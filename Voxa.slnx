@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Voxa.Core/Voxa.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Voxa.Core.Tests/Voxa.Core.Tests.csproj" />
+  </Folder>
+</Solution>

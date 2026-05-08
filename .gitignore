@@ -1,0 +1,31 @@
+# Build outputs
+bin/
+obj/
+out/
+artifacts/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln.docstates
+*.userprefs
+
+# .NET
+[Bb]uild/
+TestResults/
+*.pidb
+*.svclog
+*.scc
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+*.opencover.xml
+
+# OS
+.DS_Store
+Thumbs.db
