@@ -36,14 +36,13 @@ app.MapGet("/", () => Results.Text(
 
 app.Map("/voice/voice-live", async (HttpContext ctx) =>
 {
-    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    if (!await EnsureWebSocketAsync(ctx)) return;
 
     var endpoint = builder.Configuration["AzureVoiceLive:Endpoint"];
     var apiKey = builder.Configuration["AzureVoiceLive:ApiKey"];
     if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(apiKey))
     {
-        ctx.Response.StatusCode = 500;
-        await ctx.Response.WriteAsync("AzureVoiceLive:Endpoint and AzureVoiceLive:ApiKey must be configured.");
+        await ReportConfigErrorAsync(ctx, "AzureVoiceLive:Endpoint and AzureVoiceLive:ApiKey must be configured.");
         return;
     }
 
@@ -68,7 +67,7 @@ app.Map("/voice/voice-live", async (HttpContext ctx) =>
 
 app.Map("/voice/azure", async (HttpContext ctx) =>
 {
-    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    if (!await EnsureWebSocketAsync(ctx)) return;
     var azure = ReadAzureSpeechOptions(builder.Configuration);
     if (azure is null) { await Missing(ctx, "AzureSpeech"); return; }
 
@@ -85,7 +84,7 @@ app.Map("/voice/azure", async (HttpContext ctx) =>
 
 app.Map("/voice/openai", async (HttpContext ctx) =>
 {
-    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    if (!await EnsureWebSocketAsync(ctx)) return;
     var openai = ReadOpenAIOptions(builder.Configuration);
     if (openai is null) { await Missing(ctx, "OpenAI"); return; }
 
@@ -102,7 +101,7 @@ app.Map("/voice/openai", async (HttpContext ctx) =>
 
 app.Map("/voice/azure-elevenlabs", async (HttpContext ctx) =>
 {
-    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    if (!await EnsureWebSocketAsync(ctx)) return;
     var azure = ReadAzureSpeechOptions(builder.Configuration);
     var elevenlabs = ReadElevenLabsOptions(builder.Configuration);
     if (azure is null) { await Missing(ctx, "AzureSpeech"); return; }
@@ -121,7 +120,7 @@ app.Map("/voice/azure-elevenlabs", async (HttpContext ctx) =>
 
 app.Map("/voice/azure-mistral", async (HttpContext ctx) =>
 {
-    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    if (!await EnsureWebSocketAsync(ctx)) return;
     var azure = ReadAzureSpeechOptions(builder.Configuration);
     var mistral = ReadMistralOptions(builder.Configuration);
     if (azure is null) { await Missing(ctx, "AzureSpeech"); return; }
@@ -157,10 +156,28 @@ static async Task RunAsync(Pipeline pipeline, System.Net.WebSockets.WebSocket ws
     }
 }
 
-static async Task Missing(HttpContext ctx, string section)
+static async Task<bool> EnsureWebSocketAsync(HttpContext ctx)
 {
-    ctx.Response.StatusCode = 500;
-    await ctx.Response.WriteAsync($"Configuration section '{section}' is missing or incomplete in appsettings.json.");
+    if (ctx.WebSockets.IsWebSocketRequest) return true;
+    ctx.Response.StatusCode = 400;
+    await ctx.Response.WriteAsync("WebSocket required. Open this URL with a WebSocket client (e.g. `new WebSocket(...)` from a browser).");
+    return false;
+}
+
+static async Task Missing(HttpContext ctx, string section)
+    => await ReportConfigErrorAsync(ctx, $"Configuration section '{section}' is missing or incomplete in appsettings.json.");
+
+static async Task ReportConfigErrorAsync(HttpContext ctx, string message)
+{
+    using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+    var payload = System.Text.Json.JsonSerializer.Serialize(new { type = "error", message });
+    var bytes = System.Text.Encoding.UTF8.GetBytes(payload);
+    try
+    {
+        await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ctx.RequestAborted);
+        await ws.CloseAsync(WebSocketCloseStatus.PolicyViolation, "missing config", default);
+    }
+    catch { /* client may have already disconnected */ }
 }
 
 static AzureSpeechOptions? ReadAzureSpeechOptions(IConfiguration cfg)
