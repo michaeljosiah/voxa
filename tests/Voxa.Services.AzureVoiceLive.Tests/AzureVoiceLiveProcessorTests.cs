@@ -8,6 +8,8 @@ namespace Voxa.Services.AzureVoiceLive.Tests;
 
 public class AzureVoiceLiveProcessorTests
 {
+    private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(3);
+
     private static AzureVoiceLiveOptions MakeOptions() => new()
     {
         Endpoint = new Uri("wss://test.example.com/voice-live"),
@@ -46,11 +48,11 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(80);
 
-            Assert.NotEmpty(h.Transport.SentEvents);
-            var first = h.Transport.SentEvents[0];
-            using var doc = JsonDocument.Parse(first);
+            var sessionUpdate = await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
+            Assert.NotNull(sessionUpdate);
+
+            using var doc = JsonDocument.Parse(sessionUpdate!);
             Assert.Equal("session.update", doc.RootElement.GetProperty("type").GetString());
             var session = doc.RootElement.GetProperty("session");
             Assert.Equal("Be helpful and brief.", session.GetProperty("instructions").GetString());
@@ -66,13 +68,12 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(50);
+            await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
 
             var pcm = new byte[] { 0x01, 0x02, 0x03, 0x04 };
             await h.Pipeline.Source.IngestAsync(new AudioRawFrame(pcm, 24000, 1));
 
-            await Task.Delay(80);
-            var appendEvent = h.Transport.SentEvents.FirstOrDefault(e => e.Contains("input_audio_buffer.append"));
+            var appendEvent = await h.Transport.WaitForSentEventAsync(s => s.Contains("input_audio_buffer.append"), WaitTimeout);
             Assert.NotNull(appendEvent);
             using var doc = JsonDocument.Parse(appendEvent!);
             var b64 = doc.RootElement.GetProperty("audio").GetString();
@@ -87,14 +88,13 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(50);
+            await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
 
             var pcm = new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 };
             var b64 = Convert.ToBase64String(pcm);
-            var evt = $"{{\"type\":\"response.audio.delta\",\"delta\":\"{b64}\"}}";
-            await h.Transport.QueueServerEventAsync(evt);
+            await h.Transport.QueueServerEventAsync($"{{\"type\":\"response.audio.delta\",\"delta\":\"{b64}\"}}");
 
-            await h.Captured.WaitForAsync(2, TimeSpan.FromSeconds(2));
+            await h.Captured.WaitForAsync(2, WaitTimeout);
             var audio = h.Captured.Captured.OfType<AudioRawFrame>().FirstOrDefault();
             Assert.NotNull(audio);
             Assert.Equal(pcm, audio!.Pcm.ToArray());
@@ -109,16 +109,15 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(50);
+            await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
 
             // Bot starts speaking → BotStartedSpeakingFrame
             await h.Transport.QueueServerEventAsync("{\"type\":\"response.created\",\"response\":{\"id\":\"r1\"}}");
-            await h.Captured.WaitForAsync(2, TimeSpan.FromSeconds(2));
-            await Task.Delay(40);
+            await WaitForCapturedAsync<BotStartedSpeakingFrame>(h.Captured, WaitTimeout);
 
             // User speaks over the bot → User start + Interruption
             await h.Transport.QueueServerEventAsync("{\"type\":\"input_audio_buffer.speech_started\"}");
-            await Task.Delay(120);
+            await WaitForCapturedAsync<InterruptionFrame>(h.Captured, WaitTimeout);
 
             Assert.Contains(h.Captured.Captured, f => f is BotStartedSpeakingFrame);
             Assert.Contains(h.Captured.Captured, f => f is UserStartedSpeakingFrame);
@@ -133,7 +132,7 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(50);
+            await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
 
             var evt = "{\"type\":\"response.function_call_arguments.done\"," +
                       "\"call_id\":\"call_abc\"," +
@@ -141,8 +140,7 @@ public class AzureVoiceLiveProcessorTests
                       "\"arguments\":\"{\\\"city\\\":\\\"Lagos\\\"}\"}";
             await h.Transport.QueueServerEventAsync(evt);
 
-            await h.Captured.WaitForAsync(2, TimeSpan.FromSeconds(2));
-            var call = h.Captured.Captured.OfType<ToolCallRequestFrame>().FirstOrDefault();
+            var call = await WaitForCapturedAsync<ToolCallRequestFrame>(h.Captured, WaitTimeout);
             Assert.NotNull(call);
             Assert.Equal("call_abc", call!.CallId);
             Assert.Equal("get_weather", call.Name);
@@ -157,13 +155,13 @@ public class AzureVoiceLiveProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await Task.Delay(50);
+            await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
 
             await h.Transport.QueueServerEventAsync(
                 "{\"type\":\"error\",\"error\":{\"message\":\"upstream blew up\",\"code\":\"x\"}}");
 
             var ex = await Assert.ThrowsAsync<PipelineFailedException>(
-                async () => await h.Runner.WaitAsync().WaitAsync(TimeSpan.FromSeconds(3)));
+                async () => await h.Runner.WaitAsync().WaitAsync(WaitTimeout));
             Assert.Contains("upstream blew up", ex.Message);
         }
     }
@@ -171,18 +169,35 @@ public class AzureVoiceLiveProcessorTests
     [Fact]
     public async Task ToolCallResultFrame_Sends_Output_Then_ResponseCreate()
     {
-        var h = BuildPipeline();
-        await using (h.Runner)
+        var transport = new ScriptedRealtimeApiTransport();
+        var processor = new AzureVoiceLiveProcessor(MakeOptions(), () => transport);
+
+        var pipeline = Pipeline.Build()
+            .Source(new PipelineSource())
+            .Then(processor)
+            .Sink(new PipelineSink());
+
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+        await transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout);
+
+        await pipeline.Source.IngestAsync(new ToolCallResultFrame("call_abc", "{\"temp\":\"30\"}"));
+
+        var output = await transport.WaitForSentEventAsync(s => s.Contains("conversation.item.create") && s.Contains("call_abc"), WaitTimeout);
+        Assert.NotNull(output);
+        var responseCreate = await transport.WaitForSentEventAsync(s => s.Contains("\"response.create\""), WaitTimeout);
+        Assert.NotNull(responseCreate);
+    }
+
+    private static async Task<T?> WaitForCapturedAsync<T>(CapturingProcessor captured, TimeSpan timeout) where T : Frame
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
         {
-            await h.Runner.StartAsync();
-            await Task.Delay(50);
-
-            await h.Pipeline.Source.IngestAsync(new ToolCallResultFrame("call_abc", "{\"temp\":\"30\"}"));
-            await Task.Delay(100);
-
-            var sent = h.Transport.SentEvents;
-            Assert.Contains(sent, e => e.Contains("conversation.item.create") && e.Contains("call_abc"));
-            Assert.Contains(sent, e => e.Contains("\"response.create\""));
+            var match = captured.Captured.OfType<T>().FirstOrDefault();
+            if (match is not null) return match;
+            await Task.Delay(10);
         }
+        return null;
     }
 }

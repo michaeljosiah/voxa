@@ -43,6 +43,19 @@ internal sealed class ScriptedRealtimeApiTransport : IRealtimeApiTransport
 
     public ValueTask QueueServerEventAsync(string json) => _serverEvents.Writer.WriteAsync(json);
 
+    /// <summary>Poll until a sent event matches <paramref name="predicate"/> or the timeout elapses.</summary>
+    public async Task<string?> WaitForSentEventAsync(Func<string, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var match = SentEvents.FirstOrDefault(predicate);
+            if (match is not null) return match;
+            await Task.Delay(10);
+        }
+        return null;
+    }
+
     public ValueTask DisposeAsync()
     {
         Connected = false;
