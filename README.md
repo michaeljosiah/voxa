@@ -4,7 +4,7 @@
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); designed around Microsoft Agent Framework and Azure services.
 
-> Pre-alpha. Phase 2 of 6 — composite Voice Live processor + offline test harness landed. Not yet published to NuGet.
+> Pre-alpha. Phase 3 of 6 — WebSocket transport + Microsoft Agent Framework adapter landed. Not yet published to NuGet.
 
 ## What it is
 
@@ -47,8 +47,8 @@ Each `FrameProcessor` runs two concurrent tasks: a system task draining priority
 |-------|-------|
 | 1 | ✅ Core pipeline primitives — frames, processors, pipeline, runner |
 | 2 | ✅ `Voxa.Services.AzureVoiceLive` composite processor + `Voxa.Testing` offline harness |
-| **3 (next)** | `Voxa.Transports.WebSocket` + `Voxa.Services.MicrosoftAgents` adapter |
-| 4 | Mobile transport integration |
+| 3 | ✅ `Voxa.Transports.WebSocket` + `Voxa.Services.MicrosoftAgents` adapter |
+| **4 (next)** | Mobile transport integration + sample app |
 | 5 | `Voxa.Services.AzureSpeech` STT/TTS + observability |
 | 6 | OSS release, samples, docs |
 
