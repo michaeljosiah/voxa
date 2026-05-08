@@ -78,15 +78,41 @@ Pipeline.Build()
     .Sink(new WebSocketAudioSink(ws));
 ```
 
-**Granular path** — for tenants without Voice Live regional access, premium voices, or a different LLM stack:
+**Granular path** — vendor-neutral STT + agent + TTS. Mix any STT, any LLM, any TTS:
 
 ```csharp
 Pipeline.Build()
     .Source(new WebSocketAudioSource(ws))
-    .Then(new AzureSpeechSttProcessor(speechOpts))
-    .Then(new MicrosoftAgentsProcessor(yourAgent))
-    .Then(new AzureSpeechTtsProcessor(speechOpts))
+    .Then(AzureSpeech.StreamingTranscription(azureOpts))     // STT vendor
+    .Then(new MicrosoftAgentsProcessor(yourAgent))           // any MAF agent
+    .Then(ElevenLabs.Synthesis(elevenlabsOpts))              // TTS vendor
     .Sink(new WebSocketAudioSink(ws));
+```
+
+## Vendor recipes
+
+Each STT vendor pairs with each TTS vendor pairs with any agent. Some examples:
+
+```csharp
+// Azure end-to-end (cheapest, broadest regional coverage)
+.Then(AzureSpeech.StreamingTranscription(azure))
+.Then(new MicrosoftAgentsProcessor(agent))
+.Then(AzureSpeech.Synthesis(azure))
+
+// Whisper STT, OpenAI TTS, OpenAI agent — full OpenAI stack
+.Then(OpenAISpeech.StreamingTranscription(openai))
+.Then(new MicrosoftAgentsProcessor(openaiAgent))
+.Then(OpenAISpeech.Synthesis(openai))
+
+// Premium voice — Whisper + ElevenLabs voice clone
+.Then(OpenAISpeech.StreamingTranscription(openai))
+.Then(new MicrosoftAgentsProcessor(agent))
+.Then(ElevenLabs.Synthesis(elevenlabs))
+
+// Cost-optimised — Azure STT (fast, cheap) + Mistral TTS (Voxtral)
+.Then(AzureSpeech.StreamingTranscription(azure))
+.Then(new MicrosoftAgentsProcessor(agent))
+.Then(Mistral.Synthesis(mistral))
 ```
 
 ## Wire protocol
@@ -120,7 +146,17 @@ services.AddOpenTelemetry()
 
 ## Sample app
 
-[`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — minimal ASP.NET Core voice-agent server. `dotnet run` it, point a WebSocket client at `wss://localhost:5001/voice`, stream PCM.
+[`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — ASP.NET Core voice-agent server with **five WebSocket endpoints** demonstrating each pipeline shape:
+
+| Route | Pipeline |
+|-------|----------|
+| `/voice/voice-live`         | Voice Live composite (full LLM-driven) |
+| `/voice/azure`              | Azure STT → echo → Azure TTS |
+| `/voice/openai`             | OpenAI Whisper → echo → OpenAI TTS |
+| `/voice/azure-elevenlabs`   | Azure STT → echo → ElevenLabs TTS |
+| `/voice/azure-mistral`      | Azure STT → echo → Mistral Voxtral-TTS |
+
+`dotnet run --project samples/Voxa.Samples.AspNetServer`. Configure only the vendors you want to demo.
 
 ## Building
 

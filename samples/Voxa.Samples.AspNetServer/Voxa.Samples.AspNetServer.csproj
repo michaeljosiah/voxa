@@ -11,6 +11,11 @@
     <ProjectReference Include="..\..\src\Voxa.Core\Voxa.Core.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Transports.WebSocket\Voxa.Transports.WebSocket.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Services.AzureVoiceLive\Voxa.Services.AzureVoiceLive.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.Azure\Voxa.Speech.Azure.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />
   </ItemGroup>
 
 </Project>
