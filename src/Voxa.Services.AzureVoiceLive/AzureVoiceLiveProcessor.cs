@@ -76,19 +76,24 @@ public sealed class AzureVoiceLiveProcessor : FrameProcessor
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
-        if (_transport is null) return;
-
-        switch (frame)
+        if (_transport is not null)
         {
-            case AudioRawFrame audio:
-                await _transport.SendEventAsync(RealtimeEventCodec.BuildInputAudioBufferAppend(audio.Pcm), ct).ConfigureAwait(false);
-                break;
+            switch (frame)
+            {
+                case AudioRawFrame audio:
+                    // Audio is consumed by Voice Live; assistant audio is emitted by the read loop instead.
+                    await _transport.SendEventAsync(RealtimeEventCodec.BuildInputAudioBufferAppend(audio.Pcm), ct).ConfigureAwait(false);
+                    return;
 
-            case ToolCallResultFrame tool:
-                await _transport.SendEventAsync(RealtimeEventCodec.BuildToolCallOutput(tool.CallId, tool.ResultJson), ct).ConfigureAwait(false);
-                await _transport.SendEventAsync(RealtimeEventCodec.BuildResponseCreate(), ct).ConfigureAwait(false);
-                break;
+                case ToolCallResultFrame tool:
+                    await _transport.SendEventAsync(RealtimeEventCodec.BuildToolCallOutput(tool.CallId, tool.ResultJson), ct).ConfigureAwait(false);
+                    await _transport.SendEventAsync(RealtimeEventCodec.BuildResponseCreate(), ct).ConfigureAwait(false);
+                    return;
+            }
         }
+
+        // Forward everything else (StartFrame, EndFrame, …) downstream so the sink can complete.
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);
     }
 
     private async Task ReadEventsLoopAsync(CancellationToken ct)

@@ -4,7 +4,7 @@
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); designed around Microsoft Agent Framework and Azure services.
 
-> Pre-alpha. Phase 3 of 6 — WebSocket transport + Microsoft Agent Framework adapter landed. Not yet published to NuGet.
+> Pre-alpha. Phase 5 of 6 — Azure Speech STT/TTS standalone + first sample app landed. Not yet published to NuGet.
 
 ## What it is
 
@@ -48,9 +48,11 @@ Each `FrameProcessor` runs two concurrent tasks: a system task draining priority
 | 1 | ✅ Core pipeline primitives — frames, processors, pipeline, runner |
 | 2 | ✅ `Voxa.Services.AzureVoiceLive` composite processor + `Voxa.Testing` offline harness |
 | 3 | ✅ `Voxa.Transports.WebSocket` + `Voxa.Services.MicrosoftAgents` adapter |
-| **4 (next)** | Mobile transport integration + sample app |
-| 5 | `Voxa.Services.AzureSpeech` STT/TTS + observability |
-| 6 | OSS release, samples, docs |
+| 5 | ✅ `Voxa.Services.AzureSpeech` STT/TTS standalone + `Voxa.Samples.AspNetServer` |
+| **4 (next)** | Mobile transport integration (downstream consumers — Payabo, etc.) |
+| 6 | Observability, OSS release, NuGet publish, docs |
+
+The same `AzureVoiceLiveProcessor` speaks Azure Voice Live, Azure OpenAI Realtime, **and** OpenAI Realtime — they share a wire protocol, so only the endpoint URL and auth header change. For tenants without Voice Live regional access, swap to the granular `AzureSpeechSttProcessor → MicrosoftAgentsProcessor → AzureSpeechTtsProcessor` chain.
 
 The same `AzureVoiceLiveProcessor` speaks Azure Voice Live, Azure OpenAI Realtime, **and** OpenAI Realtime — they share a wire protocol, so only the endpoint URL and auth header change.
 

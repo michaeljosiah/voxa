@@ -1,6 +1,10 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Voxa.Samples.AspNetServer/Voxa.Samples.AspNetServer.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Voxa.Core/Voxa.Core.csproj" />
+    <Project Path="src/Voxa.Services.AzureSpeech/Voxa.Services.AzureSpeech.csproj" />
     <Project Path="src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj" />
     <Project Path="src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
@@ -8,6 +12,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Voxa.Core.Tests/Voxa.Core.Tests.csproj" />
+    <Project Path="tests/Voxa.Services.AzureSpeech.Tests/Voxa.Services.AzureSpeech.Tests.csproj" />
     <Project Path="tests/Voxa.Services.AzureVoiceLive.Tests/Voxa.Services.AzureVoiceLive.Tests.csproj" />
     <Project Path="tests/Voxa.Services.MicrosoftAgents.Tests/Voxa.Services.MicrosoftAgents.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />

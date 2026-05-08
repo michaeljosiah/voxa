@@ -48,11 +48,16 @@ public sealed class MicrosoftAgentsProcessor : FrameProcessor
         {
             case TranscriptionFrame t when t.IsFinal && !string.IsNullOrWhiteSpace(t.Text):
                 await RunAgentAsync(t.Text, ct).ConfigureAwait(false);
-                break;
+                // Also forward the transcription downstream — useful for UI / observability.
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
             case TextFrame txt when !string.IsNullOrWhiteSpace(txt.Text):
                 await RunAgentAsync(txt.Text, ct).ConfigureAwait(false);
-                break;
+                return;
         }
+
+        // Forward StartFrame, EndFrame, interim transcriptions, etc. so the sink can complete.
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);
     }
 
     private async Task RunAgentAsync(string userInput, CancellationToken ct)
