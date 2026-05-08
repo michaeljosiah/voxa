@@ -8,6 +8,8 @@ namespace Voxa.Transports.WebSocket.Tests;
 
 public class WebSocketAudioSinkTests
 {
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(3);
+
     private static (PipelineRunner Runner, FakeWebSocket Ws, Pipeline Pipeline) Build()
     {
         var ws = new FakeWebSocket();
@@ -28,11 +30,10 @@ public class WebSocketAudioSinkTests
 
             var pcm = new byte[] { 0x10, 0x20, 0x30, 0x40 };
             await pipeline.Source.IngestAsync(new AudioRawFrame(pcm, 24000, 1));
-            await Task.Delay(80);
 
-            var binary = ws.Sent.FirstOrDefault(s => s.Type == WebSocketMessageType.Binary);
-            Assert.NotEqual(default, binary);
-            Assert.Equal(pcm, binary.Data);
+            var binary = await ws.WaitForSentBinaryAsync(SendTimeout);
+            Assert.NotNull(binary);
+            Assert.Equal(pcm, binary);
         }
     }
 
@@ -45,9 +46,8 @@ public class WebSocketAudioSinkTests
             await runner.StartAsync();
 
             await pipeline.Source.IngestAsync(new LlmTextChunkFrame("Hello"));
-            await Task.Delay(80);
 
-            var text = ws.SentTextAsString.FirstOrDefault(s => s.Contains("\"text\""));
+            var text = await ws.WaitForSentTextAsync(s => s.Contains("\"text\""), SendTimeout);
             Assert.NotNull(text);
             using var doc = JsonDocument.Parse(text!);
             Assert.Equal("text", doc.RootElement.GetProperty("type").GetString());
@@ -64,9 +64,8 @@ public class WebSocketAudioSinkTests
             await runner.StartAsync();
 
             await pipeline.Source.IngestAsync(new ToolCallRequestFrame("c1", "ping", "{\"x\":1}"));
-            await Task.Delay(80);
 
-            var text = ws.SentTextAsString.FirstOrDefault(s => s.Contains("toolCall"));
+            var text = await ws.WaitForSentTextAsync(s => s.Contains("toolCall"), SendTimeout);
             Assert.NotNull(text);
             using var doc = JsonDocument.Parse(text!);
             Assert.Equal("c1", doc.RootElement.GetProperty("callId").GetString());
@@ -83,9 +82,8 @@ public class WebSocketAudioSinkTests
             await runner.StartAsync();
 
             await pipeline.Source.IngestAsync(new BotStartedSpeakingFrame());
-            await Task.Delay(80);
 
-            var text = ws.SentTextAsString.FirstOrDefault(s => s.Contains("speaking"));
+            var text = await ws.WaitForSentTextAsync(s => s.Contains("speaking"), SendTimeout);
             Assert.NotNull(text);
             using var doc = JsonDocument.Parse(text!);
             Assert.Equal("bot", doc.RootElement.GetProperty("who").GetString());
@@ -102,7 +100,7 @@ public class WebSocketAudioSinkTests
             await runner.StartAsync();
             await runner.StopAsync(TimeSpan.FromSeconds(2));
 
-            var text = ws.SentTextAsString.FirstOrDefault(s => s.Contains("\"end\""));
+            var text = await ws.WaitForSentTextAsync(s => s.Contains("\"end\""), SendTimeout);
             Assert.NotNull(text);
             await runner.WaitAsync().WaitAsync(TimeSpan.FromSeconds(2));
         }

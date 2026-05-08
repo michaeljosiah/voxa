@@ -64,4 +64,30 @@ internal sealed class FakeWebSocket : System.Net.WebSockets.WebSocket
         => _incoming.Writer.WriteAsync((WebSocketMessageType.Text, Encoding.UTF8.GetBytes(json), endOfMessage));
 
     public void CompleteIncoming() => _incoming.Writer.TryComplete();
+
+    /// <summary>Poll until <paramref name="predicate"/> matches one of the sent text frames or timeout.</summary>
+    public async Task<string?> WaitForSentTextAsync(Func<string, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var match = SentTextAsString.FirstOrDefault(predicate);
+            if (match is not null) return match;
+            await Task.Delay(10);
+        }
+        return null;
+    }
+
+    /// <summary>Poll until at least one binary frame is sent or timeout.</summary>
+    public async Task<byte[]?> WaitForSentBinaryAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var binary = Sent.FirstOrDefault(s => s.Type == WebSocketMessageType.Binary);
+            if (binary != default) return binary.Data;
+            await Task.Delay(10);
+        }
+        return null;
+    }
 }
