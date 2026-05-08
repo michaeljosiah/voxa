@@ -17,7 +17,12 @@
     <Description>OpenTelemetry tracing helpers for Voxa pipelines. Provides the TracingProcessor (drop in anywhere to emit per-frame Activity spans) on top of the public Voxa ActivitySource.</Description>
     <PackageTags>voxa;voice;ai;observability;opentelemetry;tracing</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />

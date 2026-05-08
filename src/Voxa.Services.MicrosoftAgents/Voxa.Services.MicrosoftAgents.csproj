@@ -17,7 +17,12 @@
     <Description>Adapter that wraps any Microsoft.Agents.AI AIAgent as a Voxa FrameProcessor. Bridges transcribed user input into the agent and pumps streamed text + tool calls back into the pipeline.</Description>
     <PackageTags>voxa;voice;ai;agents;maf;microsoft</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" Version="1.5.0" />

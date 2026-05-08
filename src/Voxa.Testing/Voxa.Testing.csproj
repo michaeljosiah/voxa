@@ -17,7 +17,12 @@
     <Description>Test helpers for Voxa pipelines: WAV file processors, capturing processors, in-memory transports.</Description>
     <PackageTags>voxa;voice;ai;testing</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />

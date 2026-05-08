@@ -17,7 +17,12 @@
     <Description>Composite STT+LLM+TTS+VAD processor for the Voxa pipeline framework, backed by the Azure Voice Live API. The same processor speaks Azure OpenAI Realtime and OpenAI Realtime by changing the endpoint.</Description>
     <PackageTags>voxa;voice;ai;azure;voicelive;realtime;openai</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
