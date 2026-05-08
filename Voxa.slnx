@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Voxa.Core/Voxa.Core.csproj" />
+    <Project Path="src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj" />
+    <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Voxa.Core.Tests/Voxa.Core.Tests.csproj" />
+    <Project Path="tests/Voxa.Services.AzureVoiceLive.Tests/Voxa.Services.AzureVoiceLive.Tests.csproj" />
   </Folder>
 </Solution>
