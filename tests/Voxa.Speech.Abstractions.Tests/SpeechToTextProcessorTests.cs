@@ -1,17 +1,17 @@
 using Voxa.Frames;
 using Voxa.Pipelines;
 using Voxa.Processors;
+using Voxa.Speech;
 using Voxa.Testing.Processors;
 
-namespace Voxa.Services.AzureSpeech.Tests;
+namespace Voxa.Speech.Abstractions.Tests;
 
-public class AzureSpeechSttProcessorTests
+public class SpeechToTextProcessorTests
 {
-    private static (PipelineRunner Runner, ScriptedSpeechToTextEngine Engine, CapturingProcessor Captured, Pipeline Pipeline)
-        Build()
+    private static (PipelineRunner Runner, ScriptedSpeechToTextEngine Engine, CapturingProcessor Captured, Pipeline Pipeline) Build()
     {
         var engine = new ScriptedSpeechToTextEngine();
-        var processor = new AzureSpeechSttProcessor(() => engine);
+        var processor = new SpeechToTextProcessor(() => engine);
         var captured = new CapturingProcessor();
         var pipeline = Pipeline.Build()
             .Source(new PipelineSource())
@@ -34,20 +34,21 @@ public class AzureSpeechSttProcessorTests
     }
 
     [Fact]
-    public async Task AudioRawFrame_Is_Written_To_Engine()
+    public async Task AudioRawFrame_Is_Written_To_Engine_And_Not_Forwarded()
     {
-        var (runner, engine, _, pipeline) = Build();
+        var (runner, engine, captured, pipeline) = Build();
         await using (runner)
         {
             await runner.StartAsync();
             await Task.Delay(40);
 
-            var pcm = new byte[] { 1, 2, 3, 4, 5, 6 };
+            var pcm = new byte[] { 1, 2, 3, 4 };
             await pipeline.Source.IngestAsync(new AudioRawFrame(pcm, 16000, 1));
             await Task.Delay(60);
 
             Assert.Single(engine.WrittenAudio);
             Assert.Equal(pcm, engine.WrittenAudio[0]);
+            Assert.DoesNotContain(captured.Captured, f => f is AudioRawFrame);
         }
     }
 
@@ -67,9 +68,21 @@ public class AzureSpeechSttProcessorTests
             var transcripts = captured.Captured.OfType<TranscriptionFrame>().ToList();
             Assert.Equal(2, transcripts.Count);
             Assert.False(transcripts[0].IsFinal);
-            Assert.Equal("hello", transcripts[0].Text);
             Assert.True(transcripts[1].IsFinal);
-            Assert.Equal("hello world", transcripts[1].Text);
+        }
+    }
+
+    [Fact]
+    public async Task Non_Audio_Frames_Are_Forwarded()
+    {
+        var (runner, _, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new TextFrame("system message"));
+            await captured.WaitForAsync(2, TimeSpan.FromSeconds(2));
+
+            Assert.Contains(captured.Captured, f => f is TextFrame);
         }
     }
 

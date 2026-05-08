@@ -2,37 +2,36 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Voxa.Frames;
 using Voxa.Processors;
-using Voxa.Services.AzureSpeech.Engines;
 
-namespace Voxa.Services.AzureSpeech;
+namespace Voxa.Speech;
 
 /// <summary>
-/// Streaming text-to-speech processor. On each <see cref="TextFrame"/> or
-/// <see cref="LlmTextChunkFrame"/>, runs the <see cref="ITextToSpeechEngine"/> and emits a
-/// <see cref="BotStartedSpeakingFrame"/>, the resulting <see cref="AudioRawFrame"/> chunks, then
-/// a <see cref="BotStoppedSpeakingFrame"/>.
+/// Vendor-neutral TTS processor. On each <see cref="TextFrame"/> or
+/// <see cref="LlmTextChunkFrame"/>, runs an <see cref="ITextToSpeechEngine"/> and emits a
+/// <see cref="BotStartedSpeakingFrame"/>, the resulting <see cref="AudioRawFrame"/> chunks,
+/// then a <see cref="BotStoppedSpeakingFrame"/>.
 /// </summary>
-public sealed class AzureSpeechTtsProcessor : FrameProcessor
+public sealed class TextToSpeechProcessor : FrameProcessor
 {
     private readonly Func<ITextToSpeechEngine> _engineFactory;
     private readonly int _outputSampleRate;
-    private readonly ILogger<AzureSpeechTtsProcessor> _logger;
+    private readonly ILogger _logger;
     private ITextToSpeechEngine? _engine;
 
-    /// <summary>Construct with a default <see cref="AzureTextToSpeechEngine"/> built from <paramref name="options"/>.</summary>
-    public AzureSpeechTtsProcessor(AzureSpeechOptions options, ILogger<AzureSpeechTtsProcessor>? logger = null)
-        : this(() => new AzureTextToSpeechEngine(options), options.OutputSampleRate, logger) { }
+    /// <summary>Construct with an existing engine instance (one-shot use).</summary>
+    public TextToSpeechProcessor(ITextToSpeechEngine engine, int outputSampleRate = 24000, ILogger? logger = null)
+        : this(() => engine, outputSampleRate, logger) { }
 
-    /// <summary>Construct with a custom engine factory — useful for tests.</summary>
-    public AzureSpeechTtsProcessor(
+    /// <summary>Construct with a factory and the output sample rate vendor engines yield.</summary>
+    public TextToSpeechProcessor(
         Func<ITextToSpeechEngine> engineFactory,
         int outputSampleRate = 24000,
-        ILogger<AzureSpeechTtsProcessor>? logger = null)
-        : base("AzureSpeechTts")
+        ILogger? logger = null)
+        : base("TextToSpeech")
     {
         _engineFactory = engineFactory ?? throw new ArgumentNullException(nameof(engineFactory));
         _outputSampleRate = outputSampleRate > 0 ? outputSampleRate : throw new ArgumentOutOfRangeException(nameof(outputSampleRate));
-        _logger = logger ?? NullLogger<AzureSpeechTtsProcessor>.Instance;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     protected override async ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
@@ -65,7 +64,7 @@ public sealed class AzureSpeechTtsProcessor : FrameProcessor
             }
         }
 
-        // Forward everything else (StartFrame, EndFrame, transcriptions, tool calls, …) downstream.
+        // Forward everything else (Start/End, transcriptions, tool calls, …) downstream.
         await PushFrameAsync(frame, ct).ConfigureAwait(false);
     }
 
@@ -84,7 +83,7 @@ public sealed class AzureSpeechTtsProcessor : FrameProcessor
         catch (OperationCanceledException) { /* shutdown */ }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AzureSpeechTtsProcessor: synthesis failed");
+            _logger.LogError(ex, "TextToSpeechProcessor: synthesis failed");
             await PushErrorAsync($"TTS engine failed: {ex.Message}", ex, ct).ConfigureAwait(false);
         }
         finally

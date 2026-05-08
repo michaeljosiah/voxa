@@ -5,18 +5,26 @@
   <Folder Name="/src/">
     <Project Path="src/Voxa.Core/Voxa.Core.csproj" />
     <Project Path="src/Voxa.Observability/Voxa.Observability.csproj" />
-    <Project Path="src/Voxa.Services.AzureSpeech/Voxa.Services.AzureSpeech.csproj" />
     <Project Path="src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj" />
     <Project Path="src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj" />
+    <Project Path="src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj" />
+    <Project Path="src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj" />
+    <Project Path="src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj" />
+    <Project Path="src/Voxa.Speech.Mistral/Voxa.Speech.Mistral.csproj" />
+    <Project Path="src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
     <Project Path="src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Voxa.Core.Tests/Voxa.Core.Tests.csproj" />
     <Project Path="tests/Voxa.Observability.Tests/Voxa.Observability.Tests.csproj" />
-    <Project Path="tests/Voxa.Services.AzureSpeech.Tests/Voxa.Services.AzureSpeech.Tests.csproj" />
     <Project Path="tests/Voxa.Services.AzureVoiceLive.Tests/Voxa.Services.AzureVoiceLive.Tests.csproj" />
     <Project Path="tests/Voxa.Services.MicrosoftAgents.Tests/Voxa.Services.MicrosoftAgents.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Abstractions.Tests/Voxa.Speech.Abstractions.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Azure.Tests/Voxa.Speech.Azure.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.ElevenLabs.Tests/Voxa.Speech.ElevenLabs.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Mistral.Tests/Voxa.Speech.Mistral.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.OpenAI.Tests/Voxa.Speech.OpenAI.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />
   </Folder>
 </Solution>

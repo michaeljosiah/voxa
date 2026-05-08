@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Voxa.Services.AzureSpeech\Voxa.Services.AzureSpeech.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.Azure\Voxa.Speech.Azure.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Testing\Voxa.Testing.csproj" />
   </ItemGroup>
 

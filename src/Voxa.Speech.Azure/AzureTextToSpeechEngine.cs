@@ -1,12 +1,12 @@
 using System.Runtime.CompilerServices;
 using Microsoft.CognitiveServices.Speech;
 
-namespace Voxa.Services.AzureSpeech.Engines;
+namespace Voxa.Speech.Azure;
 
 /// <summary>
-/// Default <see cref="ITextToSpeechEngine"/> implementation backed by the Microsoft Cognitive
-/// Services Speech SDK. Synthesizes to raw 24 kHz 16-bit mono PCM by default and yields the
-/// audio in fixed-size chunks so consumers can stream to a transport while synthesis continues.
+/// <see cref="ITextToSpeechEngine"/> implementation backed by the Microsoft Cognitive Services
+/// Speech SDK. Synthesises to raw 24 kHz 16-bit mono PCM and yields the audio in fixed-size
+/// chunks so consumers can stream while synthesis continues.
 /// </summary>
 public sealed class AzureTextToSpeechEngine : ITextToSpeechEngine
 {
@@ -27,7 +27,7 @@ public sealed class AzureTextToSpeechEngine : ITextToSpeechEngine
         _speechConfig.SpeechSynthesisVoiceName = _options.Voice;
         _speechConfig.SetSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Raw24Khz16BitMonoPcm);
 
-        // Pass null AudioConfig — we don't want the SDK rendering to a speaker, we want the bytes.
+        // Pass null AudioConfig — we don't want the SDK rendering to a speaker; we want the bytes.
         _synthesizer = new SpeechSynthesizer(_speechConfig, audioConfig: null);
         return Task.CompletedTask;
     }

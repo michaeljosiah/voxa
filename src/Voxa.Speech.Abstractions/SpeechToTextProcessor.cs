@@ -2,32 +2,31 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Voxa.Frames;
 using Voxa.Processors;
-using Voxa.Services.AzureSpeech.Engines;
 
-namespace Voxa.Services.AzureSpeech;
+namespace Voxa.Speech;
 
 /// <summary>
-/// Streaming speech-to-text processor. Pipes inbound <see cref="AudioRawFrame"/>s into an
-/// <see cref="ISpeechToTextEngine"/> and emits <see cref="TranscriptionFrame"/>s — interim and
-/// final — for downstream consumers (typically a <c>MicrosoftAgentsProcessor</c>).
+/// Vendor-neutral STT processor. Pipes inbound <see cref="AudioRawFrame"/>s into an
+/// <see cref="ISpeechToTextEngine"/> and emits <see cref="TranscriptionFrame"/>s for downstream.
+/// Pair with a vendor engine from <c>Voxa.Speech.Azure</c>, <c>Voxa.Speech.OpenAI</c>, etc.
 /// </summary>
-public sealed class AzureSpeechSttProcessor : FrameProcessor
+public sealed class SpeechToTextProcessor : FrameProcessor
 {
     private readonly Func<ISpeechToTextEngine> _engineFactory;
-    private readonly ILogger<AzureSpeechSttProcessor> _logger;
+    private readonly ILogger _logger;
     private ISpeechToTextEngine? _engine;
     private Task? _readLoop;
 
-    /// <summary>Construct with a default <see cref="AzureSpeechToTextEngine"/> built from <paramref name="options"/>.</summary>
-    public AzureSpeechSttProcessor(AzureSpeechOptions options, ILogger<AzureSpeechSttProcessor>? logger = null)
-        : this(() => new AzureSpeechToTextEngine(options), logger) { }
+    /// <summary>Construct with an existing engine instance (one-shot use).</summary>
+    public SpeechToTextProcessor(ISpeechToTextEngine engine, ILogger? logger = null)
+        : this(() => engine, logger) { }
 
-    /// <summary>Construct with a custom engine factory — useful for tests.</summary>
-    public AzureSpeechSttProcessor(Func<ISpeechToTextEngine> engineFactory, ILogger<AzureSpeechSttProcessor>? logger = null)
-        : base("AzureSpeechStt")
+    /// <summary>Construct with a factory — engine is created on Start, disposed on End.</summary>
+    public SpeechToTextProcessor(Func<ISpeechToTextEngine> engineFactory, ILogger? logger = null)
+        : base("SpeechToText")
     {
         _engineFactory = engineFactory ?? throw new ArgumentNullException(nameof(engineFactory));
-        _logger = logger ?? NullLogger<AzureSpeechSttProcessor>.Instance;
+        _logger = logger ?? NullLogger.Instance;
     }
 
     protected override async ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
@@ -62,7 +61,7 @@ public sealed class AzureSpeechSttProcessor : FrameProcessor
             return;
         }
 
-        // Forward control + non-audio frames so Start/End/etc. reach the sink and the runner can complete.
+        // Forward control + non-audio frames so Start/End/etc. reach the sink.
         await PushFrameAsync(frame, ct).ConfigureAwait(false);
     }
 
@@ -79,7 +78,7 @@ public sealed class AzureSpeechSttProcessor : FrameProcessor
         catch (OperationCanceledException) { /* shutdown */ }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AzureSpeechSttProcessor: STT engine read loop failed");
+            _logger.LogError(ex, "SpeechToTextProcessor: STT engine read loop failed");
             await PushErrorAsync($"STT engine failed: {ex.Message}", ex, ct).ConfigureAwait(false);
         }
     }

@@ -31,15 +31,28 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 
 ## Packages
 
+### Core
+
 | Package | Description |
 |---------|-------------|
 | `Voxa.Core` | Frames, processors, pipeline, runner. Zero external deps beyond NUlid. |
 | `Voxa.Testing` | WAV file source/sink, capturing/passthrough processors. |
 | `Voxa.Transports.WebSocket` | Host-agnostic source + sink over `System.Net.WebSockets.WebSocket`. |
 | `Voxa.Services.AzureVoiceLive` | Composite STT+LLM+TTS+VAD via the Realtime API protocol. |
-| `Voxa.Services.AzureSpeech` | Granular STT + TTS via the Cognitive Services Speech SDK. |
 | `Voxa.Services.MicrosoftAgents` | Wraps any Microsoft Agent Framework `AIAgent` as a processor. |
 | `Voxa.Observability` | `TracingProcessor` + `VoxaActivities` ActivitySource for OpenTelemetry. |
+
+### Speech (granular STT/TTS, multi-vendor)
+
+| Package | STT | TTS | Description |
+|---------|-----|-----|-------------|
+| `Voxa.Speech.Abstractions` | — | — | `ISpeechToTextEngine`, `ITextToSpeechEngine`, generic `SpeechToTextProcessor` / `TextToSpeechProcessor`. |
+| `Voxa.Speech.Azure` | ✅ | ✅ | Azure Cognitive Services Speech SDK. |
+| `Voxa.Speech.OpenAI` | ✅ | ✅ | Whisper REST + OpenAI TTS (`/v1/audio/speech`). Works against OpenAI-compatible proxies. |
+| `Voxa.Speech.ElevenLabs` | — | ✅ | Streaming TTS, voice cloning, voice settings. |
+| `Voxa.Speech.Mistral` | — | ✅ | Voxtral-TTS via Mistral's OpenAI-compatible audio API. |
+
+Mix-and-match: use any STT vendor with any LLM with any TTS vendor.
 
 ## Architecture
 

@@ -1,17 +1,19 @@
 using Voxa.Frames;
 using Voxa.Pipelines;
 using Voxa.Processors;
+using Voxa.Speech;
 using Voxa.Testing.Processors;
 
-namespace Voxa.Services.AzureSpeech.Tests;
+namespace Voxa.Speech.Abstractions.Tests;
 
-public class AzureSpeechTtsProcessorTests
+public class TextToSpeechProcessorTests
 {
-    private static (PipelineRunner Runner, ScriptedTextToSpeechEngine Engine, CapturingProcessor Captured, Pipeline Pipeline)
-        Build(Func<string, byte[][]>? generate = null, int outputSampleRate = 24000)
+    private static (PipelineRunner Runner, ScriptedTextToSpeechEngine Engine, CapturingProcessor Captured, Pipeline Pipeline) Build(
+        Func<string, byte[][]>? generate = null,
+        int outputSampleRate = 24000)
     {
         var engine = new ScriptedTextToSpeechEngine(generate);
-        var processor = new AzureSpeechTtsProcessor(() => engine, outputSampleRate);
+        var processor = new TextToSpeechProcessor(() => engine, outputSampleRate);
         var captured = new CapturingProcessor();
         var pipeline = Pipeline.Build()
             .Source(new PipelineSource())

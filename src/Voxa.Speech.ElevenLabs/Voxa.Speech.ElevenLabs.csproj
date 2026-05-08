@@ -11,11 +11,11 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Package">
-    <PackageId>Voxa.Services.AzureSpeech</PackageId>
-    <Version>0.1.0-alpha</Version>
+    <PackageId>Voxa.Speech.ElevenLabs</PackageId>
+    <Version>0.2.0-alpha</Version>
     <Authors>Voxa contributors</Authors>
-    <Description>Azure Speech Services STT and TTS processors for the Voxa pipeline. Use as a granular alternative to the Voice Live composite when you need finer control or regional fallback (Voice Live is North America only).</Description>
-    <PackageTags>voxa;voice;ai;azure;speech;stt;tts</PackageTags>
+    <Description>ElevenLabs text-to-speech engine for the Voxa pipeline. Implements ITextToSpeechEngine via the streaming REST API — pair with the generic TextToSpeechProcessor from Voxa.Speech.Abstractions.</Description>
+    <PackageTags>voxa;voice;ai;elevenlabs;tts</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
@@ -25,12 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.49.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,8 @@
 using System.Threading.Channels;
-using Voxa.Services.AzureSpeech.Engines;
+using Voxa.Speech;
 
-namespace Voxa.Services.AzureSpeech.Tests;
+namespace Voxa.Speech.Abstractions.Tests;
 
-/// <summary>In-memory <see cref="ISpeechToTextEngine"/> that captures audio writes and lets tests script transcripts.</summary>
 internal sealed class ScriptedSpeechToTextEngine : ISpeechToTextEngine
 {
     private readonly Channel<TranscriptionResult> _transcripts = Channel.CreateUnbounded<TranscriptionResult>();
@@ -19,11 +18,7 @@ internal sealed class ScriptedSpeechToTextEngine : ISpeechToTextEngine
         get { lock (_lock) return _writtenAudio.ToList(); }
     }
 
-    public Task StartAsync(CancellationToken ct)
-    {
-        Started = true;
-        return Task.CompletedTask;
-    }
+    public Task StartAsync(CancellationToken ct) { Started = true; return Task.CompletedTask; }
 
     public ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
     {

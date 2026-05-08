@@ -2,12 +2,12 @@ using System.Threading.Channels;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
 
-namespace Voxa.Services.AzureSpeech.Engines;
+namespace Voxa.Speech.Azure;
 
 /// <summary>
-/// Default <see cref="ISpeechToTextEngine"/> implementation backed by the Microsoft Cognitive
-/// Services Speech SDK. Uses a <see cref="PushAudioInputStream"/> for incremental audio input
-/// and continuous-recognition events for interim + final transcripts.
+/// <see cref="ISpeechToTextEngine"/> implementation backed by the Microsoft Cognitive Services
+/// Speech SDK. Uses a <see cref="PushAudioInputStream"/> for incremental audio input and
+/// continuous-recognition events for interim + final transcripts.
 /// </summary>
 public sealed class AzureSpeechToTextEngine : ISpeechToTextEngine
 {
@@ -49,7 +49,6 @@ public sealed class AzureSpeechToTextEngine : ISpeechToTextEngine
     public ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
     {
         if (_pushStream is null) return ValueTask.CompletedTask;
-        // PushAudioInputStream.Write is sync and accepts a byte[]. ToArray is unavoidable here.
         _pushStream.Write(pcm.ToArray());
         return ValueTask.CompletedTask;
     }

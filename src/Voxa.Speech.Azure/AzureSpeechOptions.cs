@@ -1,9 +1,7 @@
-namespace Voxa.Services.AzureSpeech;
+namespace Voxa.Speech.Azure;
 
 /// <summary>
-/// Configuration shared by <see cref="AzureSpeechSttProcessor"/> and
-/// <see cref="AzureSpeechTtsProcessor"/>. Use the same instance for both when running them
-/// in the same pipeline against the same Azure Speech resource.
+/// Configuration shared by the Azure Speech STT and TTS engines.
 /// </summary>
 public sealed record AzureSpeechOptions
 {
@@ -19,12 +17,12 @@ public sealed record AzureSpeechOptions
     /// <summary>Voice id for TTS output. Defaults to a neutral neural voice.</summary>
     public string Voice { get; init; } = "en-US-JennyNeural";
 
-    /// <summary>Sample rate of audio fed into STT. Voice Live default is 24 kHz; Azure Speech accepts 16 kHz native.</summary>
+    /// <summary>Sample rate of audio fed into STT. Voice Live default is 24 kHz; Azure Speech accepts 16 kHz natively.</summary>
     public int InputSampleRate { get; init; } = 16000;
 
     /// <summary>Channel count of audio fed into STT.</summary>
     public int InputChannels { get; init; } = 1;
 
-    /// <summary>Sample rate of audio emitted by TTS. Stays 24 kHz to match the rest of the Voxa default chain.</summary>
+    /// <summary>Sample rate of audio emitted by TTS.</summary>
     public int OutputSampleRate { get; init; } = 24000;
 }

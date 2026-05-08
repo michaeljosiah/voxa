@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0-alpha] - 2026-05
+
+### Added
+
+- **`Voxa.Speech.Abstractions`** — new package. Hoists `ISpeechToTextEngine` / `ITextToSpeechEngine` and the generic `SpeechToTextProcessor` / `TextToSpeechProcessor` out of the Azure-specific package so any vendor can plug in.
+- **`Voxa.Speech.OpenAI`** — new package. `OpenAIWhisperEngine` (REST `/v1/audio/transcriptions`, buffer-and-flush) and `OpenAITextToSpeechEngine` (REST `/v1/audio/speech`, streaming PCM). Configurable base URL for OpenAI-compatible proxies.
+- **`Voxa.Speech.ElevenLabs`** — new package. `ElevenLabsTextToSpeechEngine` over the streaming TTS endpoint. Voice cloning, voice settings (stability, similarity, style, speed, speaker boost), regional endpoints.
+- **`Voxa.Speech.Mistral`** — new package. `MistralTextToSpeechEngine` for Mistral's Voxtral-TTS via the OpenAI-compatible `/v1/audio/speech` endpoint.
+
+### Changed
+
+- **`Voxa.Services.AzureSpeech` renamed to `Voxa.Speech.Azure`** to match the new vendor naming convention (`Voxa.Speech.<Vendor>`). Engines are unchanged; processor classes are now the generic ones from `Voxa.Speech.Abstractions`. Old package on nuget.org stops at v0.1.0-alpha.2; consumers should switch to `Voxa.Speech.Azure`.
+
+### Migration
+
+```csharp
+// Before (v0.1.x)
+.Then(new AzureSpeechSttProcessor(speechOpts))
+.Then(new AzureSpeechTtsProcessor(speechOpts))
+
+// After (v0.2.x)
+.Then(AzureSpeech.StreamingTranscription(speechOpts))
+.Then(AzureSpeech.Synthesis(speechOpts))
+// or, longhand:
+.Then(new SpeechToTextProcessor(new AzureSpeechToTextEngine(speechOpts)))
+.Then(new TextToSpeechProcessor(new AzureTextToSpeechEngine(speechOpts)))
+```
+
 ## [0.1.0-alpha.2] - 2026-05
 
 ### Added
@@ -49,6 +77,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 - Consuming processors (Voice Live, Azure Speech STT/TTS, Microsoft Agents) now forward `StartFrame`/`EndFrame` and other unrecognised frames downstream so the sink's `EndFrameObserved` fires and `runner.WaitAsync()` completes on graceful stop.
 
-[Unreleased]: https://github.com/michaeljosiah/voxa/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/michaeljosiah/voxa/compare/v0.2.0-alpha...HEAD
+[0.2.0-alpha]: https://github.com/michaeljosiah/voxa/compare/v0.1.0-alpha.2...v0.2.0-alpha
 [0.1.0-alpha.2]: https://github.com/michaeljosiah/voxa/compare/v0.1.0-alpha...v0.1.0-alpha.2
 [0.1.0-alpha]: https://github.com/michaeljosiah/voxa/releases/tag/v0.1.0-alpha

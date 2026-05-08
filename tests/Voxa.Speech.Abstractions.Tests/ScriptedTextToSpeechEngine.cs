@@ -1,10 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Voxa.Services.AzureSpeech.Engines;
+using Voxa.Speech;
 
-namespace Voxa.Services.AzureSpeech.Tests;
+namespace Voxa.Speech.Abstractions.Tests;
 
-/// <summary>In-memory <see cref="ITextToSpeechEngine"/> that yields scripted PCM chunks per text request.</summary>
 internal sealed class ScriptedTextToSpeechEngine : ITextToSpeechEngine
 {
     private readonly Func<string, byte[][]> _generate;
