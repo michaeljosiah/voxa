@@ -13,6 +13,7 @@ jobs:
   publish:
     name: Pack & publish to NuGet
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: write
     steps:
