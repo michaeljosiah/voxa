@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.1.0-alpha)'
+        required: true
+
+jobs:
+  publish:
+    name: Pack & publish to NuGet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore Voxa.slnx
+
+      - name: Build
+        run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test Voxa.slnx --configuration Release --no-build
+
+      - name: Pack
+        run: |
+          dotnet pack src/Voxa.Core/Voxa.Core.csproj                                   --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Testing/Voxa.Testing.csproj                             --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj   --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Services.AzureSpeech/Voxa.Services.AzureSpeech.csproj   --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Observability/Voxa.Observability.csproj                 --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --skip-duplicate
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: ./artifacts/*.nupkg
