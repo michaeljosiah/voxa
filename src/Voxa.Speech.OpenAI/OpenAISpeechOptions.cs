@@ -25,7 +25,7 @@ public sealed record OpenAISpeechOptions
     public string? SttLanguage { get; init; }
 
     /// <summary>How many seconds of audio to buffer before posting one Whisper batch. Trade-off: latency vs. cost-per-call. Default 3s.</summary>
-    public double SttBufferSeconds { get; init; } = 3.0;
+    public double SttBufferSeconds { get; init; } = 1.5;
 
     /// <summary>Sample rate of audio fed into STT (must match <see cref="Voxa.Frames.AudioRawFrame"/> input).</summary>
     public int InputSampleRate { get; init; } = 16000;

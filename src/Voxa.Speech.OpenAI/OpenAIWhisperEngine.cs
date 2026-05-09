@@ -93,7 +93,12 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         lock (_bufferLock)
         {
             if (_buffer.Length == 0) return;
-            if (!force && _buffer.Length < _bytesPerChunk) return;
+            // Always flush whatever's accumulated. The timer ticks every SttBufferSeconds — that
+            // IS the latency budget. The previous "wait for ≥ SttBufferSeconds of audio" check
+            // meant a short utterance never crossed the threshold, the timer kept skipping the
+            // flush, and the bot fell minutes behind. The `force` flag is kept for the StopAsync
+            // path where we explicitly want to drain regardless of state.
+            _ = force; // currently equivalent — kept for API symmetry with StopAsync path
             pcm = _buffer.ToArray();
             _buffer.SetLength(0);
         }
