@@ -10,11 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`Voxa.Services.OpenAIRealtime`** — new package. `OpenAIRealtimeProcessor` is a composite STT+LLM+TTS+VAD processor backed by the OpenAI Realtime API. Full-duplex WebSocket session, server-side voice activity detection, native interruption — sub-400 ms turns. The C# equivalent of Pipecat's `OpenAIRealtimeBetaService`. Use this instead of chaining `Voxa.Speech.OpenAI`'s Whisper + TTS engines when you want low-latency conversational voice without hallucinations on silence.
   - 9 unit tests cover session.update emission, audio buffer append, audio/transcript delta translation, interruption-on-bot-speaking, function calls, and error propagation.
-  - The sample app's `OpenAI Realtime (recommended)` route is the new default in the demo dropdown.
+- **`TranscriptionFilter`** (in `Voxa.Speech.Abstractions`) — drops final `TranscriptionFrame`s that match Whisper's well-known silence/breath hallucinations ("Thank you.", "Bye.", ".", "you", "Subscribe", etc.) plus user-tunable exact and substring blocklists, plus a minimum-length check. Critical when chaining Whisper REST with anything that would synthesise the bogus text. 5 unit tests.
+- **`SentenceAggregator`** (in `Voxa.Speech.Abstractions`) — buffers `LlmTextChunkFrame`s coming from a streaming LLM and emits whole-sentence `TextFrame`s downstream as soon as a sentence boundary lands. Lets a downstream `TextToSpeechProcessor` start synthesising the first sentence while the LLM is still generating the rest — Pipecat's `SentenceAggregator` pattern. Eager flush at end-of-buffer + drop on `UserStartedSpeakingFrame` interruption + leftover flush on `EndFrame`. 7 unit tests.
+- **`SileroVadOptions.PrerollDuration`** (default 300 ms) — `SileroVadProcessor` now keeps a rolling buffer of the last N audio windows and replays them downstream the moment the gate opens. Without this, the first 200 ms of every utterance was silently dropped (matching `StartDuration`), so the leading consonant of every sentence was lost on the way to STT. Matches Pipecat's `speech_pad_ms`.
+- Sample app: new **`/voice/openai-batch`** route — Whisper STT + `gpt-4o-mini` chat + OpenAI TTS, wired through `SileroVadProcessor` (or `SilenceGateProcessor`) + `TranscriptionFilter` + `MicrosoftAgentsProcessor` + `SentenceAggregator`. Designed to feel close to Realtime at ~45× lower cost (≈ $0.40/hr vs $18/hr).
 
 ### Changed
 
 - **`TextToSpeechProcessor` now forwards the input `TextFrame` / `LlmTextChunkFrame` downstream BEFORE synthesizing audio.** Mirrors Pipecat's TTS pattern. Transports / UI sinks can now render the spoken text in real time as the bot speaks. The previous behaviour was to silently consume the text frame, which left WebSocket clients with empty conversation bubbles. Two new tests pin the ordering: text frames arrive before `BotStartedSpeakingFrame` and the first `AudioRawFrame`.
+- Sample app's demo dropdown now leads with the cost-effective `OpenAI Whisper + gpt-4o-mini + TTS (cheap)` preset, with `OpenAI Realtime (premium)` as the second option. Old echo-only OpenAI route remains as `OpenAI Whisper + TTS (echo only)` for diagnostics.
 
 ## [0.3.0-alpha] - 2026-05
 

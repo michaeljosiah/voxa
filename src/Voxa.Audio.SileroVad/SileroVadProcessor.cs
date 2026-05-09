@@ -34,6 +34,10 @@ public sealed class SileroVadProcessor : FrameProcessor
     private TimeSpan _voicedAccum = TimeSpan.Zero;
     private TimeSpan _unvoicedAccum = TimeSpan.Zero;
 
+    // Pre-roll: keeps the last N windows so when the gate opens we don't lose the first word.
+    private readonly Queue<byte[]> _preroll = new();
+    private readonly int _prerollWindows;
+
     private float _peakProbThisSecond;
     private double _peakRmsThisSecond;
     private int _windowsThisSecond;
@@ -47,6 +51,7 @@ public sealed class SileroVadProcessor : FrameProcessor
         _logger = logger ?? NullLogger.Instance;
         _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
         _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
+        _prerollWindows = Math.Max(1, (int)Math.Ceiling(_options.PrerollDuration.TotalMilliseconds / _windowDuration.TotalMilliseconds));
     }
 
     /// <summary>The configured sample rate. Audio frames at other rates are forwarded untouched (with a warning).</summary>
@@ -131,10 +136,27 @@ public sealed class SileroVadProcessor : FrameProcessor
                 _windowsThisSecond = 0;
             }
 
+            // Convert this window to PCM16 once — we'll either buffer it (gate closed) or push it (gate open).
+            var pcmOut = new byte[_engine.WindowSize * 2];
+            for (int i = 0; i < _engine.WindowSize; i++)
+            {
+                short s = (short)Math.Clamp(window[i] * 32768f, short.MinValue, short.MaxValue);
+                BinaryPrimitives.WriteInt16LittleEndian(pcmOut.AsSpan(i * 2, 2), s);
+            }
+
             if (_isSpeaking && !wasSpeaking)
             {
-                _logger.LogDebug("SileroVad: gate OPENED (prob {Prob:F2}, rms {Rms:F4})", prob, rms);
+                _logger.LogDebug(
+                    "SileroVad: gate OPENED (prob {Prob:F2}, rms {Rms:F4}, prerolling {Count} windows ≈ {Ms} ms)",
+                    prob, rms, _preroll.Count, (int)(_preroll.Count * _windowDuration.TotalMilliseconds));
                 await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
+
+                // Flush the pre-roll buffer so the first syllable of the utterance reaches STT.
+                while (_preroll.Count > 0)
+                {
+                    var preBytes = _preroll.Dequeue();
+                    await PushFrameAsync(new AudioRawFrame(preBytes, audio.SampleRate, audio.Channels), ct).ConfigureAwait(false);
+                }
             }
             else if (!_isSpeaking && wasSpeaking)
             {
@@ -144,13 +166,13 @@ public sealed class SileroVadProcessor : FrameProcessor
 
             if (_isSpeaking)
             {
-                var pcmOut = new byte[_engine.WindowSize * 2];
-                for (int i = 0; i < _engine.WindowSize; i++)
-                {
-                    short s = (short)Math.Clamp(window[i] * 32768f, short.MinValue, short.MaxValue);
-                    BinaryPrimitives.WriteInt16LittleEndian(pcmOut.AsSpan(i * 2, 2), s);
-                }
                 await PushFrameAsync(new AudioRawFrame(pcmOut, audio.SampleRate, audio.Channels), ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // Gate closed — keep the last N windows so we can replay them when it opens.
+                _preroll.Enqueue(pcmOut);
+                while (_preroll.Count > _prerollWindows) _preroll.Dequeue();
             }
         }
     }

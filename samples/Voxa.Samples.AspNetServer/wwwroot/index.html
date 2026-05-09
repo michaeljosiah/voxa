@@ -383,10 +383,11 @@
   <div class="topbar">
     <div class="left">
       <select id="route" aria-label="Pipeline preset">
-        <option value="/voice/openai-realtime">OpenAI Realtime (recommended)</option>
+        <option value="/voice/openai-batch">OpenAI Whisper + gpt-4o-mini + TTS (cheap)</option>
+        <option value="/voice/openai-realtime">OpenAI Realtime (premium)</option>
         <option value="/voice/voice-live">Azure Voice Live</option>
         <option value="/voice/azure">Azure Speech echo</option>
-        <option value="/voice/openai">OpenAI Whisper + TTS (batch)</option>
+        <option value="/voice/openai">OpenAI Whisper + TTS (echo only)</option>
         <option value="/voice/azure-elevenlabs">Azure STT + ElevenLabs</option>
         <option value="/voice/azure-mistral">Azure STT + Mistral</option>
       </select>
@@ -469,6 +470,7 @@
 
 <script>
 const ROUTES = {
+  '/voice/openai-batch':     { inRate: 16000, outRate: 24000 },
   '/voice/openai-realtime':  { inRate: 24000, outRate: 24000 },
   '/voice/voice-live':       { inRate: 24000, outRate: 24000 },
   '/voice/azure':            { inRate: 16000, outRate: 24000 },

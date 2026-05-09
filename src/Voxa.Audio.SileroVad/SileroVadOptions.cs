@@ -38,4 +38,13 @@ public sealed record SileroVadOptions
     /// lenient than Pipecat's 200 ms to avoid clipping the tail of utterances.
     /// </summary>
     public TimeSpan StopDuration { get; init; } = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Audio kept in a rolling buffer that's prepended to the gated stream when speech is
+    /// detected — so the first word's onset isn't lost while the gate is making up its mind.
+    /// Default 300 ms (matches Pipecat's <c>speech_pad_ms</c>). Must be at least
+    /// <see cref="StartDuration"/> for the rule "fire StartedSpeaking with the audio that
+    /// triggered it" to hold.
+    /// </summary>
+    public TimeSpan PrerollDuration { get; init; } = TimeSpan.FromMilliseconds(300);
 }

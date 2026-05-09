@@ -47,7 +47,7 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 
 | Package | STT | TTS | Description |
 |---------|-----|-----|-------------|
-| `Voxa.Speech.Abstractions` | — | — | `ISpeechToTextEngine`, `ITextToSpeechEngine`, generic `SpeechToTextProcessor` / `TextToSpeechProcessor`, `SilenceGateProcessor` (energy VAD). |
+| `Voxa.Speech.Abstractions` | — | — | `ISpeechToTextEngine`, `ITextToSpeechEngine`, generic `SpeechToTextProcessor` / `TextToSpeechProcessor`, `SilenceGateProcessor` (energy VAD), `TranscriptionFilter` (drops Whisper hallucinations), `SentenceAggregator` (LLM tokens → sentence-sized TTS chunks). |
 | `Voxa.Speech.Azure` | ✅ | ✅ | Azure Cognitive Services Speech SDK. |
 | `Voxa.Speech.OpenAI` | ✅ | ✅ | Whisper REST + OpenAI TTS (`/v1/audio/speech`). Works against OpenAI-compatible proxies. |
 | `Voxa.Speech.ElevenLabs` | — | ✅ | Streaming TTS, voice cloning, voice settings. |

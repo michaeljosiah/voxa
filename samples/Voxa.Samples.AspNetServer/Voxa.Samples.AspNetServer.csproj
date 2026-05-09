@@ -14,12 +14,18 @@
     <ProjectReference Include="..\..\src\Voxa.Transports.WebSocket\Voxa.Transports.WebSocket.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Services.AzureVoiceLive\Voxa.Services.AzureVoiceLive.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Services.OpenAIRealtime\Voxa.Services.OpenAIRealtime.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Services.MicrosoftAgents\Voxa.Services.MicrosoftAgents.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.Azure\Voxa.Speech.Azure.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenAI" Version="2.10.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.5.2" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,13 @@
 using System.Net.WebSockets;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using OpenAI;
 using Voxa.Audio.SileroVad;
 using Voxa.Frames;
 using Voxa.Pipelines;
 using Voxa.Processors;
 using Voxa.Services.AzureVoiceLive;
+using Voxa.Services.MicrosoftAgents;
 using Voxa.Services.OpenAIRealtime;
 using Voxa.Speech;
 using Voxa.Speech.Azure;
@@ -123,6 +127,47 @@ app.Map("/voice/openai-realtime", async (HttpContext ctx) =>
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = options.InputSampleRate }))
         .Then(new OpenAIRealtimeProcessor(options))
+        .Sink(new WebSocketAudioSink(ws));
+
+    await RunAsync(pipeline, ws, ctx, app.Logger);
+});
+
+// Cost-effective alternative to /voice/openai-realtime: chains Whisper STT + gpt-4o-mini chat +
+// OpenAI TTS as separate REST calls. Designed to feel close to Realtime via:
+//   - Silero VAD with pre-roll (don't lose first word, don't transcribe breath)
+//   - TranscriptionFilter (drop "Thank you" / "Bye" / "." Whisper hallucinations)
+//   - SentenceAggregator (TTS speaks the first sentence the moment it lands, doesn't wait for the LLM to finish)
+// Cost is roughly $0.40/hr vs Realtime's $18/hr — ~45x cheaper for an extra ~700ms of turn latency.
+app.Map("/voice/openai-batch", async (HttpContext ctx) =>
+{
+    if (!await EnsureWebSocketAsync(ctx)) return;
+    var openai = ReadOpenAIOptions(builder.Configuration);
+    if (openai is null) { await Missing(ctx, "OpenAI"); return; }
+
+    var chatModel = builder.Configuration["OpenAI:ChatModel"] ?? "gpt-4o-mini";
+    var instructions = builder.Configuration["OpenAI:ChatInstructions"]
+        ?? "You are a friendly voice assistant. Keep responses to 1-2 short sentences. Be conversational, not formal.";
+
+    using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+
+    // Build the MAF agent: OpenAI ChatClient -> IChatClient -> ChatClientAgent.
+    var openAiClient = new OpenAIClient(openai.ApiKey);
+    var chatClient = openAiClient.GetChatClient(chatModel).AsIChatClient();
+    var agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
+    {
+        Name = "VoxaSampleAgent",
+        ChatOptions = new ChatOptions { Instructions = instructions },
+    });
+
+    var pipeline = Pipeline.Build()
+        .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = openai.InputSampleRate }))
+        .Then(new AudioArrivalLogger(app.Logger))
+        .Then(MakeVad(builder.Configuration))
+        .Then(OpenAISpeech.StreamingTranscription(openai))
+        .Then(new TranscriptionFilter())
+        .Then(new MicrosoftAgentsProcessor(agent))
+        .Then(new SentenceAggregator())
+        .Then(OpenAISpeech.Synthesis(openai))
         .Sink(new WebSocketAudioSink(ws));
 
     await RunAsync(pipeline, ws, ctx, app.Logger);
