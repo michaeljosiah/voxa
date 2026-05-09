@@ -14,17 +14,21 @@ using Voxa.Transports.WebSocket;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-// VAD selector — `Voxa:Vad` config: "Silero" (default, ML-based), "Silence" (energy-only), "None".
+// VAD selector — `Voxa:Vad` config: "Silence" (default, energy-only), "Silero" (ML-based), "None".
+// Default is the energy gate because (a) it's the known-good for the demo, (b) Silero's defaults
+// take per-environment tuning to match user mic characteristics — opt-in once you've verified
+// the rest of the pipeline works.
 static FrameProcessor MakeVad(IConfiguration cfg)
 {
-    var mode = cfg["Voxa:Vad"]?.ToLowerInvariant() ?? "silero";
+    var mode = cfg["Voxa:Vad"]?.ToLowerInvariant() ?? "silence";
     return mode switch
     {
-        "silence" or "silencegate" or "energy" => new SilenceGateProcessor(),
+        "silero" or "silerovad" or "ml" => new SileroVadProcessor(),
         "none" or "off" or "disabled" => new PassthroughVad(),
-        _ => new SileroVadProcessor(),
+        _ => new SilenceGateProcessor(),
     };
 }
+
 
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(60) });
 app.UseDefaultFiles();
@@ -70,6 +74,7 @@ app.Map("/voice/azure", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new AudioArrivalLogger(app.Logger))
         .Then(MakeVad(builder.Configuration))
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
@@ -88,6 +93,7 @@ app.Map("/voice/openai", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = openai.InputSampleRate }))
+        .Then(new AudioArrivalLogger(app.Logger))
         .Then(MakeVad(builder.Configuration))
         .Then(OpenAISpeech.StreamingTranscription(openai))
         .Then(new EchoTranscriptionProcessor())
@@ -108,6 +114,7 @@ app.Map("/voice/azure-elevenlabs", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new AudioArrivalLogger(app.Logger))
         .Then(MakeVad(builder.Configuration))
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
@@ -128,6 +135,7 @@ app.Map("/voice/azure-mistral", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new AudioArrivalLogger(app.Logger))
         .Then(MakeVad(builder.Configuration))
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
@@ -258,4 +266,42 @@ internal sealed class PassthroughVad : FrameProcessor
     public PassthroughVad() : base("PassthroughVad") { }
     protected override ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
         => PushFrameAsync(frame, ct);
+}
+
+/// <summary>
+/// Tracks audio-arrival rate and RMS so the server console reveals whether voice is even
+/// reaching the pipeline. Insert immediately after WebSocketAudioSource. Logs once per second.
+/// </summary>
+internal sealed class AudioArrivalLogger : FrameProcessor
+{
+    private readonly ILogger _logger;
+    private int _framesThisSecond;
+    private long _bytesThisSecond;
+    private double _peakRmsThisSecond;
+    private DateTime _windowStart = DateTime.UtcNow;
+
+    public AudioArrivalLogger(ILogger logger) : base("AudioArrivalLogger") { _logger = logger; }
+
+    protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+    {
+        if (frame is AudioRawFrame audio)
+        {
+            _framesThisSecond++;
+            _bytesThisSecond += audio.Pcm.Length;
+            _peakRmsThisSecond = Math.Max(_peakRmsThisSecond, SilenceGateProcessor.ComputeRms(audio.Pcm.Span));
+
+            var elapsed = DateTime.UtcNow - _windowStart;
+            if (elapsed >= TimeSpan.FromSeconds(1))
+            {
+                _logger.LogInformation(
+                    "audio inbound: {Frames} frames / {Bytes} B / peak RMS {Rms:F4} (sample rate {Sr} Hz)",
+                    _framesThisSecond, _bytesThisSecond, _peakRmsThisSecond, audio.SampleRate);
+                _framesThisSecond = 0;
+                _bytesThisSecond = 0;
+                _peakRmsThisSecond = 0;
+                _windowStart = DateTime.UtcNow;
+            }
+        }
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);
+    }
 }

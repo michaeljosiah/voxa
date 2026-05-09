@@ -709,13 +709,34 @@ async function connect() {
   micCtx = new AudioContext({ sampleRate: cfg.inRate });
   await micCtx.audioWorklet.addModule('/recorder-worklet.js');
 
+  // Diagnostic: did the browser actually honour our requested sample rate?
+  if (micCtx.sampleRate !== cfg.inRate) {
+    event('mic-rate-mismatch', `requested ${cfg.inRate} Hz, got ${micCtx.sampleRate} Hz`, 'error');
+  } else {
+    event('mic-rate', `${micCtx.sampleRate} Hz, ${Math.floor(cfg.inRate / 20)} samples/chunk (50ms)`, '');
+  }
+
   const source = micCtx.createMediaStreamSource(micStream);
   workletNode = new AudioWorkletNode(micCtx, 'recorder', {
     processorOptions: { chunkSamples: Math.floor(cfg.inRate / 20) },
   });
-  workletNode.port.onmessage = (e) => {
+  // Diagnostic: count how many audio chunks the worklet posts each second.
+  let workletFrames = 0;
+  let workletBytes = 0;
+  setInterval(() => {
+    if (workletFrames > 0) {
+      event('audio-out', `${workletFrames} frames / ${workletBytes}B`, '');
+      workletFrames = 0;
+      workletBytes = 0;
+    }
+  }, 1000);
+  const origPostHandler = (e) => {
     if (ws?.readyState === WebSocket.OPEN) ws.send(e.data);
+    workletFrames++;
+    workletBytes += e.data.byteLength;
   };
+  workletNode.port.onmessage = origPostHandler;
+  // Replace the original handler below to avoid double-wiring:
   source.connect(workletNode);
 
   micAnalyser = micCtx.createAnalyser();
