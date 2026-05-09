@@ -110,6 +110,41 @@ public class MicrosoftAgentsProcessorTests
     }
 
     [Fact]
+    public async Task TranscriptionFrame_Is_Forwarded_Before_First_LlmTextChunk()
+    {
+        // UI rendering depends on this: the user's transcription bubble must appear before
+        // the assistant's reply text starts streaming in. Otherwise the chat shows the bot
+        // talking before the user even said anything.
+        var (runner, captured, pipeline) = Build(_ => Updates(
+            new TextContent("Sure, "),
+            new TextContent("here you go.")));
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+
+            await pipeline.Source.IngestAsync(new TranscriptionFrame("what's up?", IsFinal: true));
+
+            await captured.WaitForAsync(3, TimeSpan.FromSeconds(2));
+
+            int IndexOf(Func<Frame, bool> p)
+            {
+                for (int i = 0; i < captured.Captured.Count; i++)
+                    if (p(captured.Captured[i])) return i;
+                return -1;
+            }
+
+            var transcriptionIndex = IndexOf(f => f is TranscriptionFrame t && t.IsFinal && t.Text == "what's up?");
+            var firstChunkIndex = IndexOf(f => f is LlmTextChunkFrame);
+
+            Assert.True(transcriptionIndex >= 0, "TranscriptionFrame must reach the sink.");
+            Assert.True(firstChunkIndex >= 0, "LLM text chunks must reach the sink.");
+            Assert.True(transcriptionIndex < firstChunkIndex,
+                "TranscriptionFrame must arrive BEFORE the first LlmTextChunkFrame so the user bubble renders before the bot reply.");
+        }
+    }
+
+    [Fact]
     public async Task Agent_Exception_Surfaces_As_PipelineFailedException()
     {
         var (runner, _, pipeline) = Build(_ => Throws());

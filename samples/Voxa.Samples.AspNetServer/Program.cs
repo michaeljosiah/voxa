@@ -172,13 +172,21 @@ app.Map("/voice/openai-batch", async (HttpContext ctx) =>
         ChatOptions = new ChatOptions { Instructions = instructions },
     });
 
+    // Per-connection in-memory session — gives the bot conversation memory for the lifetime of
+    // this WebSocket. AgentSession isn't IDisposable, just drop on disconnect.
+    // For AONIK integration, replace the no-arg overload with
+    //   agent.CreateSessionAsync(conversationId, ct)
+    // pointing at the persisted ChatThread id, so memory survives reconnects + flows back to
+    // the SSE chat tab.
+    var session = await agent.CreateSessionAsync(ctx.RequestAborted);
+
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = openai.InputSampleRate }))
         .Then(new AudioArrivalLogger(app.Logger))
         .Then(MakeVad(builder.Configuration))
         .Then(OpenAISpeech.StreamingTranscription(openai))
         .Then(new TranscriptionFilter())
-        .Then(new MicrosoftAgentsProcessor(agent))
+        .Then(new MicrosoftAgentsProcessor(agent, session))
         .Then(new SentenceAggregator())
         .Then(OpenAISpeech.Synthesis(openai))
         .Sink(new WebSocketAudioSink(ws));

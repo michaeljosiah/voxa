@@ -47,9 +47,12 @@ public sealed class MicrosoftAgentsProcessor : FrameProcessor
         switch (frame)
         {
             case TranscriptionFrame t when t.IsFinal && !string.IsNullOrWhiteSpace(t.Text):
-                await RunAgentAsync(t.Text, ct).ConfigureAwait(false);
-                // Also forward the transcription downstream — useful for UI / observability.
+                // Forward the transcription downstream BEFORE running the agent so transports
+                // can render the user's bubble immediately. Otherwise the bot's reply text
+                // arrives at the sink first (LLM streams while we still hold the frame) and
+                // the user transcript appears AFTER the bot has already replied.
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                await RunAgentAsync(t.Text, ct).ConfigureAwait(false);
                 return;
             case TextFrame txt when !string.IsNullOrWhiteSpace(txt.Text):
                 await RunAgentAsync(txt.Text, ct).ConfigureAwait(false);
