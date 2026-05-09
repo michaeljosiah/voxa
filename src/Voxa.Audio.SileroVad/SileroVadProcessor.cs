@@ -32,6 +32,9 @@ public sealed class SileroVadProcessor : FrameProcessor
     private bool _isSpeaking;
     private int _consecutiveSilent;
     private int _consecutiveSpeech;
+    private float _peakProbThisSecond;
+    private int _windowsThisSecond;
+    private readonly int _windowsPerSecond;
 
     public SileroVadProcessor(SileroVadOptions? options = null, ILogger? logger = null)
         : base("SileroVad")
@@ -39,6 +42,7 @@ public sealed class SileroVadProcessor : FrameProcessor
         _options = options ?? new SileroVadOptions();
         _engine = new SileroVadEngine(_options.SampleRate);
         _logger = logger ?? NullLogger.Instance;
+        _windowsPerSecond = _options.SampleRate / _engine.WindowSize; // ~31 at 16 kHz
     }
 
     /// <summary>The configured sample rate. Audio frames at other rates are forwarded untouched (with a warning).</summary>
@@ -84,12 +88,27 @@ public sealed class SileroVadProcessor : FrameProcessor
             bool wasSpeaking = _isSpeaking;
             UpdateGateState(prob);
 
+            // Track peak probability per second so users can tune thresholds. Logged at Debug.
+            _peakProbThisSecond = Math.Max(_peakProbThisSecond, prob);
+            _windowsThisSecond++;
+            if (_windowsThisSecond >= _windowsPerSecond)
+            {
+                _logger.LogDebug(
+                    "SileroVad: peak speech probability over last {Count} windows = {Peak:F2} (gate {State}, activate@{Act:F2} / deactivate@{Deact:F2})",
+                    _windowsThisSecond, _peakProbThisSecond, _isSpeaking ? "OPEN" : "closed",
+                    _options.ActivationThreshold, _options.DeactivationThreshold);
+                _peakProbThisSecond = 0;
+                _windowsThisSecond = 0;
+            }
+
             if (_isSpeaking && !wasSpeaking)
             {
+                _logger.LogDebug("SileroVad: gate OPENED (prob {Prob:F2})", prob);
                 await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
             }
             else if (!_isSpeaking && wasSpeaking)
             {
+                _logger.LogDebug("SileroVad: gate CLOSED (prob {Prob:F2})", prob);
                 await PushFrameAsync(new UserStoppedSpeakingFrame(), ct).ConfigureAwait(false);
             }
 
