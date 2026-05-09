@@ -7,19 +7,19 @@ using Voxa.Processors;
 namespace Voxa.Audio.SileroVad;
 
 /// <summary>
-/// ML-based voice activity gate using the Silero VAD ONNX model. Buffers incoming audio into
-/// fixed-size windows, runs the model on each window, and applies hysteresis + minimum-duration
-/// rules to decide when to open and close the gate.
+/// ML-based voice activity gate combining the Silero VAD v6 ONNX model with an energy floor
+/// (Pipecat-style: a window is "voiced" only if confidence ≥ threshold AND RMS ≥ floor) and
+/// time-based start/stop windows so the gate doesn't flap on a single noisy or quiet frame.
 ///
 /// <para>
 /// Emits <see cref="UserStartedSpeakingFrame"/> / <see cref="UserStoppedSpeakingFrame"/> on
-/// transitions (same shape as <c>SilenceGateProcessor</c> and Voice Live, so the downstream
-/// <c>SpeechToTextProcessor</c> automatically force-flushes its batch engine on speech-end).
+/// transitions — same shape as <c>SilenceGateProcessor</c> and Voice Live, so the downstream
+/// <c>SpeechToTextProcessor</c> automatically force-flushes its batch engine on speech-end.
 /// </para>
 ///
 /// <para>
 /// Use as a drop-in upgrade for <c>SilenceGateProcessor</c> when energy-only filtering isn't
-/// enough — keyboard noise, fans, distant chatter all stay closed; quiet but real speech opens.
+/// enough — keyboard noise / fans / distant chatter stay closed; quiet but real speech opens.
 /// </para>
 /// </summary>
 public sealed class SileroVadProcessor : FrameProcessor
@@ -29,10 +29,13 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly ILogger _logger;
 
     private readonly List<float> _samples = new();
+    private readonly TimeSpan _windowDuration;
     private bool _isSpeaking;
-    private int _consecutiveSilent;
-    private int _consecutiveSpeech;
+    private TimeSpan _voicedAccum = TimeSpan.Zero;
+    private TimeSpan _unvoicedAccum = TimeSpan.Zero;
+
     private float _peakProbThisSecond;
+    private double _peakRmsThisSecond;
     private int _windowsThisSecond;
     private readonly int _windowsPerSecond;
 
@@ -42,7 +45,8 @@ public sealed class SileroVadProcessor : FrameProcessor
         _options = options ?? new SileroVadOptions();
         _engine = new SileroVadEngine(_options.SampleRate);
         _logger = logger ?? NullLogger.Instance;
-        _windowsPerSecond = _options.SampleRate / _engine.WindowSize; // ~31 at 16 kHz
+        _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
+        _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
     }
 
     /// <summary>The configured sample rate. Audio frames at other rates are forwarded untouched (with a warning).</summary>
@@ -77,7 +81,6 @@ public sealed class SileroVadProcessor : FrameProcessor
             _samples.Add(s / 32768f);
         }
 
-        // Process complete windows.
         while (_samples.Count >= _engine.WindowSize)
         {
             var window = new float[_engine.WindowSize];
@@ -85,36 +88,62 @@ public sealed class SileroVadProcessor : FrameProcessor
             _samples.RemoveRange(0, _engine.WindowSize);
 
             float prob = _engine.Probability(window);
-            bool wasSpeaking = _isSpeaking;
-            UpdateGateState(prob);
+            double rms = ComputeRms(window);
 
-            // Track peak probability per second so users can tune thresholds. Logged at Debug.
+            // Pipecat-style: BOTH must agree.
+            bool voiced = prob >= _options.ConfidenceThreshold && rms >= _options.MinRms;
+
+            // Track sustained durations.
+            if (voiced)
+            {
+                _voicedAccum += _windowDuration;
+                _unvoicedAccum = TimeSpan.Zero;
+            }
+            else
+            {
+                _unvoicedAccum += _windowDuration;
+                _voicedAccum = TimeSpan.Zero;
+            }
+
+            bool wasSpeaking = _isSpeaking;
+            if (!_isSpeaking && voiced && _voicedAccum >= _options.StartDuration)
+            {
+                _isSpeaking = true;
+            }
+            else if (_isSpeaking && !voiced && _unvoicedAccum >= _options.StopDuration)
+            {
+                _isSpeaking = false;
+            }
+
+            // Per-second diagnostic so users can tune.
             _peakProbThisSecond = Math.Max(_peakProbThisSecond, prob);
+            _peakRmsThisSecond = Math.Max(_peakRmsThisSecond, rms);
             _windowsThisSecond++;
             if (_windowsThisSecond >= _windowsPerSecond)
             {
                 _logger.LogDebug(
-                    "SileroVad: peak speech probability over last {Count} windows = {Peak:F2} (gate {State}, activate@{Act:F2} / deactivate@{Deact:F2})",
-                    _windowsThisSecond, _peakProbThisSecond, _isSpeaking ? "OPEN" : "closed",
-                    _options.ActivationThreshold, _options.DeactivationThreshold);
+                    "SileroVad: peak prob {Prob:F2} (threshold {Conf:F2}), peak RMS {Rms:F4} (floor {Floor:F4}), gate {State}",
+                    _peakProbThisSecond, _options.ConfidenceThreshold,
+                    _peakRmsThisSecond, _options.MinRms,
+                    _isSpeaking ? "OPEN" : "closed");
                 _peakProbThisSecond = 0;
+                _peakRmsThisSecond = 0;
                 _windowsThisSecond = 0;
             }
 
             if (_isSpeaking && !wasSpeaking)
             {
-                _logger.LogDebug("SileroVad: gate OPENED (prob {Prob:F2})", prob);
+                _logger.LogDebug("SileroVad: gate OPENED (prob {Prob:F2}, rms {Rms:F4})", prob, rms);
                 await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
             }
             else if (!_isSpeaking && wasSpeaking)
             {
-                _logger.LogDebug("SileroVad: gate CLOSED (prob {Prob:F2})", prob);
+                _logger.LogDebug("SileroVad: gate CLOSED (prob {Prob:F2}, rms {Rms:F4})", prob, rms);
                 await PushFrameAsync(new UserStoppedSpeakingFrame(), ct).ConfigureAwait(false);
             }
 
             if (_isSpeaking)
             {
-                // Re-emit this window's worth of audio downstream (gate is open).
                 var pcmOut = new byte[_engine.WindowSize * 2];
                 for (int i = 0; i < _engine.WindowSize; i++)
                 {
@@ -126,42 +155,12 @@ public sealed class SileroVadProcessor : FrameProcessor
         }
     }
 
-    private void UpdateGateState(float prob)
+    private static double ComputeRms(ReadOnlySpan<float> window)
     {
-        if (_isSpeaking)
-        {
-            if (prob < _options.DeactivationThreshold)
-            {
-                _consecutiveSilent++;
-                _consecutiveSpeech = 0;
-                if (_consecutiveSilent >= _options.MinSilenceWindows)
-                {
-                    _isSpeaking = false;
-                    _consecutiveSilent = 0;
-                }
-            }
-            else
-            {
-                _consecutiveSilent = 0;
-            }
-        }
-        else
-        {
-            if (prob >= _options.ActivationThreshold)
-            {
-                _consecutiveSpeech++;
-                _consecutiveSilent = 0;
-                if (_consecutiveSpeech >= _options.MinSpeechWindows)
-                {
-                    _isSpeaking = true;
-                    _consecutiveSpeech = 0;
-                }
-            }
-            else
-            {
-                _consecutiveSpeech = 0;
-            }
-        }
+        if (window.Length == 0) return 0;
+        double sumSquares = 0;
+        for (int i = 0; i < window.Length; i++) sumSquares += window[i] * window[i];
+        return Math.Sqrt(sumSquares / window.Length);
     }
 
     protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)

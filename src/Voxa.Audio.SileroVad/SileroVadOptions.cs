@@ -1,31 +1,41 @@
 namespace Voxa.Audio.SileroVad;
 
 /// <summary>
-/// Tuning knobs for <see cref="SileroVadProcessor"/>. Defaults are tuned for browser-mic input
-/// with aggressive AGC + noise suppression — those compress dynamic range and pull speech
-/// probabilities into the 0.3–0.6 range. For clean far-field mics, raise the activation
-/// threshold to 0.5–0.7 to reduce false positives.
+/// Tuning knobs for <see cref="SileroVadProcessor"/>. Defaults follow Pipecat's recipe — a
+/// modest VAD confidence threshold combined with a low energy floor and time-based
+/// start/stop windows. Browser-mic audio under aggressive AGC compresses dynamic range
+/// and Silero v6's probabilities can hover lower than studio audio; both signals together
+/// rejects keyboard / fan / chair noise without clipping real speech.
 /// </summary>
 public sealed record SileroVadOptions
 {
-    /// <summary>Sample rate of incoming audio. Silero v5 supports 16000 (512-sample windows) and 8000 (256-sample windows).</summary>
+    /// <summary>Sample rate of incoming audio. Silero v6 supports 16000 (512-sample windows) and 8000 (256-sample windows).</summary>
     public int SampleRate { get; init; } = 16000;
 
     /// <summary>
-    /// Speech-probability threshold to OPEN the gate. Default 0.3 is lenient — works well for
-    /// browser mics under AGC. For studio mics, try 0.5–0.7.
+    /// Speech-probability threshold from the VAD model. Frame is "voiced" only when
+    /// probability ≥ this value. Default 0.5 — Silero's standard. Pipecat uses 0.7
+    /// for clean far-field; lower (0.3) for noisy / AGC'd browser mics.
     /// </summary>
-    public float ActivationThreshold { get; init; } = 0.3f;
+    public float ConfidenceThreshold { get; init; } = 0.5f;
 
     /// <summary>
-    /// Speech-probability threshold to CLOSE the gate. Lower than <see cref="ActivationThreshold"/>
-    /// for hysteresis — once we believe the user is speaking, stay in that state through brief dips.
+    /// Minimum normalized RMS to consider a window "voiced", combined with
+    /// <see cref="ConfidenceThreshold"/> via AND. Drops pure silence and very low-energy
+    /// noise even when the model returns spurious confidence. Default 0.003 = very lenient
+    /// floor (well below typical speech RMS of 0.05+).
     /// </summary>
-    public float DeactivationThreshold { get; init; } = 0.2f;
+    public double MinRms { get; init; } = 0.003;
 
-    /// <summary>How many sustained silent windows before declaring speech-end. Default 8 windows × 32 ms = ~256 ms.</summary>
-    public int MinSilenceWindows { get; init; } = 8;
+    /// <summary>
+    /// Sustained voiced duration before the gate opens. Default 200 ms (Pipecat's
+    /// <c>start_secs</c>). Lower for snappier triggers; higher to filter out brief sounds.
+    /// </summary>
+    public TimeSpan StartDuration { get; init; } = TimeSpan.FromMilliseconds(200);
 
-    /// <summary>How many sustained speech windows before declaring speech-start. Default 1 — open immediately on first detection to minimise latency.</summary>
-    public int MinSpeechWindows { get; init; } = 1;
+    /// <summary>
+    /// Sustained unvoiced duration before the gate closes. Default 500 ms — slightly more
+    /// lenient than Pipecat's 200 ms to avoid clipping the tail of utterances.
+    /// </summary>
+    public TimeSpan StopDuration { get; init; } = TimeSpan.FromMilliseconds(500);
 }
