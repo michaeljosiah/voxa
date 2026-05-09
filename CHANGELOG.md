@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0-alpha] - 2026-05
+
+### Added
+
+- **`Voxa.Audio.SileroVad`** — new package. ML-based voice activity detection using the bundled Silero VAD v5 ONNX model (~2.3 MB embedded resource, MIT-licensed). Same emission contract as `SilenceGateProcessor` (`UserStartedSpeakingFrame` / `UserStoppedSpeakingFrame` on transitions) so it's a drop-in upgrade. Handles keyboard noise, fans, distant chatter, music — anything `SilenceGateProcessor`'s energy threshold gets confused by.
+  - `SileroVadEngine` — thin stateful wrapper around the ONNX model. Supports 16 kHz (512-sample windows) and 8 kHz (256-sample windows). LSTM hidden state persists across calls.
+  - `SileroVadProcessor` — `FrameProcessor` with hysteresis (separate activation / deactivation thresholds) and minimum-duration rules (default 64 ms speech-on / 256 ms speech-off).
+  - 11 unit tests cover construction, sample-rate validation, silence classification, and processor pass-through behaviour.
+
+### Changed
+
+- Sample app's granular routes use `SileroVadProcessor` by default. Override with `Voxa:Vad=Silence` (energy gate) or `Voxa:Vad=None` (no VAD) in `appsettings.json` / user-secrets.
+
 ## [0.2.0-alpha] - 2026-05
 
 ### Added
@@ -77,7 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 - Consuming processors (Voice Live, Azure Speech STT/TTS, Microsoft Agents) now forward `StartFrame`/`EndFrame` and other unrecognised frames downstream so the sink's `EndFrameObserved` fires and `runner.WaitAsync()` completes on graceful stop.
 
-[Unreleased]: https://github.com/michaeljosiah/voxa/compare/v0.2.0-alpha...HEAD
+[Unreleased]: https://github.com/michaeljosiah/voxa/compare/v0.3.0-alpha...HEAD
+[0.3.0-alpha]: https://github.com/michaeljosiah/voxa/compare/v0.2.0-alpha...v0.3.0-alpha
 [0.2.0-alpha]: https://github.com/michaeljosiah/voxa/compare/v0.1.0-alpha.2...v0.2.0-alpha
 [0.1.0-alpha.2]: https://github.com/michaeljosiah/voxa/compare/v0.1.0-alpha...v0.1.0-alpha.2
 [0.1.0-alpha]: https://github.com/michaeljosiah/voxa/releases/tag/v0.1.0-alpha

@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\src\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
   </ItemGroup>
 
 </Project>

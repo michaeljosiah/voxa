@@ -59,6 +59,7 @@ jobs:
           dotnet pack src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj                     --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj             --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Speech.Mistral/Voxa.Speech.Mistral.csproj                   --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj                 --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
 
       - name: Push to NuGet
         run: |
