@@ -57,6 +57,7 @@ app.Map("/voice/azure", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new SilenceGateProcessor())
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
         .Then(AzureSpeech.Synthesis(azure))
@@ -74,6 +75,7 @@ app.Map("/voice/openai", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = openai.InputSampleRate }))
+        .Then(new SilenceGateProcessor())
         .Then(OpenAISpeech.StreamingTranscription(openai))
         .Then(new EchoTranscriptionProcessor())
         .Then(OpenAISpeech.Synthesis(openai))
@@ -93,6 +95,7 @@ app.Map("/voice/azure-elevenlabs", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new SilenceGateProcessor())
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
         .Then(ElevenLabs.Synthesis(elevenlabs))
@@ -112,6 +115,7 @@ app.Map("/voice/azure-mistral", async (HttpContext ctx) =>
     using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = azure.InputSampleRate }))
+        .Then(new SilenceGateProcessor())
         .Then(AzureSpeech.StreamingTranscription(azure))
         .Then(new EchoTranscriptionProcessor())
         .Then(Mistral.Synthesis(mistral))
