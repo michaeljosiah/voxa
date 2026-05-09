@@ -24,8 +24,14 @@ public sealed record OpenAISpeechOptions
     /// <summary>Optional BCP-47 language hint for STT. Null lets Whisper auto-detect.</summary>
     public string? SttLanguage { get; init; }
 
-    /// <summary>How many seconds of audio to buffer before posting one Whisper batch. Trade-off: latency vs. cost-per-call. Default 3s.</summary>
-    public double SttBufferSeconds { get; init; } = 1.5;
+    /// <summary>
+    /// SAFETY BACKSTOP only — maximum seconds of audio to buffer before force-flushing to Whisper.
+    /// In normal operation Whisper is flushed on <c>UserStoppedSpeakingFrame</c> (driven by VAD),
+    /// matching Pipecat's <c>SegmentedSTTService</c> behaviour. This timeout only fires for runaway
+    /// monologues where the VAD never detects speech-end (e.g. continuous background music).
+    /// Default 30 s. Set to 0 to disable the timer entirely.
+    /// </summary>
+    public double SttBufferSeconds { get; init; } = 30.0;
 
     /// <summary>Sample rate of audio fed into STT (must match <see cref="Voxa.Frames.AudioRawFrame"/> input).</summary>
     public int InputSampleRate { get; init; } = 16000;

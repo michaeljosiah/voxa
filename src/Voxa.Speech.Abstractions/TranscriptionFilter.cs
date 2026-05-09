@@ -35,9 +35,11 @@ public sealed class TranscriptionFilter : FrameProcessor
         "bye.", "bye", "bye-bye.", "bye-bye", "goodbye.", "goodbye",
         "you.", "you", ".", "..", "...", "?", "!",
         "subscribe.", "subscribe", "please subscribe.", "please subscribe",
-        "okay.", "okay", "ok.", "ok",
-        "uh.", "uh", "um.", "um", "hmm.", "hmm",
-        "[music]", "(music)", "[silence]", "(silence)",
+        "okay.", "okay", "ok.", "ok", "yeah.", "yeah",
+        "uh.", "uh", "um.", "um", "hmm.", "hmm", "huh.", "huh",
+        "pfft.", "pfft", "psst.", "psst", "sh.", "shh.", "shhh.", "tsk.",
+        "[music]", "(music)", "[silence]", "(silence)", "[laughter]", "(laughter)",
+        "[applause]", "(applause)", "[breathing]", "(breathing)", "[sigh]", "(sigh)",
     };
 
     /// <summary>Default substrings (case-insensitive) that trigger a drop, e.g. "subscribe to my channel".</summary>

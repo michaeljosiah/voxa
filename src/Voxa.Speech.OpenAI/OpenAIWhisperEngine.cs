@@ -42,7 +42,13 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _bytesPerChunk = (int)(_options.InputSampleRate * 2 * _options.SttBufferSeconds);
-        _flushLoop = Task.Run(() => FlushLoopAsync(_cts.Token));
+        // Periodic timer is now a SAFETY BACKSTOP (default 30s) — primary flush path is
+        // FlushAsync() called by SpeechToTextProcessor on UserStoppedSpeakingFrame. Setting
+        // SttBufferSeconds to 0 disables the timer entirely (caller relies fully on VAD).
+        if (_options.SttBufferSeconds > 0)
+        {
+            _flushLoop = Task.Run(() => FlushLoopAsync(_cts.Token));
+        }
         return Task.CompletedTask;
     }
 
@@ -88,7 +94,12 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(_options.SttBufferSeconds * 1000), ct).ConfigureAwait(false);
-                await FlushAsync(force: false).ConfigureAwait(false);
+                // Safety-backstop only: only fire if the buffer has actually accumulated past
+                // the timeout (i.e. VAD never fired UserStoppedSpeaking — runaway monologue or
+                // VAD-less pipeline). Otherwise this is a no-op.
+                bool overTimeout;
+                lock (_bufferLock) overTimeout = _buffer.Length >= _bytesPerChunk;
+                if (overTimeout) await FlushAsync(force: false).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { /* shutdown */ }
@@ -100,12 +111,7 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         lock (_bufferLock)
         {
             if (_buffer.Length == 0) return;
-            // Always flush whatever's accumulated. The timer ticks every SttBufferSeconds — that
-            // IS the latency budget. The previous "wait for ≥ SttBufferSeconds of audio" check
-            // meant a short utterance never crossed the threshold, the timer kept skipping the
-            // flush, and the bot fell minutes behind. The `force` flag is kept for the StopAsync
-            // path where we explicitly want to drain regardless of state.
-            _ = force; // currently equivalent — kept for API symmetry with StopAsync path
+            _ = force; // unused — kept for API symmetry with StopAsync path
             pcm = _buffer.ToArray();
             _buffer.SetLength(0);
         }
