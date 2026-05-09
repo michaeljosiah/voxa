@@ -644,7 +644,9 @@ async function connect() {
             break;
           case 'speaking':
             if (obj.who === 'bot' && obj.started) {
-              currentBotBubble = renderTurn('bot', '');
+              // The 'text' envelope (from TTS forwarding the TextFrame) usually arrives FIRST
+              // and creates the bubble. Only create an empty placeholder if it didn't.
+              if (!currentBotBubble) currentBotBubble = renderTurn('bot', '');
               setServerStatus('speaking', false);
             }
             if (obj.who === 'bot' && !obj.started) {

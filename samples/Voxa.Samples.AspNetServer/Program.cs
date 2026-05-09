@@ -243,9 +243,10 @@ static MistralSpeechOptions? ReadMistralOptions(IConfiguration cfg)
 }
 
 /// <summary>
-/// Demo-only adapter: forwards each final <see cref="TranscriptionFrame"/> as a
-/// <see cref="TextFrame"/> so a downstream TTS can speak it back. Replace with
-/// <c>MicrosoftAgentsProcessor</c> for a real LLM-driven granular pipeline.
+/// Demo-only adapter: forwards each final <see cref="TranscriptionFrame"/> downstream
+/// (so the WebSocket sink emits a <c>transcription</c> envelope and the user bubble appears)
+/// AND emits a <see cref="TextFrame"/> with the same text so a downstream TTS can speak it back.
+/// Replace with <c>MicrosoftAgentsProcessor</c> for a real LLM-driven granular pipeline.
 /// </summary>
 internal sealed class EchoTranscriptionProcessor : FrameProcessor
 {
@@ -253,7 +254,8 @@ internal sealed class EchoTranscriptionProcessor : FrameProcessor
     {
         if (frame is TranscriptionFrame { IsFinal: true } t && !string.IsNullOrWhiteSpace(t.Text))
         {
-            await PushFrameAsync(new TextFrame(t.Text), ct);
+            await PushFrameAsync(t, ct);                 // surface the transcription to the UI
+            await PushFrameAsync(new TextFrame(t.Text), ct); // and have TTS speak it back
             return;
         }
         await PushFrameAsync(frame, ct);

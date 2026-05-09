@@ -115,4 +115,61 @@ public class TextToSpeechProcessorTests
             Assert.Empty(engine.SynthesizeCalls);
         }
     }
+
+    [Fact]
+    public async Task TextFrame_Is_Forwarded_Downstream_Before_Audio()
+    {
+        // Critical for transports/UI: the TextFrame must reach the sink so
+        // it can be serialized as a `text` envelope (e.g. to render in a chat
+        // bubble) BEFORE the audio chunks arrive.
+        var (runner, _, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            await pipeline.Source.IngestAsync(new TextFrame("hi there"));
+            await Task.Delay(150);
+
+            var indexOfText = IndexOf(captured.Captured, f => f is TextFrame t && t.Text == "hi there");
+            var indexOfStarted = IndexOf(captured.Captured, f => f is BotStartedSpeakingFrame);
+            var indexOfAudio = IndexOf(captured.Captured, f => f is AudioRawFrame);
+
+            Assert.True(indexOfText >= 0, "TextFrame must be forwarded downstream so the sink/UI can render it.");
+            Assert.True(indexOfStarted >= 0);
+            Assert.True(indexOfAudio >= 0);
+            Assert.True(indexOfText < indexOfStarted, "TextFrame must arrive BEFORE BotStartedSpeakingFrame.");
+            Assert.True(indexOfText < indexOfAudio, "TextFrame must arrive BEFORE the first AudioRawFrame.");
+        }
+    }
+
+    [Fact]
+    public async Task LlmTextChunkFrame_Is_Forwarded_Downstream_Before_Audio()
+    {
+        var (runner, _, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            await pipeline.Source.IngestAsync(new LlmTextChunkFrame("chunk one"));
+            await Task.Delay(150);
+
+            var indexOfChunk = IndexOf(captured.Captured, f => f is LlmTextChunkFrame c && c.Text == "chunk one");
+            var indexOfAudio = IndexOf(captured.Captured, f => f is AudioRawFrame);
+
+            Assert.True(indexOfChunk >= 0, "LlmTextChunkFrame must be forwarded downstream.");
+            Assert.True(indexOfAudio >= 0);
+            Assert.True(indexOfChunk < indexOfAudio, "LlmTextChunkFrame must arrive BEFORE the first AudioRawFrame.");
+        }
+    }
+
+    private static int IndexOf(IReadOnlyList<Frame> source, Func<Frame, bool> predicate)
+    {
+        for (int i = 0; i < source.Count; i++)
+        {
+            if (predicate(source[i])) return i;
+        }
+        return -1;
+    }
 }

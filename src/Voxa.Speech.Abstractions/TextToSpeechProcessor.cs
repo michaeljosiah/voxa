@@ -56,9 +56,14 @@ public sealed class TextToSpeechProcessor : FrameProcessor
             switch (frame)
             {
                 case TextFrame txt when !string.IsNullOrWhiteSpace(txt.Text):
+                    // Forward the text frame downstream BEFORE synthesizing so transports can
+                    // render it as soon as it's available — the bot's text appears in the UI
+                    // before the audio finishes streaming. Mirrors Pipecat's TTS pattern.
+                    await PushFrameAsync(txt, ct).ConfigureAwait(false);
                     await SynthesizeAsync(txt.Text, ct).ConfigureAwait(false);
                     return;
                 case LlmTextChunkFrame chunk when !string.IsNullOrWhiteSpace(chunk.Text):
+                    await PushFrameAsync(chunk, ct).ConfigureAwait(false);
                     await SynthesizeAsync(chunk.Text, ct).ConfigureAwait(false);
                     return;
             }
