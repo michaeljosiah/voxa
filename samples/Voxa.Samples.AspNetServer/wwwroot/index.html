@@ -3,23 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Voxa</title>
+<title>Try Voxa</title>
 <style>
   :root {
-    --bg: #f7f7f8;
-    --card: #ffffff;
+    --bg: #ffffff;
+    --bg-soft: #fafafa;
+    --bg-panel: #f3f4f6;
     --border: #e5e7eb;
     --text: #111827;
+    --text-soft: #374151;
     --muted: #6b7280;
+    --muted-2: #9ca3af;
     --accent: #2563eb;
-    --user-bubble: #2563eb;
-    --user-bubble-text: #ffffff;
-    --bot-bubble: #f1f3f5;
-    --bot-bubble-text: #111827;
-    --danger: #dc2626;
-    --success: #059669;
-    --meter-on: #dc2626;
+    --user: #2563eb;
+    --user-text: #ffffff;
+    --bot: #f1f3f5;
+    --bot-text: #111827;
+    --connect: #10b981;
+    --connect-hover: #059669;
+    --disconnect: #ef4444;
+    --disconnect-hover: #dc2626;
+    --meter-on: #10b981;
     --meter-off: #d1d5db;
+    --bar-on: #111827;
+    --bar-off: #e5e7eb;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -27,120 +35,159 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     background: var(--bg);
     color: var(--text);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2.5rem 1rem;
-  }
-  header {
-    text-align: center;
-    margin-bottom: 1.5rem;
-  }
-  .logo {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 1rem;
-    padding: 1.25rem 2rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  }
-  .logo h1 { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
-  .logo .glyph { font-size: 2rem; }
-  .tagline { color: var(--muted); margin: 1rem 0 0; max-width: 38rem; }
-
-  .widget {
-    width: 100%;
-    max-width: 38rem;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    overflow: hidden;
-  }
-  .widget h2 {
-    text-align: center;
-    margin: 0;
-    padding: 1.25rem 1.5rem 0.5rem;
-    font-size: 1.25rem;
+    font-size: 14px;
   }
 
-  .controls {
+  .app {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.5rem;
-    padding: 1rem 1.5rem 0.75rem;
+    grid-template-rows: 56px 1fr 220px;
+    height: 100vh;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
     align-items: center;
+    padding: 0 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
   }
-  .controls select {
-    padding: 0.6rem 0.75rem;
-    border-radius: 0.5rem;
+  .topbar .left, .topbar .right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .topbar .right { justify-content: flex-end; }
+  .topbar .center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .topbar select {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.375rem;
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--bg);
+    font-size: 0.85rem;
+    font-family: var(--mono);
+  }
+  .connect-btn {
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.375rem;
+    border: none;
+    background: var(--connect);
+    color: white;
     font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
   }
-  .controls .icon-btn {
-    width: 2.5rem; height: 2.5rem;
-    border-radius: 0.5rem;
+  .connect-btn:hover { background: var(--connect-hover); }
+  .connect-btn.connected { background: var(--disconnect); }
+  .connect-btn.connected:hover { background: var(--disconnect-hover); }
+  .connect-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .icon-btn {
+    width: 2rem; height: 2rem;
+    border-radius: 0.375rem;
     border: 1px solid var(--border);
-    background: var(--card);
+    background: var(--bg);
     cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     color: var(--muted);
   }
-  .controls .icon-btn:hover { color: var(--text); }
+  .icon-btn:hover { background: var(--bg-panel); color: var(--text); }
 
-  .control-row {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0 1.5rem 0.75rem;
-    align-items: center;
+  /* Main 3-column area */
+  .main {
+    display: grid;
+    grid-template-columns: 280px 1fr 320px;
+    min-height: 0;
   }
-  .connect {
-    flex: 1;
-    padding: 0.7rem 1rem;
-    border-radius: 0.5rem;
-    border: none;
-    background: var(--accent);
-    color: white;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .connect.connected { background: var(--danger); }
-  .connect:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .mic-strip {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.45rem 0.75rem;
-    background: #f3f4f6;
-    border-radius: 0.5rem;
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .mic-strip svg { flex: 0 0 auto; }
-  .meter { display: flex; gap: 0.25rem; }
-  .meter-dot {
-    width: 0.5rem; height: 0.5rem;
-    border-radius: 50%;
-    background: var(--meter-off);
-    transition: background 0.05s linear;
-  }
-  .meter-dot.on { background: var(--meter-on); }
-
-  .chat {
-    height: 22rem;
-    overflow-y: auto;
-    padding: 1rem 1.5rem;
-    background: #fafafa;
-    border-top: 1px solid var(--border);
+  /* Left bot-audio panel */
+  .bot-panel {
+    border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    position: relative;
+    background: var(--bg);
+  }
+  .panel-label {
+    padding: 0.75rem 1rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .bot-panel .speaker-icon {
+    position: absolute;
+    top: 0.75rem; right: 1rem;
+    color: var(--muted-2);
+  }
+  .bot-bars {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 1rem;
+  }
+  .bot-bars .bar {
+    width: 0.4rem;
+    height: 0.4rem;
+    background: var(--bar-on);
+    border-radius: 1px;
+    transition: height 0.05s ease, background 0.1s;
+  }
+
+  /* Center conversation panel */
+  .conv-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    min-width: 0;
+  }
+  .tabs {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
     gap: 0.5rem;
+  }
+  .tab {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .tab.active { color: var(--text); background: var(--bg-soft); }
+  .tab:hover { color: var(--text); }
+  .tabs .right {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
   }
   .chat .empty {
     color: var(--muted);
@@ -148,145 +195,276 @@
     text-align: center;
     margin: auto;
   }
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: 85%;
+  }
+  .turn.user { align-self: flex-end; align-items: flex-end; }
+  .turn.bot { align-self: flex-start; align-items: flex-start; }
+  .turn .role {
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .turn.bot .role { color: var(--muted); }
   .bubble {
-    max-width: 80%;
-    padding: 0.6rem 0.85rem;
-    border-radius: 1rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.875rem;
     font-size: 0.95rem;
-    line-height: 1.4;
+    line-height: 1.45;
     word-wrap: break-word;
   }
-  .bubble.user {
-    align-self: flex-end;
-    background: var(--user-bubble);
-    color: var(--user-bubble-text);
+  .turn.user .bubble {
+    background: var(--user);
+    color: var(--user-text);
     border-bottom-right-radius: 0.25rem;
   }
-  .bubble.bot {
-    align-self: flex-start;
-    background: var(--bot-bubble);
-    color: var(--bot-bubble-text);
+  .turn.bot .bubble {
+    background: var(--bot);
+    color: var(--bot-text);
     border-bottom-left-radius: 0.25rem;
   }
-  .bubble.error {
+  .turn .ts {
+    font-size: 0.7rem;
+    color: var(--muted-2);
+    margin-top: 0.2rem;
+  }
+  .toolcall {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text-soft);
+  }
+  .toolcall .check { color: var(--connect); }
+  .errorbubble {
     align-self: stretch;
     background: #fee2e2;
     color: #991b1b;
-    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
     font-size: 0.85rem;
   }
-  .bubble.bot .speaking { color: var(--muted); font-size: 0.75rem; margin-left: 0.4rem; }
-  .status-line {
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.8rem;
-    padding: 0.5rem 1rem;
+
+  .composer {
     border-top: 1px solid var(--border);
-    background: var(--card);
+    padding: 0.75rem 2rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
   }
-  .status-line.recording { color: var(--danger); font-weight: 600; }
-
-  details.debug {
-    margin-top: 1rem;
-    width: 100%;
-    max-width: 38rem;
+  .composer input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 0.95rem;
+    color: var(--text);
+    outline: none;
   }
-  details.debug summary {
+  .composer input::placeholder { color: var(--muted-2); }
+  .composer .send-btn {
+    width: 2rem; height: 2rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
     cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
     color: var(--muted);
-    font-size: 0.85rem;
-    padding: 0.5rem;
   }
-  #log {
-    background: #0d1117;
-    color: #c9d1d9;
-    font-family: ui-monospace, "SF Mono", Consolas, monospace;
-    padding: 0.75rem;
-    height: 14rem;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    font-size: 0.75rem;
-    border-radius: 0.5rem;
-  }
-  #log .err  { color: #ff7b72; }
-  #log .ok   { color: #7ee787; }
-  #log .dim  { color: #6e7681; }
+  .composer .send-btn:hover:not(:disabled) { background: var(--bg-panel); color: var(--text); }
+  .composer .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  footer {
-    margin-top: auto;
-    padding-top: 1.5rem;
+  /* Right info panel */
+  .info-panel {
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+    overflow-y: auto;
+    padding: 0.5rem 0;
+  }
+  .info-section {
+    padding: 0.75rem 1rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-section:last-child { border-bottom: none; }
+  .info-section h3 {
+    margin: 0 0 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
     color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
     font-size: 0.85rem;
   }
-  footer a { color: var(--accent); text-decoration: none; margin: 0 0.5rem; }
-  footer a:hover { text-decoration: underline; }
+  .info-row .label { color: var(--text-soft); }
+  .info-row .value { color: var(--text); font-family: var(--mono); font-size: 0.8rem; }
+  .info-row .value.dim { color: var(--muted-2); }
+  .device-row {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-panel);
+    border-radius: 0.375rem;
+  }
+  .device-row .mic-icon { color: var(--muted); }
+  .meter { display: flex; gap: 0.25rem; flex: 1; }
+  .meter-dot {
+    width: 0.45rem; height: 0.45rem;
+    border-radius: 50%;
+    background: var(--meter-off);
+    transition: background 0.05s linear;
+  }
+  .meter-dot.on { background: var(--meter-on); }
+
+  /* Bottom events panel */
+  .events-panel {
+    border-top: 1px solid var(--border);
+    background: var(--bg-panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .events-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .events-header .label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+  .events-header input.filter {
+    flex: 0 0 240px;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    background: var(--bg);
+  }
+  .events-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.25rem 1rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-soft);
+  }
+  .events-list .row {
+    padding: 0.18rem 0;
+    display: grid;
+    grid-template-columns: 70px 160px 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+  .events-list .ts { color: var(--muted-2); }
+  .events-list .name { color: var(--text); font-weight: 600; }
+  .events-list .name.error { color: var(--disconnect); }
+  .events-list .name.ok { color: var(--connect-hover); }
+  .events-list .payload { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
 <body>
-  <header>
-    <div class="logo">
-      <span class="glyph" aria-hidden="true">🎙️</span>
-      <h1>Voxa</h1>
-    </div>
-    <p class="tagline">Real-time voice AI pipeline framework for .NET. Pick a vendor recipe, click connect, talk.</p>
-  </header>
-
-  <div class="widget">
-    <h2>Try Voxa</h2>
-
-    <div class="controls">
+<div class="app">
+  <div class="topbar">
+    <div class="left">
       <select id="route" aria-label="Pipeline preset">
-        <option value="/voice/voice-live">Voice Live composite</option>
-        <option value="/voice/azure">Azure Speech (STT + TTS echo)</option>
-        <option value="/voice/openai">OpenAI Whisper + TTS echo</option>
-        <option value="/voice/azure-elevenlabs">Azure STT + ElevenLabs TTS echo</option>
-        <option value="/voice/azure-mistral">Azure STT + Mistral TTS echo</option>
+        <option value="/voice/voice-live">Voice Live</option>
+        <option value="/voice/azure">Azure Speech echo</option>
+        <option value="/voice/openai">OpenAI Whisper + TTS</option>
+        <option value="/voice/azure-elevenlabs">Azure STT + ElevenLabs</option>
+        <option value="/voice/azure-mistral">Azure STT + Mistral</option>
       </select>
-      <button class="icon-btn" id="settingsBtn" title="Settings (route picker doubles as preset switcher)" aria-label="Settings">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
+    </div>
+    <div class="center">🎙️ Try Voxa</div>
+    <div class="right">
+      <button id="connectBtn" class="connect-btn">Connect</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
     </div>
-
-    <div class="control-row">
-      <button id="connectBtn" class="connect">Connect</button>
-      <div class="mic-strip" aria-label="Microphone level">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-        <div class="meter" id="meter">
-          <div class="meter-dot"></div>
-          <div class="meter-dot"></div>
-          <div class="meter-dot"></div>
-          <div class="meter-dot"></div>
-          <div class="meter-dot"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat" id="chat">
-      <div class="empty">Pick a route, click Connect, and start talking. Transcripts and assistant replies appear here.</div>
-    </div>
-    <div class="status-line" id="status">idle</div>
   </div>
 
-  <details class="debug">
-    <summary>Debug log</summary>
-    <div id="log"></div>
-  </details>
+  <div class="main">
+    <aside class="bot-panel">
+      <div class="panel-label">BOT AUDIO</div>
+      <div class="speaker-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+      </div>
+      <div class="bot-bars" id="bot-bars"></div>
+    </aside>
 
-  <footer>
-    <a href="https://github.com/michaeljosiah/voxa" target="_blank" rel="noopener">GitHub</a>
-    ·
-    <a href="https://github.com/michaeljosiah/voxa#readme" target="_blank" rel="noopener">Docs</a>
-    ·
-    <a href="https://www.nuget.org/packages?q=Voxa" target="_blank" rel="noopener">NuGet</a>
-  </footer>
+    <main class="conv-panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="conv">💬 Conversation</button>
+        <button class="tab" data-tab="metrics">📊 Metrics</button>
+        <span class="right" id="tabRight">Instant</span>
+      </div>
+
+      <div class="chat" id="chat">
+        <div class="empty">Pick a route, click Connect, talk.</div>
+      </div>
+
+      <div class="composer">
+        <input id="composer" placeholder="Connect to send" disabled />
+        <button class="send-btn" id="sendBtn" disabled title="Send">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>
+        </button>
+      </div>
+    </main>
+
+    <aside class="info-panel">
+      <section class="info-section">
+        <h3>STATUS</h3>
+        <div class="info-row"><span class="label">Client</span><span class="value dim" id="clientStatus">disconnected</span></div>
+        <div class="info-row"><span class="label">Server</span><span class="value dim" id="serverStatus">—</span></div>
+      </section>
+
+      <section class="info-section">
+        <h3>DEVICES</h3>
+        <div class="device-row">
+          <span class="mic-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </span>
+          <div class="meter" id="meter">
+            <div class="meter-dot"></div><div class="meter-dot"></div><div class="meter-dot"></div>
+            <div class="meter-dot"></div><div class="meter-dot"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="info-section">
+        <h3>SESSION</h3>
+        <div class="info-row"><span class="label">Transport</span><span class="value">WebSocket</span></div>
+        <div class="info-row"><span class="label">Session ID</span><span class="value dim" id="sessionId">—</span></div>
+        <div class="info-row"><span class="label">Voxa Client</span><span class="value">v0.2.0-alpha</span></div>
+        <div class="info-row"><span class="label">Sample Rate</span><span class="value dim" id="sampleRate">—</span></div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="events-panel">
+    <div class="events-header">
+      <span class="label">EVENTS</span>
+      <input class="filter" id="eventFilter" placeholder="Filter" />
+    </div>
+    <div class="events-list" id="events"></div>
+  </div>
+</div>
 
 <script>
 const ROUTES = {
@@ -298,43 +476,156 @@ const ROUTES = {
 };
 
 const $ = (id) => document.getElementById(id);
-const log = (msg, cls='dim') => {
-  const el = document.createElement('div');
-  el.className = cls;
-  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  $('log').append(el);
-  $('log').scrollTop = $('log').scrollHeight;
-};
-const setStatus = (s, cls='') => { $('status').textContent = s; $('status').className = `status-line ${cls}`; };
-const clearChat = () => { $('chat').innerHTML = ''; };
 
-function bubble(text, kind) {
-  if ($('chat').querySelector('.empty')) clearChat();
-  const div = document.createElement('div');
-  div.className = `bubble ${kind}`;
-  div.textContent = text;
-  $('chat').append(div);
-  $('chat').scrollTop = $('chat').scrollHeight;
-  return div;
+// --- Events log ---
+const events = [];
+let eventFilter = '';
+function event(name, payload, kind='') {
+  events.push({ ts: new Date(), name, payload: payload ?? '', kind });
+  renderEvents();
+}
+function renderEvents() {
+  const container = $('events');
+  const filter = eventFilter.toLowerCase();
+  container.innerHTML = '';
+  for (const e of events) {
+    const text = `${e.name} ${e.payload}`.toLowerCase();
+    if (filter && !text.includes(filter)) continue;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const time = e.ts.toLocaleTimeString('en-GB');
+    row.innerHTML = `<span class="ts">${time}</span><span class="name ${e.kind}">${e.name}</span><span class="payload">${escape(e.payload)}</span>`;
+    container.appendChild(row);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+function escape(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+$('eventFilter').addEventListener('input', (e) => { eventFilter = e.target.value; renderEvents(); });
+
+// --- Status panel ---
+function setClientStatus(text, dim=true) {
+  $('clientStatus').textContent = text;
+  $('clientStatus').classList.toggle('dim', dim);
+}
+function setServerStatus(text, dim=true) {
+  $('serverStatus').textContent = text;
+  $('serverStatus').classList.toggle('dim', dim);
 }
 
+// --- Bot audio bars ---
+const NUM_BARS = 12;
+const barsRoot = $('bot-bars');
+for (let i = 0; i < NUM_BARS; i++) {
+  const b = document.createElement('div');
+  b.className = 'bar';
+  barsRoot.appendChild(b);
+}
+let botAnalyser = null;
+let botRaf = 0;
+function pumpBotBars() {
+  if (!botAnalyser) {
+    botRaf = requestAnimationFrame(pumpBotBars);
+    return;
+  }
+  const data = new Uint8Array(botAnalyser.frequencyBinCount);
+  botAnalyser.getByteFrequencyData(data);
+  const bars = barsRoot.querySelectorAll('.bar');
+  const step = Math.floor(data.length / NUM_BARS);
+  for (let i = 0; i < NUM_BARS; i++) {
+    let sum = 0;
+    for (let j = 0; j < step; j++) sum += data[i * step + j];
+    const norm = (sum / step) / 255;
+    const heightPx = Math.max(4, Math.floor(norm * 80));
+    bars[i].style.height = `${heightPx}px`;
+  }
+  botRaf = requestAnimationFrame(pumpBotBars);
+}
+pumpBotBars();
+
+// --- Mic level meter ---
+let micAnalyser = null;
+function pumpMeter() {
+  if (!micAnalyser) return;
+  const data = new Uint8Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getByteFrequencyData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+  const rms = Math.sqrt(sum / data.length) / 255;
+  const dots = document.querySelectorAll('#meter .meter-dot');
+  const lit = Math.min(5, Math.floor(rms * 30));
+  dots.forEach((d, i) => d.classList.toggle('on', i < lit));
+  requestAnimationFrame(pumpMeter);
+}
+
+// --- Chat rendering ---
+function clearChat() { $('chat').innerHTML = ''; }
+function ensureNotEmpty() { if ($('chat').querySelector('.empty')) clearChat(); }
+
+function renderTurn(role, text) {
+  ensureNotEmpty();
+  const wrapper = document.createElement('div');
+  wrapper.className = `turn ${role}`;
+  const r = document.createElement('div');
+  r.className = 'role';
+  r.textContent = role === 'user' ? 'user' : 'assistant';
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.textContent = text;
+  const ts = document.createElement('div');
+  ts.className = 'ts';
+  ts.textContent = new Date().toLocaleTimeString('en-GB');
+  wrapper.append(r, b, ts);
+  $('chat').appendChild(wrapper);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return b;
+}
+
+function renderToolCall(name) {
+  ensureNotEmpty();
+  const div = document.createElement('div');
+  div.className = 'toolcall';
+  div.innerHTML = `<span class="check">✓</span> Function call <code>${escape(name)}</code>`;
+  $('chat').appendChild(div);
+  $('chat').scrollTop = $('chat').scrollHeight;
+}
+
+function renderError(msg) {
+  ensureNotEmpty();
+  const div = document.createElement('div');
+  div.className = 'errorbubble';
+  div.textContent = msg;
+  $('chat').appendChild(div);
+  $('chat').scrollTop = $('chat').scrollHeight;
+}
+
+// --- WebSocket / Audio plumbing ---
 let ws = null, micCtx = null, outCtx = null, micStream = null, workletNode = null,
-    nextPlayTime = 0, playRate = 24000, currentBotBubble = null,
-    analyser = null, meterRaf = 0;
+    nextPlayTime = 0, playRate = 24000, currentBotBubble = null;
+
+function newSessionId() {
+  return 'voxa-' + Math.random().toString(16).slice(2, 10) + '-' + Date.now().toString(16);
+}
 
 async function connect() {
   const route = $('route').value;
   const cfg = ROUTES[route];
   $('connectBtn').disabled = true;
-  setStatus('connecting…');
+  setClientStatus('connecting…');
   clearChat();
+  events.length = 0; renderEvents();
+
+  $('sessionId').textContent = newSessionId();
+  $('sessionId').classList.remove('dim');
+  $('sampleRate').textContent = `${cfg.inRate} Hz / ${cfg.outRate} Hz`;
+  $('sampleRate').classList.remove('dim');
 
   outCtx = new AudioContext();
   playRate = cfg.outRate;
   nextPlayTime = outCtx.currentTime;
 
   const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${route}`;
-  log(`Connecting ${wsUrl}`);
+  event('connecting', wsUrl);
   ws = new WebSocket(wsUrl);
   ws.binaryType = 'arraybuffer';
 
@@ -342,31 +633,40 @@ async function connect() {
     if (typeof e.data === 'string') {
       try {
         const obj = JSON.parse(e.data);
-        log(`server  ${e.data}`, 'dim');
+        event(obj.type, obj.message ?? obj.text ?? obj.who ?? '', obj.type === 'error' ? 'error' : '');
         switch (obj.type) {
           case 'transcription':
-            if (obj.isFinal) bubble(obj.text, 'user');
+            if (obj.isFinal) renderTurn('user', obj.text);
             break;
           case 'text':
             if (currentBotBubble) currentBotBubble.textContent += obj.text;
-            else currentBotBubble = bubble(obj.text, 'bot');
+            else currentBotBubble = renderTurn('bot', obj.text);
             break;
           case 'speaking':
-            if (obj.who === 'bot' && !obj.started) currentBotBubble = null;
-            if (obj.who === 'bot' && obj.started) currentBotBubble = bubble('', 'bot');
+            if (obj.who === 'bot' && obj.started) {
+              currentBotBubble = renderTurn('bot', '');
+              setServerStatus('speaking', false);
+            }
+            if (obj.who === 'bot' && !obj.started) {
+              currentBotBubble = null;
+              setServerStatus('listening', false);
+            }
+            if (obj.who === 'user' && obj.started) setServerStatus('listening (user)', false);
+            break;
+          case 'toolCall':
+            renderToolCall(obj.name);
             break;
           case 'interruption':
             currentBotBubble = null;
             break;
           case 'error':
-            bubble(obj.message, 'error');
-            log(`ERROR  ${obj.message}`, 'err');
+            renderError(obj.message);
             break;
         }
-      } catch { log(`server  ${e.data}`, 'dim'); }
+      } catch { event('raw', e.data); }
     } else {
       if (e.data.byteLength % 2 !== 0) {
-        log(`server sent odd-byte PCM (${e.data.byteLength}B) — vendor bug`, 'err');
+        event('binary', `odd-byte (${e.data.byteLength}B) — vendor bug`, 'error');
         return;
       }
       playPcm(new Int16Array(e.data));
@@ -374,30 +674,34 @@ async function connect() {
   };
 
   ws.onclose = (e) => {
-    log(`Closed code=${e.code} reason="${e.reason}"`, e.code === 1000 ? 'dim' : 'err');
+    event('closed', `code=${e.code} reason="${e.reason}"`, e.code === 1000 ? '' : 'error');
     cleanup();
   };
-  ws.onerror = () => log('WebSocket error', 'err');
+  ws.onerror = () => event('ws-error', '', 'error');
 
   await new Promise((res) => { ws.onopen = res; });
   await new Promise((r) => setTimeout(r, 150));
   if (ws.readyState !== WebSocket.OPEN) {
-    log('Server closed before accepting the session', 'err');
+    event('rejected', 'server closed before accepting', 'error');
     cleanup();
     return;
   }
 
-  log('Connected', 'ok');
+  event('connected', wsUrl, 'ok');
+  setClientStatus('connected', false);
+  setServerStatus('ready', false);
   $('connectBtn').textContent = 'Disconnect';
   $('connectBtn').classList.add('connected');
   $('connectBtn').disabled = false;
+  $('composer').disabled = false; $('sendBtn').disabled = false;
+  $('composer').placeholder = 'Type a message and press Enter…';
 
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     });
   } catch (ex) {
-    log(`Mic permission denied: ${ex.message}`, 'err');
+    event('mic-denied', ex.message, 'error');
     cleanup();
     return;
   }
@@ -414,25 +718,10 @@ async function connect() {
   };
   source.connect(workletNode);
 
-  analyser = micCtx.createAnalyser();
-  analyser.fftSize = 256;
-  source.connect(analyser);
+  micAnalyser = micCtx.createAnalyser();
+  micAnalyser.fftSize = 256;
+  source.connect(micAnalyser);
   pumpMeter();
-
-  setStatus('● recording', 'recording');
-}
-
-function pumpMeter() {
-  if (!analyser) return;
-  const data = new Uint8Array(analyser.frequencyBinCount);
-  analyser.getByteFrequencyData(data);
-  let sum = 0;
-  for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-  const rms = Math.sqrt(sum / data.length) / 255;
-  const dots = document.querySelectorAll('.meter-dot');
-  const lit = Math.min(5, Math.floor(rms * 30));
-  dots.forEach((d, i) => d.classList.toggle('on', i < lit));
-  meterRaf = requestAnimationFrame(pumpMeter);
 }
 
 function playPcm(int16) {
@@ -443,37 +732,73 @@ function playPcm(int16) {
   buf.copyToChannel(float32, 0);
   const src = outCtx.createBufferSource();
   src.buffer = buf;
-  src.connect(outCtx.destination);
+
+  // Tap an analyser for the bot-audio bars.
+  if (!botAnalyser) {
+    botAnalyser = outCtx.createAnalyser();
+    botAnalyser.fftSize = 64;
+  }
+  src.connect(botAnalyser);
+  botAnalyser.connect(outCtx.destination);
+
   const startAt = Math.max(outCtx.currentTime, nextPlayTime);
   src.start(startAt);
   nextPlayTime = startAt + buf.duration;
 }
 
 function disconnect() {
-  log('Disconnecting');
+  event('disconnecting', '');
   try { ws?.send(JSON.stringify({ type: 'end' })); } catch {}
   try { ws?.close(); } catch {}
   cleanup();
 }
 
 function cleanup() {
-  cancelAnimationFrame(meterRaf);
   try { workletNode?.disconnect(); } catch {}
-  try { analyser?.disconnect(); } catch {}
+  try { micAnalyser?.disconnect(); } catch {}
   micStream?.getTracks().forEach((t) => t.stop());
   try { micCtx?.close(); } catch {}
-  setTimeout(() => { try { outCtx?.close(); } catch {}; outCtx = null; }, 1000);
-  document.querySelectorAll('.meter-dot').forEach((d) => d.classList.remove('on'));
-  setStatus('idle');
+  setTimeout(() => { try { outCtx?.close(); } catch {}; outCtx = null; botAnalyser = null; }, 1500);
+  document.querySelectorAll('#meter .meter-dot').forEach((d) => d.classList.remove('on'));
+  setClientStatus('disconnected');
+  setServerStatus('—');
   $('connectBtn').textContent = 'Connect';
   $('connectBtn').classList.remove('connected');
   $('connectBtn').disabled = false;
-  ws = null; workletNode = null; micCtx = null; micStream = null; analyser = null;
+  $('composer').disabled = true; $('sendBtn').disabled = true;
+  $('composer').placeholder = 'Connect to send';
+  ws = null; workletNode = null; micCtx = null; micStream = null; micAnalyser = null;
   currentBotBubble = null;
 }
 
+// Send-text fallback (uses the WireProtocol "text" envelope client→server).
+function sendText() {
+  const v = $('composer').value.trim();
+  if (!v || ws?.readyState !== WebSocket.OPEN) return;
+  renderTurn('user', v);
+  ws.send(JSON.stringify({ type: 'text', text: v }));
+  event('sent', `text: ${v}`);
+  $('composer').value = '';
+}
+
 $('connectBtn').onclick = () => (ws ? disconnect() : connect());
-$('settingsBtn').onclick = () => alert('Use the dropdown above to switch presets. Per-vendor config lives in appsettings.json / user-secrets — see the README.');
+$('settingsBtn').onclick = () => alert('Pick a different route from the top-left dropdown. Per-vendor config lives in user-secrets — see the README.');
+$('sendBtn').onclick = sendText;
+$('composer').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendText(); });
+
+// Tab switching (placeholder — metrics tab not yet implemented)
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    if (t.dataset.tab === 'metrics') {
+      $('chat').innerHTML = '<div class="empty">Metrics tab is wired up in a follow-up commit.</div>';
+    } else {
+      // Restore conversation view
+      $('chat').innerHTML = '<div class="empty">Pick a route, click Connect, talk.</div>';
+    }
+  };
+});
 </script>
 </body>
 </html>
