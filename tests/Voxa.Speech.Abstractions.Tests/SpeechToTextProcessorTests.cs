@@ -87,6 +87,23 @@ public class SpeechToTextProcessorTests
     }
 
     [Fact]
+    public async Task UserStoppedSpeakingFrame_Triggers_Engine_FlushAsync()
+    {
+        var (runner, engine, _, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            Assert.Equal(0, engine.FlushCount);
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());
+            await Task.Delay(60);
+
+            Assert.Equal(1, engine.FlushCount);
+        }
+    }
+
+    [Fact]
     public async Task Engine_Is_Disposed_On_EndFrame()
     {
         var (runner, engine, _, _) = Build();

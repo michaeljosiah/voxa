@@ -54,14 +54,26 @@ public sealed class SpeechToTextProcessor : FrameProcessor
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
-        if (_engine is not null && frame is AudioRawFrame audio)
+        if (_engine is not null)
         {
-            // Audio is consumed by STT; transcriptions are emitted by the read loop instead.
-            await _engine.WriteAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
-            return;
+            if (frame is AudioRawFrame audio)
+            {
+                // Audio is consumed by STT; transcriptions come back via the read loop.
+                await _engine.WriteAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (frame is UserStoppedSpeakingFrame)
+            {
+                // Speech-end signal — drain whatever the batch engine has buffered immediately
+                // instead of waiting for its periodic timer. The frame still flows downstream
+                // (transports may want to surface it).
+                try { await _engine.FlushAsync().ConfigureAwait(false); }
+                catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: engine FlushAsync threw"); }
+            }
         }
 
-        // Forward control + non-audio frames so Start/End/etc. reach the sink.
+        // Forward control + non-audio frames so Start/End/speaking events reach the sink.
         await PushFrameAsync(frame, ct).ConfigureAwait(false);
     }
 

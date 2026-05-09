@@ -66,6 +66,13 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         _transcripts.Writer.TryComplete();
     }
 
+    /// <summary>
+    /// Force-flush whatever's buffered to Whisper right now. Called by the upstream
+    /// <c>SpeechToTextProcessor</c> when it sees a <c>UserStoppedSpeakingFrame</c> — gives
+    /// sub-second turn latency instead of waiting for the next timer tick.
+    /// </summary>
+    public Task FlushAsync() => FlushAsync(force: true);
+
     public ValueTask DisposeAsync()
     {
         _cts?.Dispose();

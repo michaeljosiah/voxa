@@ -5,21 +5,16 @@ using Voxa.Processors;
 namespace Voxa.Speech;
 
 /// <summary>
-/// Drops <see cref="AudioRawFrame"/>s whose RMS amplitude is below a threshold. Sit it between
-/// an audio source and an STT engine to stop silent / near-silent windows from reaching the STT
-/// — Whisper in particular is well-known for hallucinating "thank you" / "bye" / "..." on
-/// near-silent audio.
+/// Energy-based voice activity gate. Drops <see cref="AudioRawFrame"/>s whose RMS amplitude
+/// is below a threshold (with hold-open hangover so brief gaps between syllables don't clip
+/// speech), and emits <see cref="UserStartedSpeakingFrame"/> / <see cref="UserStoppedSpeakingFrame"/>
+/// on transitions. The downstream <see cref="SpeechToTextProcessor"/> uses the speech-end
+/// signal to force-flush its batch engine immediately — so a single utterance gets
+/// transcribed within ~hangover ms of the last syllable, not after the next periodic tick.
 ///
 /// <para>
-/// Uses a "hangover" (hold-open) so brief amplitude dips between syllables don't clip speech:
-/// once any frame crosses the threshold, the gate stays open for <see cref="Hangover"/>
-/// regardless of subsequent frame amplitude.
-/// </para>
-///
-/// <para>
-/// All non-audio frames (control, system, transcriptions, etc.) are forwarded unchanged. For
-/// production VAD with model-based speech/non-speech classification, use a dedicated package
-/// (e.g. Silero ONNX) — this gate is a cheap energy-only filter.
+/// All non-audio frames forwarded unchanged. Insert immediately before any STT processor.
+/// Skip on the Voice Live composite path — Voice Live includes its own server-side VAD.
 /// </para>
 /// </summary>
 public sealed class SilenceGateProcessor : FrameProcessor
@@ -27,17 +22,16 @@ public sealed class SilenceGateProcessor : FrameProcessor
     private readonly double _rmsThreshold;
     private readonly TimeSpan _hangover;
     private DateTime _gateOpenUntilUtc = DateTime.MinValue;
+    private bool _gateOpen;
 
-    /// <summary>
-    /// Construct the gate.
-    /// </summary>
+    /// <summary>Construct the gate.</summary>
     /// <param name="rmsThreshold">
     /// Normalized-RMS threshold in [0..1]. Defaults to 0.005 — drops pure silence and most
-    /// quiet room noise but lets quiet speech through. Raise to 0.01–0.02 for noisier
-    /// environments; lower to 0.002 if quiet talkers are getting cut off.
+    /// quiet room noise but lets quieter speech through. Raise to 0.01–0.02 for noisier
+    /// environments; lower to 0.002 if quiet talkers get cut off.
     /// </param>
     /// <param name="hangover">
-    /// How long to keep the gate open after the most recent above-threshold frame. Defaults
+    /// How long the gate stays open after the most recent above-threshold frame. Defaults
     /// to 500 ms — long enough to span a syllable gap, short enough that real silence doesn't
     /// leak through.
     /// </param>
@@ -68,9 +62,22 @@ public sealed class SilenceGateProcessor : FrameProcessor
             {
                 _gateOpenUntilUtc = now + _hangover;
             }
-            if (now >= _gateOpenUntilUtc)
+            bool isOpenNow = now < _gateOpenUntilUtc;
+
+            if (isOpenNow && !_gateOpen)
             {
-                return; // gate closed — drop the frame
+                _gateOpen = true;
+                await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
+            }
+            else if (!isOpenNow && _gateOpen)
+            {
+                _gateOpen = false;
+                await PushFrameAsync(new UserStoppedSpeakingFrame(), ct).ConfigureAwait(false);
+            }
+
+            if (!isOpenNow)
+            {
+                return; // gate closed — drop the audio frame
             }
         }
         await PushFrameAsync(frame, ct).ConfigureAwait(false);

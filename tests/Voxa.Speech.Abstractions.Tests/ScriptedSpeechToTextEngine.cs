@@ -12,6 +12,7 @@ internal sealed class ScriptedSpeechToTextEngine : ISpeechToTextEngine
     public bool Started { get; private set; }
     public bool Stopped { get; private set; }
     public bool Disposed { get; private set; }
+    public int FlushCount { get; private set; }
 
     public IReadOnlyList<byte[]> WrittenAudio
     {
@@ -33,6 +34,12 @@ internal sealed class ScriptedSpeechToTextEngine : ISpeechToTextEngine
     {
         Stopped = true;
         _transcripts.Writer.TryComplete();
+        return Task.CompletedTask;
+    }
+
+    public Task FlushAsync()
+    {
+        FlushCount++;
         return Task.CompletedTask;
     }
 

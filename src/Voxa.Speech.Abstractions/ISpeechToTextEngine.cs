@@ -18,6 +18,17 @@ public interface ISpeechToTextEngine : IAsyncDisposable
 
     /// <summary>Gracefully end the recognition session.</summary>
     Task StopAsync();
+
+    /// <summary>
+    /// Force any buffered audio to be transcribed immediately. Called by
+    /// <see cref="SpeechToTextProcessor"/> when it observes a <see cref="Voxa.Frames.UserStoppedSpeakingFrame"/>
+    /// upstream so batch engines (REST Whisper, etc.) can hit the API right at speech-end
+    /// instead of waiting for the next periodic timer tick.
+    ///
+    /// <para>Default: no-op. Streaming engines (Azure SDK, OpenAI Realtime) don't batch and
+    /// override this only if they have something to drain.</para>
+    /// </summary>
+    Task FlushAsync() => Task.CompletedTask;
 }
 
 /// <summary>One transcription result from an STT engine.</summary>

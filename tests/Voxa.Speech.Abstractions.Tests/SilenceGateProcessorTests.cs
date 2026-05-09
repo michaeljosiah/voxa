@@ -137,6 +137,65 @@ public class SilenceGateProcessorTests
     }
 
     [Fact]
+    public async Task Loud_Frame_Emits_UserStartedSpeakingFrame()
+    {
+        var (runner, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            await pipeline.Source.IngestAsync(new AudioRawFrame(PcmAtAmplitude(800, 0.5), 16000, 1));
+            await Task.Delay(60);
+
+            Assert.Contains(captured.Captured, f => f is UserStartedSpeakingFrame);
+        }
+    }
+
+    [Fact]
+    public async Task Gate_Closing_Emits_UserStoppedSpeakingFrame()
+    {
+        // Short hangover so the gate closes quickly between bursts.
+        var (runner, captured, pipeline) = Build(threshold: 0.05, hangover: TimeSpan.FromMilliseconds(50));
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            // Loud frame opens the gate.
+            await pipeline.Source.IngestAsync(new AudioRawFrame(PcmAtAmplitude(800, 0.5), 16000, 1));
+            await Task.Delay(120); // wait past hangover
+
+            // Quiet frame, hangover already expired — should detect transition and emit Stop.
+            await pipeline.Source.IngestAsync(new AudioRawFrame(new byte[1600], 16000, 1));
+            await Task.Delay(60);
+
+            Assert.Contains(captured.Captured, f => f is UserStartedSpeakingFrame);
+            Assert.Contains(captured.Captured, f => f is UserStoppedSpeakingFrame);
+        }
+    }
+
+    [Fact]
+    public async Task Single_Continuous_Speech_Emits_Exactly_One_StartedSpeaking()
+    {
+        var (runner, captured, pipeline) = Build(hangover: TimeSpan.FromMilliseconds(500));
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await Task.Delay(40);
+
+            for (int i = 0; i < 5; i++)
+            {
+                await pipeline.Source.IngestAsync(new AudioRawFrame(PcmAtAmplitude(800, 0.5), 16000, 1));
+                await Task.Delay(20);
+            }
+
+            Assert.Single(captured.Captured.OfType<UserStartedSpeakingFrame>());
+            Assert.Empty(captured.Captured.OfType<UserStoppedSpeakingFrame>());
+        }
+    }
+
+    [Fact]
     public async Task Non_Audio_Frames_Always_Forward()
     {
         var (runner, captured, pipeline) = Build();
