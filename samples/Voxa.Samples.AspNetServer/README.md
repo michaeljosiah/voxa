@@ -1,6 +1,6 @@
 # Voxa.Samples.AspNetServer
 
-A multi-vendor voice-agent server demonstrating the full Voxa stack. Five WebSocket endpoints, each composing a different pipeline shape.
+A multi-vendor voice-agent server with an in-browser demo client. Five WebSocket endpoints, each composing a different pipeline shape.
 
 ## Endpoints
 
@@ -12,7 +12,7 @@ A multi-vendor voice-agent server demonstrating the full Voxa stack. Five WebSoc
 | `/voice/azure-elevenlabs`   | `... → AzureSpeechStt → Echo → ElevenLabsTts → ...` | Azure Speech STT, ElevenLabs TTS |
 | `/voice/azure-mistral`      | `... → AzureSpeechStt → Echo → MistralTts → ...` | Azure Speech STT, Mistral Voxtral-TTS |
 
-The "Echo" processor is a tiny demo adapter that forwards each final `TranscriptionFrame` as a `TextFrame` so the TTS speaks it back. **In a real granular pipeline, replace it with [`MicrosoftAgentsProcessor`](../../src/Voxa.Services.MicrosoftAgents/MicrosoftAgentsProcessor.cs)** wrapping any MAF `AIAgent`:
+The "Echo" processor is a tiny demo adapter that forwards each final `TranscriptionFrame` as a `TextFrame`. **In a real granular pipeline, replace it with [`MicrosoftAgentsProcessor`](../../src/Voxa.Services.MicrosoftAgents/MicrosoftAgentsProcessor.cs)** wrapping any MAF `AIAgent`:
 
 ```csharp
 .Then(AzureSpeech.StreamingTranscription(azure))
@@ -20,57 +20,70 @@ The "Echo" processor is a tiny demo adapter that forwards each final `Transcript
 .Then(ElevenLabs.Synthesis(elevenlabs))
 ```
 
-## Configure
+## Configure (User Secrets — recommended)
 
-Edit `appsettings.json` or set environment variables. Each endpoint only needs the vendor sections it actually uses, so you can configure just one and skip the rest.
+The csproj has a `<UserSecretsId>` so secrets are stored outside the repo:
 
 ```bash
-# Voice Live (full composite agent)
-export AzureVoiceLive__Endpoint="wss://<resource>.cognitiveservices.azure.com/voice-live/realtime?model=gpt-realtime-mini&api-version=2025-10-01"
-export AzureVoiceLive__ApiKey="<your-key>"
+# Voice Live
+dotnet user-secrets set "AzureVoiceLive:Endpoint" "wss://<resource>.cognitiveservices.azure.com/voice-live/realtime?model=gpt-realtime-mini&api-version=2025-10-01" --project samples/Voxa.Samples.AspNetServer
+dotnet user-secrets set "AzureVoiceLive:ApiKey"   "<your-key>" --project samples/Voxa.Samples.AspNetServer
 
-# Granular paths
-export AzureSpeech__SubscriptionKey="<your-key>"
+# Granular STT
+dotnet user-secrets set "AzureSpeech:SubscriptionKey" "<your-key>" --project samples/Voxa.Samples.AspNetServer
+dotnet user-secrets set "AzureSpeech:Region"          "eastus"     --project samples/Voxa.Samples.AspNetServer
+
+# OpenAI
+dotnet user-secrets set "OpenAI:ApiKey" "sk-..." --project samples/Voxa.Samples.AspNetServer
+
+# ElevenLabs
+dotnet user-secrets set "ElevenLabs:ApiKey"  "<your-key>" --project samples/Voxa.Samples.AspNetServer
+dotnet user-secrets set "ElevenLabs:VoiceId" "21m00Tcm4TlvDq8ikWAM" --project samples/Voxa.Samples.AspNetServer
+
+# Mistral
+dotnet user-secrets set "Mistral:ApiKey" "<your-key>" --project samples/Voxa.Samples.AspNetServer
+```
+
+List what's set: `dotnet user-secrets list --project samples/Voxa.Samples.AspNetServer`.
+Clear everything: `dotnet user-secrets clear --project samples/Voxa.Samples.AspNetServer`.
+
+User Secrets only load in `Development` (which the `http` launch profile sets). For production you'd switch to env vars, Azure Key Vault, etc.
+
+### Or env vars (no setup, double-underscore = colon)
+
+```bash
+export AzureVoiceLive__ApiKey="<key>"
+export AzureSpeech__SubscriptionKey="<key>"
 export AzureSpeech__Region="eastus"
-
-export OpenAI__ApiKey="sk-..."
-
-export ElevenLabs__ApiKey="<your-key>"
-export ElevenLabs__VoiceId="21m00Tcm4TlvDq8ikWAM"
-
-export Mistral__ApiKey="<your-key>"
+# etc.
 ```
 
 ## Run
 
 ```bash
-dotnet run --project samples/Voxa.Samples.AspNetServer
+dotnet run --project samples/Voxa.Samples.AspNetServer --launch-profile http
 ```
 
-Visit `http://localhost:5000/` for the route list, then connect a WebSocket to any of the `/voice/...` paths and stream PCM.
+Open <http://localhost:5009/> in Chrome (mic permission required). Pick a route, click **Start**, talk. The page captures your mic, ships PCM to the server, plays the server's PCM response back, and prints transcription / text envelopes to the log.
+
+## What's in the in-browser client
+
+- `wwwroot/index.html` — UI, WebSocket lifecycle, Web Audio playback scheduler.
+- `wwwroot/recorder-worklet.js` — `AudioWorklet` that buffers Float32 mic samples into 50 ms chunks and converts to 16-bit PCM.
+
+The page asks `AudioContext` for the route's target sample rate (24 kHz for Voice Live, 16 kHz for granular). The browser resamples the mic stream automatically.
 
 ## Wire protocol
 
 Per [`Voxa.Transports.WebSocket.Protocol.WireProtocol`](../../src/Voxa.Transports.WebSocket/Protocol/WireProtocol.cs):
 
 **Client → Server:**
-- Binary: 16-bit PCM, sample rate per scenario (24 kHz for Voice Live, 16 kHz default for granular STT)
+- Binary: 16-bit PCM at the per-route sample rate
 - Text JSON: `{"type":"hello",...}`, `{"type":"end"}`, `{"type":"toolResult",...}`, `{"type":"text",...}`
 
 **Server → Client:**
-- Binary: 16-bit PCM (response audio, vendor-specific output rate)
+- Binary: 16-bit PCM (response audio)
 - Text JSON: `{"type":"transcription",...}`, `{"type":"text",...}`, `{"type":"toolCall",...}`, `{"type":"speaking",...}`, `{"type":"interruption"}`, `{"type":"error",...}`, `{"type":"end"}`
-
-## Quick browser smoke test
-
-Open the dev tools console and run:
-
-```js
-const ws = new WebSocket('ws://localhost:5000/voice/azure');
-ws.onmessage = e => console.log(typeof e.data === 'string' ? JSON.parse(e.data) : `${e.data.byteLength} bytes audio`);
-```
-
-Then capture mic via `getUserMedia` + `AudioContext` and feed PCM to `ws.send(buffer)`.
 
 ## Mix-and-match recipe
 

@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- User Secrets enabled. See README for how to set values. -->
+    <UserSecretsId>voxa-sample-aspnetserver-9f3c2e8a</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

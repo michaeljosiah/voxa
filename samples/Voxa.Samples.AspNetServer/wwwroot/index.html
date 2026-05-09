@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voxa Sample</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { margin-bottom: 0.25rem; }
+  .lead { color: #666; margin-top: 0; }
+  select, button { font-size: 1rem; padding: 0.5rem 1rem; border-radius: 0.25rem; }
+  button { cursor: pointer; border: 1px solid #ccc; background: #fff; }
+  button:disabled { cursor: not-allowed; opacity: 0.5; }
+  .controls { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin: 1.25rem 0; }
+  #status { padding: 0.4rem 0.85rem; border-radius: 0.25rem; background: #eee; color: #555; font-weight: 500; }
+  #status.connected { background: #1d7a3a; color: #fff; }
+  #status.recording { background: #c0392b; color: #fff; }
+  #status.error     { background: #b71c1c; color: #fff; }
+  #log { background: #0d1117; color: #c9d1d9; font-family: ui-monospace, "SF Mono", Consolas, monospace; padding: 1rem; height: 320px; overflow-y: auto; white-space: pre-wrap; font-size: 0.85rem; border-radius: 0.5rem; }
+  #log .err  { color: #ff7b72; }
+  #log .ok   { color: #7ee787; }
+  #log .info { color: #c9d1d9; }
+  #log .dim  { color: #6e7681; }
+  details { margin: 1rem 0; }
+  details summary { cursor: pointer; color: #555; }
+  pre { background: #f6f8fa; padding: 0.75rem; border-radius: 0.25rem; overflow-x: auto; }
+</style>
+</head>
+<body>
+  <h1>Voxa sample</h1>
+  <p class="lead">Pick a route, click Start. Mic streams to the server; assistant audio plays back. Server-side JSON envelopes show in the log.</p>
+
+  <div class="controls">
+    <label>
+      Route:
+      <select id="route">
+        <option value="/voice/voice-live">/voice/voice-live  (Voice Live composite)</option>
+        <option value="/voice/azure">/voice/azure  (Azure echo)</option>
+        <option value="/voice/openai">/voice/openai  (OpenAI Whisper + TTS echo)</option>
+        <option value="/voice/azure-elevenlabs">/voice/azure-elevenlabs  (Azure STT + ElevenLabs TTS echo)</option>
+        <option value="/voice/azure-mistral">/voice/azure-mistral  (Azure STT + Mistral TTS echo)</option>
+      </select>
+    </label>
+    <button id="start">Start</button>
+    <button id="stop" disabled>Stop</button>
+    <span id="status">idle</span>
+  </div>
+
+  <div id="log"></div>
+
+  <details>
+    <summary>How does this work?</summary>
+    <p>The browser captures mic audio via <code>getUserMedia</code> + an <code>AudioWorklet</code>, resamples to the route's target rate (24 kHz for Voice Live, 16 kHz for granular STT), converts Float32 → Int16, and ships it as binary WebSocket frames. Incoming binary frames are raw PCM played back via the Web Audio scheduler.</p>
+    <p>If you see <code>missing config</code> in the log, set the relevant secret with <code>dotnet user-secrets set "Section:Key" "value"</code> and restart the server.</p>
+  </details>
+
+<script>
+const ROUTES = {
+  '/voice/voice-live':       { inRate: 24000, outRate: 24000 },
+  '/voice/azure':            { inRate: 16000, outRate: 24000 },
+  '/voice/openai':           { inRate: 16000, outRate: 24000 },
+  '/voice/azure-elevenlabs': { inRate: 16000, outRate: 24000 },
+  '/voice/azure-mistral':    { inRate: 16000, outRate: 24000 },
+};
+
+const $ = (id) => document.getElementById(id);
+const log = (msg, cls = 'info') => {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  $('log').append(el);
+  $('log').scrollTop = $('log').scrollHeight;
+};
+const setStatus = (s, cls = '') => {
+  $('status').textContent = s;
+  $('status').className = cls;
+};
+
+let ws = null, micCtx = null, outCtx = null, micStream = null, workletNode = null, nextPlayTime = 0;
+
+async function start() {
+  const route = $('route').value;
+  const cfg = ROUTES[route];
+  if (!cfg) { log(`No config for ${route}`, 'err'); return; }
+
+  $('start').disabled = true;
+  setStatus('connecting…');
+
+  outCtx = new AudioContext({ sampleRate: cfg.outRate });
+  nextPlayTime = outCtx.currentTime;
+
+  const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${route}`;
+  log(`Connecting ${wsUrl}`, 'dim');
+  ws = new WebSocket(wsUrl);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      try {
+        const obj = JSON.parse(e.data);
+        if (obj.type === 'error') { log(`ERROR  ${obj.message}`, 'err'); return; }
+        if (obj.type === 'transcription') { log(`STT (${obj.isFinal ? 'final' : 'interim'})  ${obj.text}`, 'ok'); return; }
+        if (obj.type === 'text') { log(`assistant  ${obj.text}`, 'info'); return; }
+        if (obj.type === 'speaking') { log(`${obj.who} ${obj.started ? 'started' : 'stopped'} speaking`, 'dim'); return; }
+        if (obj.type === 'interruption') { log('interruption', 'dim'); return; }
+        log(`server  ${e.data}`, 'dim');
+      } catch { log(`server  ${e.data}`, 'dim'); }
+    } else {
+      playPcm(new Int16Array(e.data));
+    }
+  };
+
+  ws.onclose = (e) => {
+    log(`Closed code=${e.code} reason="${e.reason}"`, e.code === 1000 ? 'dim' : 'err');
+    cleanup();
+  };
+  ws.onerror = () => log('WebSocket error', 'err');
+
+  await new Promise((res) => { ws.onopen = res; });
+  // Give the server a moment to reject with an error envelope before we ask for mic permission.
+  await new Promise((r) => setTimeout(r, 150));
+  if (ws.readyState !== WebSocket.OPEN) {
+    log('Server closed before accepting the session — see error above', 'err');
+    cleanup();
+    return;
+  }
+  log('Connected', 'ok');
+  setStatus('connected', 'connected');
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (ex) {
+    log(`Mic permission denied: ${ex.message}`, 'err');
+    cleanup();
+    return;
+  }
+
+  micCtx = new AudioContext({ sampleRate: cfg.inRate });
+  await micCtx.audioWorklet.addModule('/recorder-worklet.js');
+
+  const source = micCtx.createMediaStreamSource(micStream);
+  workletNode = new AudioWorkletNode(micCtx, 'recorder', {
+    processorOptions: { chunkSamples: Math.floor(cfg.inRate / 20) }, // 50 ms
+  });
+  workletNode.port.onmessage = (e) => {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(e.data);
+  };
+  source.connect(workletNode);
+
+  setStatus('recording', 'recording');
+  log(`Mic streaming @ ${cfg.inRate} Hz`, 'ok');
+  $('stop').disabled = false;
+}
+
+function playPcm(int16) {
+  if (!outCtx) return;
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+  const buf = outCtx.createBuffer(1, float32.length, outCtx.sampleRate);
+  buf.copyToChannel(float32, 0);
+  const src = outCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(outCtx.destination);
+  const startAt = Math.max(outCtx.currentTime, nextPlayTime);
+  src.start(startAt);
+  nextPlayTime = startAt + buf.duration;
+}
+
+function stop() {
+  log('Stopping');
+  try { ws?.send(JSON.stringify({ type: 'end' })); } catch {}
+  try { ws?.close(); } catch {}
+  cleanup();
+}
+
+function cleanup() {
+  try { workletNode?.disconnect(); } catch {}
+  micStream?.getTracks().forEach((t) => t.stop());
+  try { micCtx?.close(); } catch {}
+  // outCtx kept alive briefly so queued PCM finishes.
+  setTimeout(() => { try { outCtx?.close(); } catch {}; outCtx = null; }, 1000);
+  setStatus('idle');
+  $('start').disabled = false;
+  $('stop').disabled = true;
+  ws = null; workletNode = null; micCtx = null; micStream = null;
+}
+
+$('start').onclick = start;
+$('stop').onclick = stop;
+</script>
+</body>
+</html>

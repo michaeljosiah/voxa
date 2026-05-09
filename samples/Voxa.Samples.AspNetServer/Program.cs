@@ -14,25 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(60) });
-
-app.MapGet("/", () => Results.Text(
-    """
-    Voxa multi-vendor sample.
-
-    Open a WebSocket to one of these endpoints, stream 16-bit PCM @ 24 kHz mono:
-
-      /voice/voice-live            Azure Voice Live composite (STT+LLM+TTS+VAD in one node)
-      /voice/azure                 Azure Speech STT  → echo → Azure Speech TTS
-      /voice/openai                OpenAI Whisper STT → echo → OpenAI TTS
-      /voice/azure-elevenlabs      Azure Speech STT  → echo → ElevenLabs TTS
-      /voice/azure-mistral         Azure Speech STT  → echo → Mistral TTS
-
-    Each endpoint reads its config from appsettings.json. Configure only the
-    vendors whose endpoints you intend to call. The /voice/voice-live route
-    runs a full LLM-driven agent; the others are STT→echo→TTS loopbacks
-    that demonstrate the vendor-swap story (drop in MicrosoftAgentsProcessor
-    in place of EchoTranscriptionProcessor for a real granular agent path).
-    """));
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.Map("/voice/voice-live", async (HttpContext ctx) =>
 {
