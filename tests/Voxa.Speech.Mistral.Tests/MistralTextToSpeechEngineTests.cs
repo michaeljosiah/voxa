@@ -37,7 +37,7 @@ public class MistralTextToSpeechEngineTests
     [Fact]
     public async Task Posts_To_Audio_Speech_Endpoint_With_Bearer_Auth()
     {
-        var pcmResponse = new byte[] { 0xC1, 0xC2, 0xC3 };
+        var pcmResponse = new byte[] { 0xC1, 0xC2, 0xC3, 0xC4 }; // 4 bytes (even — 16-bit aligned)
         var handler = new CapturingHandler
         {
             Respond = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(pcmResponse) },

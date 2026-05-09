@@ -111,9 +111,14 @@ async function start() {
         log(`server  ${e.data}`, 'dim');
       } catch { log(`server  ${e.data}`, 'dim'); }
     } else {
-      // Defensive: drop a trailing odd byte if the server's chunking ever splits a 16-bit sample.
-      const len = e.data.byteLength & ~1;
-      if (len > 0) playPcm(new Int16Array(e.data, 0, len / 2));
+      // Server guarantees 2-byte-aligned chunks (PcmStreamReader carries trailing odd bytes
+      // across HTTP-stream reads). If we ever see an odd-byte message anyway, surface the bug
+      // instead of silently shifting the stream by 1 byte (which would produce clicks/static).
+      if (e.data.byteLength % 2 !== 0) {
+        log(`server sent odd-byte PCM message (${e.data.byteLength}B) — likely a vendor bug`, 'err');
+        return;
+      }
+      playPcm(new Int16Array(e.data));
     }
   };
 

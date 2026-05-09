@@ -63,12 +63,8 @@ public sealed class ElevenLabsTextToSpeechEngine : ITextToSpeechEngine
         resp.EnsureSuccessStatusCode();
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        var buffer = new byte[ChunkSize];
-        int read;
-        while ((read = await stream.ReadAsync(buffer.AsMemory(0, ChunkSize), ct).ConfigureAwait(false)) > 0)
+        await foreach (var chunk in PcmStreamReader.ReadEvenChunksAsync(stream, ChunkSize, ct).ConfigureAwait(false))
         {
-            var chunk = new byte[read];
-            Buffer.BlockCopy(buffer, 0, chunk, 0, read);
             yield return chunk;
         }
     }

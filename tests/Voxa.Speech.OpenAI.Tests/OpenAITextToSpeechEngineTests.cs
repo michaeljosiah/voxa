@@ -16,7 +16,7 @@ public class OpenAITextToSpeechEngineTests
     [Fact]
     public async Task Posts_To_Audio_Speech_Endpoint_With_Bearer_Auth()
     {
-        var pcmResponse = new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50 };
+        var pcmResponse = new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 }; // 6 bytes (even — 16-bit aligned)
         var handler = new MockHttpMessageHandler
         {
             Respond = req => new HttpResponseMessage(HttpStatusCode.OK)
