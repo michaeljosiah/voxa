@@ -75,7 +75,7 @@ const setStatus = (s, cls = '') => {
   $('status').className = cls;
 };
 
-let ws = null, micCtx = null, outCtx = null, micStream = null, workletNode = null, nextPlayTime = 0;
+let ws = null, micCtx = null, outCtx = null, micStream = null, workletNode = null, nextPlayTime = 0, playRate = 24000;
 
 async function start() {
   const route = $('route').value;
@@ -85,7 +85,13 @@ async function start() {
   $('start').disabled = true;
   setStatus('connecting…');
 
-  outCtx = new AudioContext({ sampleRate: cfg.outRate });
+  // Don't request a specific sampleRate on the output context — Chrome on some Windows
+  // hardware silently falls back to the hardware-native rate (often 48 kHz), and if the
+  // returned `outCtx.sampleRate` doesn't match, the same PCM bytes get played at the
+  // wrong speed (= garbled). Use hardware native and create buffers at the data's rate;
+  // the buffer source will resample on playback.
+  outCtx = new AudioContext();
+  playRate = cfg.outRate;
   nextPlayTime = outCtx.currentTime;
 
   const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${route}`;
@@ -105,7 +111,9 @@ async function start() {
         log(`server  ${e.data}`, 'dim');
       } catch { log(`server  ${e.data}`, 'dim'); }
     } else {
-      playPcm(new Int16Array(e.data));
+      // Defensive: drop a trailing odd byte if the server's chunking ever splits a 16-bit sample.
+      const len = e.data.byteLength & ~1;
+      if (len > 0) playPcm(new Int16Array(e.data, 0, len / 2));
     }
   };
 
@@ -154,10 +162,12 @@ async function start() {
 }
 
 function playPcm(int16) {
-  if (!outCtx) return;
+  if (!outCtx || int16.length === 0) return;
   const float32 = new Float32Array(int16.length);
   for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-  const buf = outCtx.createBuffer(1, float32.length, outCtx.sampleRate);
+  // Build the AudioBuffer at the known DATA rate (e.g. 24 kHz for OpenAI / Voice Live),
+  // not outCtx.sampleRate — the BufferSource resamples to whatever the context is running at.
+  const buf = outCtx.createBuffer(1, float32.length, playRate);
   buf.copyToChannel(float32, 0);
   const src = outCtx.createBufferSource();
   src.buffer = buf;
