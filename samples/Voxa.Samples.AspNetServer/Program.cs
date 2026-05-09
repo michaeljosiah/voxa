@@ -23,14 +23,27 @@ var app = builder.Build();
 // Default is the energy gate because (a) it's the known-good for the demo, (b) Silero's defaults
 // take per-environment tuning to match user mic characteristics — opt-in once you've verified
 // the rest of the pipeline works.
+//
+// Tunables (both VADs):
+//   Voxa:VadStopMs   — silence required before the gate closes / "end-of-turn" timeout (default 800 ms).
+//                       Raise (1200–1500) for slow speakers or anyone who pauses mid-sentence to think.
+//                       Lower (400–500) for crisp speakers and snappier turn-taking.
+//   Voxa:VadStartMs  — sustained voiced duration before the gate opens (Silero only, default 200 ms).
 static FrameProcessor MakeVad(IConfiguration cfg)
 {
     var mode = cfg["Voxa:Vad"]?.ToLowerInvariant() ?? "silence";
+    var stopMs = int.TryParse(cfg["Voxa:VadStopMs"], out var s) ? s : 800;
+    var startMs = int.TryParse(cfg["Voxa:VadStartMs"], out var st) ? st : 200;
+
     return mode switch
     {
-        "silero" or "silerovad" or "ml" => new SileroVadProcessor(),
+        "silero" or "silerovad" or "ml" => new SileroVadProcessor(new SileroVadOptions
+        {
+            StartDuration = TimeSpan.FromMilliseconds(startMs),
+            StopDuration = TimeSpan.FromMilliseconds(stopMs),
+        }),
         "none" or "off" or "disabled" => new PassthroughVad(),
-        _ => new SilenceGateProcessor(),
+        _ => new SilenceGateProcessor(hangover: TimeSpan.FromMilliseconds(stopMs)),
     };
 }
 

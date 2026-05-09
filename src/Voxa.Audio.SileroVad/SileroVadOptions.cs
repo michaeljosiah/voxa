@@ -34,10 +34,14 @@ public sealed record SileroVadOptions
     public TimeSpan StartDuration { get; init; } = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
-    /// Sustained unvoiced duration before the gate closes. Default 500 ms — slightly more
-    /// lenient than Pipecat's 200 ms to avoid clipping the tail of utterances.
+    /// Sustained unvoiced duration before the gate closes — also the "end-of-turn" timeout for
+    /// downstream STT flush. Default 800 ms (matches Pipecat's <c>stop_secs=0.8</c>). Raise to
+    /// 1200–1500 ms for slow speakers or anyone who pauses mid-sentence to think; lower to
+    /// 400–500 ms for crisp speakers and snappier turn-taking. There's no perfect value —
+    /// silence detection alone can't tell a within-sentence breath from end-of-turn. A future
+    /// LLM-based smart turn analyzer is the proper fix.
     /// </summary>
-    public TimeSpan StopDuration { get; init; } = TimeSpan.FromMilliseconds(500);
+    public TimeSpan StopDuration { get; init; } = TimeSpan.FromMilliseconds(800);
 
     /// <summary>
     /// Audio kept in a rolling buffer that's prepended to the gated stream when speech is

@@ -31,9 +31,12 @@ public sealed class SilenceGateProcessor : FrameProcessor
     /// environments; lower to 0.002 if quiet talkers get cut off.
     /// </param>
     /// <param name="hangover">
-    /// How long the gate stays open after the most recent above-threshold frame. Defaults
-    /// to 500 ms — long enough to span a syllable gap, short enough that real silence doesn't
-    /// leak through.
+    /// How long the gate stays open after the most recent above-threshold frame — also the
+    /// "end-of-turn" timeout for downstream STT flush. Defaults to 800 ms (matches Pipecat's
+    /// <c>stop_secs=0.8</c>). Lower (300–500 ms) for snappier turn-taking with crisp speakers;
+    /// raise (1000–1500 ms) for slow speakers or anyone who pauses mid-sentence to think —
+    /// without that headroom, "Good morning, my name is Michael, *(pause)* what time is it?"
+    /// will be transcribed as two separate turns.
     /// </param>
     /// <param name="name">Optional processor name for logging.</param>
     public SilenceGateProcessor(
@@ -44,7 +47,7 @@ public sealed class SilenceGateProcessor : FrameProcessor
     {
         if (rmsThreshold < 0) throw new ArgumentOutOfRangeException(nameof(rmsThreshold));
         _rmsThreshold = rmsThreshold;
-        _hangover = hangover ?? TimeSpan.FromMilliseconds(500);
+        _hangover = hangover ?? TimeSpan.FromMilliseconds(800);
     }
 
     /// <summary>The threshold this gate is configured with.</summary>
