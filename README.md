@@ -6,6 +6,8 @@
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
+> See [`ROADMAP.md`](ROADMAP.md) for tracked work — latency improvements, smart turn detection, echo suppression, AONIK integration.
+
 > **Status: pre-alpha (0.1.x).** Public API stabilising. Not yet on NuGet.
 
 ## What it is
