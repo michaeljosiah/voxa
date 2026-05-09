@@ -53,6 +53,7 @@ jobs:
           dotnet pack src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          dotnet pack src/Voxa.Services.OpenAIRealtime/Voxa.Services.OpenAIRealtime.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Observability/Voxa.Observability.csproj                     --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj         --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
           dotnet pack src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj                       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}

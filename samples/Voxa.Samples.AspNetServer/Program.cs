@@ -4,6 +4,7 @@ using Voxa.Frames;
 using Voxa.Pipelines;
 using Voxa.Processors;
 using Voxa.Services.AzureVoiceLive;
+using Voxa.Services.OpenAIRealtime;
 using Voxa.Speech;
 using Voxa.Speech.Azure;
 using Voxa.Speech.ElevenLabs;
@@ -98,6 +99,30 @@ app.Map("/voice/openai", async (HttpContext ctx) =>
         .Then(OpenAISpeech.StreamingTranscription(openai))
         .Then(new EchoTranscriptionProcessor())
         .Then(OpenAISpeech.Synthesis(openai))
+        .Sink(new WebSocketAudioSink(ws));
+
+    await RunAsync(pipeline, ws, ctx, app.Logger);
+});
+
+app.Map("/voice/openai-realtime", async (HttpContext ctx) =>
+{
+    if (!await EnsureWebSocketAsync(ctx)) return;
+    var apiKey = builder.Configuration["OpenAI:ApiKey"];
+    if (string.IsNullOrEmpty(apiKey)) { await Missing(ctx, "OpenAI"); return; }
+
+    using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+    var options = new OpenAIRealtimeOptions
+    {
+        ApiKey = apiKey,
+        Model = builder.Configuration["OpenAI:RealtimeModel"] ?? "gpt-realtime-mini",
+        Voice = builder.Configuration["OpenAI:RealtimeVoice"] ?? "alloy",
+        Instructions = builder.Configuration["OpenAI:RealtimeInstructions"]
+            ?? "You are a friendly voice assistant. Keep responses brief and conversational.",
+    };
+
+    var pipeline = Pipeline.Build()
+        .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = options.InputSampleRate }))
+        .Then(new OpenAIRealtimeProcessor(options))
         .Sink(new WebSocketAudioSink(ws));
 
     await RunAsync(pipeline, ws, ctx, app.Logger);

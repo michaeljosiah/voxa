@@ -38,7 +38,8 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 | `Voxa.Core` | Frames, processors, pipeline, runner. Zero external deps beyond NUlid. |
 | `Voxa.Testing` | WAV file source/sink, capturing/passthrough processors. |
 | `Voxa.Transports.WebSocket` | Host-agnostic source + sink over `System.Net.WebSockets.WebSocket`. |
-| `Voxa.Services.AzureVoiceLive` | Composite STT+LLM+TTS+VAD via the Realtime API protocol. |
+| `Voxa.Services.AzureVoiceLive` | Composite STT+LLM+TTS+VAD via Azure Voice Live's Realtime API. |
+| `Voxa.Services.OpenAIRealtime` | Composite STT+LLM+TTS+VAD via OpenAI Realtime API (full-duplex, server-side VAD). |
 | `Voxa.Services.MicrosoftAgents` | Wraps any Microsoft Agent Framework `AIAgent` as a processor. |
 | `Voxa.Observability` | `TracingProcessor` + `VoxaActivities` ActivitySource for OpenTelemetry. |
 

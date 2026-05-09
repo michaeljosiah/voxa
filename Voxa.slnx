@@ -8,6 +8,7 @@
     <Project Path="src/Voxa.Observability/Voxa.Observability.csproj" />
     <Project Path="src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj" />
     <Project Path="src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj" />
+    <Project Path="src/Voxa.Services.OpenAIRealtime/Voxa.Services.OpenAIRealtime.csproj" />
     <Project Path="src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj" />
     <Project Path="src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj" />
     <Project Path="src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/Voxa.Observability.Tests/Voxa.Observability.Tests.csproj" />
     <Project Path="tests/Voxa.Services.AzureVoiceLive.Tests/Voxa.Services.AzureVoiceLive.Tests.csproj" />
     <Project Path="tests/Voxa.Services.MicrosoftAgents.Tests/Voxa.Services.MicrosoftAgents.Tests.csproj" />
+    <Project Path="tests/Voxa.Services.OpenAIRealtime.Tests/Voxa.Services.OpenAIRealtime.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Abstractions.Tests/Voxa.Speech.Abstractions.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Azure.Tests/Voxa.Speech.Azure.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.ElevenLabs.Tests/Voxa.Speech.ElevenLabs.Tests.csproj" />
