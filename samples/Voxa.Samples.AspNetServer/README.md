@@ -1,23 +1,67 @@
 # Voxa.Samples.AspNetServer
 
-A multi-vendor voice-agent server with an in-browser demo client. Five WebSocket endpoints, each composing a different pipeline shape.
+A multi-vendor voice-agent server with an in-browser demo client. WebSocket endpoints, each composing a different pipeline shape — including a side-by-side comparison of the lower-level `Pipeline.Build()` API and the fluent `MapVoxaVoice` surface from `Voxa.AspNetCore`.
 
 ## Endpoints
 
-| Route | Pipeline | Vendors involved |
-|-------|----------|------------------|
-| `/voice/voice-live`         | `WebSocketAudioSource → AzureVoiceLiveProcessor → WebSocketAudioSink` (full LLM-driven composite) | Azure Voice Live (or any OpenAI Realtime endpoint) |
-| `/voice/azure`              | `WebSocketAudioSource → AzureSpeechStt → Echo → AzureSpeechTts → WebSocketAudioSink` | Azure Speech (STT + TTS) |
-| `/voice/openai`             | `... → OpenAIWhisperStt → Echo → OpenAITts → ...` | OpenAI (STT + TTS) |
-| `/voice/azure-elevenlabs`   | `... → AzureSpeechStt → Echo → ElevenLabsTts → ...` | Azure Speech STT, ElevenLabs TTS |
-| `/voice/azure-mistral`      | `... → AzureSpeechStt → Echo → MistralTts → ...` | Azure Speech STT, Mistral Voxtral-TTS |
+| Route | Pipeline | Surface | Vendors |
+|-------|----------|---------|---------|
+| `/voice/voice-live`         | `WebSocketAudioSource → AzureVoiceLiveProcessor → WebSocketAudioSink` (full LLM-driven composite) | Lower-level | Azure Voice Live (or any OpenAI Realtime endpoint) |
+| `/voice/azure`              | `... → AzureSpeechStt → Echo → AzureSpeechTts → ...` | Lower-level | Azure Speech (STT + TTS) |
+| `/voice/openai`             | `... → OpenAIWhisperStt → Echo → OpenAITts → ...` | Lower-level | OpenAI (STT + TTS) |
+| `/voice/openai-realtime`    | `... → OpenAIRealtimeProcessor → ...` | Lower-level | OpenAI Realtime |
+| `/voice/openai-batch`       | `... → Whisper STT → MAF agent → SentenceAggregator → OpenAI TTS → ...` | Lower-level | OpenAI |
+| `/voice/openai-batch-fluent` | Same chain as `/voice/openai-batch`, expressed via `MapVoxaVoice` | **Fluent** (`Voxa.AspNetCore`) | OpenAI |
+| `/voice/azure-elevenlabs`   | `... → AzureSpeechStt → Echo → ElevenLabsTts → ...` | Lower-level | Azure Speech STT, ElevenLabs TTS |
+| `/voice/azure-mistral`      | `... → AzureSpeechStt → Echo → MistralTts → ...` | Lower-level | Azure Speech STT, Mistral Voxtral-TTS |
 
-The "Echo" processor is a tiny demo adapter that forwards each final `TranscriptionFrame` as a `TextFrame`. **In a real granular pipeline, replace it with [`MicrosoftAgentsProcessor`](../../src/Voxa.Services.MicrosoftAgents/MicrosoftAgentsProcessor.cs)** wrapping any MAF `AIAgent`:
+The "Echo" processor is a tiny demo adapter that forwards each final `TranscriptionFrame` as a `TextFrame`. **In a real granular pipeline, replace it with `MicrosoftAgentVoice.CreateProcessor(yourAgent)`** — the agent loop, frontend tool round-trips, token aggregation, and re-run logic are then handled for you:
 
 ```csharp
 .Then(AzureSpeech.StreamingTranscription(azure))
-.Then(new MicrosoftAgentsProcessor(yourAgent))    // ← swap Echo for this
+.Then(MicrosoftAgentVoice.CreateProcessor(yourAgent))    // ← swap Echo for this
+.Then(new SentenceAggregator())
 .Then(ElevenLabs.Synthesis(elevenlabs))
+```
+
+## Two integration surfaces, side-by-side
+
+The `/voice/openai-batch` and `/voice/openai-batch-fluent` endpoints are **the same pipeline** built two different ways. Compare them in [`Program.cs`](Program.cs) to see the boilerplate the fluent surface saves you.
+
+Lower-level (`Pipeline.Build()`):
+
+```csharp
+app.Map("/voice/openai-batch", async (HttpContext ctx) =>
+{
+    if (!await EnsureWebSocketAsync(ctx)) return;
+    using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+
+    var pipeline = Pipeline.Build()
+        .Source(new WebSocketAudioSource(ws, ...))
+        .Then(MakeVad(...))
+        .Then(OpenAISpeech.StreamingTranscription(openai))
+        .Then(new TranscriptionFilter())
+        .Then(MicrosoftAgentVoice.CreateProcessor(agent, ...))
+        .Then(new SentenceAggregator())
+        .Then(OpenAISpeech.Synthesis(openai))
+        .Sink(new WebSocketAudioSink(ws));
+
+    await using var runner = new PipelineRunner(pipeline, ctx.RequestAborted);
+    await runner.StartAsync(ct: ctx.RequestAborted);
+    await runner.WaitAsync().WaitAsync(ctx.RequestAborted);
+});
+```
+
+Fluent (`MapVoxaVoice`):
+
+```csharp
+app.MapVoxaVoice("/voice/openai-batch-fluent", voice => voice
+    .UseProcessor(_ => MakeVad(...))
+    .UseSpeechToText(() => OpenAISpeech.StreamingTranscription(openai))
+    .UseTranscriptionFilter()
+    .UseProcessor(ctx => MicrosoftAgentVoice.CreateProcessor(agent, ...))
+    .UseSentenceAggregator()
+    .UseTextToSpeech(() => OpenAISpeech.Synthesis(openai)));
 ```
 
 ## Configure (User Secrets — recommended)
@@ -83,8 +127,10 @@ Per [`Voxa.Transports.WebSocket.Protocol.WireProtocol`](../../src/Voxa.Transport
 
 **Server → Client:**
 - Binary: 16-bit PCM (response audio)
-- Text JSON: `{"type":"transcription",...}`, `{"type":"text",...}`, `{"type":"toolCall",...}`, `{"type":"speaking",...}`, `{"type":"interruption"}`, `{"type":"error",...}`, `{"type":"end"}`
+- Text JSON: `{"type":"transcription",...}`, `{"type":"text",...}`, `{"type":"toolCall",...}`, `{"type":"speaking",...}`, `{"type":"interruption"}`, `{"type":"status",...}`, `{"type":"error",...}`, `{"type":"end"}`
+
+The `status` envelope is for sanitized backend-tool progress (e.g. *"Checking your spending..."*). The MAF adapter emits it via `StatusFrame` whenever a host has configured `MicrosoftAgentVoiceOptions.BuildBackendToolStatus` for the called tool.
 
 ## Mix-and-match recipe
 
-The whole point of the multi-vendor split: **each STT engine works with each TTS engine, and dropping in `MicrosoftAgentsProcessor` slots a real LLM into the middle.** That's 4 STT × N TTS × any MAF agent = a lot of ground covered by a few small composable processors.
+The whole point of the multi-vendor split: **each STT engine works with each TTS engine, and dropping in `MicrosoftAgentVoice.CreateProcessor` slots a real LLM into the middle.** That's 4 STT × N TTS × any MAF agent = a lot of ground covered by a few small composable processors.

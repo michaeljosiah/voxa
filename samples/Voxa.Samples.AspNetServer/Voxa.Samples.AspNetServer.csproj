@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Transports.WebSocket\Voxa.Transports.WebSocket.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Services.AzureVoiceLive\Voxa.Services.AzureVoiceLive.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Services.OpenAIRealtime\Voxa.Services.OpenAIRealtime.csproj" />

@@ -16,14 +16,31 @@ public sealed record TextFrame(string Text) : DataFrame;
 /// <summary>A token chunk emitted by an LLM agent processor. Distinct from <see cref="TextFrame"/> for routing.</summary>
 public sealed record LlmTextChunkFrame(string Text) : DataFrame;
 
-/// <summary>Tool/function call requested by the LLM. <c>ArgumentsJson</c> is the raw JSON object.</summary>
+/// <summary>
+/// Tool/function call requested by the LLM. <c>ArgumentsJson</c> is the raw JSON object.
+///
+/// <para>
+/// Marked <see cref="IUninterruptible"/> so a mid-stream <see cref="InterruptionFrame"/>
+/// doesn't drop an in-flight tool call. Pipecat parity: <c>FunctionCallInProgressFrame</c>
+/// is uninterruptible there for the same reason — dropping a call mid-flight leaves
+/// conversation state inconsistent.
+/// </para>
+/// </summary>
 public sealed record ToolCallRequestFrame(
     string CallId,
     string Name,
-    string ArgumentsJson) : DataFrame;
+    string ArgumentsJson) : DataFrame, IUninterruptible;
 
-/// <summary>Result of a tool/function call returned to the LLM. <c>ResultJson</c> is the serialized result.</summary>
+/// <summary>
+/// Result of a tool/function call returned to the LLM. <c>ResultJson</c> is the serialized result.
+///
+/// <para>
+/// Marked <see cref="IUninterruptible"/> so a mid-stream <see cref="InterruptionFrame"/>
+/// doesn't drop the result before the agent loop can resume on it. Pipecat parity:
+/// <c>FunctionCallResultFrame</c>.
+/// </para>
+/// </summary>
 public sealed record ToolCallResultFrame(
     string CallId,
     string ResultJson,
-    bool IsError = false) : DataFrame;
+    bool IsError = false) : DataFrame, IUninterruptible;

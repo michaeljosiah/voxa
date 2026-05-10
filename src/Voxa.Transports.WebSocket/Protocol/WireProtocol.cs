@@ -17,7 +17,8 @@ namespace Voxa.Transports.WebSocket.Protocol;
 /// Server → Client: <c>{"type":"transcription", ...}</c>, <c>{"type":"text","text":"..."}</c>,
 /// <c>{"type":"toolCall","callId":"...","name":"...","argumentsJson":"..."}</c>,
 /// <c>{"type":"speaking","who":"bot|user","started":true}</c>, <c>{"type":"interruption"}</c>,
-/// <c>{"type":"error","message":"..."}</c>, <c>{"type":"end"}</c>.
+/// <c>{"type":"status","message":"..."}</c>, <c>{"type":"error","message":"..."}</c>,
+/// <c>{"type":"end"}</c>.
 /// </para>
 /// </summary>
 public static class WireProtocol
@@ -88,6 +89,9 @@ public static class WireProtocol
 
     public static string BuildInterruption()
         => JsonSerializer.Serialize(new { type = "interruption" }, JsonOpts);
+
+    public static string BuildStatus(string message)
+        => JsonSerializer.Serialize(new { type = "status", message }, JsonOpts);
 
     public static string BuildError(string message)
         => JsonSerializer.Serialize(new { type = "error", message }, JsonOpts);

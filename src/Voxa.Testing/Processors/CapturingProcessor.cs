@@ -33,6 +33,24 @@ public sealed class CapturingProcessor : FrameProcessor
         }
     }
 
+    /// <summary>
+    /// Wait until at least one captured frame matches <paramref name="predicate"/> or timeout.
+    /// Useful for awaiting a specific frame type or content rather than a raw count.
+    /// </summary>
+    public async Task WaitForAsync(Func<Frame, bool> predicate, TimeSpan timeout, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            bool any;
+            lock (_lock) { any = _captured.Any(predicate); }
+            if (any) return;
+            await Task.Delay(5, ct).ConfigureAwait(false);
+        }
+    }
+
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
         lock (_lock) _captured.Add(frame);

@@ -15,11 +15,28 @@ namespace Voxa.Transports.WebSocket;
 public sealed class WebSocketAudioSink : PipelineSink
 {
     private readonly System.Net.WebSockets.WebSocket _ws;
+    private readonly Func<Frame, string?>? _customSerializer;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    public WebSocketAudioSink(System.Net.WebSockets.WebSocket webSocket) : base("WebSocketAudioSink")
+    /// <summary>
+    /// Construct a sink. The optional <paramref name="customSerializer"/> lets hosts add
+    /// JSON envelopes for frame types Voxa doesn't know about (e.g. AONIK <c>ThreadReadyFrame</c>)
+    /// without subclassing or copying the sink. Return <c>null</c> for frames the host doesn't
+    /// handle and Voxa's built-in serialization runs as the fallback.
+    /// </summary>
+    /// <param name="webSocket">Open WebSocket. Caller owns lifetime; sink does NOT dispose it.</param>
+    /// <param name="customSerializer">
+    /// Optional. Called once per outbound frame BEFORE the built-in switch. If it returns a
+    /// non-null string, that string is sent as a text frame and the built-in switch is skipped.
+    /// Custom serializer output goes through the same private send-lock as the built-in path.
+    /// </param>
+    public WebSocketAudioSink(
+        System.Net.WebSockets.WebSocket webSocket,
+        Func<Frame, string?>? customSerializer = null)
+        : base("WebSocketAudioSink")
     {
         _ws = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
+        _customSerializer = customSerializer;
     }
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
@@ -45,6 +62,18 @@ public sealed class WebSocketAudioSink : PipelineSink
 
     private async Task SendFrameAsync(Frame frame, CancellationToken ct)
     {
+        // Host-supplied custom serializer wins for any frame it claims. Returning non-null means
+        // "I serialize this one"; returning null means "fall through to the built-in switch."
+        if (_customSerializer is not null)
+        {
+            var customJson = _customSerializer(frame);
+            if (customJson is not null)
+            {
+                await SendTextAsync(customJson, ct).ConfigureAwait(false);
+                return;
+            }
+        }
+
         switch (frame)
         {
             case AudioRawFrame audio:
@@ -76,6 +105,9 @@ public sealed class WebSocketAudioSink : PipelineSink
                 break;
             case InterruptionFrame:
                 await SendTextAsync(WireProtocol.BuildInterruption(), ct).ConfigureAwait(false);
+                break;
+            case StatusFrame status:
+                await SendTextAsync(WireProtocol.BuildStatus(status.Message), ct).ConfigureAwait(false);
                 break;
             case ErrorFrame err:
                 await SendTextAsync(WireProtocol.BuildError(err.Message), ct).ConfigureAwait(false);

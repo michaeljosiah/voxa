@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using Voxa.AspNetCore;
 using Voxa.Audio.SileroVad;
 using Voxa.Frames;
 using Voxa.Pipelines;
@@ -172,13 +173,11 @@ app.Map("/voice/openai-batch", async (HttpContext ctx) =>
         ChatOptions = new ChatOptions { Instructions = instructions },
     });
 
-    // Per-connection in-memory session — gives the bot conversation memory for the lifetime of
-    // this WebSocket. AgentSession isn't IDisposable, just drop on disconnect.
-    // For AONIK integration, replace the no-arg overload with
-    //   agent.CreateSessionAsync(conversationId, ct)
-    // pointing at the persisted ChatThread id, so memory survives reconnects + flows back to
-    // the SSE chat tab.
-    var session = await agent.CreateSessionAsync(ctx.RequestAborted);
+    // Per-connection in-memory chat history — gives the bot conversation memory for the lifetime
+    // of this WebSocket. The closure captures the list; BuildMessages is called per turn to assemble
+    // the message list MAF sees. Hosts that persist conversations (e.g. AONIK's ChatThread) replace
+    // this with a load-from-database call inside BuildMessages.
+    var chatHistory = new List<ChatMessage>();
 
     var pipeline = Pipeline.Build()
         .Source(new WebSocketAudioSource(ws, new WebSocketAudioOptions { InputSampleRate = openai.InputSampleRate }))
@@ -186,12 +185,80 @@ app.Map("/voice/openai-batch", async (HttpContext ctx) =>
         .Then(MakeVad(builder.Configuration))
         .Then(OpenAISpeech.StreamingTranscription(openai))
         .Then(new TranscriptionFilter())
-        .Then(new MicrosoftAgentsProcessor(agent, session))
+        .Then(MicrosoftAgentVoice.CreateProcessor(agent, options =>
+        {
+            options.BuildMessages = (turnCtx, ct) =>
+            {
+                chatHistory.Add(new ChatMessage(ChatRole.User, turnCtx.UserText));
+                // Snapshot — defensive copy so the agent doesn't see in-progress mutations.
+                return ValueTask.FromResult<IReadOnlyList<ChatMessage>>(chatHistory.ToArray());
+            };
+            options.OnTurnCompleted = (turnCtx, summary, ct) =>
+            {
+                if (!string.IsNullOrEmpty(summary.AssistantText))
+                {
+                    chatHistory.Add(new ChatMessage(ChatRole.Assistant, summary.AssistantText));
+                }
+                return ValueTask.CompletedTask;
+            };
+        }))
         .Then(new SentenceAggregator())
         .Then(OpenAISpeech.Synthesis(openai))
         .Sink(new WebSocketAudioSink(ws));
 
     await RunAsync(pipeline, ws, ctx, app.Logger);
+});
+
+// Same chain as /voice/openai-batch but expressed via the Voxa.AspNetCore fluent surface:
+//   MapVoxaVoice + UseSpeechToText + UseTranscriptionFilter + UseMicrosoftAgent + UseSentenceAggregator + UseTextToSpeech
+// — no manual Pipeline.Build()/runner plumbing. This is the integration story for hosts that
+// just want "give me a voice WS endpoint backed by my agent" without wiring the lower-level API.
+app.MapVoxaVoice("/voice/openai-batch-fluent", voice =>
+{
+    var openai = ReadOpenAIOptions(builder.Configuration)
+        ?? throw new InvalidOperationException("OpenAI configuration is missing.");
+
+    var chatModel = builder.Configuration["OpenAI:ChatModel"] ?? "gpt-4o-mini";
+    var instructions = builder.Configuration["OpenAI:ChatInstructions"]
+        ?? "You are a friendly voice assistant. Keep responses to 1-2 short sentences. Be conversational, not formal.";
+
+    voice
+        .UseProcessor(_ => MakeVad(builder.Configuration))
+        .UseSpeechToText(() => OpenAISpeech.StreamingTranscription(openai))
+        .UseTranscriptionFilter()
+        .UseProcessor(ctx =>
+        {
+            // Per-connection MAF agent + chat history. Captured in this factory closure so each
+            // WebSocket gets its own conversation memory; persisting hosts (AONIK) replace this
+            // with a load-from-store call inside MicrosoftAgentVoiceOptions.BuildMessages.
+            var openAiClient = new OpenAIClient(openai.ApiKey);
+            var chatClient = openAiClient.GetChatClient(chatModel).AsIChatClient();
+            var agent = new ChatClientAgent(chatClient, new ChatClientAgentOptions
+            {
+                Name = "VoxaSampleAgent",
+                ChatOptions = new ChatOptions { Instructions = instructions },
+            });
+            var chatHistory = new List<ChatMessage>();
+
+            return MicrosoftAgentVoice.CreateProcessor(agent, options =>
+            {
+                options.BuildMessages = (turnCtx, ct) =>
+                {
+                    chatHistory.Add(new ChatMessage(ChatRole.User, turnCtx.UserText));
+                    return ValueTask.FromResult<IReadOnlyList<ChatMessage>>(chatHistory.ToArray());
+                };
+                options.OnTurnCompleted = (turnCtx, summary, ct) =>
+                {
+                    if (!string.IsNullOrEmpty(summary.AssistantText))
+                    {
+                        chatHistory.Add(new ChatMessage(ChatRole.Assistant, summary.AssistantText));
+                    }
+                    return ValueTask.CompletedTask;
+                };
+            });
+        })
+        .UseSentenceAggregator()
+        .UseTextToSpeech(() => OpenAISpeech.Synthesis(openai));
 });
 
 app.Map("/voice/azure-elevenlabs", async (HttpContext ctx) =>
@@ -337,7 +404,7 @@ static MistralSpeechOptions? ReadMistralOptions(IConfiguration cfg)
 /// Demo-only adapter: forwards each final <see cref="TranscriptionFrame"/> downstream
 /// (so the WebSocket sink emits a <c>transcription</c> envelope and the user bubble appears)
 /// AND emits a <see cref="TextFrame"/> with the same text so a downstream TTS can speak it back.
-/// Replace with <c>MicrosoftAgentsProcessor</c> for a real LLM-driven granular pipeline.
+/// Replace with <c>MicrosoftAgentVoice.CreateProcessor(agent)</c> for a real LLM-driven granular pipeline.
 /// </summary>
 internal sealed class EchoTranscriptionProcessor : FrameProcessor
 {

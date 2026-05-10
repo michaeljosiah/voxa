@@ -1,0 +1,110 @@
+name: Publish to GitHub Packages
+
+# Publishes Voxa nupkgs to GitHub Packages on every push to main + on manual dispatch.
+# Used by downstream private consumers (e.g. AONIK) that want to track Voxa from main without
+# waiting for a tagged nuget.org release. The official nuget.org release flow lives in
+# release.yml and triggers on tag push.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Voxa.slnx'
+      - 'Directory.Build.props'
+      - '.github/workflows/publish-packages.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 0.1.0-alpha.42). Defaults to 0.1.0-alpha.{run_number}.'
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Pack & publish to GitHub Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="0.1.0-alpha.${{ github.run_number }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION"
+
+      - name: Restore
+        run: dotnet restore Voxa.slnx
+
+      - name: Build
+        run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test Voxa.slnx --configuration Release --no-build
+
+      - name: Pack
+        run: |
+          # All publishable Voxa packages. Voxa.Testing is intentionally included so consumers can
+          # write integration tests against Voxa pipelines without re-implementing the WAV / capture
+          # processors locally. Sample apps are excluded (IsPackable=false).
+          for proj in \
+            src/Voxa.Core/Voxa.Core.csproj \
+            src/Voxa.AspNetCore/Voxa.AspNetCore.csproj \
+            src/Voxa.Testing/Voxa.Testing.csproj \
+            src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj \
+            src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj \
+            src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj \
+            src/Voxa.Services.OpenAIRealtime/Voxa.Services.OpenAIRealtime.csproj \
+            src/Voxa.Observability/Voxa.Observability.csproj \
+            src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj \
+            src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj \
+            src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj \
+            src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj \
+            src/Voxa.Speech.Mistral/Voxa.Speech.Mistral.csproj \
+            src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj
+          do
+            dotnet pack "$proj" \
+              --configuration Release --no-build \
+              --output ./artifacts \
+              -p:Version=${{ steps.version.outputs.version }} \
+              -p:RepositoryUrl=https://github.com/${{ github.repository }} \
+              -p:RepositoryType=git \
+              -p:RepositoryCommit=${{ github.sha }}
+          done
+
+      - name: Add GitHub Packages source
+        run: |
+          dotnet nuget add source \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --name github \
+            --username ${{ github.repository_owner }} \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text
+
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --source github \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs-${{ steps.version.outputs.version }}
+          path: ./artifacts/*.nupkg
