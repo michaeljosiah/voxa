@@ -24,7 +24,25 @@ public sealed record VoxaSttDescriptor(
     string ConfigSection,
     int PreferredInputSampleRate,
     Func<IConfigurationSection, IReadOnlyList<string>> Validate,
-    Func<IServiceProvider, IConfigurationSection, SpeechToTextProcessor> CreateProcessor);
+    Func<IServiceProvider, IConfigurationSection, SpeechToTextProcessor> CreateProcessor)
+{
+    /// <summary>
+    /// Override hook for providers whose config does not follow the
+    /// <c>&lt;ConfigSection&gt;:InputSampleRate</c> key convention. Receives the root
+    /// "Voxa" section; returns the sample rate the processor will actually run at.
+    /// </summary>
+    public Func<IConfigurationSection, int>? ResolveInputSampleRate { get; init; }
+
+    /// <summary>
+    /// The sample rate the STT processor will actually be configured with for the given config —
+    /// the host's <c>&lt;ConfigSection&gt;:InputSampleRate</c> override when present, otherwise
+    /// <see cref="PreferredInputSampleRate"/>. The session envelope and VAD must use this value,
+    /// not the descriptor default, or they diverge from the processor when a host overrides the rate.
+    /// </summary>
+    public int GetEffectiveInputSampleRate(IConfigurationSection root)
+        => ResolveInputSampleRate?.Invoke(root)
+           ?? root.GetSection(ConfigSection).GetValue("InputSampleRate", PreferredInputSampleRate);
+}
 
 /// <summary>TTS twin of <see cref="VoxaSttDescriptor"/>.</summary>
 public sealed record VoxaTtsDescriptor(
@@ -32,7 +50,23 @@ public sealed record VoxaTtsDescriptor(
     string ConfigSection,
     int OutputSampleRate,
     Func<IConfigurationSection, IReadOnlyList<string>> Validate,
-    Func<IServiceProvider, IConfigurationSection, TextToSpeechProcessor> CreateProcessor);
+    Func<IServiceProvider, IConfigurationSection, TextToSpeechProcessor> CreateProcessor)
+{
+    /// <summary>
+    /// Override hook for providers whose config does not follow the
+    /// <c>&lt;ConfigSection&gt;:OutputSampleRate</c> key convention.
+    /// </summary>
+    public Func<IConfigurationSection, int>? ResolveOutputSampleRate { get; init; }
+
+    /// <summary>
+    /// The sample rate the TTS processor will actually be configured with for the given config —
+    /// the host's <c>&lt;ConfigSection&gt;:OutputSampleRate</c> override when present, otherwise
+    /// <see cref="OutputSampleRate"/>.
+    /// </summary>
+    public int GetEffectiveOutputSampleRate(IConfigurationSection root)
+        => ResolveOutputSampleRate?.Invoke(root)
+           ?? root.GetSection(ConfigSection).GetValue("OutputSampleRate", OutputSampleRate);
+}
 
 /// <summary>
 /// Settings derived from the active profile/config passed to a VAD descriptor factory.

@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Testing\Voxa.Testing.csproj" />
+    <ProjectReference Include="..\..\src\Voxa\Voxa.csproj" />
   </ItemGroup>
 
 </Project>

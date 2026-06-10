@@ -53,15 +53,26 @@ public sealed class VoxaDefaultsGuard : IHostedService
         // scoped services from the root provider throws under scope validation).
         using var scope = _sp.CreateScope();
         var scoped = scope.ServiceProvider;
-        bool hasAgent = scoped.GetService<Microsoft.Agents.AI.AIAgent>() is not null
-                     || scoped.GetService<Microsoft.Extensions.AI.IChatClient>() is not null
-                     || scoped.GetService<IVoiceAgentFactory>() is not null;
+        bool hasDiAgent = scoped.GetService<Microsoft.Agents.AI.AIAgent>() is not null
+                       || scoped.GetService<Microsoft.Extensions.AI.IChatClient>() is not null;
 
-        if (!hasAgent)
+        if (!hasDiAgent)
         {
-            errors.Add("UseDefaults() needs an agent. Either register an AIAgent or IChatClient in DI, " +
-                       "or set Voxa:Agent:Provider (requires the Voxa meta-package which registers " +
-                       "OpenAIChatAgentFactory). See docs/getting-started.md.");
+            // The factory is the agent source the composer will fall back to, so its mere
+            // presence is not enough — the meta-package always registers one. Ask it whether
+            // the configured provider/credentials would actually let Create() succeed; otherwise
+            // the failure surfaces only when the first WebSocket request arrives.
+            var factory = scoped.GetService<IVoiceAgentFactory>();
+            if (factory is null)
+            {
+                errors.Add("UseDefaults() needs an agent. Either register an AIAgent or IChatClient in DI, " +
+                           "or set Voxa:Agent:Provider (requires the Voxa meta-package which registers " +
+                           "OpenAIChatAgentFactory). See docs/getting-started.md.");
+            }
+            else
+            {
+                errors.AddRange(factory.Validate(o.Agent));
+            }
         }
 
         if (errors.Count > 0)

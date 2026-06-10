@@ -63,11 +63,17 @@ public sealed class DefaultVoicePipelineComposer
 
         var parts = new List<Func<HttpContext, FrameProcessor>>();
 
+        // Effective rates honour per-provider config overrides (e.g. Voxa:OpenAI:InputSampleRate).
+        // The descriptor constants are only defaults — the processors bind the override, so the
+        // VAD and the session envelope must advertise the same rate the processors actually use.
+        var inputSampleRate  = stt.GetEffectiveInputSampleRate(root);
+        var outputSampleRate = tts.GetEffectiveOutputSampleRate(root);
+
         // 1. VAD (engine names are case-insensitive, matching Profile and provider lookups)
         if (!string.Equals(o.Vad.Engine, "None", StringComparison.OrdinalIgnoreCase))
         {
             var vadSettings = new VoxaVadSettings(
-                SampleRate:           stt.PreferredInputSampleRate,
+                SampleRate:           inputSampleRate,
                 ConfidenceThreshold:  tuning.VadConfidenceThreshold,
                 MinRms:               tuning.VadMinRms,
                 StartDuration:        tuning.VadStartDuration,
@@ -115,8 +121,8 @@ public sealed class DefaultVoicePipelineComposer
 
         return new ComposedVoice(
             Parts:            parts,
-            InputSampleRate:  stt.PreferredInputSampleRate,
-            OutputSampleRate: tts.OutputSampleRate);
+            InputSampleRate:  inputSampleRate,
+            OutputSampleRate: outputSampleRate);
     }
 
     private FrameProcessor CreateAgentProcessor(

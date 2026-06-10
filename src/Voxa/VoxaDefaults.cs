@@ -70,29 +70,16 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
 
     public AIAgent Create(HttpContext context, VoxaAgentOptions options)
     {
-        // Agent:Provider must be null or "OpenAI" when using the default factory.
-        if (options.Provider is not null &&
-            !string.Equals(options.Provider, "OpenAI", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI' " +
-                $"(got '{options.Provider}'). " +
-                "Register a custom IVoiceAgentFactory singleton for other providers.");
-        }
+        // Same checks VoxaDefaultsGuard runs at startup via Validate() — repeated here so
+        // hosts that never arm the guard still get config-key-level messages, not the opaque
+        // ArgumentException ApiKeyCredential throws for an empty key.
+        var errors = CheckUsable(options);
+        if (errors.Count > 0)
+            throw new InvalidOperationException(string.Join(" ", errors));
 
-        var apiKey = !string.IsNullOrEmpty(options.ApiKey)
-            ? options.ApiKey
-            : _configuration["Voxa:OpenAI:ApiKey"];
+        var apiKey = ResolveApiKey(options);
 
-        // Fail with a config-key-level message rather than the opaque ArgumentException
-        // ApiKeyCredential throws for an empty key.
-        if (string.IsNullOrEmpty(apiKey))
-            throw new InvalidOperationException(
-                "No OpenAI API key configured for the default voice agent. " +
-                "Set Voxa:Agent:ApiKey or Voxa:OpenAI:ApiKey (user-secrets or environment variable " +
-                "Voxa__OpenAI__ApiKey), or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.");
-
-        IChatClient chatClient = new OpenAIClient(new ApiKeyCredential(apiKey))
+        IChatClient chatClient = new OpenAIClient(new ApiKeyCredential(apiKey!))
             .GetChatClient(options.Model)
             .AsIChatClient();
 
@@ -102,4 +89,41 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
             ChatOptions = new ChatOptions { Instructions = options.Instructions },
         });
     }
+
+    /// <summary>
+    /// Called by VoxaDefaultsGuard at host startup. Without this, the factory's mere presence
+    /// in DI (it is always registered by the meta-package) would satisfy the guard's agent
+    /// probe, deferring provider/credential failures to the first WebSocket request.
+    /// </summary>
+    public IReadOnlyList<string> Validate(VoxaAgentOptions options) => CheckUsable(options);
+
+    private IReadOnlyList<string> CheckUsable(VoxaAgentOptions options)
+    {
+        // Agent:Provider must be null or "OpenAI" when using the default factory.
+        if (options.Provider is not null &&
+            !string.Equals(options.Provider, "OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI' " +
+                $"(got '{options.Provider}'). " +
+                "Register a custom IVoiceAgentFactory singleton for other providers.",
+            ];
+        }
+
+        if (string.IsNullOrEmpty(ResolveApiKey(options)))
+        {
+            return
+            [
+                "No OpenAI API key configured for the default voice agent. " +
+                "Set Voxa:Agent:ApiKey or Voxa:OpenAI:ApiKey (user-secrets or environment variable " +
+                "Voxa__OpenAI__ApiKey), or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.",
+            ];
+        }
+
+        return [];
+    }
+
+    private string? ResolveApiKey(VoxaAgentOptions options)
+        => !string.IsNullOrEmpty(options.ApiKey) ? options.ApiKey : _configuration["Voxa:OpenAI:ApiKey"];
 }
