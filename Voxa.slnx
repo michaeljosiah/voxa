@@ -4,8 +4,10 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Voxa.Samples.AspNetServer/Voxa.Samples.AspNetServer.csproj" />
+    <Project Path="samples/Voxa.Samples.MinimalServer/Voxa.Samples.MinimalServer.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Voxa/Voxa.csproj" />
     <Project Path="src/Voxa.AspNetCore/Voxa.AspNetCore.csproj" />
     <Project Path="src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj" />
     <Project Path="src/Voxa.Core/Voxa.Core.csproj" />

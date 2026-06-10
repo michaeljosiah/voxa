@@ -18,6 +18,18 @@ public sealed record EndFrame : ControlFrame, IUninterruptible;
 public sealed record HeartbeatFrame : ControlFrame;
 
 /// <summary>
+/// Emitted once, immediately after the pipeline starts, to announce the audio sample rates
+/// in use. The WebSocket sink serialises this as <c>{"type":"session","v":1,...}</c> so the
+/// client can configure its AudioContext without hard-coding per-route constants.
+/// Optional: clients that never receive it fall back to their constructor defaults (old servers
+/// keep working with new clients; old clients ignore the envelope silently).
+/// </summary>
+public sealed record SessionInfoFrame(
+    int InputSampleRate,
+    int OutputSampleRate,
+    int ProtocolVersion = 1) : ControlFrame;
+
+/// <summary>
 /// Emitted by <see cref="Processors.AgentLoopProcessor"/> at the start of a turn — i.e. just before
 /// the host's <c>RunTurnAsync</c> begins streaming. Lets downstream processors (TTS, audit, metrics)
 /// see clean turn boundaries instead of inferring them from text-frame arrival patterns.

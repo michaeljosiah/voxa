@@ -52,23 +52,37 @@ public class AllocationGateTests
         await PumpAsync(p, frame, 2000);
         await DrainedAsync(p, 2000);
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
-
-        const int N = 10000;
-        long before = GC.GetTotalAllocatedBytes(precise: true);   // all threads, incl. the drain loop
-        await PumpAsync(p, frame, N);
-        await DrainedAsync(p, 2000 + N);
-        long after = GC.GetTotalAllocatedBytes(precise: true);
-
-        double perFrame = (after - before) / (double)N;
         // There is an irreducible ~100 B/frame floor from System.Threading.Channels' async-wait
         // machinery (allocated whenever the reader parks waiting for the next write) — it is
         // present with or without WS1. The CTS we removed cost a further ~150 B/frame on top of
         // that (a linked CancellationTokenSource + its parent-token registration). Budget 160 sits
-        // safely above the channel floor (+noise) yet well below the ~250 B/frame a reintroduced
+        // safely above the channel floor yet well below the ~250 B/frame a reintroduced
         // per-frame CTS would produce, so this gate fails if WS1 regresses.
-        Assert.True(perFrame < 160, $"Steady-state allocated {perFrame:F1} B/frame (budget 160). Per-frame CTS regression?");
+        //
+        // GetTotalAllocatedBytes is process-wide and xUnit runs other test classes in parallel,
+        // so a single window can be inflated by unrelated tests' allocations. That noise is
+        // additive-only: the MINIMUM across trials approximates the true drain-loop cost, while
+        // a real per-frame CTS regression raises every trial.
+        const int N = 10000;
+        const double Budget = 160;
+        double best = double.MaxValue;
+        int pumped = 2000;
+        for (int trial = 0; trial < 3 && best >= Budget; trial++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            long before = GC.GetTotalAllocatedBytes(precise: true);   // all threads, incl. the drain loop
+            await PumpAsync(p, frame, N);
+            await DrainedAsync(p, pumped + N);
+            long after = GC.GetTotalAllocatedBytes(precise: true);
+
+            pumped += N;
+            best = Math.Min(best, (after - before) / (double)N);
+        }
+
+        Assert.True(best < Budget,
+            $"Steady-state allocated {best:F1} B/frame (best of trials; budget {Budget}). Per-frame CTS regression?");
     }
 }

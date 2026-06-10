@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Batteries-included Voxa package. One package reference: AddVoxa(cfg) + MapVoxaVoice("/voice").UseDefaults() gives a working voice bot with STT, TTS, VAD, and an OpenAI chat agent — no knowledge of frames required.</Description>
+    <PackageTags>voxa;voice;ai;aspnetcore;openai;speech</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+
+  <!-- Speech providers and VAD — the heavy closure. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Azure\Voxa.Speech.Azure.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />
+    <ProjectReference Include="..\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
+  </ItemGroup>
+
+  <!-- OpenAI client for the default chat-agent factory. -->
+  <ItemGroup>
+    <PackageReference Include="OpenAI" Version="2.10.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.5.2" />
+  </ItemGroup>
+
+</Project>

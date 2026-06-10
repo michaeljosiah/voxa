@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VDX-001 — Voxa Developer Experience Specification</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; } /* comment */
+  pre .kw { color: #79b8ff; } /* keyword-ish hint (manual) */
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p0 { background: #4a1416; color: #ff8a80; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .progress-note { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-001 — Voxa Developer Experience Specification</h1>
+  <div class="sub">Five lines to a voice bot: <code>AddVoxa()</code> with config-bound providers and named latency profiles, <code>MapVoxaVoice("/voice").UseDefaults()</code>, a <code>Voxa</code> meta-package, a <code>dotnet new voxa-server</code> template, and an official <code>@voxa/client</code> JS package with the wire contract generated from the server DTOs — no knowledge of frames required.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-001 v1.0</div>
+    <div><b>Date</b> 2026-06-10</div>
+    <div><b>Status</b> Approved for implementation</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>), TypeScript 5.x (client)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code> @ c77264d)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">Executive summary</a></li>
+    <li><a href="#s2">Goals, non-goals &amp; DX budgets</a></li>
+    <li><a href="#s3">Architecture context — DX today vs the target</a></li>
+    <li><a href="#s4">Gap inventory</a></li>
+    <li><a href="#s5">Workstreams (WS0–WS9) with code</a>
+      <ol>
+        <li><a href="#ws0">WS0 — Acceptance fixture: the five-line sample as a failing test</a></li>
+        <li><a href="#ws1">WS1 — Configuration model: <code>VoxaOptions</code>, binding, fail-fast validation</a></li>
+        <li><a href="#ws2">WS2 — <code>AddVoxa()</code>: provider registry, DI, <code>IHttpClientFactory</code></a></li>
+        <li><a href="#ws3">WS3 — Profiles: LowLatency / Quality / Cheap</a></li>
+        <li><a href="#ws4">WS4 — <code>MapVoxaVoice(pattern).UseDefaults()</code>: default composition, conversation memory, session envelope</a></li>
+        <li><a href="#ws5">WS5 — <code>Voxa</code> meta-package + default agent</a></li>
+        <li><a href="#ws6">WS6 — <code>dotnet new voxa-server</code> template</a></li>
+        <li><a href="#ws7">WS7 — Wire contract codegen: <code>protocol.generated.ts</code> + <code>docs/wire-protocol.md</code> + drift gate</a></li>
+        <li><a href="#ws8">WS8 — <code>@voxa/client</code>: mic capture, streaming playback, barge-in flush</a></li>
+        <li><a href="#ws9">WS9 — Dogfooding, docs &amp; roadmap reconciliation</a></li>
+      </ol>
+    </li>
+    <li><a href="#s6">Contract structure changes (summary)</a></li>
+    <li><a href="#s7">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s8">Progress checklist</a></li>
+    <li><a href="#s9">Verification protocol</a></li>
+    <li><a href="#s10">Risk register</a></li>
+    <li><a href="#s11">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>Executive summary</h2>
+<p>Voxa's runtime is now fast (VPS-001) and its processor model is sound — but <em>using</em> it requires expertise the target audience doesn't have yet. A developer who wants "a voice endpoint on my ASP.NET app" today must: pick 5–7 NuGet packages out of 14, hand-write configuration readers, construct engines with the right sample rates, know that VAD goes before STT and the aggregator goes before TTS, hand-roll per-connection chat history with <code>BuildMessages</code>/<code>OnTurnCompleted</code> closures, learn 11 tuning knobs to get acceptable latency, and then write ~500 lines of browser JavaScript (AudioWorklet capture, gap-free PCM scheduling) for which the only reference is the sample's embedded script. The working minimum today is <b>~47–58 lines of C# per endpoint plus ~500 lines of JS</b>; the sample server's <code>ReadXxxOptions</code> helpers alone are 52 lines.</p>
+<p>This spec collapses that to the ROADMAP P5 target — a working voice bot in five lines plus one config block:</p>
+<pre><code>var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddVoxa(builder.Configuration);          <span class="cm">// reads the "Voxa" config section</span>
+var app = builder.Build();
+app.UseWebSockets();
+app.MapVoxaVoice("/voice").UseDefaults();                 <span class="cm">// VAD → STT → agent → aggregator → TTS</span>
+app.Run();</code></pre>
+<p>…and a working browser client in five more:</p>
+<pre><code>import { VoxaClient } from "@voxa/client";
+const voice = new VoxaClient({ url: "wss://localhost:5001/voice" });
+voice.on("transcription", e =&gt; console.log("you:", e.text));
+voice.on("text", e =&gt; console.log("bot:", e.text));
+await voice.connect();                                    <span class="cm">// mic, playback, barge-in flush — handled</span></code></pre>
+<p>Five deliverables, in dependency order:</p>
+<ol>
+  <li><b>A typed configuration model with fail-fast validation.</b> <code>VoxaOptions</code> binds the <code>"Voxa"</code> section (<code>"Stt": "OpenAI"</code>, <code>"Tts": "ElevenLabs"</code>, <code>"Profile": "LowLatency"</code>, per-provider blocks). Misconfiguration fails at startup with a message naming the exact missing key — never a mid-call null reference.</li>
+  <li><b><code>AddVoxa()</code> + a provider registry.</b> Provider packages describe themselves with descriptor objects (<code>OpenAISpeech.SttDescriptor</code>); <code>AddVoxa</code> resolves <code>"Stt": "OpenAI"</code> against the registry. <code>IHttpClientFactory</code> integration replaces <code>VoxaHttp.Shared</code> for hosts that need proxies/custom handlers (the promise in <a href="../performance-tuning.md">docs/performance-tuning.md</a>).</li>
+  <li><b>Named profiles.</b> "LowLatency" / "Quality" / "Cheap" bundle the VPS-001 tuning knobs (VAD hangover, eager first chunk, buffer sizes) so users get a tuned pipeline without learning any of them. Explicit config always wins over the profile.</li>
+  <li><b><code>UseDefaults()</code> composition + the <code>Voxa</code> meta-package + a project template.</b> One package reference, one <code>dotnet new voxa-server</code>, sensible default chain with built-in per-connection conversation memory.</li>
+  <li><b><code>@voxa/client</code> on npm with a generated wire contract.</b> The TypeScript protocol types are <em>generated from the C# <code>WireMessages</code> DTOs</em> with a CI drift gate, so client and server cannot diverge silently. The client ships the missing client half of barge-in (ROADMAP P2): playback-buffer flush on the <code>{"type":"interruption"}</code> envelope.</li>
+</ol>
+<p><b>Expected outcome:</b> server boilerplate per endpoint drops from ~47–58 statements to ≤ 6; packages to discover drops from 5–7 to 1; client code drops from ~500 hand-rolled lines to ≤ 10; a misconfigured key is a startup error, not a silent runtime failure; and barge-in finally works end-to-end because the official client flushes its playback buffer. Every claim is enforced by a compiled acceptance fixture, golden-file tests, and a wire-contract drift gate.</p>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Goals, non-goals &amp; DX budgets</h2>
+
+<h3>2.1 Quantified DX budgets</h3>
+<p>VPS-001 measured allocations and milliseconds; this spec measures lines, packages, and minutes. Each budget has an enforcement mechanism — most are compiled fixtures, not aspirations.</p>
+<table>
+  <tr><th>Metric</th><th>Baseline (today)</th><th>Target</th><th>How verified</th></tr>
+  <tr><td>C# statements for a working voice bot (server)</td><td>~47–58 per endpoint + 52 lines of config readers (<code>samples/Voxa.Samples.AspNetServer/Program.cs:168-277,364-416</code>)</td><td><b>≤ 6 statements</b> + one config block</td><td><code>samples/Voxa.Samples.MinimalServer</code> compiles in CI and is golden-file checked (WS0)</td></tr>
+  <tr><td>NuGet packages the user must discover</td><td>5–7 of 14</td><td><b>1</b> (<code>Voxa</code>)</td><td>MinimalServer csproj references only <code>Voxa</code> (WS5)</td></tr>
+  <tr><td>Browser JS for mic + playback + barge-in</td><td>~500 lines hand-rolled (sample <code>index.html</code> embedded script + worklet)</td><td><b>≤ 10 lines</b> via <code>@voxa/client</code></td><td>Template's <code>index.html</code> uses the client; line count asserted in template smoke test (WS6/WS8)</td></tr>
+  <tr><td>Feedback on misconfiguration (missing API key, unknown provider)</td><td>Silent skip or <code>NullReferenceException</code> mid-call</td><td>Startup failure naming the exact config key and valid values</td><td>Options-validation unit tests (WS1)</td></tr>
+  <tr><td>Tuning knobs to learn for competitive latency</td><td>11 (per <code>docs/performance-tuning.md</code>)</td><td><b>0</b> — <code>"Profile": "LowLatency"</code></td><td>Profile resolution unit tests assert effective knob values (WS3)</td></tr>
+  <tr><td>Client half of barge-in (playback flush on interruption)</td><td>Missing — stale audio keeps playing client-side (ROADMAP P2 gap)</td><td>Built into <code>@voxa/client</code></td><td>Playback-queue flush unit test + manual barge-in check (WS8, §9)</td></tr>
+  <tr><td>Client/server wire-contract drift</td><td>Unguarded (protocol exists only in C# source)</td><td>Impossible to merge: codegen + CI diff gate</td><td><code>wiregen</code> drift check in CI (WS7)</td></tr>
+  <tr><td>Time from <code>dotnet new</code> to first conversation</td><td>Hours (read sample, copy ~600 lines, debug rates)</td><td><b>&lt; 10 minutes</b> (template + paste two API keys)</td><td>Manual protocol run, recorded in PR (§9)</td></tr>
+</table>
+
+<h3>2.2 Non-goals</h3>
+<ul>
+  <li>No new speech providers (Deepgram, Cartesia, WhisperCpp, Piper) — ROADMAP P0/P6; the registry built here is where they will plug in.</li>
+  <li>No session resilience / reconnect tokens — ROADMAP P6. The JS client gets a clean <code>disconnected</code> event and a manual <code>connect()</code> retry path, nothing more.</li>
+  <li>No runtime control envelope (<code>{"type":"configure"}</code>) — ROADMAP P7. The additive <code>session</code> envelope in WS4 is server→client announce only.</li>
+  <li>No typed frontend tools / source-generated tool schemas — ROADMAP P6. <code>@voxa/client</code> exposes raw <code>toolCall</code>/<code>sendToolResult</code> passthrough only.</li>
+  <li>No changes to the frame model, processor lifecycle, or anything VPS-001 optimized. This spec is composition and packaging <em>around</em> the runtime, not the runtime.</li>
+  <li>No Realtime/VoiceLive support in <code>UseDefaults()</code> v1 — the default chain is the chained (STT→agent→TTS) pipeline. Realtime composition stays on the explicit <code>MapVoxaVoice(pattern, configure)</code> overload (see <a href="#s11">§11</a>).</li>
+</ul>
+
+<h3>2.3 Hard rules for the implementer</h3>
+<div class="callout danger"><b>Read this before writing any code.</b>
+<ul>
+  <li>Every workstream lands as its own commit (or small commit series) with its tests in the same commit. Never batch two workstreams in one commit.</li>
+  <li>Run <code>dotnet build Voxa.sln -warnaserror</code> and <code>dotnet test</code> after each workstream. All 13 existing test projects must stay green. The JS package additionally gates on <code>npm test</code> + <code>npm run build</code>.</li>
+  <li><b>The existing programming model must keep working unchanged.</b> <code>MapVoxaVoice(pattern, configure)</code>, manual <code>Pipeline.Build()</code>, and direct engine construction are the escape hatches that make <code>UseDefaults()</code> safe to opinionate. No existing public API is removed or behaviorally changed except where marked <span class="badge breaking">BREAKING</span> (there is exactly one, WS7's <code>WireTypes</code> refactor, and it is internal-only).</li>
+  <li><b>Defaults must be production-plausible, not demo-plausible.</b> Every default chosen by <code>UseDefaults()</code>/profiles must be one you would defend in a production review (e.g. conversation memory is bounded, errors close the socket with a proper status).</li>
+  <li>Wire-protocol additions are <b>additive only</b>: existing envelope bytes must remain byte-for-byte identical (the VPS-001 WS3 wire-compat tests are the guard — they must pass unmodified).</li>
+  <li>Configuration precedence is exactly: <b>explicit config &gt; profile &gt; built-in default</b>. Encode it in one place (WS3's resolver) and test it; do not re-derive it ad hoc per knob.</li>
+  <li>Keep <code>ConfigureAwait(false)</code> on every await in library code (existing convention).</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Architecture context — DX today vs the target</h2>
+<p>What a user writes today for the cost-effective chained pipeline (abridged from <code>samples/Voxa.Samples.AspNetServer/Program.cs:231-277</code> — the <em>fluent</em> variant, i.e. the current best case):</p>
+<div class="arrowflow">TODAY (47 lines + 52 lines of config readers + 500 lines of JS)        TARGET (5 + 5 lines)
+
+ReadOpenAIOptions(cfg) ─┐                                              "Voxa" config section
+new OpenAIClient(key)   ├─ hand-wired                                  services.AddVoxa(cfg)
+ChatClientAgent(...)    │                                              app.MapVoxaVoice("/voice")
+chatHistory closures    ─┘                                                .UseDefaults()
+voice.UseProcessor(MakeVad(cfg))         ← knob knowledge
+     .UseSpeechToText(...)               ← ordering knowledge          @voxa/client handles mic,
+     .UseTranscriptionFilter()                                         playback, rates, barge-in
+     .UseProcessor(agent + history)      ← MAF plumbing
+     .UseSentenceAggregator()
+     .UseTextToSpeech(...)
+index.html: 508-line script + worklet    ← every consumer re-writes</div>
+<p>The default chain composed by <code>UseDefaults()</code> is exactly the sample's proven shape — nothing novel:</p>
+<div class="arrowflow">WS client ──binary PCM──▶ WebSocketAudioSource ─▶ VAD (Silero, profile-tuned) ─▶ SpeechToTextProcessor (registry)
+                                                                                          │
+                                                                                 TranscriptionFilter
+                                                                                          │
+WS client ◀── binary PCM + JSON envelopes ── WebSocketAudioSink ◀─ TextToSpeechProcessor (registry)
+                                                                          ▲
+                                                  SentenceAggregator (profile-tuned)
+                                                                          ▲
+                                        MicrosoftAgentsProcessor + built-in ConversationMemory</div>
+<p>Layering (who may reference whom). The key constraint: <code>Voxa.AspNetCore</code> must <b>not</b> grow references to individual speech providers or the ONNX-bearing VAD package — that would force every à-la-carte consumer to download the world. The meta-package takes the heavy closure instead:</p>
+<table>
+  <tr><th>Layer</th><th>Project(s)</th><th>New responsibilities from this spec</th></tr>
+  <tr><td>Abstractions</td><td><code>Voxa.Speech.Abstractions</code></td><td>Hosts the provider <em>descriptor</em> records (data + factory delegates; needs only <code>Microsoft.Extensions.Configuration.Abstractions</code> added — it already takes <code>Logging.Abstractions</code>).</td></tr>
+  <tr><td>Providers</td><td><code>Voxa.Speech.*</code>, <code>Voxa.Audio.SileroVad</code></td><td>Each exposes static descriptors (<code>OpenAISpeech.SttDescriptor</code>, <code>SileroVad.Descriptor</code>). No DI package references.</td></tr>
+  <tr><td>Hosting</td><td><code>Voxa.AspNetCore</code></td><td><code>VoxaOptions</code>, <code>AddVoxa(cfg, configure)</code>, registry, profiles, <code>MapVoxaVoice(pattern)</code> + <code>UseDefaults()</code>, default composer, validation.</td></tr>
+  <tr><td>Batteries-included</td><td><b>new</b> <code>src/Voxa</code> (meta-package)</td><td>References everything; registers all built-in descriptors; default OpenAI chat agent factory; the only package a beginner installs.</td></tr>
+  <tr><td>Scaffolding</td><td><b>new</b> <code>templates/</code> (<code>Voxa.Templates</code>)</td><td><code>dotnet new voxa-server</code>.</td></tr>
+  <tr><td>Client</td><td><b>new</b> <code>clients/js/voxa-client</code></td><td><code>@voxa/client</code> npm package; consumes <code>protocol.generated.ts</code> from WS7's codegen tool (<code>tools/Voxa.WireGen</code>).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Gap inventory</h2>
+<p>Every gap is verified against source at commit <code>c77264d</code>. IDs are referenced from the workstreams. Severity reflects adoption impact, not correctness.</p>
+<table>
+  <tr><th>ID</th><th>Severity</th><th>Location</th><th>Gap</th><th>Fixed by</th></tr>
+  <tr><td>G-01</td><td class="sev-crit">CRIT</td><td><code>Program.cs:364-416</code> (sample)</td><td>No DI/config integration anywhere in the libraries. Every host hand-writes <code>ReadXxxOptions(IConfiguration)</code> helpers (52 lines in the sample); a missing key returns <code>null</code> and the endpoint silently 404s or NREs mid-call.</td><td><a href="#ws1">WS1</a>/<a href="#ws2">WS2</a></td></tr>
+  <tr><td>G-02</td><td class="sev-crit">CRIT</td><td><code>VoicePipelineBuilder.cs</code>, sample routes</td><td>Pipeline composition requires frame/processor expertise: VAD must precede STT, <code>TranscriptionFilter</code> must precede the agent, <code>SentenceAggregator</code> must precede TTS — no guardrails, wrong order fails silently (e.g. aggregator after TTS = no audio). 47–58 lines per endpoint.</td><td><a href="#ws4">WS4</a></td></tr>
+  <tr><td>G-03</td><td class="sev-crit">CRIT</td><td><code>samples/.../wwwroot/index.html</code> (508-line script), <code>recorder-worklet.js</code></td><td>No official JS client. AudioWorklet capture, Int16 conversion, gap-free <code>AudioContext</code> scheduling, envelope dispatch — all must be reverse-engineered from the sample by every consumer.</td><td><a href="#ws8">WS8</a></td></tr>
+  <tr><td>G-04</td><td class="sev-crit">CRIT</td><td>sample <code>index.html</code> <code>interruption</code> handler</td><td>Client half of barge-in missing (ROADMAP P2): the server purges its queue and sends <code>{"type":"interruption"}</code> (VPS-001 WS4), but the reference client only clears the chat bubble — already-scheduled audio keeps playing.</td><td><a href="#ws8">WS8</a></td></tr>
+  <tr><td>G-05</td><td class="sev-high">HIGH</td><td><code>Program.cs:188-210, 244-266</code></td><td>Conversation memory is hand-rolled closure plumbing over <code>List&lt;ChatMessage&gt;</code> via <code>BuildMessages</code>/<code>OnTurnCompleted</code>, duplicated verbatim in two sample routes; unbounded growth; not thread-documented.</td><td><a href="#ws4">WS4</a></td></tr>
+  <tr><td>G-06</td><td class="sev-high">HIGH</td><td>NuGet / <code>release.yml</code></td><td>14 packages, no meta-package, no template. A newcomer must determine that "voice bot" = Core + AspNetCore + Transports.WebSocket + Speech.Abstractions + Speech.OpenAI + Audio.SileroVad + Services.MicrosoftAgents.</td><td><a href="#ws5">WS5</a>/<a href="#ws6">WS6</a></td></tr>
+  <tr><td>G-07</td><td class="sev-high">HIGH</td><td><code>docs/performance-tuning.md</code></td><td>11 tuning knobs documented individually; no presets. The difference between a sluggish demo (800 ms hangover, no eager flush) and a crisp one is knowledge the user shouldn't need on day one.</td><td><a href="#ws3">WS3</a></td></tr>
+  <tr><td>G-08</td><td class="sev-med">MED</td><td><code>Protocol/WireMessages.cs</code>, <code>WireProtocol.cs</code></td><td>The wire protocol exists only as internal C# source. No generated doc (ROADMAP P7 wants one), no TS types, nothing stops a client from drifting. Discriminator strings (<code>"transcription"</code> etc.) are scattered literals.</td><td><a href="#ws7">WS7</a></td></tr>
+  <tr><td>G-09</td><td class="sev-med">MED</td><td>sample <code>index.html</code> route table</td><td>Sample-rate coupling is implicit: 16 kHz in for Whisper/Azure, 24 kHz in for Realtime, 24 kHz out everywhere. The client must hard-code rates per route; nothing on the wire announces them.</td><td><a href="#ws4">WS4</a>/<a href="#ws8">WS8</a></td></tr>
+  <tr><td>G-10</td><td class="sev-med">MED</td><td><code>VoxaHttp.cs</code>, engine ctors</td><td>No <code>IHttpClientFactory</code> path. <code>docs/performance-tuning.md</code> promises it ("feeds/replaces VoxaHttp.Shared"); today a host needing a corporate proxy must construct every engine manually with a custom <code>HttpClient</code>.</td><td><a href="#ws2">WS2</a></td></tr>
+  <tr><td>G-11</td><td class="sev-low">LOW</td><td><code>Program.cs:418-437</code> (<code>MakeVad</code>)</td><td>Silero-vs-SilenceGate choice and VAD option mapping live in a private sample helper; not reusable.</td><td><a href="#ws1">WS1</a>/<a href="#ws4">WS4</a></td></tr>
+  <tr><td>G-12</td><td class="sev-low">LOW</td><td><code>VoiceHello.cs</code></td><td>Hello envelope has no protocol version; ROADMAP P7 wants <code>"v": 1</code> negotiation. The new <code>session</code> envelope (WS4) carries <code>v</code> server→client; full negotiation stays deferred.</td><td><a href="#ws4">WS4</a> (partial)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Workstreams</h2>
+
+<!-- ================= WS0 ================= -->
+<h3 id="ws0">WS0 — Acceptance fixture: the five-line sample as a failing test <span class="badge p0">Phase 0</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> sets the bar for G-01/G-02/G-06</span><span><b>Effort:</b> ~0.25 day</span><span><b>Risk:</b> none (additive)</span><span><b>Projects:</b> new <code>samples/Voxa.Samples.MinimalServer</code>, CI workflow</span>
+</div>
+<p><b>Why first:</b> VPS-001 started by making latency measurable; this spec starts by making the DX claim <em>compilable</em>. The five-line program is written on day one, added to the solution, and fails to compile until WS1–WS5 land. CI keeps everyone honest about what "done" means.</p>
+<h4>WS0.1 — Create the fixture project</h4>
+<div class="filelabel">samples/Voxa.Samples.MinimalServer/Program.cs (the entire file — this is the deliverable)</div>
+<pre><code>var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddVoxa(builder.Configuration);
+var app = builder.Build();
+app.UseWebSockets();
+app.MapVoxaVoice("/voice").UseDefaults();
+app.Run();</code></pre>
+<div class="filelabel">samples/Voxa.Samples.MinimalServer/appsettings.json (the one config block)</div>
+<pre><code>{
+  "Voxa": {
+    "Profile": "LowLatency",
+    "Stt": "OpenAI",
+    "Tts": "OpenAI",
+    "OpenAI": { "ApiKey": "" },
+    "Agent": {
+      "Provider": "OpenAI",
+      "Model": "gpt-4o-mini",
+      "Instructions": "You are a friendly voice assistant. Keep responses brief."
+    }
+  }
+}</code></pre>
+<ol>
+  <li>The csproj references <b>only</b> the <code>Voxa</code> meta-package project (<code>src/Voxa/Voxa.csproj</code>, created in WS5; create the empty shell project now so the solution builds — see WS5.1 ordering note).</li>
+  <li>Add the project to <code>Voxa.sln</code> under <code>samples</code>. Exclude from the release pack list.</li>
+  <li>Until WS5 lands, mark the project <code>&lt;ExcludeFromBuild&gt;</code>-equivalent via a solution build-configuration exclusion <em>and</em> track re-enabling it in the WS5 checklist item — do not let a red build linger on main; the fixture compiles from the WS5 commit onward.</li>
+</ol>
+<h4>WS0.2 — Golden-file guard</h4>
+<p>Add <code>tests/Voxa.AspNetCore.Tests/MinimalServerGoldenTests.cs</code>: reads <code>samples/Voxa.Samples.MinimalServer/Program.cs</code> at test time (path relative to the repo root, located via marker-file walk) and asserts (a) ≤ 6 top-level statements (count lines that are not blank/comment), and (b) it contains the exact strings <code>AddVoxa(builder.Configuration)</code> and <code>MapVoxaVoice("/voice").UseDefaults()</code>. This converts "five lines" from marketing into a regression test — anyone whose change forces a seventh line into the minimal program breaks CI and has to justify it.</p>
+<p><b>Acceptance criteria:</b> fixture project exists in the solution; golden test exists (skipped with reason <code>"enabled by WS5"</code> until the fixture compiles); CI builds the samples folder.</p>
+
+<!-- ================= WS1 ================= -->
+<h3 id="ws1">WS1 — Configuration model: <code>VoxaOptions</code>, binding, fail-fast validation <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-01, G-11 (mapping half)</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> low (additive)</span><span><b>Projects:</b> <code>src/Voxa.AspNetCore</code>, <code>tests/Voxa.AspNetCore.Tests</code></span>
+</div>
+<p>One options graph, bound from the <code>"Voxa"</code> section. Design rule: <b>every tunable is nullable; <code>null</code> means "let the profile decide"</b>. This makes precedence (explicit &gt; profile &gt; default) mechanical — no <code>IConfigurationSection.Exists()</code> probing, no sentinel values.</p>
+<div class="filelabel">src/Voxa.AspNetCore/Configuration/VoxaOptions.cs (new file)</div>
+<pre><code>namespace Voxa.AspNetCore;
+
+/// &lt;summary&gt;
+/// Root options bound from the "Voxa" configuration section. Provider-specific blocks
+/// (e.g. "Voxa:OpenAI", "Voxa:ElevenLabs") are NOT modeled here — each registered provider
+/// descriptor binds its own sub-section (see VoxaProviderRegistry), so adding a provider
+/// never requires touching this type.
+/// &lt;/summary&gt;
+public sealed class VoxaOptions
+{
+    public const string SectionName = "Voxa";
+
+    /// &lt;summary&gt;Named tuning preset: "Default", "LowLatency", "Quality", "Cheap". Case-insensitive.&lt;/summary&gt;
+    public string Profile { get; set; } = "Default";
+
+    /// &lt;summary&gt;STT provider name as registered in the provider registry, e.g. "OpenAI", "Azure".&lt;/summary&gt;
+    public string? Stt { get; set; }
+
+    /// &lt;summary&gt;TTS provider name, e.g. "OpenAI", "ElevenLabs", "Azure", "Mistral".&lt;/summary&gt;
+    public string? Tts { get; set; }
+
+    public VoxaVadOptions Vad { get; set; } = new();
+    public VoxaAgentOptions Agent { get; set; } = new();
+    public VoxaAggregatorOptions Aggregator { get; set; } = new();
+}
+
+/// &lt;summary&gt;VAD selection + tuning. Null tunables fall through to the active profile.&lt;/summary&gt;
+public sealed class VoxaVadOptions
+{
+    /// &lt;summary&gt;"Silero" (default; requires the Silero descriptor — registered by the Voxa
+    /// meta-package), "SilenceGate" (energy-only fallback, no ONNX), or "None".&lt;/summary&gt;
+    public string Engine { get; set; } = "Silero";
+
+    public float?  ConfidenceThreshold { get; set; }
+    public double? MinRms { get; set; }
+    public int?    StartDurationMs { get; set; }
+    public int?    StopDurationMs { get; set; }
+    public int?    PrerollDurationMs { get; set; }
+}
+
+/// &lt;summary&gt;Default agent configuration for UseDefaults(). Ignored when the host registers
+/// its own AIAgent / IChatClient in DI (DI always wins — see WS4 resolution order).&lt;/summary&gt;
+public sealed class VoxaAgentOptions
+{
+    /// &lt;summary&gt;"OpenAI" is the only built-in provider (shipped by the Voxa meta-package).
+    /// Null → an AIAgent or IChatClient MUST be resolvable from DI.&lt;/summary&gt;
+    public string? Provider { get; set; }
+
+    public string Model { get; set; } = "gpt-4o-mini";
+    public string Instructions { get; set; } =
+        "You are a helpful voice assistant. Keep responses brief and conversational.";
+
+    /// &lt;summary&gt;Falls back to "Voxa:OpenAI:ApiKey" when null and Provider == "OpenAI".&lt;/summary&gt;
+    public string? ApiKey { get; set; }
+
+    /// &lt;summary&gt;Built-in per-connection chat history (WS4). Default on.&lt;/summary&gt;
+    public bool ConversationMemory { get; set; } = true;
+
+    /// &lt;summary&gt;History cap: oldest user/assistant pairs are trimmed beyond this.&lt;/summary&gt;
+    public int MaxHistoryMessages { get; set; } = 50;
+}
+
+public sealed class VoxaAggregatorOptions
+{
+    public int? EagerFirstChunkMinChars { get; set; }
+    public int? MaxBufferChars { get; set; }
+}</code></pre>
+
+<h4>WS1.1 — Validation: fail at startup, name the key</h4>
+<p>Register with <code>ValidateOnStart()</code> so every error below aborts host startup, not the first call:</p>
+<div class="filelabel">src/Voxa.AspNetCore/Configuration/VoxaOptionsValidator.cs (new file)</div>
+<pre><code>internal sealed class VoxaOptionsValidator : IValidateOptions&lt;VoxaOptions&gt;
+{
+    private readonly VoxaProviderRegistry _registry;   // WS2
+    private readonly IConfiguration _configuration;
+
+    public VoxaOptionsValidator(VoxaProviderRegistry registry, IConfiguration configuration)
+    { _registry = registry; _configuration = configuration; }
+
+    public ValidateOptionsResult Validate(string? name, VoxaOptions o)
+    {
+        var errors = new List&lt;string&gt;();
+
+        if (!VoxaProfiles.IsKnown(o.Profile))
+            errors.Add($"Voxa:Profile '{o.Profile}' is not a known profile. " +
+                       $"Valid values: {string.Join(", ", VoxaProfiles.Names)}.");
+
+        ValidateProvider(errors, "Voxa:Stt", o.Stt, _registry.SttNames);
+        ValidateProvider(errors, "Voxa:Tts", o.Tts, _registry.TtsNames);
+
+        // Each selected provider's descriptor validates its own config sub-section
+        // (e.g. OpenAI requires "Voxa:OpenAI:ApiKey"). See VoxaProviderDescriptor.Validate.
+        if (o.Stt is not null &amp;&amp; _registry.TryGetStt(o.Stt, out var stt))
+            errors.AddRange(stt.Validate(_configuration.GetSection(VoxaOptions.SectionName)));
+        if (o.Tts is not null &amp;&amp; _registry.TryGetTts(o.Tts, out var tts))
+            errors.AddRange(tts.Validate(_configuration.GetSection(VoxaOptions.SectionName)));
+
+        if (o.Vad.Engine is not ("Silero" or "SilenceGate" or "None"))
+            errors.Add($"Voxa:Vad:Engine '{o.Vad.Engine}' is invalid. Valid values: Silero, SilenceGate, None.");
+
+        return errors.Count == 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(errors);
+    }
+
+    private static void ValidateProvider(List&lt;string&gt; errors, string key, string? value, IReadOnlyCollection&lt;string&gt; known)
+    {
+        if (value is null)
+            errors.Add($"{key} is required when using UseDefaults(). " +
+                       $"Registered providers: {(known.Count == 0 ? "(none — did you reference the Voxa meta-package or register descriptors?)" : string.Join(", ", known))}.");
+        else if (!known.Contains(value, StringComparer.OrdinalIgnoreCase))
+            errors.Add($"{key} '{value}' is not a registered provider. Registered: {string.Join(", ", known)}.");
+    }
+}</code></pre>
+<div class="callout"><b>Error-message bar:</b> every validation error must answer three questions in one sentence: <em>which key</em>, <em>what's wrong</em>, <em>what are the valid values</em>. The unit tests assert message content, not just failure — these strings are the product.</div>
+<div class="callout warn"><b>Validation scope:</b> <code>VoxaOptionsValidator</code> runs only when <code>UseDefaults()</code> is in play conceptually, but options validation is global. Hosts that call <code>AddVoxa</code> purely for engine DI and compose manually must not be forced to set <code>Stt</code>/<code>Tts</code>. Resolution: the <code>Stt</code>/<code>Tts</code>-required checks run lazily — <code>UseDefaults()</code> (WS4) triggers them by requesting <code>IOptions&lt;VoxaOptions&gt;</code> through a wrapper service <code>VoxaDefaultsGuard</code> that performs the required-field checks at first map/first request; the structural checks (unknown profile, unknown provider <em>name when one is given</em>, provider sub-section validity) stay in the eager <code>ValidateOnStart</code> path. Test both modes.</div>
+<p><b>Acceptance criteria:</b> binding tests (full section → options graph, TimeSpan-as-ms ints honored); validation tests for: missing <code>Stt</code> with empty registry, unknown provider with suggestions list, unknown profile, missing <code>ApiKey</code> in a selected provider's block, manual-composition host with no <code>Stt</code>/<code>Tts</code> passing startup; all messages assert the three-question bar.</p>
+
+<!-- ================= WS2 ================= -->
+<h3 id="ws2">WS2 — <code>AddVoxa()</code>: provider registry, DI, <code>IHttpClientFactory</code> <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-01, G-10</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> medium (layering — descriptors must not drag DI deps into provider packages)</span><span><b>Projects:</b> <code>Voxa.Speech.Abstractions</code>, all <code>Voxa.Speech.*</code>, <code>Voxa.Audio.SileroVad</code>, <code>Voxa.AspNetCore</code></span>
+</div>
+
+<h4>WS2.1 — Provider descriptors (in Speech.Abstractions — data only, no DI references)</h4>
+<p>A descriptor is a record of: a name, the config sub-section it owns, preferred sample rates, a validation function, and a per-connection processor factory. <code>System.IServiceProvider</code> is BCL; the only new package reference for <code>Voxa.Speech.Abstractions</code> is <code>Microsoft.Extensions.Configuration.Abstractions</code> (tiny, already transitively everywhere in ASP.NET hosts).</p>
+<div class="filelabel">src/Voxa.Speech.Abstractions/VoxaProviderDescriptor.cs (new file)</div>
+<pre><code>using Microsoft.Extensions.Configuration;
+using Voxa.Processors;
+
+namespace Voxa.Speech;
+
+/// &lt;summary&gt;
+/// Self-description of an STT provider for config-driven composition ("Voxa:Stt": "OpenAI").
+/// Lives in abstractions so provider packages can describe themselves without referencing
+/// DI or ASP.NET. The factory runs once per connection (engines are per-session stateful).
+/// &lt;/summary&gt;
+public sealed record VoxaSttDescriptor(
+    string Name,                                  // registry key, e.g. "OpenAI"
+    string ConfigSection,                         // sub-section under "Voxa", e.g. "OpenAI", "AzureSpeech"
+    int PreferredInputSampleRate,                 // drives WebSocketAudioOptions + VAD + session envelope
+    Func&lt;IConfigurationSection, IReadOnlyList&lt;string&gt;&gt; Validate,   // section = the "Voxa" root
+    Func&lt;IServiceProvider, IConfigurationSection, SpeechToTextProcessor&gt; CreateProcessor);
+
+/// &lt;summary&gt;TTS twin of &lt;see cref="VoxaSttDescriptor"/&gt;.&lt;/summary&gt;
+public sealed record VoxaTtsDescriptor(
+    string Name,
+    string ConfigSection,
+    int OutputSampleRate,
+    Func&lt;IConfigurationSection, IReadOnlyList&lt;string&gt;&gt; Validate,
+    Func&lt;IServiceProvider, IConfigurationSection, TextToSpeechProcessor&gt; CreateProcessor);</code></pre>
+<p>Each provider package adds one static class. Example (the other three providers follow the identical pattern — Azure binds <code>AzureSpeechOptions</code> from <code>"AzureSpeech"</code>, ElevenLabs from <code>"ElevenLabs"</code>, Mistral from <code>"Mistral"</code>; section names match today's sample <code>appsettings.json</code> so existing configs port by nesting under <code>"Voxa"</code>):</p>
+<div class="filelabel">src/Voxa.Speech.OpenAI/OpenAISpeechDescriptors.cs (new file)</div>
+<pre><code>namespace Voxa.Speech.OpenAI;
+
+public static class OpenAISpeechDescriptors
+{
+    public static VoxaSttDescriptor Stt { get; } = new(
+        Name: "OpenAI",
+        ConfigSection: "OpenAI",
+        PreferredInputSampleRate: 16000,
+        Validate: root =&gt;
+        {
+            var errors = new List&lt;string&gt;();
+            if (string.IsNullOrEmpty(root["OpenAI:ApiKey"]))
+                errors.Add("Voxa:OpenAI:ApiKey is required when Voxa:Stt or Voxa:Tts is 'OpenAI'.");
+            return errors;
+        },
+        CreateProcessor: (sp, root) =&gt;
+            OpenAISpeech.StreamingTranscription(BindOptions(sp, root)));
+
+    public static VoxaTtsDescriptor Tts { get; } = new(
+        Name: "OpenAI", ConfigSection: "OpenAI", OutputSampleRate: 24000,
+        Validate: /* same key check */ ...,
+        CreateProcessor: (sp, root) =&gt; OpenAISpeech.Synthesis(BindOptions(sp, root)));
+
+    private static OpenAISpeechOptions BindOptions(IServiceProvider sp, IConfigurationSection root)
+    {
+        var s = root.GetSection("OpenAI");
+        return new OpenAISpeechOptions
+        {
+            ApiKey = s["ApiKey"]!,                                    // validated above
+            ApiBaseUrl = s["ApiBaseUrl"] ?? "https://api.openai.com/v1",
+            TtsModel = s["TtsModel"] ?? "tts-1",
+            TtsVoice = s["TtsVoice"] ?? "alloy",
+            SttModel = s["SttModel"] ?? "whisper-1",
+            SttLanguage = s["SttLanguage"],
+            InputSampleRate = s.GetValue("InputSampleRate", 16000),
+            OutputSampleRate = s.GetValue("OutputSampleRate", 24000),
+        };
+        // HttpClient: resolved via VoxaHttpResolver (WS2.3) inside the engine factory methods —
+        // see the OpenAISpeech.StreamingTranscription(opts, httpClient) overload added there.
+    }
+}</code></pre>
+<p>The VAD descriptor lives in <code>Voxa.Audio.SileroVad</code> with the same shape (<code>VoxaVadDescriptor</code> in abstractions: name + <code>Func&lt;IServiceProvider, SileroVadEngineSettings, FrameProcessor&gt;</code> taking the <em>resolved</em> tuning from WS3 — the descriptor does not read config itself because VAD knobs are profile-mediated, unlike provider credentials).</p>
+
+<h4>WS2.2 — The registry and <code>AddVoxa</code> (Voxa.AspNetCore)</h4>
+<div class="filelabel">src/Voxa.AspNetCore/VoxaServiceCollectionExtensions.cs (new file)</div>
+<pre><code>namespace Voxa.AspNetCore;
+
+public sealed class VoxaBuilder
+{
+    public IServiceCollection Services { get; }
+    internal VoxaProviderRegistry Registry { get; } = new();
+
+    public VoxaBuilder AddProvider(VoxaSttDescriptor stt)  { Registry.Add(stt); return this; }
+    public VoxaBuilder AddProvider(VoxaTtsDescriptor tts)  { Registry.Add(tts); return this; }
+    public VoxaBuilder AddProvider(VoxaVadDescriptor vad)  { Registry.Add(vad); return this; }
+}
+
+public static class VoxaServiceCollectionExtensions
+{
+    /// &lt;summary&gt;
+    /// Register Voxa options, validation, and the provider registry. À-la-carte hosts pass
+    /// the providers they referenced; the Voxa meta-package overload (WS5) pre-registers all
+    /// built-ins so beginners never see this delegate.
+    /// &lt;/summary&gt;
+    public static IServiceCollection AddVoxa(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action&lt;VoxaBuilder&gt;? configure = null)
+    {
+        var builder = new VoxaBuilder(services);
+        configure?.Invoke(builder);
+
+        services.AddSingleton(builder.Registry);
+        services.AddOptions&lt;VoxaOptions&gt;()
+            .Bind(configuration.GetSection(VoxaOptions.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton&lt;IValidateOptions&lt;VoxaOptions&gt;, VoxaOptionsValidator&gt;();
+        services.AddSingleton&lt;VoxaTuningResolver&gt;();          // WS3
+        services.AddSingleton&lt;DefaultVoicePipelineComposer&gt;(); // WS4
+        services.AddSingleton&lt;VoxaHttpResolver&gt;();             // WS2.3
+
+        // Named HttpClient mirroring VoxaHttp.Shared's handler settings. Hosts override
+        // freely: services.AddHttpClient(VoxaHttpResolver.ClientName).ConfigurePrimaryHttpMessageHandler(...).
+        services.AddHttpClient(VoxaHttpResolver.ClientName)
+            .ConfigurePrimaryHttpMessageHandler(() =&gt; new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                EnableMultipleHttp2Connections = true,
+                AutomaticDecompression = DecompressionMethods.None,
+                ConnectTimeout = TimeSpan.FromSeconds(5),
+            });
+
+        return services;
+    }
+}</code></pre>
+<p><code>VoxaProviderRegistry</code> is a plain class with case-insensitive dictionaries per kind, <code>Add</code> (last-wins with a debug log, enabling test overrides), <code>TryGetStt/TryGetTts/TryGetVad</code>, and <code>SttNames/TtsNames</code> for error messages.</p>
+
+<h4>WS2.3 — <code>IHttpClientFactory</code> integration (G-10)</h4>
+<p>Engines already accept an injected <code>HttpClient</code> and default to <code>VoxaHttp.Shared</code>. Bridge, don't replace:</p>
+<div class="filelabel">src/Voxa.AspNetCore/VoxaHttpResolver.cs (new file)</div>
+<pre><code>/// &lt;summary&gt;
+/// Resolves the HttpClient handed to speech engines created by descriptors.
+/// Uses IHttpClientFactory's named client when available (proxies, custom handlers,
+/// Polly — whatever the host configured); falls back to VoxaHttp.Shared otherwise.
+/// NOTE: factory-produced HttpClient instances are cheap wrappers over pooled handlers —
+/// creating one per connection is the intended usage pattern.
+/// &lt;/summary&gt;
+public sealed class VoxaHttpResolver
+{
+    public const string ClientName = "Voxa";
+    private readonly IHttpClientFactory? _factory;
+    public VoxaHttpResolver(IHttpClientFactory? factory = null) =&gt; _factory = factory;
+    public HttpClient Resolve() =&gt; _factory?.CreateClient(ClientName) ?? VoxaHttp.Shared;
+}</code></pre>
+<p>Descriptor factories call <code>sp.GetRequiredService&lt;VoxaHttpResolver&gt;().Resolve()</code> and pass the client through the existing engine constructor injection points. Audit each HTTP engine (OpenAI STT/TTS, ElevenLabs, Mistral): where a factory method like <code>OpenAISpeech.Synthesis(opts)</code> doesn't yet expose an <code>HttpClient</code> parameter, add an optional one <span class="badge additive">ADDITIVE</span>. The default timeout difference matters: <code>VoxaHttp.Shared</code> uses 100 s; the named client must set the same <code>Timeout</code> in <code>AddHttpClient(...).ConfigureHttpClient(c =&gt; c.Timeout = TimeSpan.FromSeconds(100))</code> — engines rely on it for long synthesis.</p>
+<div class="callout warn"><b>Warmup still applies:</b> engines fire <code>VoxaHttp.WarmupAsync</code> in <code>StartAsync</code> regardless of which client they got (VPS-001 WS6.4). Factory-produced clients share pooled handlers, so warmup benefits carry over. Verify with a unit test that the warmup path is exercised for a factory-resolved client (fake handler counts the HEAD request).</div>
+<p><b>Acceptance criteria:</b> registry unit tests (registration, case-insensitive lookup, last-wins override); each of the four speech packages exposes compiling descriptors with validation; an integration-style test boots a minimal host with <code>AddVoxa(cfg, v =&gt; v.AddProvider(OpenAISpeechDescriptors.Stt)...)</code> and resolves a composed processor pair; <code>VoxaHttpResolver</code> tests for both branches; all existing tests green.</p>
+
+<!-- ================= WS3 ================= -->
+<h3 id="ws3">WS3 — Profiles: LowLatency / Quality / Cheap <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-07</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> low</span><span><b>Projects:</b> <code>Voxa.AspNetCore</code></span>
+</div>
+<p>A profile is a complete set of effective tuning values. The resolver merges: <b>explicit config (non-null) &gt; profile &gt; Default profile</b>. Values come from <code>docs/performance-tuning.md</code> (the VPS-001 deliverable) — the profiles are that document, encoded.</p>
+<table>
+  <tr><th>Knob (effective type)</th><th>Default</th><th>LowLatency</th><th>Quality</th><th>Cheap</th><th>Rationale</th></tr>
+  <tr><td><code>Vad.StopDuration</code></td><td>800 ms</td><td><b>400 ms</b></td><td>1000 ms</td><td>800 ms</td><td>The single biggest latency lever (perf-tuning §1). 400 ms is the documented "crisp" floor without a smart-turn classifier; Quality favors never cutting the user off.</td></tr>
+  <tr><td><code>Vad.StartDuration</code></td><td>200 ms</td><td>150 ms</td><td>200 ms</td><td>200 ms</td><td>Slightly faster gate-open; below 150 ms breath noise triggers turns.</td></tr>
+  <tr><td><code>Vad.PrerollDuration</code></td><td>300 ms</td><td>300 ms</td><td>400 ms</td><td>300 ms</td><td>Quality keeps more leading audio → fewer clipped first words. Must stay ≥ StartDuration (resolver clamps + warns).</td></tr>
+  <tr><td><code>Vad.ConfidenceThreshold</code></td><td>0.5</td><td>0.5</td><td>0.6</td><td>0.5</td><td>Quality trades sensitivity for fewer false triggers (Pipecat uses 0.7 far-field).</td></tr>
+  <tr><td><code>Vad.MinRms</code></td><td>0.003</td><td>0.003</td><td>0.003</td><td>0.003</td><td>Environment-specific; profiles don't guess.</td></tr>
+  <tr><td><code>Aggregator.EagerFirstChunkMinChars</code></td><td>0 (off)</td><td><b>40</b></td><td>0</td><td>40</td><td>VPS-001 WS8.2: first audio 100–400 ms earlier on long openers. Quality keeps full-sentence prosody.</td></tr>
+  <tr><td><code>Aggregator.MaxBufferChars</code></td><td>500</td><td>350</td><td>500</td><td>500</td><td>Caps worst-case first-flush wait on boundary-less output.</td></tr>
+  <tr><td><code>Stt buffer backstop</code> (OpenAI <code>SttBufferSeconds</code>)</td><td>30</td><td>30</td><td>30</td><td>30</td><td>VAD-driven flush is the real trigger (perf-tuning); not profile-varied.</td></tr>
+</table>
+<div class="callout"><b>What profiles deliberately do NOT touch:</b> provider model selection (<code>TtsModel</code>, <code>Agent.Model</code>) and credentials. "Cheap" means <em>tuned for the cheap chain the defaults already are</em> (gpt-4o-mini + tts-1 + whisper-1); it does not silently swap models the user configured. Model guidance goes in the docs table (WS9), not in code. Rationale: a profile that mutates billing-relevant choices is a support nightmare.</div>
+<div class="filelabel">src/Voxa.AspNetCore/Configuration/VoxaTuningResolver.cs (new file — core shape)</div>
+<pre><code>/// &lt;summary&gt;Effective, non-null tuning after merging config over the active profile.&lt;/summary&gt;
+public sealed record VoxaEffectiveTuning(
+    TimeSpan VadStartDuration, TimeSpan VadStopDuration, TimeSpan VadPrerollDuration,
+    float VadConfidenceThreshold, double VadMinRms,
+    int EagerFirstChunkMinChars, int MaxBufferChars);
+
+public static class VoxaProfiles
+{
+    public static readonly IReadOnlyList&lt;string&gt; Names = ["Default", "LowLatency", "Quality", "Cheap"];
+    public static bool IsKnown(string name) =&gt; Names.Contains(name, StringComparer.OrdinalIgnoreCase);
+    internal static VoxaEffectiveTuning Get(string name) =&gt; /* table above, switch on lowercase */ ...;
+}
+
+public sealed class VoxaTuningResolver
+{
+    public VoxaEffectiveTuning Resolve(VoxaOptions o)
+    {
+        var p = VoxaProfiles.Get(o.Profile);
+        var preroll  = MsOr(o.Vad.PrerollDurationMs, p.VadPrerollDuration);
+        var start    = MsOr(o.Vad.StartDurationMs,  p.VadStartDuration);
+        if (preroll &lt; start) preroll = start;   // invariant from SileroVadOptions docs; log a warning
+        return new VoxaEffectiveTuning(
+            start,
+            MsOr(o.Vad.StopDurationMs, p.VadStopDuration),
+            preroll,
+            o.Vad.ConfidenceThreshold ?? p.VadConfidenceThreshold,
+            o.Vad.MinRms ?? p.VadMinRms,
+            o.Aggregator.EagerFirstChunkMinChars ?? p.EagerFirstChunkMinChars,
+            o.Aggregator.MaxBufferChars ?? p.MaxBufferChars);
+        static TimeSpan MsOr(int? ms, TimeSpan fallback) =&gt; ms is { } v ? TimeSpan.FromMilliseconds(v) : fallback;
+    }
+}</code></pre>
+<p><b>Acceptance criteria:</b> one unit test per profile asserting every effective value against the table above (the table is the spec — copy it into the test as expected data); precedence tests (explicit <code>StopDurationMs: 250</code> beats LowLatency's 400); preroll-clamp test; unknown profile already covered by WS1 validation.</p>
+
+<!-- ================= WS4 ================= -->
+<h3 id="ws4">WS4 — <code>MapVoxaVoice(pattern).UseDefaults()</code>: default composition, conversation memory, session envelope <span class="badge p0">Phase 2</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-02, G-05, G-09, G-12 (partial)</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> medium (agent resolution order; additive wire envelope)</span><span><b>Projects:</b> <code>Voxa.AspNetCore</code>, <code>Voxa.Core</code> (one frame), <code>Voxa.Transports.WebSocket</code> (one envelope), <code>Voxa.Services.MicrosoftAgents</code> (memory)</span>
+</div>
+
+<h4>WS4.1 — The new endpoint surface</h4>
+<div class="filelabel">src/Voxa.AspNetCore/MapVoxaVoiceExtensions.cs — additions (existing two-arg overload untouched)</div>
+<pre><code>/// &lt;summary&gt;
+/// Map a Voxa voice endpoint whose pipeline is composed per-connection from DI
+/// (AddVoxa + provider registry + profile). Chain .UseDefaults() for the standard
+/// chained pipeline, or .Use(...) to append custom processors after the defaults.
+/// &lt;/summary&gt;
+public static VoxaVoiceRoute MapVoxaVoice(this IEndpointRouteBuilder endpoints, string pattern);
+
+public sealed class VoxaVoiceRoute : IEndpointConventionBuilder
+{
+    /// &lt;summary&gt;Compose VAD → STT → TranscriptionFilter → agent → SentenceAggregator → TTS
+    /// from the registered providers and active profile. Idempotent; throws if combined
+    /// with a conflicting Use(...) ordering instruction.&lt;/summary&gt;
+    public VoxaVoiceRoute UseDefaults();
+
+    /// &lt;summary&gt;Escape hatch: runs after UseDefaults' processors (or alone, replicating the
+    /// classic overload but with DI access). Receives the same VoicePipelineBuilder.&lt;/summary&gt;
+    public VoxaVoiceRoute Use(Action&lt;HttpContext, VoicePipelineBuilder&gt; configure);
+
+    public VoxaVoiceRoute RequireAuthorization(params string[] policies);
+    public void Add(Action&lt;EndpointBuilder&gt; convention);   // IEndpointConventionBuilder passthrough
+}</code></pre>
+<p>Implementation: the route handler defers composition to request time — it resolves <code>DefaultVoicePipelineComposer</code> from <code>context.RequestServices</code>, asks it to populate a <code>VoicePipelineBuilder</code>, then reuses the <em>existing</em> <code>HandleAsync</code> path (refactor <code>HandleAsync</code> to accept the builder + an optional post-start hook; behavior for the classic overload is byte-identical — its tests must pass unmodified).</p>
+
+<h4>WS4.2 — The composer</h4>
+<div class="filelabel">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs (new file — core logic)</div>
+<pre><code>public sealed class DefaultVoicePipelineComposer
+{
+    // ctor: IOptions&lt;VoxaOptions&gt;, VoxaProviderRegistry, VoxaTuningResolver, IConfiguration, ILogger
+
+    /// &lt;summary&gt;Returns the per-connection composition + the rates for the session envelope.&lt;/summary&gt;
+    public ComposedVoice Compose(HttpContext httpContext)
+    {
+        var o = _options.Value;
+        var tuning = _resolver.Resolve(o);
+        var root = _configuration.GetSection(VoxaOptions.SectionName);
+
+        _registry.TryGetStt(o.Stt!, out var stt);    // guaranteed by VoxaDefaultsGuard (WS1)
+        _registry.TryGetTts(o.Tts!, out var tts);
+
+        var parts = new List&lt;Func&lt;HttpContext, FrameProcessor&gt;&gt;();
+
+        // 1. VAD — Silero descriptor if registered, else SilenceGate fallback with a one-time warning.
+        if (o.Vad.Engine != "None")
+            parts.Add(ctx =&gt; CreateVad(ctx.RequestServices, o.Vad.Engine, tuning, stt.PreferredInputSampleRate));
+
+        // 2. STT (provider factory) → 3. hallucination filter.
+        parts.Add(ctx =&gt; stt.CreateProcessor(ctx.RequestServices, root));
+        parts.Add(_ =&gt; new TranscriptionFilter());
+
+        // 4. Agent with built-in conversation memory (WS4.3).
+        parts.Add(ctx =&gt; CreateAgentProcessor(ctx, o.Agent));
+
+        // 5. Aggregator (profile-tuned) → 6. TTS.
+        parts.Add(_ =&gt; new SentenceAggregator
+        {
+            EagerFirstChunkMinChars = tuning.EagerFirstChunkMinChars,
+            MaxBufferChars = tuning.MaxBufferChars,
+        });
+        parts.Add(ctx =&gt; tts.CreateProcessor(ctx.RequestServices, root));
+
+        return new ComposedVoice(
+            Parts: parts,
+            InputSampleRate: stt.PreferredInputSampleRate,
+            OutputSampleRate: tts.OutputSampleRate);
+    }
+}</code></pre>
+<p><code>ComposedVoice.InputSampleRate</code> feeds <code>new WebSocketAudioOptions {{ InputSampleRate = ... }}</code> on the source — today's silent 16 k/24 k mismatch trap (G-09) disappears because the STT descriptor is the single source of truth for the input rate, and the VAD is constructed at the same rate.</p>
+
+<h4>WS4.3 — Agent resolution + built-in conversation memory (G-05)</h4>
+<p>Resolution order, evaluated per connection inside <code>CreateAgentProcessor</code> — <b>host DI always beats config</b>:</p>
+<ol>
+  <li><code>ctx.RequestServices.GetService&lt;AIAgent&gt;()</code> — host registered a full MAF agent: use it as-is.</li>
+  <li><code>ctx.RequestServices.GetService&lt;IChatClient&gt;()</code> — wrap: <code>new ChatClientAgent(chatClient, new ChatClientAgentOptions {{ Name = "VoxaVoiceAgent", ChatOptions = new() {{ Instructions = o.Agent.Instructions }} }})</code>.</li>
+  <li><code>ctx.RequestServices.GetService&lt;IVoiceAgentFactory&gt;()</code> — provider-backed default; the <code>Voxa</code> meta-package registers the OpenAI one (WS5) when <code>Voxa:Agent:Provider == "OpenAI"</code>.</li>
+  <li>None of the above → throw <code>InvalidOperationException</code> with the full menu: <em>"UseDefaults() needs an agent. Either register an AIAgent or IChatClient in DI, or set Voxa:Agent:Provider (requires the Voxa meta-package). See docs/getting-started.md."</em> The <code>VoxaDefaultsGuard</code> surfaces this at startup, not first call, when it can prove none is registered.</li>
+</ol>
+<div class="filelabel">src/Voxa.AspNetCore/IVoiceAgentFactory.cs + src/Voxa.Services.MicrosoftAgents/InMemoryChatHistory.cs (new files)</div>
+<pre><code>namespace Voxa.AspNetCore;
+/// &lt;summary&gt;Creates the per-connection default agent when none is registered in DI.&lt;/summary&gt;
+public interface IVoiceAgentFactory
+{
+    AIAgent Create(HttpContext context, VoxaAgentOptions options);
+}
+
+namespace Voxa.Services.MicrosoftAgents;
+/// &lt;summary&gt;
+/// Bounded per-connection chat history for the default voice pipeline. Single-threaded by
+/// construction: the agent processor invokes BuildMessages/OnTurnCompleted from one turn
+/// worker at a time, so no locking is needed — documented, and guarded by a debug assert.
+/// Trims the OLDEST messages beyond MaxMessages (whole user/assistant pairs, never splitting
+/// a pair, so the model always sees coherent turns).
+/// &lt;/summary&gt;
+public sealed class InMemoryChatHistory(int maxMessages = 50)
+{
+    private readonly List&lt;ChatMessage&gt; _messages = new();
+    public void AddUser(string text)      { _messages.Add(new(ChatRole.User, text)); Trim(); }
+    public void AddAssistant(string text) { _messages.Add(new(ChatRole.Assistant, text)); Trim(); }
+    public IReadOnlyList&lt;ChatMessage&gt; Snapshot() =&gt; _messages.ToArray();
+    private void Trim() { while (_messages.Count &gt; maxMessages) _messages.RemoveRange(0, 2); }
+}</code></pre>
+<p><code>CreateAgentProcessor</code> wires it exactly as the sample does today (<code>BuildMessages</code> adds the user text + returns the snapshot; <code>OnTurnCompleted</code> appends non-empty assistant text) — the sample's proven closure pattern becomes library code with a bound. <code>o.Agent.ConversationMemory == false</code> skips it (each turn sees only the current utterance).</p>
+
+<h4>WS4.4 — The <code>session</code> envelope <span class="badge additive">ADDITIVE</span> (G-09, G-12 partial)</h4>
+<p>One new server→client envelope announcing what the client must know to configure audio, sent once immediately after the pipeline starts:</p>
+<pre><code>{"type":"session","v":1,"inputSampleRate":16000,"outputSampleRate":24000}</code></pre>
+<ol>
+  <li><code>Voxa.Core</code>: new <code>SessionInfoFrame(int InputSampleRate, int OutputSampleRate, int ProtocolVersion = 1)</code> — a <code>ControlFrame</code>, downstream.</li>
+  <li><code>WireMessages.cs</code>: <code>internal readonly record struct SessionEnvelope(string Type, int V, int InputSampleRate, int OutputSampleRate);</code> registered in <code>WireJsonContext</code>.</li>
+  <li><code>WireProtocol</code>: <code>public static byte[] BuildSession(SessionInfoFrame f)</code>; <code>WebSocketAudioSink</code> gains a <code>case SessionInfoFrame</code>. Wire-compat test with hard-coded expected JSON (camelCase: <code>inputSampleRate</code>).</li>
+  <li>The <code>UseDefaults()</code> handler ingests the frame right after <code>runner.StartAsync</code>: <code>await pipeline.Source.IngestAsync(new SessionInfoFrame(composed.InputSampleRate, composed.OutputSampleRate))</code>. Hand-built pipelines may do the same; nothing requires it (the JS client falls back to its ctor options when no session envelope arrives — old servers keep working with new clients and vice versa).</li>
+</ol>
+<p><b>Acceptance criteria:</b> classic-overload tests pass unmodified; composer unit tests assert the exact processor sequence and types for a registry with OpenAI STT/TTS (use the existing fakes pattern from <code>Voxa.AspNetCore.Tests</code>); agent resolution tests for all four branches incl. the error message; <code>InMemoryChatHistory</code> trim tests (pair-preserving); session envelope wire-compat test; an end-to-end test (fake WebSocket, fake engines registered as test descriptors) drives one full turn through a <code>UseDefaults</code> composition.</p>
+
+<!-- ================= WS5 ================= -->
+<h3 id="ws5">WS5 — <code>Voxa</code> meta-package + default agent <span class="badge p0">Phase 2</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-06 (package half)</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> low</span><span><b>Projects:</b> new <code>src/Voxa</code>, <code>release.yml</code>, MinimalServer un-exclusion</span>
+</div>
+<h4>WS5.1 — The package</h4>
+<p><code>src/Voxa/Voxa.csproj</code> — PackageId <code>Voxa</code>, version aligned with the suite. References: <code>Voxa.AspNetCore</code>, <code>Voxa.Speech.OpenAI</code>, <code>Voxa.Speech.Azure</code>, <code>Voxa.Speech.ElevenLabs</code>, <code>Voxa.Speech.Mistral</code>, <code>Voxa.Audio.SileroVad</code>, plus <code>Microsoft.Extensions.AI.OpenAI</code> + <code>OpenAI</code> (for the default agent — the same pair the sample already uses). It is a real (thin) assembly, not a dependency-only package, because it carries the glue:</p>
+<div class="filelabel">src/Voxa/VoxaDefaults.cs (new file — the whole package is ~two classes)</div>
+<pre><code>namespace Voxa;   <span class="cm">// extension namespace chosen so `using Voxa;` lights everything up</span>
+
+public static class VoxaDefaultsExtensions
+{
+    /// &lt;summary&gt;
+    /// Batteries-included registration: all built-in STT/TTS providers, Silero VAD, and the
+    /// OpenAI default agent factory, then the core AddVoxa. THE five-line entry point.
+    /// &lt;/summary&gt;
+    public static IServiceCollection AddVoxa(this IServiceCollection services, IConfiguration configuration)
+        =&gt; services.AddVoxa(configuration, voxa =&gt; voxa
+            .AddProvider(OpenAISpeechDescriptors.Stt)
+            .AddProvider(OpenAISpeechDescriptors.Tts)
+            .AddProvider(AzureSpeechDescriptors.Stt)
+            .AddProvider(AzureSpeechDescriptors.Tts)
+            .AddProvider(ElevenLabsDescriptors.Tts)
+            .AddProvider(MistralSpeechDescriptors.Tts)
+            .AddProvider(SileroVadDescriptors.Vad)
+            .Services.AddSingleton&lt;IVoiceAgentFactory, OpenAIChatAgentFactory&gt;() is var _ ? voxa : voxa);
+            <span class="cm">// (implement as statements, not the expression hack above — shown compressed for the spec)</span>
+}
+
+internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
+{
+    public AIAgent Create(HttpContext context, VoxaAgentOptions o)
+    {
+        if (!string.Equals(o.Provider, "OpenAI", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Voxa:Agent:Provider '{o.Provider}' is not supported by the built-in agent factory (only 'OpenAI'). " +
+                "Register your own AIAgent or IChatClient in DI for other providers.");
+
+        var apiKey = o.ApiKey
+            ?? context.RequestServices.GetRequiredService&lt;IConfiguration&gt;()["Voxa:OpenAI:ApiKey"]
+            ?? throw new InvalidOperationException("Voxa:Agent:ApiKey or Voxa:OpenAI:ApiKey is required for the OpenAI agent.");
+
+        var chatClient = new OpenAIClient(apiKey).GetChatClient(o.Model).AsIChatClient();
+        return new ChatClientAgent(chatClient, new ChatClientAgentOptions
+        {
+            Name = "VoxaVoiceAgent",
+            ChatOptions = new ChatOptions { Instructions = o.Instructions },
+        });
+    }
+}</code></pre>
+<div class="callout warn"><b>Overload resolution check:</b> the meta-package's <code>AddVoxa(IServiceCollection, IConfiguration)</code> and AspNetCore's <code>AddVoxa(IServiceCollection, IConfiguration, Action&lt;VoxaBuilder&gt;?)</code> must not be ambiguous from a call site that has both namespaces imported. Make the AspNetCore overload's third parameter <b>required</b> (no default value) so <code>AddVoxa(cfg)</code> uniquely binds to the meta-package method. Add a compile test in the fixture project (it imports both).</div>
+<h4>WS5.2 — Release wiring + fixture activation</h4>
+<ol>
+  <li>Add <code>Voxa</code> to <code>release.yml</code>'s pack list (now 15 packages + Templates in WS6 = 16). The meta-package's project references become NuGet dependencies automatically via <code>dotnet pack</code>.</li>
+  <li>Re-enable <code>Voxa.Samples.MinimalServer</code> in the solution build; un-skip the WS0.2 golden test. <b>This is the moment the five-line claim becomes CI-enforced.</b></li>
+  <li>Caveat for the agent-factory startup guard: <code>VoxaDefaultsGuard</code> (WS1) treats a registered <code>IVoiceAgentFactory</code> + <code>Voxa:Agent:Provider</code> present as "agent resolvable".</li>
+</ol>
+<p><b>Acceptance criteria:</b> MinimalServer compiles and boots with <code>dotnet run</code> (manual: a real conversation against OpenAI with a key in user-secrets); golden test green; <code>dotnet pack src/Voxa</code> produces a package whose dependency list contains all seven Voxa packages (assert in a pack smoke test or manual check recorded in the PR).</p>
+
+<!-- ================= WS6 ================= -->
+<h3 id="ws6">WS6 — <code>dotnet new voxa-server</code> template <span class="badge p1">Phase 3</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-06 (template half)</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> low</span><span><b>Projects:</b> new <code>templates/</code> tree, CI smoke job</span>
+</div>
+<h4>WS6.1 — Template content</h4>
+<div class="arrowflow">templates/
+├─ Voxa.Templates.csproj          ← packs content/ as a template package (PackageType=Template)
+└─ content/voxa-server/
+   ├─ .template.config/template.json
+   ├─ VoxaServer.csproj           ← references the Voxa meta-package (version pinned via template token)
+   ├─ Program.cs                  ← the five lines + app.UseDefaultFiles()/UseStaticFiles()
+   ├─ appsettings.json            ← full "Voxa" block, keys empty, comments… (JSON: use README instead)
+   ├─ appsettings.Development.json
+   ├─ README.md                   ← "paste your key here, dotnet run, open /"
+   └─ wwwroot/index.html          ← ≤ 40 lines: minimal chat UI on @voxa/client (CDN script tag
+                                     to the IIFE bundle; falls back clearly if offline)</div>
+<div class="filelabel">templates/content/voxa-server/.template.config/template.json</div>
+<pre><code>{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Voxa",
+  "classifications": ["Web", "Voice", "AI"],
+  "identity": "Voxa.Server.CSharp",
+  "name": "Voxa voice bot server",
+  "shortName": "voxa-server",
+  "sourceName": "VoxaServer",
+  "preferNameDirectory": true,
+  "symbols": {
+    "stt": {
+      "type": "parameter", "datatype": "choice", "defaultValue": "OpenAI",
+      "choices": [
+        { "choice": "OpenAI", "description": "Whisper REST (16 kHz in)" },
+        { "choice": "Azure",  "description": "Azure Speech streaming (16 kHz in)" }
+      ],
+      "replaces": "STT_PROVIDER"
+    },
+    "tts": {
+      "type": "parameter", "datatype": "choice", "defaultValue": "OpenAI",
+      "choices": [
+        { "choice": "OpenAI" }, { "choice": "ElevenLabs" }, { "choice": "Azure" }, { "choice": "Mistral" }
+      ],
+      "replaces": "TTS_PROVIDER"
+    },
+    "profile": {
+      "type": "parameter", "datatype": "choice", "defaultValue": "LowLatency",
+      "choices": [ { "choice": "LowLatency" }, { "choice": "Default" }, { "choice": "Quality" }, { "choice": "Cheap" } ],
+      "replaces": "VOXA_PROFILE"
+    }
+  }
+}</code></pre>
+<p><code>appsettings.json</code> uses the <code>STT_PROVIDER</code>/<code>TTS_PROVIDER</code>/<code>VOXA_PROFILE</code> tokens; the provider blocks for all four providers are present with empty keys so switching later is editing, not authoring. The README's first section is exactly three steps: <code>dotnet user-secrets set "Voxa:OpenAI:ApiKey" sk-…</code> → <code>dotnet run</code> → open <code>https://localhost:5001</code>.</p>
+<h4>WS6.2 — CI smoke job</h4>
+<p>New job in the build workflow: <code>dotnet pack templates/Voxa.Templates.csproj</code> (with locally-packed Voxa packages in a local feed via <code>nuget.config</code> so the template resolves the in-repo version, not nuget.org) → <code>dotnet new install &lt;nupkg&gt;</code> → <code>dotnet new voxa-server -o smoke --stt OpenAI --tts ElevenLabs</code> → <code>dotnet build smoke</code>. The job also asserts the instantiated <code>index.html</code> is ≤ 60 lines (the JS-client DX budget guard for the template).</p>
+<p><b>Acceptance criteria:</b> smoke job green for at least two symbol combinations; <code>dotnet new uninstall</code> clean; <code>Voxa.Templates</code> added to <code>release.yml</code>.</p>
+
+<!-- ================= WS7 ================= -->
+<h3 id="ws7">WS7 — Wire contract codegen + drift gate <span class="badge p1">Phase 4</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-08</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> low</span><span><b>Projects:</b> new <code>tools/Voxa.WireGen</code>, <code>Voxa.Transports.WebSocket</code> (internal refactor), CI</span>
+</div>
+<h4>WS7.1 — Single source of truth for discriminators <span class="badge breaking">BREAKING (internal only)</span></h4>
+<p>Centralize the scattered type-string literals so codegen and the serializer can't disagree:</p>
+<div class="filelabel">src/Voxa.Transports.WebSocket/Protocol/WireTypes.cs (new file)</div>
+<pre><code>/// &lt;summary&gt;Wire envelope discriminators. THE source of truth — WireProtocol, the wiregen
+/// tool, and the wire-compat tests all reference these constants.&lt;/summary&gt;
+internal static class WireTypes
+{
+    // server → client
+    public const string Session = "session";          // WS4
+    public const string Transcription = "transcription";
+    public const string Text = "text";
+    public const string ToolCall = "toolCall";
+    public const string Speaking = "speaking";
+    public const string Interruption = "interruption";
+    public const string Status = "status";
+    public const string Error = "error";
+    public const string End = "end";
+    // client → server
+    public const string Hello = "hello";
+    public const string ClientText = "text";
+    public const string ToolResult = "toolResult";
+    public const string ClientEnd = "end";
+}</code></pre>
+<p>Also add explicit DTO records for the <b>client→server</b> shapes (today they exist only as parsing code inside <code>TryParseClientMessage</code>): <code>ClientTextMessage(string Type, string Text)</code>, <code>ClientToolResultMessage(string Type, string CallId, string ResultJson, bool IsError)</code>, <code>ClientEndMessage(string Type)</code>. <code>TryParseClientMessage</code> keeps its hand-rolled UTF-8 parsing (it's the hot path); the DTOs exist so wiregen has a reflectable contract, and a round-trip test asserts parser and DTOs agree.</p>
+<h4>WS7.2 — The generator</h4>
+<p><code>tools/Voxa.WireGen</code> — console project, <code>net10.0</code>, referencing <code>Voxa.Transports.WebSocket</code> with <code>[InternalsVisibleTo("Voxa.WireGen")]</code> (and <code>"Voxa.Transports.WebSocket.Tests"</code> already exists — same mechanism). It reflects over the envelope records in <code>WireMessages.cs</code> + the client DTOs and emits two files <em>deterministically</em> (stable ordering, LF endings, a "GENERATED — do not edit" header containing the tool name but <b>no timestamp</b>, so diffs are clean):</p>
+<ul>
+  <li><code>clients/js/voxa-client/src/protocol.generated.ts</code> — TS interfaces + the discriminated union:</li>
+</ul>
+<pre><code>// GENERATED by tools/Voxa.WireGen — do not edit.
+export interface TranscriptionEnvelope { type: "transcription"; text: string; isFinal: boolean; language?: string; speakerId?: string; }
+export interface TextEnvelope          { type: "text"; text: string; }
+export interface SessionEnvelope       { type: "session"; v: number; inputSampleRate: number; outputSampleRate: number; }
+export interface ToolCallEnvelope      { type: "toolCall"; callId: string; name: string; argumentsJson: string; }
+export interface SpeakingEnvelope      { type: "speaking"; who: "bot" | "user"; started: boolean; }
+export interface StatusEnvelope        { type: "status"; message: string; }
+export interface ErrorEnvelope         { type: "error"; message: string; }
+export interface InterruptionEnvelope  { type: "interruption"; }
+export interface EndEnvelope           { type: "end"; }
+export type ServerEnvelope = TranscriptionEnvelope | TextEnvelope | SessionEnvelope | ToolCallEnvelope
+                           | SpeakingEnvelope | StatusEnvelope | ErrorEnvelope | InterruptionEnvelope | EndEnvelope;
+export interface ClientTextMessage       { type: "text"; text: string; }
+export interface ClientToolResultMessage { type: "toolResult"; callId: string; resultJson: string; isError?: boolean; }
+export interface ClientEndMessage        { type: "end"; }</code></pre>
+<ul>
+  <li><code>docs/wire-protocol.md</code> — the ROADMAP P7 deliverable pulled forward: one table per direction (envelope, fields, types, when sent), plus the binary-frame contract (16-bit signed little-endian PCM, mono, rates announced by <code>session</code>) and the protocol-version note (<code>v: 1</code>).</li>
+</ul>
+<p>Type mapping rules (encode in the tool, test with a golden file): <code>string</code>→<code>string</code> (nullable → optional <code>?</code> property, matching <code>WhenWritingNull</code> omission), <code>bool</code>→<code>boolean</code>, <code>int</code>→<code>number</code>; the <code>Type</code> property becomes the literal type from the <code>WireTypes</code> constant associated at the <code>WireProtocol.Build*</code> call site — wiregen reads a small attribute added to each DTO: <code>[WireEnvelope(WireTypes.Transcription, Direction.ServerToClient)]</code>. The <code>who</code> field's <code>"bot" | "user"</code> union comes from a <code>[WireValues("bot", "user")]</code> attribute on the property. These two tiny internal attributes are part of this workstream.</p>
+<h4>WS7.3 — Drift gate</h4>
+<p>CI step: <code>dotnet run --project tools/Voxa.WireGen</code> then <code>git diff --exit-code -- clients/js/voxa-client/src/protocol.generated.ts docs/wire-protocol.md</code>. A failing gate's message tells the developer to re-run wiregen and commit. This is the "client and server can't drift" guarantee from the roadmap, mechanically.</p>
+<p><b>Acceptance criteria:</b> generated TS compiles under <code>tsc --strict</code> (checked by WS8's build); golden-file test for the generator output; drift gate wired into CI and demonstrated red on an intentional local DTO edit (note in PR); existing wire-compat byte tests untouched and green.</p>
+
+<!-- ================= WS8 ================= -->
+<h3 id="ws8">WS8 — <code>@voxa/client</code>: mic capture, streaming playback, barge-in flush <span class="badge p1">Phase 4</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> G-03, G-04, G-09 (client half)</span><span><b>Effort:</b> ~3 days</span><span><b>Risk:</b> medium (browser audio quirks; npm scope)</span><span><b>Projects:</b> new <code>clients/js/voxa-client</code>, npm publish workflow</span>
+</div>
+<h4>WS8.1 — Package shape</h4>
+<div class="arrowflow">clients/js/voxa-client/
+├─ package.json        name "@voxa/client" (fallback "voxa-voice-client" if scope unavailable — see risks)
+├─ tsconfig.json       strict, ES2022, DOM
+├─ src/
+│  ├─ index.ts         public exports
+│  ├─ client.ts        VoxaClient — WS lifecycle, envelope dispatch, typed events
+│  ├─ mic.ts           getUserMedia + AudioWorklet capture → Int16 PCM chunks
+│  ├─ playback.ts      gap-free scheduling queue + flush() (the barge-in half)
+│  └─ protocol.generated.ts   ← from WS7; never hand-edited
+├─ test/               vitest: protocol dispatch, playback math, flush, reconnect events
+└─ build: tsup → dist/index.js (ESM) + dist/index.global.js (IIFE, global `Voxa`) + .d.ts</code — zero runtime dependencies.</div>
+<h4>WS8.2 — Public API (complete)</h4>
+<div class="filelabel">clients/js/voxa-client/src/client.ts — public surface</div>
+<pre><code>export interface VoxaClientOptions {
+  url: string;
+  /** Optional hello envelope sent as the first text frame (server's UseWebSocketHello&lt;T&gt; shape). */
+  hello?: Record&lt;string, unknown&gt;;
+  /** Fallbacks when the server doesn't send a "session" envelope (older servers). */
+  inputSampleRate?: number;    // default 16000
+  outputSampleRate?: number;   // default 24000
+  /** Mic chunk size in ms (default 50 — matches the sample's proven cadence). */
+  chunkMs?: number;
+  audioConstraints?: MediaTrackConstraints;  // default: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+}
+
+export interface VoxaEventMap {
+  session:       SessionEnvelope;
+  transcription: TranscriptionEnvelope;
+  text:          TextEnvelope;
+  toolCall:      ToolCallEnvelope;
+  speaking:      SpeakingEnvelope;
+  status:        StatusEnvelope;
+  error:         ErrorEnvelope;          // server-reported errors
+  interruption:  InterruptionEnvelope;   // emitted AFTER the internal playback flush
+  end:           EndEnvelope;
+  connected:     void;
+  disconnected:  { code: number; reason: string };   // no auto-reconnect (ROADMAP P6)
+  miclevel:      { rms: number };                    // ~10 Hz, for UI meters
+}
+
+export class VoxaClient {
+  constructor(options: VoxaClientOptions);
+
+  /** Opens the WebSocket, sends hello (if any), starts mic capture and the playback context.
+   *  Resolves once the socket is open and the mic stream is live. Rejects with a typed
+   *  VoxaConnectError ("websocket" | "microphone-denied" | "audio-context"). */
+  connect(): Promise&lt;void&gt;;
+
+  /** Sends {"type":"end"}, stops the mic, flushes playback, closes the socket. Idempotent. */
+  disconnect(): Promise&lt;void&gt;;
+
+  sendText(text: string): void;
+  sendToolResult(callId: string, resultJson: string, isError?: boolean): void;
+
+  /** Pause/resume uplink without tearing down the mic (track.enabled toggle). */
+  muted: boolean;
+
+  /** Typed subscribe; returns an unsubscribe function. */
+  on&lt;K extends keyof VoxaEventMap&gt;(type: K, handler: (ev: VoxaEventMap[K]) =&gt; void): () =&gt; void;
+}</code></pre>
+<h4>WS8.3 — Implementation requirements (the hard-won details from the sample, made library-grade)</h4>
+<ul>
+  <li><b>Worklet without a second file.</b> The AudioWorklet processor source is embedded as a string and loaded via <code>URL.createObjectURL(new Blob([src], {type:"text/javascript"}))</code> — consumers must not have to serve <code>recorder-worklet.js</code> next to their bundle (the #1 integration papercut with the sample). Port the sample worklet's logic: fixed-size Float32 buffering, clamp to [-1,1], Int16 conversion, transferable <code>postMessage</code> (zero-copy).</li>
+  <li><b>Resampling reality.</b> Request <code>new AudioContext({ sampleRate: inputSampleRate }})</code>; browsers honor it where supported. Where the context comes up at a different rate (Safari quirk), do linear-interpolation downsampling in the worklet (the sample punts on this; the library must not). Unit-test the resampler math in isolation (pure function).</li>
+  <li><b>Playback queue.</b> Maintain <code>nextStartTime</code>; for each binary frame decode Int16→Float32 into an <code>AudioBuffer</code> at <code>outputSampleRate</code>, schedule at <code>max(ctx.currentTime, nextStartTime)</code>, advance by buffer duration. Track all live <code>AudioBufferSourceNode</code>s in a Set, pruned on <code>ended</code>.</li>
+  <li><b>Barge-in flush (G-04 — the point of this package).</b> On <code>{"type":"interruption"}</code>: <code>stop(0)</code> every node in the live set, clear it, reset <code>nextStartTime = ctx.currentTime</code>, <em>then</em> emit the <code>interruption</code> event to the app. Combined with the server's epoch purge (VPS-001 WS4), bot audio now stops &lt; 100 ms after the user speaks, end-to-end.</li>
+  <li><b>Session envelope.</b> On <code>{"type":"session"}</code> reconfigure <code>outputSampleRate</code> for subsequent decoding and (if the mic context rate differs from <code>inputSampleRate</code>) the resampler target. Arrives before any audio by server ordering (ingested pre-conversation); handle late/never (fallback options) for old servers.</li>
+  <li><b>Autoplay policy.</b> <code>connect()</code> must be documented as requiring a user gesture; if the playback context starts <code>suspended</code>, call <code>resume()</code> and surface <code>VoxaConnectError("audio-context")</code> on failure rather than playing silence (the silent-failure mode every first-time WebAudio user hits).</li>
+  <li><b>Binary frames are audio, text frames are JSON</b> — exactly the server contract; unknown envelope types are ignored with a <code>console.debug</code> (forward compatibility).</li>
+</ul>
+<h4>WS8.4 — Tests, build, publish, docs</h4>
+<ul>
+  <li>vitest with mocked <code>WebSocket</code>/<code>AudioContext</code>: envelope→event dispatch for every type in <code>VoxaEventMap</code>; scheduling math (gap-free advance, late-frame clamp to <code>currentTime</code>); flush semantics (all sources stopped, clock reset, event ordering: flush before app event); resampler golden vectors; <code>disconnect()</code> idempotence.</li>
+  <li><code>npm run build</code> produces ESM + IIFE + types; <code>package.json</code> exports map covers both; <code>sideEffects: false</code>.</li>
+  <li>GitHub workflow <code>publish-js-client.yml</code> (manual dispatch, version input) — mirrors <code>release.yml</code>'s pattern with <code>NPM_TOKEN</code>.</li>
+  <li>README with the five-line usage, the user-gesture caveat, and the envelope/event table linking <code>docs/wire-protocol.md</code>.</li>
+</ul>
+<p><b>Acceptance criteria:</b> <code>npm test</code> + <code>tsc --strict</code> green in CI (new job, runs on PRs touching <code>clients/</code> — plus the WS7 drift gate always); IIFE bundle loads from a plain <code>&lt;script&gt;</code> tag (template smoke uses it); manual barge-in check per §9 recorded in the PR.</p>
+
+<!-- ================= WS9 ================= -->
+<h3 id="ws9">WS9 — Dogfooding, docs &amp; roadmap reconciliation <span class="badge p2">Phase 5</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> closes the loop on all gaps</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> none</span><span><b>Projects:</b> sample server, docs, ROADMAP</span>
+</div>
+<ol>
+  <li><b>Sample server adopts its own medicine.</b> Add <code>/voice/defaults</code> to <code>Voxa.Samples.AspNetServer</code> via <code>AddVoxa</code> + <code>UseDefaults()</code> (keep the existing hand-built routes — they are the à-la-carte regression surface). Rewrite the sample's embedded 508-line script on top of <code>@voxa/client</code> (local file reference to the built IIFE during development), keeping the rich UI but deleting the transport/audio plumbing — expected reduction ≥ 300 lines. <b>This is the real-world test of the client's API completeness</b>; any feature the sample UI needs but the client can't expose (mic level? exposed via <code>miclevel</code>) is a WS8 gap found before npm publish, not after.</li>
+  <li><b><code>docs/getting-started.md</code></b> — the template path (3 steps), the config reference (every <code>VoxaOptions</code> key with defaults), the profile table from WS3, provider model-choice guidance (the "Cheap means models" discussion profiles deliberately avoid), and the escape-hatch ladder: <code>UseDefaults()</code> → <code>.Use(...)</code> → <code>MapVoxaVoice(pattern, configure)</code> → raw <code>Pipeline.Build()</code>.</li>
+  <li><b>README quickstart</b> — the five lines, above the fold.</li>
+  <li><b>ROADMAP reconciliation:</b> mark P5 shipped (all three bullets); mark P2's remaining client half shipped (JS flush); mark P7's wire-protocol-doc bullet shipped (generated, with <code>v: 1</code> in the session envelope; the configure envelope + full negotiation remain); note the provider registry as the landing zone for P0's Deepgram/Cartesia and P6's WhisperCpp/Piper.</li>
+</ol>
+<p><b>Acceptance criteria:</b> sample compiles and a manual conversation on <code>/voice/defaults</code> works with the rewritten UI; docs build (links valid); ROADMAP reflects reality.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Contract structure changes — summary</h2>
+<table>
+  <tr><th>Contract</th><th>Change</th><th>Compat impact</th><th>WS</th></tr>
+  <tr><td><code>Voxa.Speech.Abstractions</code></td><td>+ <code>VoxaSttDescriptor</code>/<code>VoxaTtsDescriptor</code>/<code>VoxaVadDescriptor</code>; + <code>Microsoft.Extensions.Configuration.Abstractions</code> package reference</td><td>Additive</td><td>WS2</td></tr>
+  <tr><td>Provider packages</td><td>+ static descriptor classes; + optional <code>HttpClient</code> parameters on factory methods that lacked one</td><td>Additive</td><td>WS2</td></tr>
+  <tr><td><code>Voxa.AspNetCore</code></td><td>+ <code>VoxaOptions</code> graph, <code>AddVoxa</code>, <code>VoxaBuilder</code>, registry, profiles, <code>MapVoxaVoice(pattern)</code> overload, <code>VoxaVoiceRoute</code>, <code>IVoiceAgentFactory</code>, composer. Existing <code>MapVoxaVoice(pattern, configure)</code> behavior unchanged (internal refactor only).</td><td>Additive</td><td>WS1–WS4</td></tr>
+  <tr><td><code>Voxa.Services.MicrosoftAgents</code></td><td>+ <code>InMemoryChatHistory</code></td><td>Additive</td><td>WS4</td></tr>
+  <tr><td>Wire protocol</td><td>+ <code>{"type":"session","v":1,...}</code> envelope (server→client, sent once, optional)</td><td>Additive; existing envelopes byte-identical (compat tests unmodified)</td><td>WS4</td></tr>
+  <tr><td><code>Voxa.Core</code></td><td>+ <code>SessionInfoFrame</code> control frame</td><td>Additive</td><td>WS4</td></tr>
+  <tr><td><code>WireProtocol</code> internals</td><td>Type literals centralized into <code>WireTypes</code>; client-message DTOs added; <code>[WireEnvelope]</code>/<code>[WireValues]</code> attributes</td><td>Internal only <span class="badge breaking">BREAKING</span> for no external consumer (all internal)</td><td>WS7</td></tr>
+  <tr><td>Packages</td><td>+ <code>Voxa</code> (meta), + <code>Voxa.Templates</code>, + <code>@voxa/client</code> (npm)</td><td>New artifacts; <code>release.yml</code> updated</td><td>WS5/WS6/WS8</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Plan of action — phases &amp; dependencies</h2>
+<table>
+  <tr><th>Phase</th><th>Workstreams</th><th>Depends on</th><th>Effort</th><th>Exit gate</th></tr>
+  <tr><td><b>0 — Define done</b></td><td>WS0 (acceptance fixture, golden test)</td><td>—</td><td>0.25 d</td><td>Fixture in solution; golden test present (skipped)</td></tr>
+  <tr><td><b>1 — Config &amp; DI</b></td><td>WS1 (options + validation), WS2 (registry + AddVoxa + HttpClientFactory), WS3 (profiles)</td><td>Phase 0</td><td>2.5 d</td><td>Host boots with AddVoxa; bad config fails at startup with three-question messages; profile tests green</td></tr>
+  <tr><td><b>2 — Composition</b></td><td>WS4 (UseDefaults + memory + session envelope), WS5 (meta-package)</td><td>Phase 1</td><td>1.5 d</td><td><b>MinimalServer compiles; golden test enabled and green; manual conversation works</b></td></tr>
+  <tr><td><b>3 — Scaffolding</b></td><td>WS6 (template)</td><td>Phase 2</td><td>1 d</td><td>Template smoke job green for 2 symbol combos</td></tr>
+  <tr><td><b>4 — Client</b></td><td>WS7 (wiregen + drift gate), then WS8 (@voxa/client)</td><td>WS4 (session envelope) for WS7; WS7 for WS8</td><td>4 d</td><td>JS tests + tsc green; drift gate red-tested; manual barge-in flush verified</td></tr>
+  <tr><td><b>5 — Dogfood &amp; document</b></td><td>WS9 (sample adoption, docs, ROADMAP)</td><td>All phases</td><td>0.5 d</td><td>§9 protocol passes; sample UI on @voxa/client; ROADMAP updated</td></tr>
+</table>
+<p>Total: ~9.75 engineering days (ROADMAP estimated ~1.5 weeks — consistent). Phase 3 is independent of Phase 4 and may run in parallel or be reordered; everything else is a chain. WS6's index.html lands with a placeholder script tag until WS8 publishes (or references the locally built bundle), so running Phase 3 before Phase 4 is fine.</p>
+<div class="callout"><b>Commit discipline:</b> conventional commits, one per workstream sub-item where independent, e.g. <code>feat(aspnetcore): VoxaOptions + fail-fast validation</code>, <code>feat(speech): provider descriptors for config-driven composition</code>, <code>feat(aspnetcore): named latency profiles</code>, <code>feat(aspnetcore): MapVoxaVoice(pattern).UseDefaults()</code>, <code>feat(meta): Voxa batteries-included package</code>, <code>feat(templates): dotnet new voxa-server</code>, <code>feat(tools): wire-contract codegen + drift gate</code>, <code>feat(js-client): @voxa/client with barge-in flush</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
+<p class="progress-note">Checkbox state persists in this browser via localStorage. The implementing agent should also mirror completion into commit messages.</p>
+
+<h4>Phase 0 — Define done</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-00"><span class="tid">P0-1</span>Create <code>samples/Voxa.Samples.MinimalServer</code> (five-line Program.cs + Voxa config block) and the empty <code>src/Voxa</code> shell; add both to the solution (fixture build-excluded until WS5).</label><span class="ac">AC: solution builds; fixture content matches the WS0.1 listings verbatim.</span></li>
+  <li><label><input type="checkbox" id="t-01"><span class="tid">P0-2</span>Add <code>MinimalServerGoldenTests</code> (≤ 6 statements + required API strings), skipped with reason "enabled by WS5".</label><span class="ac">AC: test compiles and is discoverable.</span></li>
+</ul>
+
+<h4>Phase 1 — Config &amp; DI</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-10"><span class="tid">P1-1</span>WS1: <code>VoxaOptions</code> graph (nullable-means-profile-decides) + binding tests.</label><span class="ac">AC: full-section binding test green; ms-int knobs round-trip.</span></li>
+  <li><label><input type="checkbox" id="t-11"><span class="tid">P1-2</span>WS1.1: <code>VoxaOptionsValidator</code> + <code>VoxaDefaultsGuard</code> (lazy Stt/Tts requirement).</label><span class="ac">AC: every error message names key + problem + valid values (asserted); manual-composition host passes startup without Stt/Tts.</span></li>
+  <li><label><input type="checkbox" id="t-12"><span class="tid">P1-3</span>WS2.1: descriptor records in Speech.Abstractions; descriptors in all four speech packages + SileroVad.</label><span class="ac">AC: each descriptor validates its own required keys; no DI package refs added to provider packages.</span></li>
+  <li><label><input type="checkbox" id="t-13"><span class="tid">P1-4</span>WS2.2: <code>VoxaProviderRegistry</code> + <code>AddVoxa(cfg, configure)</code> in AspNetCore.</label><span class="ac">AC: registry tests (case-insensitive, last-wins); à-la-carte host resolves processors via test descriptors.</span></li>
+  <li><label><input type="checkbox" id="t-14"><span class="tid">P1-5</span>WS2.3: <code>VoxaHttpResolver</code> + named client + optional HttpClient params on engine factories.</label><span class="ac">AC: factory branch + VoxaHttp.Shared fallback tests green; warmup verified through a factory client; 100 s timeout matched.</span></li>
+  <li><label><input type="checkbox" id="t-15"><span class="tid">P1-6</span>WS3: <code>VoxaProfiles</code> + <code>VoxaTuningResolver</code>.</label><span class="ac">AC: per-profile value tests match §WS3 table exactly; precedence + preroll-clamp tests green.</span></li>
+</ul>
+
+<h4>Phase 2 — Composition</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-20"><span class="tid">P2-1</span>WS4.1/4.2: <code>MapVoxaVoice(pattern)</code> + <code>VoxaVoiceRoute</code> + <code>DefaultVoicePipelineComposer</code> (HandleAsync refactor, classic overload byte-identical).</label><span class="ac">AC: composer sequence test; classic-overload tests pass unmodified.</span></li>
+  <li><label><input type="checkbox" id="t-21"><span class="tid">P2-2</span>WS4.3: agent resolution chain + <code>IVoiceAgentFactory</code> + <code>InMemoryChatHistory</code>.</label><span class="ac">AC: 4 resolution-branch tests incl. error message; pair-preserving trim tests.</span></li>
+  <li><label><input type="checkbox" id="t-22"><span class="tid">P2-3</span>WS4.4: <code>SessionInfoFrame</code> + <code>session</code> envelope + ingest-after-start in UseDefaults.</label><span class="ac">AC: hard-coded-JSON wire-compat test; existing envelope compat tests unmodified and green.</span></li>
+  <li><label><input type="checkbox" id="t-23"><span class="tid">P2-4</span>End-to-end UseDefaults test: fake socket + fake test descriptors, one full turn (audio in → transcription → agent text → audio out).</label><span class="ac">AC: test green and deterministic (predicate waits, not counts — per the VPS-001 CI lesson).</span></li>
+  <li><label><input type="checkbox" id="t-24"><span class="tid">P2-5</span>WS5: <code>Voxa</code> meta-package (AddVoxa(cfg) overload, all descriptors, <code>OpenAIChatAgentFactory</code>); release.yml; <b>un-exclude MinimalServer + enable golden test</b>.</label><span class="ac">AC: MinimalServer compiles; golden test green; manual conversation with a real key works; pack dependency list verified.</span></li>
+</ul>
+
+<h4>Phase 3 — Scaffolding</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-30"><span class="tid">P3-1</span>WS6.1: template content + template.json (stt/tts/profile symbols).</label><span class="ac">AC: <code>dotnet new voxa-server</code> instantiates with token replacement correct for all symbols.</span></li>
+  <li><label><input type="checkbox" id="t-31"><span class="tid">P3-2</span>WS6.2: CI smoke job (local feed pack → install → instantiate → build) + index.html line budget.</label><span class="ac">AC: job green for 2 symbol combinations.</span></li>
+</ul>
+
+<h4>Phase 4 — Client</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-40"><span class="tid">P4-1</span>WS7.1: <code>WireTypes</code> constants + client-message DTOs + parser/DTO agreement test.</label><span class="ac">AC: no scattered type literals remain in WireProtocol (grep check); wire bytes unchanged.</span></li>
+  <li><label><input type="checkbox" id="t-41"><span class="tid">P4-2</span>WS7.2: <code>tools/Voxa.WireGen</code> emitting protocol.generated.ts + docs/wire-protocol.md (deterministic, attributed DTOs).</label><span class="ac">AC: golden-file test; output stable across two runs.</span></li>
+  <li><label><input type="checkbox" id="t-42"><span class="tid">P4-3</span>WS7.3: CI drift gate.</label><span class="ac">AC: gate demonstrated red on an intentional local edit (noted in PR), green on main.</span></li>
+  <li><label><input type="checkbox" id="t-43"><span class="tid">P4-4</span>WS8.1–8.3: <code>@voxa/client</code> implementation (blob-URL worklet, resampler, playback queue, interruption flush, session handling, autoplay errors).</label><span class="ac">AC: vitest suite green; tsc --strict green; IIFE loads from a script tag.</span></li>
+  <li><label><input type="checkbox" id="t-44"><span class="tid">P4-5</span>WS8.4: npm publish workflow + README.</label><span class="ac">AC: dry-run publish (npm pack) artifact inspected; scope fallback decision recorded.</span></li>
+</ul>
+
+<h4>Phase 5 — Dogfood &amp; document</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-50"><span class="tid">P5-1</span>WS9.1: sample server <code>/voice/defaults</code> route + UI rewritten on @voxa/client.</label><span class="ac">AC: ≥ 300 lines of transport/audio JS deleted from index.html; manual conversation green.</span></li>
+  <li><label><input type="checkbox" id="t-51"><span class="tid">P5-2</span>WS9.2/9.3: docs/getting-started.md + README quickstart.</label><span class="ac">AC: a newcomer path exists that never mentions frames or processors.</span></li>
+  <li><label><input type="checkbox" id="t-52"><span class="tid">P5-3</span>WS9.4: ROADMAP reconciliation (P5 shipped; P2 client half shipped; P7 wire-doc bullet shipped).</label><span class="ac">AC: roadmap reflects reality.</span></li>
+  <li><label><input type="checkbox" id="t-53"><span class="tid">P5-4</span>Run §9 verification protocol end-to-end; record results in the final PR.</label><span class="ac">AC: protocol results pasted into the PR description.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Verification protocol</h2>
+<ol>
+  <li><b>Build &amp; tests:</b> <code>dotnet build Voxa.sln -warnaserror</code>; <code>dotnet test Voxa.sln -c Release</code> — all existing test projects plus the new AspNetCore additions green. <code>npm ci &amp;&amp; npm test &amp;&amp; npm run build</code> in <code>clients/js/voxa-client</code>.</li>
+  <li><b>Drift gate:</b> run <code>tools/Voxa.WireGen</code>; <code>git diff --exit-code</code> clean.</li>
+  <li><b>The ten-minute test (the headline claim):</b> on a machine with only the .NET SDK: <code>dotnet new install Voxa.Templates</code> (local feed) → <code>dotnet new voxa-server -o demo</code> → paste one OpenAI key via user-secrets → <code>dotnet run</code> → open the page → hold a conversation. Time it; record in the PR. Must be &lt; 10 minutes including package restore.</li>
+  <li><b>Five-line guard:</b> MinimalServer golden test green; MinimalServer manual conversation works.</li>
+  <li><b>Misconfiguration matrix:</b> boot the MinimalServer with (a) no <code>Stt</code>, (b) <code>Stt: "Deepgram"</code> (unregistered), (c) missing <code>OpenAI:ApiKey</code>, (d) <code>Profile: "Turbo"</code> — each must fail <em>at startup</em> with the documented message shape. Paste all four messages into the PR.</li>
+  <li><b>Barge-in end-to-end (the P2 close-out):</b> with the rewritten sample UI, interrupt the bot mid-sentence on speakers: audio stops &lt; ~100 ms perceptually (server purge + client flush); the next turn works normally. Compare against the old UI (no flush) to confirm the delta is client-side.</li>
+  <li><b>Profile sanity:</b> same conversation under <code>Default</code> vs <code>LowLatency</code>; <code>voxa.turn.ttfb</code> p50 must improve (expected ~400–700 ms from the hangover + eager-flush deltas per VPS-001 measurements). Record both numbers.</li>
+  <li><b>Old-client/new-server &amp; new-client/old-server:</b> (a) the pre-rewrite sample index.html against the new server — works (session envelope ignored); (b) <code>@voxa/client</code> against a server without WS4 — works on ctor fallback rates.</li>
+  <li><b>À-la-carte regression:</b> the existing hand-built sample routes (<code>/voice/azure</code>, <code>/voice/openai-batch</code>, fluent) all still work — proves nothing in this spec is load-bearing for explicit composition.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Risk register</h2>
+<table>
+  <tr><th>Risk</th><th>Workstream</th><th>Likelihood</th><th>Mitigation</th></tr>
+  <tr><td><code>AddVoxa</code> overload ambiguity between meta-package and AspNetCore (compile error in the five-line program)</td><td>WS5</td><td>Medium</td><td>AspNetCore's <code>configure</code> parameter is required (no default); fixture project imports both namespaces and is the compile test.</td></tr>
+  <tr><td>Descriptor design forces DI/ASP.NET references into provider packages (layering regression)</td><td>WS2</td><td>Low</td><td>Descriptors are data + BCL <code>IServiceProvider</code> + <code>Configuration.Abstractions</code> only; CI could assert package refs but a code-review checklist item suffices pre-1.0.</td></tr>
+  <tr><td>UseDefaults' opinions calcify wrong defaults (users copy them into prod blindly)</td><td>WS4</td><td>Medium</td><td>Defaults are the sample server's proven configuration; the escape-hatch ladder is documented prominently; conversation memory is bounded; "production-plausible" rule in §2.3.</td></tr>
+  <tr><td>Profile values fight explicit config in surprising ways (user sets a knob, profile appears to ignore it)</td><td>WS3</td><td>Low</td><td>Single resolver, single precedence rule, exhaustive tests; effective tuning logged once at startup at Information level (<code>"Voxa profile {Profile}: stop={...}ms eager={...}"</code>).</td></tr>
+  <tr><td>npm scope <code>@voxa</code> unavailable or squatted</td><td>WS8</td><td>Medium</td><td>Check before WS8 starts; fallback name <code>voxa-voice-client</code> reserved early; package.json name is a one-line change, all docs reference a constant.</td></tr>
+  <tr><td>Browser audio quirks (Safari fixed-rate contexts, autoplay) make the client flaky where the sample "worked" (because the sample only targeted Chrome)</td><td>WS8</td><td>Medium</td><td>Resampler in the worklet (not optional); typed connect errors instead of silence; manual test matrix Chrome/Edge/Safari noted in PR; known-issue doc for anything unresolved.</td></tr>
+  <tr><td>Wiregen reflection misses a future DTO (new envelope ships without TS types)</td><td>WS7</td><td>Low</td><td>Wiregen enumerates ALL types in WireMessages.cs and fails if any lacks <code>[WireEnvelope]</code>; drift gate makes the omission loud at PR time.</td></tr>
+  <tr><td>Template references package versions that drift from the repo (template builds on CI but not for users)</td><td>WS6</td><td>Medium</td><td>Template version token is stamped at pack time from the build version; smoke test installs from the locally packed feed; release.yml packs templates last, after libraries.</td></tr>
+  <tr><td>Session envelope ordering: client receives audio before <code>session</code> on a hand-built pipeline that ingests it late</td><td>WS4/WS8</td><td>Low</td><td>Client treats <code>session</code> as reconfiguration, not initialization — fallback rates apply until it arrives; UseDefaults ingests pre-conversation so the default path is always ordered.</td></tr>
+  <tr><td><code>InMemoryChatHistory</code> used outside the agent processor's single-threaded contract</td><td>WS4</td><td>Low</td><td>XML docs state the contract; debug assert on thread reuse; it is deliberately not registered in DI (constructed per connection by the composer).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Out of scope / deferred (with rationale)</h2>
+<ul>
+  <li><b>Realtime/VoiceLive in <code>UseDefaults()</code>.</b> A <code>"Voxa:Mode": "Realtime"</code> switch is the obvious v2 (the composer would emit a single realtime processor instead of the chain), but the realtime services have materially different config (endpoint URIs, turn-detection blocks, tools) and no registry shape yet. Deferred until the descriptor pattern proves itself; the explicit overload covers it today.</li>
+  <li><b>Auto-reconnect / resume tokens in <code>@voxa/client</code></b> — ROADMAP P6 (session resilience). The clean <code>disconnected</code> event is the seam; resume needs the server-side hello token first.</li>
+  <li><b><code>{"type":"configure"}</code> runtime control envelope</b> — ROADMAP P7. The <code>session</code> envelope is one-way announce; two-way negotiation is a separate design.</li>
+  <li><b>Typed frontend tools (<code>voice.UseTool("show_chart", (string city) =&gt; ...)</code>)</b> — ROADMAP P6; requires schema source-generation, orthogonal to this spec's packaging goals.</li>
+  <li><b>Provider auto-discovery via assembly scanning.</b> Considered for "reference a provider package and it just works" — rejected: reflection-based scanning is trimming-hostile, order-nondeterministic, and saves one line that the meta-package already saves for beginners. Explicit descriptors keep à-la-carte hosts honest.</li>
+  <li><b>Profiles mutating model choice</b> ("Cheap" forcing gpt-4o-mini) — rejected in WS3; billing-relevant decisions stay explicit. Docs carry the guidance instead.</li>
+  <li><b>A Flutter/React-Native client</b> — the AONIK adapter (ROADMAP P3) owns the mobile story; <code>@voxa/client</code>'s protocol layer (generated TS) is reusable there but the audio layer is platform-specific.</li>
+  <li><b><code>dotnet new voxa-client</code> (standalone SPA template)</b> — the server template ships a working page; a dedicated frontend template adds maintenance surface without unlocking new users yet.</li>
+</ul>
+
+<hr style="border-color: var(--border); margin-top: 60px;">
+<p style="color: var(--muted); font-size: 0.8rem;">VDX-001 v1.0 — generated 2026-06-10 against Voxa <code>main@c77264d</code>. All file:line references verified against source at that commit. Companion spec: <code>voxa-performance-optimization-spec.html</code> (VPS-001). Artifacts produced by this spec: <code>src/Voxa</code> (meta-package), <code>samples/Voxa.Samples.MinimalServer</code>, <code>templates/</code> (<code>Voxa.Templates</code>), <code>tools/Voxa.WireGen</code>, <code>clients/js/voxa-client</code> (<code>@voxa/client</code>), <code>docs/wire-protocol.md</code> (generated), <code>docs/getting-started.md</code>.</p>
+</div>
+
+<script>
+// Persist checklist state per-browser.
+document.querySelectorAll('ul.cl input[type=checkbox]').forEach(cb => {
+  const key = 'vdx001:' + cb.id;
+  cb.checked = localStorage.getItem(key) === '1';
+  cb.addEventListener('change', () => localStorage.setItem(key, cb.checked ? '1' : '0'));
+});
+</script>
+</body>
+</html>

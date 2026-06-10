@@ -145,6 +145,9 @@ public sealed class WebSocketAudioSink : PipelineSink
 
         switch (frame)
         {
+            case SessionInfoFrame sessionInfo:
+                await WriteAsync(WireProtocol.BuildSession(sessionInfo), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
             case AudioRawFrame audio:
                 await WriteAsync(audio.Pcm, isBinaryAudio: true, ct).ConfigureAwait(false);
                 break;

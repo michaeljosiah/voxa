@@ -6,7 +6,7 @@
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
-> See [`ROADMAP.md`](ROADMAP.md) for tracked work — latency improvements, smart turn detection, echo suppression, developer-experience (`AddVoxa()`, JS client, profiles), local/offline speech, AONIK integration.
+> See [`ROADMAP.md`](ROADMAP.md) for tracked work — smart turn detection, echo suppression, JS client, local/offline speech, AONIK integration.
 
 > **Status: pre-alpha (0.1.x).** Public API stabilising. Not yet on NuGet.
 
@@ -14,20 +14,72 @@ A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipe
 
 Voxa lets you compose real-time voice agents from small, testable processors. Each processor consumes and emits typed `Frame`s — audio, transcription, tool calls, control signals. System frames (interruption, errors) preempt data frames in their own task. Pipelines run asynchronously with bounded backpressure on data, unbounded priority on system signals.
 
-The shortest path to a real voice endpoint, using the fluent ASP.NET Core surface (`Voxa.AspNetCore`):
+## Quickstart — five lines
+
+Reference the `Voxa` meta-package (which includes `Voxa.AspNetCore` and all built-in speech providers):
 
 ```csharp
-app.MapVoxaVoice("/voice", voice => voice
-    .UseSpeechToText(() => OpenAISpeech.StreamingTranscription(openai))
+// Program.cs
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddVoxa(builder.Configuration);
+var app = builder.Build();
+app.UseWebSockets();
+app.MapVoxaVoice("/voice").UseDefaults();
+app.Run();
+```
+
+Configure via `appsettings.json`:
+
+```json
+{
+  "Voxa": {
+    "Profile": "LowLatency",
+    "Stt": "OpenAI",
+    "Tts": "OpenAI",
+    "OpenAI": { "ApiKey": "sk-..." },
+    "Agent": {
+      "Provider": "OpenAI",
+      "Model": "gpt-4o-mini",
+      "Instructions": "You are a friendly voice assistant. Keep responses brief."
+    }
+  }
+}
+```
+
+`UseDefaults()` wires VAD → STT → agent → sentence aggregation → TTS for you, with per-connection conversation memory and a `session` frame that announces sample rates to the client.
+
+**Startup validation:** if `Voxa:Stt`, `Voxa:Tts`, or an agent are missing, the host refuses to start with a clear error listing the registered providers and what to set.
+
+## À-la-carte configuration
+
+For hosts that install only specific provider packages or need custom pipeline composition:
+
+```csharp
+// Register only the providers you have installed
+builder.Services.AddVoxa(builder.Configuration, voxa => {
+    voxa.AddProvider(OpenAISpeechDescriptors.Stt);
+    voxa.AddProvider(ElevenLabsDescriptors.Tts);
+    voxa.AddProvider(SileroVadDescriptors.Vad);
+});
+
+// Compose the pipeline yourself (pipeline is a VoicePipelineBuilder)
+app.MapVoxaVoice("/voice", pipeline => pipeline
+    .UseSpeechToText(() => OpenAISpeech.StreamingTranscription(opts))
     .UseTranscriptionFilter()
     .UseMicrosoftAgent(myAgent)
     .UseSentenceAggregator()
-    .UseTextToSpeech(() => OpenAISpeech.Synthesis(openai)));
+    .UseTextToSpeech(() => OpenAISpeech.Synthesis(opts)));
 ```
 
-That's the whole endpoint. Per-connection lifecycle, WebSocket framing, deadlock-safe agent loop, frontend-tool round-trips, turn-boundary frames, and audit hooks are all wired for you.
+Or mix the two — call `UseDefaults()` first, then append processors with `Use()`:
 
-The lower-level API is still there for hosts that want to build the pipeline by hand:
+```csharp
+app.MapVoxaVoice("/voice")
+   .UseDefaults()
+   .Use((ctx, pipeline) => pipeline.UseProcessor(() => new MyAuditProcessor()));
+```
+
+The lower-level API remains available for hosts that want to build the pipeline entirely by hand:
 
 ```csharp
 var pipeline = Pipeline.Build()
@@ -40,6 +92,23 @@ await runner.StartAsync();
 await runner.WaitAsync();
 ```
 
+## Configuration reference
+
+All keys live under the `Voxa` section. Provider sub-sections (e.g. `Voxa:OpenAI`, `Voxa:ElevenLabs`) are bound by each provider's descriptor — adding a provider never requires touching `VoxaOptions`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Voxa:Profile` | string | `"Default"` | Named latency preset. `Default`, `LowLatency`, `Quality`, or `Cheap`. |
+| `Voxa:Stt` | string | — | STT provider name, e.g. `"OpenAI"`, `"Azure"`. Required when using `UseDefaults()`. |
+| `Voxa:Tts` | string | — | TTS provider name, e.g. `"OpenAI"`, `"ElevenLabs"`, `"Azure"`, `"Mistral"`. Required when using `UseDefaults()`. |
+| `Voxa:Vad:Engine` | string | `"Silero"` | `"Silero"`, `"SilenceGate"` (energy-only), or `"None"`. |
+| `Voxa:Agent:Provider` | string | — | `"OpenAI"` uses the built-in factory. Omit to supply your own `AIAgent` / `IChatClient` via DI. |
+| `Voxa:Agent:Model` | string | `"gpt-4o-mini"` | Chat model passed to the agent factory. |
+| `Voxa:Agent:Instructions` | string | (brief assistant) | System prompt. |
+| `Voxa:Agent:ApiKey` | string | — | API key. Falls back to `Voxa:OpenAI:ApiKey`. |
+| `Voxa:Agent:ConversationMemory` | bool | `true` | Per-connection bounded chat history. |
+| `Voxa:Agent:MaxHistoryMessages` | int | `50` | History cap; oldest user/assistant pairs trimmed first. |
+
 ## Why not just call Voice Live (or OpenAI Realtime) directly
 
 Voice Live is great for the simple case. But the moment you have a second backend (regional fallback, premium voices Voice Live doesn't host, OpenAI Realtime, telephony), one tenant policy that diverges, or an audit/cost/observability concern that crosses backends, you need a pipeline. Voxa is that pipeline. The Voice Live composite processor is one node in it; you can swap it for an Azure Speech STT → MAF agent → Azure Speech TTS chain on the same wire.
@@ -48,12 +117,18 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 
 ## Packages
 
+### Meta-package
+
+| Package | Description |
+|---------|-------------|
+| `Voxa` | **Start here.** Bundles `Voxa.AspNetCore` + all built-in speech providers + the OpenAI agent factory. `AddVoxa(configuration)` (2-arg) is the entry point. |
+
 ### Core
 
 | Package | Description |
 |---------|-------------|
 | `Voxa.Core` | Frames, processors, pipeline, runner, generic `AgentLoopProcessor`. Zero external deps beyond NUlid. |
-| `Voxa.AspNetCore` | Fluent `MapVoxaVoice` + `VoicePipelineBuilder`. The recommended integration surface for ASP.NET Core hosts. |
+| `Voxa.AspNetCore` | `AddVoxa(configuration, configure)` (3-arg à-la-carte) + fluent `MapVoxaVoice` + `UseDefaults()`. The integration surface for ASP.NET Core hosts. |
 | `Voxa.Testing` | WAV file source/sink, capturing/passthrough processors. |
 | `Voxa.Transports.WebSocket` | Host-agnostic source + sink over `System.Net.WebSockets.WebSocket`. |
 | `Voxa.Services.AzureVoiceLive` | Composite STT+LLM+TTS+VAD via Azure Voice Live's Realtime API. |
@@ -183,7 +258,9 @@ Each STT vendor pairs with each TTS vendor pairs with any agent. Some examples:
 Binary WebSocket frames carry raw 16-bit PCM @ 24 kHz mono. Text WebSocket frames carry typed JSON envelopes:
 
 **Client → Server:** `hello`, `end`, `text`, `toolResult`
-**Server → Client:** `transcription`, `text`, `toolCall`, `speaking`, `interruption`, `status`, `error`, `end`
+**Server → Client:** `session`, `transcription`, `text`, `toolCall`, `speaking`, `interruption`, `status`, `error`, `end`
+
+The `session` envelope is sent once at connection start and announces the input/output sample rates the pipeline is operating at — clients use it to configure their audio encoder/decoder without hardcoding sample rates. Old clients that do not recognise the type safely ignore it.
 
 `WebSocketAudioSink` accepts a `customSerializer` hook so hosts can add their own envelopes (e.g. AONIK's `threadReady`) without subclassing.
 
@@ -238,9 +315,19 @@ services.AddOpenTelemetry()
 
 The sample server also logs `turn ttfb {n} ms` per turn via a plain `MeterListener`, no OTel backend required.
 
-## Sample app
+## Sample apps
 
-[`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — ASP.NET Core voice-agent server with WebSocket endpoints demonstrating each pipeline shape:
+### Minimal server — five lines
+
+[`samples/Voxa.Samples.MinimalServer`](samples/Voxa.Samples.MinimalServer) — the five-line `Program.cs` demo. Fill in `appsettings.json` with your API key and run:
+
+```bash
+dotnet run --project samples/Voxa.Samples.MinimalServer
+```
+
+### Full sample server
+
+[`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — ASP.NET Core server demonstrating each pipeline shape side-by-side:
 
 | Route | Pipeline | Surface |
 |-------|----------|---------|
@@ -277,10 +364,11 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | 5 | ✅ AzureSpeech STT/TTS standalone + ASP.NET sample |
 | 5.5 | ✅ Generic `AgentLoopProcessor` + delegate-based MAF surface + fluent `MapVoxaVoice` |
 | 5.6 | ✅ VPS-001 performance pass — zero-allocation hot path, source-generated wire protocol, streaming Azure TTS, server-side barge-in purge, `voxa.turn.ttfb` metric, benchmark suite |
+| P5 | ✅ VDX-001 developer experience — `AddVoxa()` + `UseDefaults()`, typed config, named latency profiles, provider descriptors, `Voxa` meta-package, fail-fast startup validation, conversation memory, `session` wire envelope |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 
-(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `AddVoxa()` developer experience, `@voxa/client` JS package, local/offline speech, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
+(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `@voxa/client` JS package, local/offline speech, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
 
 ## Contributing
 

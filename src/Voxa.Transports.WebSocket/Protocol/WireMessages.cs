@@ -4,6 +4,7 @@ namespace Voxa.Transports.WebSocket.Protocol;
 
 // Outbound (server -> client) envelope DTOs. Field order matches the historical anonymous-type
 // output so the wire bytes are byte-for-byte unchanged. 'Type' is always first.
+internal readonly record struct SessionEnvelope(string Type, int V, int InputSampleRate, int OutputSampleRate);
 internal readonly record struct TranscriptionEnvelope(string Type, string Text, bool IsFinal, string? Language, string? SpeakerId);
 internal readonly record struct TextEnvelope(string Type, string Text);
 internal readonly record struct ToolCallEnvelope(string Type, string CallId, string Name, string ArgumentsJson);
@@ -20,6 +21,7 @@ internal readonly record struct MessageEnvelope(string Type, string Message);   
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     GenerationMode = JsonSourceGenerationMode.Serialization)]
+[JsonSerializable(typeof(SessionEnvelope))]
 [JsonSerializable(typeof(TranscriptionEnvelope))]
 [JsonSerializable(typeof(TextEnvelope))]
 [JsonSerializable(typeof(ToolCallEnvelope))]
