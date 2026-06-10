@@ -84,7 +84,10 @@ public sealed class SileroVadEngine : IDisposable
         // once and reused — the contents of _inputBuf / _stateBuf are updated before each Run.
         _inputValue = OrtValue.CreateTensorValueFromMemory(_inputBuf, new long[] { 1, WindowSize });
         _stateValue = OrtValue.CreateTensorValueFromMemory(_stateBuf, new long[] { 2, 1, 128 });
-        _srValue = OrtValue.CreateTensorValueFromMemory(srBuf, new long[] { 1 });
+        // The model declares `sr` as a rank-0 scalar (shape []). ORT happens to accept a rank-1
+        // [1] tensor here too, but match the declared contract exactly with an empty shape rather
+        // than rely on that leniency holding across ORT versions.
+        _srValue = OrtValue.CreateTensorValueFromMemory(srBuf, Array.Empty<long>());
         _outValue = OrtValue.CreateTensorValueFromMemory(_outBuf, new long[] { 1, 1 });
         _stateOutValue = OrtValue.CreateTensorValueFromMemory(_stateOutBuf, new long[] { 2, 1, 128 });
 
