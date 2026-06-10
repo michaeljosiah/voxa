@@ -115,8 +115,11 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
             _ = force; // unused — kept for API symmetry with StopAsync path
             // Single allocation: WAV header + PCM copied straight out of the MemoryStream's
             // internal buffer. Replaces ToArray() (copy 1) + a second copy inside WrapPcmAsWav.
-            _buffer.TryGetBuffer(out ArraySegment<byte> seg);   // exposable: stream uses new MemoryStream()
-            wav = WrapPcmAsWav(seg.AsSpan(), _options.InputSampleRate, channels: 1);
+            // TryGetBuffer always succeeds for our own `new MemoryStream()`, but stay correct
+            // if the stream type ever changes.
+            wav = _buffer.TryGetBuffer(out ArraySegment<byte> seg)
+                ? WrapPcmAsWav(seg.AsSpan(), _options.InputSampleRate, channels: 1)
+                : WrapPcmAsWav(_buffer.ToArray(), _options.InputSampleRate, channels: 1);
             _buffer.SetLength(0);
         }
 

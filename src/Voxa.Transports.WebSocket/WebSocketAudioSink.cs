@@ -90,18 +90,28 @@ public sealed class WebSocketAudioSink : PipelineSink
             try { await _writerTask.ConfigureAwait(false); } catch { /* best-effort drain */ }
         }
 
-        await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);
+        // Only EndFrame reaches the base sink buffer (it drives EndFrameObserved for the runner).
+        // Mirroring every data frame into the inherited unbounded output channel would retain all
+        // session audio in memory — nothing drains that channel when this sink IS the transport.
+        if (frame is EndFrame)
+        {
+            await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);
+        }
     }
 
     private async ValueTask EnqueueFrameAsync(Frame frame, CancellationToken ct)
     {
         // Interruption arrives on the SYSTEM loop (concurrent with the data loop), so the epoch
         // bump takes effect immediately even while audio is queued. The envelope itself jumps
-        // ahead of the now-stale audio so the client stops local playback.
+        // ahead of the now-stale audio so the client stops local playback. The host's custom
+        // serializer still gets first claim on the envelope's shape.
         if (frame is InterruptionFrame)
         {
             Interlocked.Increment(ref _epoch);
-            await WriteAsync(WireProtocol.BuildInterruption(), isBinaryAudio: false, ct).ConfigureAwait(false);
+            var payload = _customSerializer?.Invoke(frame) is { } custom
+                ? Encoding.UTF8.GetBytes(custom)
+                : WireProtocol.BuildInterruption();
+            await WriteAsync(payload, isBinaryAudio: false, ct).ConfigureAwait(false);
             return;
         }
 
@@ -113,7 +123,7 @@ public sealed class WebSocketAudioSink : PipelineSink
         }
         else if (frame is UserStoppedSpeakingFrame)
         {
-            _turnT0 = Stopwatch.GetTimestamp();   // WS0.3: start the voice-to-voice clock
+            Volatile.Write(ref _turnT0, Stopwatch.GetTimestamp());   // WS0.3: start the voice-to-voice clock
         }
 
         if (_customSerializer is not null)
@@ -185,10 +195,13 @@ public sealed class WebSocketAudioSink : PipelineSink
 
                 if (_ws.State != WebSocketState.Open) continue;
 
-                if (msg.IsBinaryAudio && _turnT0 != 0)   // WS0.3: first bot audio after end of user speech
+                if (msg.IsBinaryAudio)   // WS0.3: first bot audio after end of user speech
                 {
-                    VoxaMetrics.TurnTtfbMs.Record(Stopwatch.GetElapsedTime(_turnT0).TotalMilliseconds);
-                    _turnT0 = 0;
+                    var t0 = Interlocked.Exchange(ref _turnT0, 0);   // read-and-clear, cross-thread safe
+                    if (t0 != 0)
+                    {
+                        VoxaMetrics.TurnTtfbMs.Record(Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
+                    }
                 }
 
                 try

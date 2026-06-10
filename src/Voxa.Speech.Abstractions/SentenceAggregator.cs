@@ -152,6 +152,7 @@ public sealed class SentenceAggregator : FrameProcessor
             leftover = _buffer.Length > 0 ? _buffer.ToString().Trim() : null;
             _buffer.Clear();
             _lastBoundary = -1;
+            _firstFlushOfTurn = true;
         }
         if (!string.IsNullOrEmpty(leftover))
         {
