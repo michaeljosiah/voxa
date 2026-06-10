@@ -67,9 +67,12 @@ public class SileroVadProcessorTests
             await Task.Delay(40);
 
             // Configured for 16 kHz but we send 24 kHz — should pass through.
+            // Wait on the frame rather than a fixed delay: on a cold CI runner the first
+            // inference pays ONNX runtime init + model load, which can exceed any fixed budget.
             var pcm = WhiteNoise(1024);
             await pipeline.Source.IngestAsync(new AudioRawFrame(pcm, 24000, 1));
-            await Task.Delay(80);
+            await captured.WaitForAsync(
+                f => f is AudioRawFrame a && a.SampleRate == 24000, TimeSpan.FromSeconds(10));
 
             Assert.Contains(captured.Captured, f => f is AudioRawFrame a && a.SampleRate == 24000);
         }
