@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Voxa.Frames;
 
 namespace Voxa.Transports.WebSocket.Protocol;
@@ -7,6 +6,12 @@ namespace Voxa.Transports.WebSocket.Protocol;
 /// <summary>
 /// JSON envelope codec for the Voxa WebSocket transport. Binary WebSocket frames carry raw PCM
 /// audio; text WebSocket frames carry these typed JSON envelopes.
+///
+/// <para>
+/// Outbound envelopes are serialized straight to UTF-8 bytes via source generation
+/// (<see cref="WireJsonContext"/>) — no reflection, no anonymous-type allocation, no intermediate
+/// string. The wire format is byte-for-byte identical to the previous reflection-based codec.
+/// </para>
 ///
 /// <para>
 /// Client → Server: <c>{"type":"hello", ...}</c>, <c>{"type":"end"}</c>,
@@ -23,11 +28,6 @@ namespace Voxa.Transports.WebSocket.Protocol;
 /// </summary>
 public static class WireProtocol
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
-
     /// <summary>
     /// Parse one inbound JSON envelope from the client and translate it into a <see cref="Frame"/>,
     /// or return null if the envelope is unrecognized or malformed (callers should drop unknowns).
@@ -71,46 +71,51 @@ public static class WireProtocol
 
     private static Frame ParseToolResult(JsonElement root)
     {
-        var callId = root.TryGetProperty("callId", out var c) ? (c.GetString() ?? string.Empty) : string.Empty;
-        var resultJson = root.TryGetProperty("resultJson", out var r) ? (r.GetString() ?? "{}") : "{}";
-        var isError = root.TryGetProperty("isError", out var e) && e.ValueKind == JsonValueKind.True;
+        var callId = root.TryGetProperty("callId"u8, out var c) ? (c.GetString() ?? string.Empty) : string.Empty;
+        var resultJson = root.TryGetProperty("resultJson"u8, out var r) ? (r.GetString() ?? "{}") : "{}";
+        var isError = root.TryGetProperty("isError"u8, out var e) && e.ValueKind == JsonValueKind.True;
         return new ToolCallResultFrame(callId, resultJson, isError);
     }
 
-    public static string BuildTranscription(TranscriptionFrame f)
-        => JsonSerializer.Serialize(new
-        {
-            type = "transcription",
-            text = f.Text,
-            isFinal = f.IsFinal,
-            language = f.Language,
-            speakerId = f.SpeakerId,
-        }, JsonOpts);
+    // ---------- Outbound (server -> client): source-generated, UTF-8, one allocation ----------
 
-    public static string BuildText(string text)
-        => JsonSerializer.Serialize(new { type = "text", text }, JsonOpts);
+    /// <summary>Serialize a transcription envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildTranscription(TranscriptionFrame f)
+        => JsonSerializer.SerializeToUtf8Bytes(
+            new TranscriptionEnvelope("transcription", f.Text, f.IsFinal, f.Language, f.SpeakerId),
+            WireJsonContext.Default.TranscriptionEnvelope);
 
-    public static string BuildToolCall(ToolCallRequestFrame f)
-        => JsonSerializer.Serialize(new
-        {
-            type = "toolCall",
-            callId = f.CallId,
-            name = f.Name,
-            argumentsJson = f.ArgumentsJson,
-        }, JsonOpts);
+    /// <summary>Serialize a text envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildText(string text)
+        => JsonSerializer.SerializeToUtf8Bytes(new TextEnvelope("text", text), WireJsonContext.Default.TextEnvelope);
 
-    public static string BuildSpeaking(string who, bool started)
-        => JsonSerializer.Serialize(new { type = "speaking", who, started }, JsonOpts);
+    /// <summary>Serialize a tool-call envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildToolCall(ToolCallRequestFrame f)
+        => JsonSerializer.SerializeToUtf8Bytes(
+            new ToolCallEnvelope("toolCall", f.CallId, f.Name, f.ArgumentsJson),
+            WireJsonContext.Default.ToolCallEnvelope);
 
-    public static string BuildInterruption()
-        => JsonSerializer.Serialize(new { type = "interruption" }, JsonOpts);
+    /// <summary>Serialize a speaking-state envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildSpeaking(string who, bool started)
+        => JsonSerializer.SerializeToUtf8Bytes(new SpeakingEnvelope("speaking", who, started), WireJsonContext.Default.SpeakingEnvelope);
 
-    public static string BuildStatus(string message)
-        => JsonSerializer.Serialize(new { type = "status", message }, JsonOpts);
+    // Fixed envelopes never vary — serialize once into static arrays so sends are zero-cost.
+    private static readonly byte[] InterruptionBytes =
+        JsonSerializer.SerializeToUtf8Bytes(new TypeOnlyEnvelope("interruption"), WireJsonContext.Default.TypeOnlyEnvelope);
+    private static readonly byte[] EndBytes =
+        JsonSerializer.SerializeToUtf8Bytes(new TypeOnlyEnvelope("end"), WireJsonContext.Default.TypeOnlyEnvelope);
 
-    public static string BuildError(string message)
-        => JsonSerializer.Serialize(new { type = "error", message }, JsonOpts);
+    /// <summary>The fixed interruption envelope as UTF-8 JSON bytes (cached; do not mutate).</summary>
+    public static byte[] BuildInterruption() => InterruptionBytes;
 
-    public static string BuildEnd()
-        => JsonSerializer.Serialize(new { type = "end" }, JsonOpts);
+    /// <summary>The fixed end envelope as UTF-8 JSON bytes (cached; do not mutate).</summary>
+    public static byte[] BuildEnd() => EndBytes;
+
+    /// <summary>Serialize a status envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildStatus(string message)
+        => JsonSerializer.SerializeToUtf8Bytes(new MessageEnvelope("status", message), WireJsonContext.Default.MessageEnvelope);
+
+    /// <summary>Serialize an error envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildError(string message)
+        => JsonSerializer.SerializeToUtf8Bytes(new MessageEnvelope("error", message), WireJsonContext.Default.MessageEnvelope);
 }

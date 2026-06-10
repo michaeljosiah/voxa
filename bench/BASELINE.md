@@ -54,8 +54,19 @@ per-envelope cost was higher):
 | BuildInterruption | 119 ns | 96 B |
 
 After WS3 (source-generated UTF-8 `byte[]`, no anonymous type, no reflection; fixed envelopes cached
-as `static readonly` arrays) — _to be filled in when WS3 lands_. Expected: fewer bytes, no reflection,
-`BuildInterruption`/`BuildEnd` → **0 B** (returns a cached array).
+as `static readonly` arrays):
+
+| Method | Mean | Allocated | vs before |
+|---|---|---|---|
+| BuildTranscription | 145 ns | 136 B | −54% |
+| BuildText | 106 ns | 88 B | −50% |
+| BuildToolCall | 282 ns | 184 B | −52% |
+| BuildInterruption | ~0 ns | **0 B** | cached array |
+
+Note: the "before" numbers measured only the `string` build; the old sink then did a *separate*
+`Encoding.UTF8.GetBytes(json)` per send (another ~100–200 B). The WS3 path returns the final UTF-8
+bytes directly, so the real per-send reduction is larger than the table shows. Wire format verified
+byte-for-byte unchanged by `WireProtocolCompatibilityTests`.
 
 ---
 
