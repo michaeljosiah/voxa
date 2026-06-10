@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Optimize>true</Optimize>
+    <IsPackable>false</IsPackable>
+    <!-- Benchmarks run against Release builds; keep them out of warnings-as-errors churn. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Transports.WebSocket\Voxa.Transports.WebSocket.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
