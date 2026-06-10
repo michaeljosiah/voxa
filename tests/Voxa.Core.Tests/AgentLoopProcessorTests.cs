@@ -45,6 +45,16 @@ public class AgentLoopProcessorTests
         }
     }
 
+    /// <summary>
+    /// Poll for a condition set by a turn-worker hook instead of a fixed delay — fixed delays
+    /// flake on slow CI runners where the worker hasn't run within the budget.
+    /// </summary>
+    private static async Task WaitForConditionAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(10);
+    }
+
     // ── Turn lifecycle ────────────────────────────────────────────────────
 
     [Fact]
@@ -180,7 +190,7 @@ public class AgentLoopProcessorTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("dup", IsFinal: true));
-            await Task.Delay(150);
+            await WaitForConditionAsync(() => captured is not null, TimeSpan.FromSeconds(5));
 
             Assert.NotNull(captured);
             Assert.IsType<InvalidOperationException>(captured);
@@ -293,7 +303,7 @@ public class AgentLoopProcessorTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("boom", IsFinal: true));
-            await Task.Delay(150);
+            await WaitForConditionAsync(() => observed is not null, TimeSpan.FromSeconds(5));
 
             Assert.NotNull(observed);
             Assert.IsType<InvalidOperationException>(observed);

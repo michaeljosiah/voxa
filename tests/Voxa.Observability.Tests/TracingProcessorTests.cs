@@ -22,6 +22,26 @@ public class TracingProcessorTests
         return (activities, listener);
     }
 
+    /// <summary>
+    /// Wait for an activity matching <paramref name="predicate"/> (or timeout), then snapshot.
+    /// Polling instead of a fixed delay — fixed delays flake on slow CI runners where the
+    /// pipeline hasn't drained the frame within the budget.
+    /// </summary>
+    private static async Task<List<Activity>> SnapshotWhenAsync(
+        List<Activity> activities, Func<Activity, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (activities)
+            {
+                if (activities.Any(predicate)) break;
+            }
+            await Task.Delay(10);
+        }
+        lock (activities) return activities.ToList();
+    }
+
     [Fact]
     public async Task Emits_Activity_Per_Frame_With_Type_Tag()
     {
@@ -37,10 +57,10 @@ public class TracingProcessorTests
             await using var runner = new PipelineRunner(pipeline);
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TextFrame("hello"));
-            await Task.Delay(80);
-
-            List<Activity> snapshot;
-            lock (activities) snapshot = activities.ToList();
+            var snapshot = await SnapshotWhenAsync(
+                activities,
+                a => a.GetTagItem("voxa.frame.type") as string == "TextFrame",
+                TimeSpan.FromSeconds(5));
 
             Assert.NotEmpty(snapshot);
             Assert.Contains(snapshot, a =>
@@ -64,10 +84,10 @@ public class TracingProcessorTests
             await using var runner = new PipelineRunner(pipeline);
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new AudioRawFrame(new byte[] { 1, 2, 3, 4 }, 24000, 1));
-            await Task.Delay(80);
-
-            List<Activity> snapshot;
-            lock (activities) snapshot = activities.ToList();
+            var snapshot = await SnapshotWhenAsync(
+                activities,
+                a => a.GetTagItem("voxa.frame.type") as string == "AudioRawFrame",
+                TimeSpan.FromSeconds(5));
 
             var audioActivity = snapshot.FirstOrDefault(a => a.GetTagItem("voxa.frame.type") as string == "AudioRawFrame");
             Assert.NotNull(audioActivity);
@@ -91,10 +111,10 @@ public class TracingProcessorTests
             await using var runner = new PipelineRunner(pipeline);
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new ErrorFrame("boom"));
-            await Task.Delay(80);
-
-            List<Activity> snapshot;
-            lock (activities) snapshot = activities.ToList();
+            var snapshot = await SnapshotWhenAsync(
+                activities,
+                a => a.GetTagItem("voxa.frame.type") as string == "ErrorFrame",
+                TimeSpan.FromSeconds(5));
 
             var errorActivity = snapshot.FirstOrDefault(a => a.GetTagItem("voxa.frame.type") as string == "ErrorFrame");
             Assert.NotNull(errorActivity);
