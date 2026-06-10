@@ -53,6 +53,19 @@ public sealed class VoxaVoiceRoute : IEndpointConventionBuilder
                 }
 
                 route._customConfigure?.Invoke(ctx, pipelineBuilder);
+
+                // Endpoint metadata cannot be applied from here: this callback runs per request,
+                // AFTER routing has selected the endpoint and evaluated its authorization/CORS
+                // metadata. Silently ignoring the call would leave an endpoint the caller believes
+                // is protected reachable without the policy — fail closed instead (HTTP 500).
+                if (pipelineBuilder.AuthPolicies.Count > 0 || pipelineBuilder.CorsPolicies.Count > 0)
+                    throw new InvalidOperationException(
+                        $"RequireAuthorization()/RequireCors() was called on the VoicePipelineBuilder inside " +
+                        $"MapVoxaVoice(\"{pattern}\").Use(...). On this fluent route the callback runs per " +
+                        "request, after endpoint metadata has already been evaluated, so the policy would " +
+                        "never be enforced. Chain it on the route instead: " +
+                        $"MapVoxaVoice(\"{pattern}\").RequireAuthorization(...) / .RequireCors(...).");
+
                 return pipelineBuilder;
             });
     }
@@ -86,6 +99,17 @@ public sealed class VoxaVoiceRoute : IEndpointConventionBuilder
     public VoxaVoiceRoute RequireAuthorization(params string[] policies)
     {
         _routeBuilder.RequireAuthorization(policies);
+        return this;
+    }
+
+    /// <summary>Apply CORS policies to the mapped endpoint.</summary>
+    public VoxaVoiceRoute RequireCors(params string[] policies)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+        foreach (var policy in policies)
+        {
+            _routeBuilder.RequireCors(policy);
+        }
         return this;
     }
 

@@ -154,8 +154,13 @@ public static class MapVoxaVoiceExtensions
                 }
             }
 
-            // 2. Assemble the pipeline.
-            var source = new WebSocketAudioSource(socket);
+            // 2. Assemble the pipeline. The source tags inbound PCM with its configured sample
+            //    rate; it must match the rate the session envelope announces (clients send at the
+            //    announced rate) or every downstream consumer of AudioRawFrame.SampleRate — VAD,
+            //    custom processors — sees the wrong rate.
+            var source = builder.SessionInputSampleRate is int announcedRate
+                ? new WebSocketAudioSource(socket, new WebSocketAudioOptions { InputSampleRate = announcedRate })
+                : new WebSocketAudioSource(socket);
             var sink = new WebSocketAudioSink(socket, builder.CustomSerializer);
             var pipelineBuilder = Pipeline.Build().Source(source);
 
