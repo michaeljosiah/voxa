@@ -34,22 +34,37 @@ public static class WireProtocol
     /// </summary>
     public static Frame? TryParseClientMessage(string json)
     {
+        var byteCount = System.Text.Encoding.UTF8.GetByteCount(json);
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(byteCount);
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("type", out var t)) return null;
-            var type = t.GetString();
+            var written = System.Text.Encoding.UTF8.GetBytes(json, rented);
+            return TryParseClientMessage(rented.AsSpan(0, written));
+        }
+        finally { System.Buffers.ArrayPool<byte>.Shared.Return(rented); }
+    }
 
-            return type switch
-            {
-                "hello" => null, // informational; consumers may snapshot audio config out-of-band
-                "end" => new EndFrame(),
-                "text" => doc.RootElement.TryGetProperty("text", out var txt)
+    /// <summary>
+    /// Parse one inbound UTF-8 JSON envelope from the client into a <see cref="Frame"/>, or return
+    /// null if the envelope is unrecognized or malformed (callers should drop unknowns). Parses the
+    /// UTF-8 bytes directly — no intermediate string.
+    /// </summary>
+    public static Frame? TryParseClientMessage(ReadOnlySpan<byte> utf8Json)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(utf8Json);
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type"u8, out var t)) return null;
+
+            if (t.ValueEquals("end"u8)) return new EndFrame();
+            if (t.ValueEquals("text"u8))
+                return root.TryGetProperty("text"u8, out var txt)
                     ? new TextFrame(txt.GetString() ?? string.Empty)
-                    : null,
-                "toolResult" => ParseToolResult(doc.RootElement),
-                _ => null,
-            };
+                    : null;
+            if (t.ValueEquals("toolResult"u8)) return ParseToolResult(root);
+            return null; // includes "hello" (handled out-of-band) and unknowns
         }
         catch (JsonException) { return null; }
     }
