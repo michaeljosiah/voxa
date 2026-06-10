@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VPS-001 — Voxa Performance Optimization Specification</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; } /* comment */
+  pre .kw { color: #79b8ff; } /* keyword-ish hint (manual) */
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p0 { background: #4a1416; color: #ff8a80; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .progress-note { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VPS-001 — Voxa Performance Optimization Specification</h1>
+  <div class="sub">Make Voxa the fastest .NET real-time voice-AI pipeline: zero steady-state allocations on the audio path, source-generated wire contracts, sub-600&nbsp;ms voice-to-voice latency on the chained pipeline, and true barge-in.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VPS-001 v1.0</div>
+    <div><b>Date</b> 2026-06-10</div>
+    <div><b>Status</b> Approved for implementation</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code> @ 5c430de)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">Executive summary</a></li>
+    <li><a href="#s2">Goals, non-goals &amp; performance budgets</a></li>
+    <li><a href="#s3">Architecture context</a></li>
+    <li><a href="#s4">Baseline findings inventory</a></li>
+    <li><a href="#s5">Workstreams (WS0–WS8) with code</a>
+      <ol>
+        <li><a href="#ws0">WS0 — Measurement baseline: benchmarks, metrics, allocation gates</a></li>
+        <li><a href="#ws1">WS1 — Core frame loop: eliminate per-frame CTS allocation</a></li>
+        <li><a href="#ws2">WS2 — Transport receive path: single-copy audio, UTF-8 parsing</a></li>
+        <li><a href="#ws3">WS3 — Wire contract v2: source-generated JSON, UTF-8 end-to-end</a></li>
+        <li><a href="#ws4">WS4 — Send path: outbound queue, no lock-during-I/O, barge-in purge</a></li>
+        <li><a href="#ws5">WS5 — Silero VAD: zero-allocation inference</a></li>
+        <li><a href="#ws6">WS6 — Speech providers: copies, streaming TTS, connection warmup</a></li>
+        <li><a href="#ws7">WS7 — Realtime services: base64 &amp; JSON fast paths</a></li>
+        <li><a href="#ws8">WS8 — Turn-latency workflow: VAD hangover, eager first sentence</a></li>
+      </ol>
+    </li>
+    <li><a href="#s6">Contract structure changes (summary of breaking changes)</a></li>
+    <li><a href="#s7">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s8">Progress checklist</a></li>
+    <li><a href="#s9">Verification protocol</a></li>
+    <li><a href="#s10">Risk register</a></li>
+    <li><a href="#s11">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>Executive summary</h2>
+<p>Voxa's architecture is fundamentally sound: bounded channels with backpressure, a deadlock-safe data-loop/turn-worker split, system-frame priority routing, and streaming TTS in three of four providers. The remaining performance cost is concentrated in five places, all fixable without changing the public programming model:</p>
+<ol>
+  <li><b>Per-frame heap churn in the hot loop.</b> Every frame through every processor allocates a linked <code>CancellationTokenSource</code> (<a href="../../src/Voxa.Core/Processors/FrameProcessor.cs">FrameProcessor.cs:139</a>). Every inbound audio message is copied twice and allocated twice (<a href="../../src/Voxa.Transports.WebSocket/WebSocketAudioSource.cs">WebSocketAudioSource.cs:65-68</a>). Every VAD inference allocates two tensors and two arrays (<a href="../../src/Voxa.Audio.SileroVad/SileroVadEngine.cs">SileroVadEngine.cs:55-72</a>). At 50 audio frames/sec across an 8-stage pipeline this is thousands of avoidable Gen0 allocations per second per session, which translates directly into GC pauses — the worst possible failure mode for real-time audio.</li>
+  <li><b>Reflection-based, triple-allocating wire serialization.</b> Every outbound JSON envelope allocates an anonymous object, a JSON <code>string</code>, and a UTF-8 <code>byte[]</code>, serialized via reflection (<a href="../../src/Voxa.Transports.WebSocket/Protocol/WireProtocol.cs">WireProtocol.cs:65-100</a>, <a href="../../src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs">WebSocketAudioSink.cs:133</a>). The fix — typed DTOs + <code>JsonSerializerContext</code> source generation + serializing straight to UTF-8 — also produces a versionable, documented contract.</li>
+  <li><b>A send path that holds a lock across network I/O.</b> All outbound traffic (audio, transcriptions, status) serializes through one <code>SemaphoreSlim</code> held <em>during</em> <code>WebSocket.SendAsync</code> (<a href="../../src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs">WebSocketAudioSink.cs:121-140</a>). Replacing it with a single-writer outbound queue removes contention <em>and</em> gives us the queue we need to purge stale TTS audio on barge-in (ROADMAP P2).</li>
+  <li><b>Provider TTFB left on the table.</b> Azure TTS buffers the full synthesis before yielding the first byte; HTTP TTS providers pay a cold TLS handshake on the first sentence of every session; Azure STT copies every audio write (<a href="../../src/Voxa.Speech.Azure/AzureSpeechToTextEngine.cs">AzureSpeechToTextEngine.cs:52</a>).</li>
+  <li><b>Turn-detection latency dominates end-to-end latency.</b> Per <a href="../../ROADMAP.md">ROADMAP.md</a>, the chained pipeline sits at ~1.6&nbsp;s; 800&nbsp;ms of that is VAD silence hangover and 300–500&nbsp;ms is TTS first-byte. This spec attacks the controllable parts now (eager first-sentence flush, connection warmup, streaming Azure TTS, configurable hangover) and defines the seam for smart-turn classification.</li>
+</ol>
+<p><b>Expected outcome:</b> steady-state audio path with zero per-frame allocations in Voxa code, wire serialization cost reduced ~70–80% (1 allocation instead of 3–4, no reflection), voice-to-voice latency on the chained pipeline reduced from ~1.6&nbsp;s toward the ~600&nbsp;ms roadmap target, and barge-in that actually stops the bot's audio. Every change ships with a benchmark or allocation gate that proves it.</p>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Goals, non-goals &amp; performance budgets</h2>
+
+<h3>2.1 Quantified targets</h3>
+<table>
+  <tr><th>Metric</th><th>Baseline (today)</th><th>Target</th><th>How verified</th></tr>
+  <tr><td>Allocations per <code>AudioRawFrame</code> traversing one <code>FrameProcessor</code></td><td>1 CTS + async overhead</td><td><b>0</b> amortized (CTS reused; replaced only after an interruption)</td><td><code>FrameLoopBenchmarks</code> + allocation gate test (WS0/WS1)</td></tr>
+  <tr><td>Allocations per inbound binary WS audio message</td><td>2 copies, 2 allocations (MemoryStream grow + <code>ToArray</code>)</td><td><b>1 copy, 1 exact-size allocation</b> (fast path); pooled assembly buffer (slow path)</td><td><code>TransportBenchmarks</code> (WS2)</td></tr>
+  <tr><td>Allocations per outbound JSON envelope</td><td>3–4 (anonymous obj + string + byte[]) + reflection</td><td><b>1</b> (UTF-8 <code>byte[]</code>), zero reflection</td><td><code>WireProtocolBenchmarks</code> (WS3)</td></tr>
+  <tr><td>Allocations per Silero VAD inference (50–62/sec)</td><td>~4 (input tensor, state clone, window float[], pcmOut byte[])</td><td><b>0</b> steady-state</td><td><code>VadBenchmarks</code> (WS5)</td></tr>
+  <tr><td>Azure TTS time-to-first-byte</td><td>300–500 ms (full-buffer synthesis)</td><td><b>100–200 ms</b> (streaming via <code>AudioDataStream</code>)</td><td>TTFB histogram (WS0 metric, WS6)</td></tr>
+  <tr><td>First-sentence TTS TTFB on a cold session (HTTP providers)</td><td>+100–300 ms TLS/TCP handshake on first request</td><td>Handshake moved to session start (<code>StartAsync</code> warmup)</td><td>TTFB histogram (WS6)</td></tr>
+  <tr><td>Voice-to-voice latency, chained pipeline (end of speech → first bot audio)</td><td>~1.6 s</td><td><b>≤ 900 ms</b> with this spec; ~600 ms once smart-turn lands (out of scope here, seam provided)</td><td><code>voxa.turn.ttfb</code> histogram (WS0)</td></tr>
+  <tr><td>Barge-in: bot audio stops after user starts speaking</td><td>~1 sentence of stale audio still plays</td><td>Queued audio purged &lt; 50 ms after interruption</td><td>Integration test (WS4)</td></tr>
+</table>
+
+<h3>2.2 Non-goals</h3>
+<ul>
+  <li>No new transports (WebRTC, telephony) — per ROADMAP "not planned".</li>
+  <li>No full smart-turn classifier implementation — WS8 only creates the configuration seam and the eager-flush behavior; the classifier is the separate ROADMAP P0 item.</li>
+  <li>No frame-object pooling for <code>Frame</code> records themselves — see <a href="#s11">§11</a> for why (fan-out ownership makes ref-counting a correctness hazard; records are small and Gen0-cheap once the larger wins land).</li>
+  <li>No behavioral changes to transcription ordering, turn semantics, or the agent loop contract (<code>IAgentTurnDriver</code> is untouched).</li>
+</ul>
+
+<h3>2.3 Hard rules for the implementer</h3>
+<div class="callout danger"><b>Read this before writing any code.</b>
+<ul>
+  <li>Every workstream lands as its own commit (or small commit series) with its benchmark/test in the same commit. Never batch two workstreams in one commit.</li>
+  <li>Run <code>dotnet build Voxa.sln -warnaserror</code> and <code>dotnet test</code> after each workstream. All 14 existing test projects must stay green.</li>
+  <li>Public API changes are allowed only where this spec marks <span class="badge breaking">BREAKING</span> — the library is pre-1.0 and the spec deliberately fixes contracts now. Do not introduce other public API changes.</li>
+  <li><code>ArrayPool&lt;byte&gt;.Shared</code> buffers must have a single, obvious owner and a <code>Return</code> on every path including exceptions (<code>try/finally</code>). If ownership would be ambiguous, allocate instead — correctness beats allocation count.</li>
+  <li>Keep <code>ConfigureAwait(false)</code> on every await in library code (existing convention).</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Architecture context</h2>
+<p>One pipeline per WebSocket connection. Frames flow through linked <code>FrameProcessor</code> nodes, each running two drain loops (an unbounded priority "system" channel and a bounded capacity-64 "data" channel). The chained (non-Realtime) composition from the sample server:</p>
+<div class="arrowflow">WS client ──binary PCM──▶ WebSocketAudioSource ─▶ SileroVadProcessor ─▶ SpeechToTextProcessor(Whisper/Azure)
+                                                                              │
+        WS client ◀─binary PCM + JSON envelopes── WebSocketAudioSink ◀─ TextToSpeechProcessor
+                                                                              ▲
+                                  SentenceAggregator ◀─ AgentLoopProcessor(IAgentTurnDriver/MAF) ◀─ TranscriptionFilter</div>
+<p>Hot-path frequency assumptions used throughout this spec: client sends 20&nbsp;ms PCM chunks at 16&nbsp;kHz mono 16-bit (640 bytes, 50 msgs/sec); TTS yields 8&nbsp;KB chunks at 24&nbsp;kHz (~6 chunks/sec of speech); VAD runs 512-sample windows (~31 inferences/sec at 16 kHz, up to 62 at smaller windows). A "session" is one WebSocket connection.</p>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Baseline findings inventory</h2>
+<p>Every finding is verified against source at commit <code>5c430de</code>. IDs are referenced from the workstreams.</p>
+<table>
+  <tr><th>ID</th><th>Severity</th><th>Location</th><th>Finding</th><th>Fixed by</th></tr>
+  <tr><td>F-01</td><td class="sev-crit">CRIT</td><td><code>FrameProcessor.cs:139</code></td><td><code>CancellationTokenSource.CreateLinkedTokenSource(ct)</code> allocated per frame, per processor. 8-stage pipeline × 50 fps ≈ 400 CTS/sec/session.</td><td><a href="#ws1">WS1</a></td></tr>
+  <tr><td>F-02</td><td class="sev-crit">CRIT</td><td><code>WebSocketAudioSource.cs:65-68</code></td><td>Binary receive: copy into <code>MemoryStream</code>, then <code>ToArray()</code> — 2 copies + 2 allocations per audio message even when the message fits one receive (it always does at 640 B vs 16 KB buffer).</td><td><a href="#ws2">WS2</a></td></tr>
+  <tr><td>F-03</td><td class="sev-crit">CRIT</td><td><code>WireProtocol.cs:65-100</code> + <code>WebSocketAudioSink.cs:133</code></td><td>Outbound JSON: anonymous object + reflection serialize + JSON string + <code>Encoding.UTF8.GetBytes</code> = 3–4 allocations per envelope.</td><td><a href="#ws3">WS3</a></td></tr>
+  <tr><td>F-04</td><td class="sev-high">HIGH</td><td><code>WebSocketAudioSink.cs:19,121-140</code></td><td>Single <code>SemaphoreSlim</code> held across <code>SendAsync</code> serializes all outbound traffic; no queue → no way to drop stale audio on barge-in (ROADMAP P2 gap).</td><td><a href="#ws4">WS4</a></td></tr>
+  <tr><td>F-05</td><td class="sev-high">HIGH</td><td><code>SileroVadEngine.cs:55-72</code></td><td>Per inference: new <code>DenseTensor&lt;float&gt;</code> input, new <code>NamedOnnxValue[]</code>, and LSTM state cloned via <code>ToDenseTensor()</code>. Plus default <code>SessionOptions</code> (no thread pinning for a ~1 MB model).</td><td><a href="#ws5">WS5</a></td></tr>
+  <tr><td>F-06</td><td class="sev-high">HIGH</td><td>SileroVadProcessor (window/pcm buffers)</td><td><code>new float[WindowSize]</code> and <code>new byte[WindowSize*2]</code> allocated per VAD window (~31–62/sec).</td><td><a href="#ws5">WS5</a></td></tr>
+  <tr><td>F-07</td><td class="sev-high">HIGH</td><td><code>AzureSpeechToTextEngine.cs:52</code></td><td><code>_pushStream.Write(pcm.ToArray())</code> — full copy of every audio chunk written to Azure STT.</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-08</td><td class="sev-high">HIGH</td><td><code>AzureTextToSpeechEngine.cs</code></td><td><code>SpeakTextAsync</code> buffers the complete synthesis before the first chunk is yielded → 300–500 ms TTFB.</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-09</td><td class="sev-high">HIGH</td><td>OpenAI/ElevenLabs/Mistral TTS engines</td><td>No connection warmup: first synthesis of a session pays TCP+TLS handshake. No shared <code>SocketsHttpHandler</code> guidance; engines may each own an <code>HttpClient</code>.</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-10</td><td class="sev-med">MED</td><td><code>OpenAIWhisperEngine.cs:115,136,166</code></td><td>Flush path copies the utterance twice: <code>_buffer.ToArray()</code> then again into the WAV array.</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-11</td><td class="sev-med">MED</td><td><code>SentenceAggregator.cs:48-61</code></td><td><code>_buffer.ToString()</code> of the <em>entire</em> buffer on every LLM chunk, plus slice + re-append churn — O(n²) over a long response.</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-12</td><td class="sev-med">MED</td><td><code>RealtimeEventCodec.cs</code> (OpenAIRealtime + AzureVoiceLive)</td><td>Audio uplink: <code>Convert.ToBase64String</code> string + JSON string per 20 ms chunk. Downlink: base64 string extracted then <code>Convert.FromBase64String</code>.</td><td><a href="#ws7">WS7</a></td></tr>
+  <tr><td>F-13</td><td class="sev-med">MED</td><td><code>OpenAIRealtimeProcessor.cs:116-117</code> (and AzureVoiceLive twin)</td><td><code>doc.RootElement.Clone()</code> per inbound event — unnecessary; decode inside the <code>using doc</code> scope.</td><td><a href="#ws7">WS7</a></td></tr>
+  <tr><td>F-14</td><td class="sev-med">MED</td><td><code>WebSocketAudioSource.cs:77-80</code></td><td>Inbound text: <code>UTF8.GetString</code> per segment + <code>StringBuilder.ToString()</code> + parse from <code>string</code>. Should parse UTF-8 bytes directly.</td><td><a href="#ws2">WS2</a>/<a href="#ws3">WS3</a></td></tr>
+  <tr><td>F-15</td><td class="sev-med">MED</td><td><code>ITextToSpeechEngine.cs</code></td><td><code>IAsyncEnumerable&lt;byte[]&gt;</code> forces engines to allocate exact arrays per chunk and prevents future pooling. Contract should yield <code>ReadOnlyMemory&lt;byte&gt;</code>.</td><td><a href="#ws6">WS6</a> <span class="badge breaking">BREAKING</span></td></tr>
+  <tr><td>F-16</td><td class="sev-low">LOW</td><td>ROADMAP P0</td><td>VAD silence hangover fixed at a conservative value; no eager first-sentence path; no TTFB metric to measure any of this.</td><td><a href="#ws0">WS0</a>/<a href="#ws8">WS8</a></td></tr>
+  <tr><td>F-17</td><td class="sev-low">LOW</td><td>Speech providers</td><td>No retry/backoff anywhere; a transient 429/5xx kills the turn. (Latency-bounded single retry only — see WS6.)</td><td><a href="#ws6">WS6</a></td></tr>
+  <tr><td>F-18</td><td class="sev-low">LOW</td><td>repo root</td><td>No benchmark project; no allocation regression gates; performance claims currently unverifiable.</td><td><a href="#ws0">WS0</a></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Workstreams</h2>
+
+<!-- ================= WS0 ================= -->
+<h3 id="ws0">WS0 — Measurement baseline: benchmarks, metrics, allocation gates <span class="badge p0">Phase 0</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-16, F-18</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> none (additive)</span><span><b>Projects:</b> new <code>bench/Voxa.Benchmarks</code>, <code>src/Voxa.Core</code>, <code>tests/Voxa.Core.Tests</code></span>
+</div>
+<p><b>Why first:</b> every later workstream must prove its gain. Without a baseline you cannot.</p>
+
+<h4>WS0.1 — Create the benchmark project</h4>
+<ol>
+  <li>Create <code>bench/Voxa.Benchmarks/Voxa.Benchmarks.csproj</code> (console, <code>net10.0</code>, <code>&lt;Optimize&gt;true&lt;/Optimize&gt;</code>), referencing <code>BenchmarkDotNet</code> (latest stable) and the <code>Voxa.Core</code>, <code>Voxa.Transports.WebSocket</code>, <code>Voxa.Audio.SileroVad</code>, <code>Voxa.Speech.Abstractions</code> projects. Add it to <code>Voxa.sln</code> under a <code>bench</code> solution folder. Exclude it from any release-pack list.</li>
+  <li>Add benchmark classes (all with <code>[MemoryDiagnoser]</code>):</li>
+</ol>
+<div class="filelabel">bench/Voxa.Benchmarks/WireProtocolBenchmarks.cs</div>
+<pre><code>using BenchmarkDotNet.Attributes;
+using Voxa.Frames;
+using Voxa.Transports.WebSocket.Protocol;
+
+[MemoryDiagnoser]
+public class WireProtocolBenchmarks
+{
+    private readonly TranscriptionFrame _frame = new("the quick brown fox jumps over the lazy dog", true, "en", null);
+
+    [Benchmark(Baseline = true)]
+    public int BuildTranscription_Current()
+        => WireProtocol.BuildTranscription(_frame).Length;   // before WS3: string; after WS3: byte[] — adjust return use
+
+    // After WS3 lands, add: BuildTranscription_Utf8 measuring the new byte[] path,
+    // keeping the old string path temporarily under #if BASELINE for comparison runs.
+}</code></pre>
+<div class="filelabel">bench/Voxa.Benchmarks/VadBenchmarks.cs</div>
+<pre><code>using BenchmarkDotNet.Attributes;
+using Voxa.Audio.SileroVad;
+
+[MemoryDiagnoser]
+public class VadBenchmarks
+{
+    private SileroVadEngine _engine = null!;
+    private float[] _window = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _engine = new SileroVadEngine(16000);
+        _window = new float[_engine.WindowSize];
+        var rnd = new Random(42);
+        for (int i = 0; i &lt; _window.Length; i++) _window[i] = (float)(rnd.NextDouble() * 0.2 - 0.1);
+    }
+
+    [Benchmark]
+    public float Probability() => _engine.Probability(_window);
+
+    [GlobalCleanup]
+    public void Cleanup() => _engine.Dispose();
+}</code></pre>
+<div class="filelabel">bench/Voxa.Benchmarks/FrameLoopBenchmarks.cs</div>
+<pre><code>using BenchmarkDotNet.Attributes;
+using Voxa.Frames;
+using Voxa.Processors;
+
+[MemoryDiagnoser]
+public class FrameLoopBenchmarks
+{
+    private sealed class PassThrough : FrameProcessor
+    {
+        protected override ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+            => PushFrameAsync(frame, ct);
+    }
+
+    private PassThrough _a = null!, _b = null!;
+    private AudioRawFrame _frame = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _a = new PassThrough(); _b = new PassThrough();
+        _a.Link(_b);
+        _a.Start(); _b.Start();
+        _frame = new AudioRawFrame(new byte[640], 16000, 1);
+    }
+
+    [Benchmark(OperationsPerInvoke = 1000)]
+    public async Task Pump1000Frames()
+    {
+        for (int i = 0; i &lt; 1000; i++)
+            await _a.QueueFrameAsync(_frame);
+        // NOTE: measures enqueue + processor drain throughput/alloc; the channel drains concurrently.
+    }
+}</code></pre>
+<ol start="3">
+  <li>Add <code>Program.cs</code> with <code>BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);</code>.</li>
+  <li><b>Capture the baseline now</b>, before any other workstream: <code>dotnet run -c Release --project bench/Voxa.Benchmarks -- --filter *</code>. Commit the results table into <code>bench/BASELINE.md</code> verbatim. Every subsequent workstream appends its after-numbers to that file.</li>
+</ol>
+
+<h4>WS0.2 — Allocation regression gates (xunit)</h4>
+<p>Benchmarks catch regressions when someone runs them; gates catch them in CI. Add to <code>tests/Voxa.Core.Tests/AllocationGateTests.cs</code>:</p>
+<div class="filelabel">tests/Voxa.Core.Tests/AllocationGateTests.cs</div>
+<pre><code>using Voxa.Frames;
+using Voxa.Processors;
+using Xunit;
+
+public class AllocationGateTests
+{
+    private sealed class CountingProcessor : FrameProcessor
+    {
+        public int Seen;
+        protected override ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+        { Seen++; return ValueTask.CompletedTask; }
+    }
+
+    [Fact]
+    public async Task DataLoop_SteadyState_DoesNotAllocatePerFrame()
+    {
+        await using var p = new CountingProcessor();
+        p.Start();
+        var frame = new AudioRawFrame(new byte[640], 16000, 1);
+
+        // Warm up: JIT + channel internals + first-frame lazies.
+        for (int i = 0; i &lt; 200; i++) await p.QueueFrameAsync(frame);
+        await WaitUntilAsync(() => p.Seen >= 200);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i &lt; 1000; i++) await p.QueueFrameAsync(frame);
+        await WaitUntilAsync(() => p.Seen >= 1200);
+        long after = GC.GetAllocatedBytesForCurrentThread();
+
+        // Budget: &lt; 64 bytes amortized per frame on the ENQUEUE thread. Before WS1 this
+        // test FAILS (per-frame CTS lives on the drain thread but enqueue also allocates
+        // async machinery); mark it [Fact(Skip="enabled by WS1")] until WS1 lands, then enable.
+        Assert.True((after - before) / 1000.0 &lt; 64, $"Allocated {(after - before) / 1000.0:F1} B/frame");
+    }
+
+    private static async Task WaitUntilAsync(Func&lt;bool&gt; cond)
+    {
+        for (int i = 0; i &lt; 500 &amp;&amp; !cond(); i++) await Task.Delay(10);
+        Assert.True(cond());
+    }
+}</code></pre>
+<div class="callout"><b>Note:</b> <code>GC.GetAllocatedBytesForCurrentThread()</code> only sees the calling thread. The drain loops run on pool threads, so the per-frame CTS (F-01) is asserted indirectly: after WS1 the benchmark's <code>Allocated</code> column for <code>Pump1000Frames</code> must drop to ≈ 0 B/op. Treat the benchmark delta as the authoritative gate for drain-thread allocations and this xunit gate as the enqueue-side guard.</div>
+
+<h4>WS0.3 — TTFB metric (the number this whole spec moves)</h4>
+<ol>
+  <li>Add <code>src/Voxa.Core/VoxaMetrics.cs</code>:</li>
+</ol>
+<div class="filelabel">src/Voxa.Core/VoxaMetrics.cs</div>
+<pre><code>using System.Diagnostics.Metrics;
+
+namespace Voxa;
+
+/// &lt;summary&gt;Process-wide meter for Voxa pipeline performance counters.&lt;/summary&gt;
+public static class VoxaMetrics
+{
+    public const string MeterName = "Voxa";
+    public static readonly Meter Meter = new(MeterName, "1.0");
+
+    /// &lt;summary&gt;End of user speech (UserStoppedSpeakingFrame at the sink) → first outbound bot audio byte.&lt;/summary&gt;
+    public static readonly Histogram&lt;double&gt; TurnTtfbMs =
+        Meter.CreateHistogram&lt;double&gt;("voxa.turn.ttfb", unit: "ms",
+            description: "Voice-to-voice latency: user stopped speaking to first bot audio sent");
+
+    /// &lt;summary&gt;Outbound send-queue depth sampled when a frame is enqueued at the sink.&lt;/summary&gt;
+    public static readonly Histogram&lt;int&gt; SinkQueueDepth =
+        Meter.CreateHistogram&lt;int&gt;("voxa.sink.queue_depth", unit: "{frames}");
+}</code></pre>
+<ol start="2">
+  <li>Record it in the sink: when the sink processes a <code>UserStoppedSpeakingFrame</code>, store <code>_turnT0 = Stopwatch.GetTimestamp()</code>; on the <em>next</em> outbound binary audio send, if <code>_turnT0 != 0</code>, record <code>Stopwatch.GetElapsedTime(_turnT0).TotalMilliseconds</code> into <code>TurnTtfbMs</code> and reset <code>_turnT0 = 0</code>. The exact insertion point is shown in the WS4 sink rewrite (look for <code>// WS0.3</code> comments) — if you implement WS0 before WS4, put the same two hooks in the current <code>SendFrameAsync</code>/<code>SendBinaryAsync</code>.</li>
+  <li>In the sample server, register the meter with OpenTelemetry if configured, and log a one-line summary per turn at Information (<code>"turn ttfb {Ms} ms"</code>) so latency is visible without an OTel backend.</li>
+</ol>
+<p><b>Acceptance criteria:</b> baseline committed to <code>bench/BASELINE.md</code>; allocation gate test present (skipped until WS1); <code>voxa.turn.ttfb</code> observable in the sample server logs when running a real conversation.</p>
+
+<!-- ================= WS1 ================= -->
+<h3 id="ws1">WS1 — Core frame loop: eliminate per-frame CTS allocation <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-01</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> medium (touches interruption semantics — read carefully)</span><span><b>Project:</b> <code>src/Voxa.Core</code></span>
+</div>
+<p><b>Current behavior</b> (<code>FrameProcessor.cs:133-164</code>): each data frame gets its own <code>CancellationTokenSource.CreateLinkedTokenSource(ct)</code> so an <code>InterruptionFrame</code> (handled on the system loop, line 120-125) can cancel exactly the in-flight frame. The allocation also registers a callback on the parent token — two costs per frame.</p>
+<p><b>Key insight:</b> interruptions are rare (a few per conversation); frames are constant (hundreds/sec). So reuse one linked CTS across frames and replace it <em>only after it has been fired</em>. The semantics that must be preserved exactly:</p>
+<ul>
+  <li>An interruption arriving <em>while a frame is in flight</em> cancels that frame's token.</li>
+  <li>An interruption arriving <em>between frames</em> cancels nothing (current behavior: <code>_currentFrameCts</code> is null in the <code>finally</code>). The next frame must run with a fresh, uncancelled token.</li>
+  <li>Processor shutdown (<code>ct</code>) still cancels everything.</li>
+</ul>
+<p><b>Replace <code>RunDataLoopAsync</code> with:</b></p>
+<div class="filelabel">src/Voxa.Core/Processors/FrameProcessor.cs — replacement for RunDataLoopAsync (lines 133-164)</div>
+<pre><code>private async Task RunDataLoopAsync(CancellationToken ct)
+{
+    // One linked CTS reused across frames; replaced only after an interruption fires it.
+    // Interruptions are rare, frames are constant — this removes the dominant per-frame
+    // allocation in the pipeline (one CTS + parent-token registration per frame).
+    var frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    try
+    {
+        await foreach (var frame in _dataChannel.Reader.ReadAllAsync(ct))
+        {
+            // A system-loop interruption may have fired the shared CTS while no frame was
+            // in flight (it cancels via _currentFrameCts only when non-null, but guard
+            // against any cancelled leftover from the previous frame's interruption).
+            if (frameCts.IsCancellationRequested)
+            {
+                frameCts.Dispose();
+                frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            }
+
+            _currentFrameCts = frameCts;
+            try
+            {
+                switch (frame)
+                {
+                    case StartFrame s: await OnStartAsync(s, frameCts.Token).ConfigureAwait(false); break;
+                    case EndFrame e: await OnEndAsync(e, frameCts.Token).ConfigureAwait(false); break;
+                }
+                await ProcessFrameAsync(frame, frameCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (frameCts.IsCancellationRequested &amp;&amp; !ct.IsCancellationRequested)
+            {
+                // Frame was preempted by an interruption — drop it and continue with a fresh CTS.
+            }
+            finally
+            {
+                _currentFrameCts = null;
+            }
+
+            if (frame is EndFrame) break;
+        }
+    }
+    catch (OperationCanceledException) { /* shutdown */ }
+    catch (ChannelClosedException) { /* shutdown */ }
+    finally
+    {
+        frameCts.Dispose();
+    }
+}</code></pre>
+<div class="callout warn"><b>Race analysis (do not skip):</b> the system loop calls <code>_currentFrameCts?.Cancel()</code>. Three windows exist:
+<ol>
+  <li><b>Frame in flight</b> — <code>_currentFrameCts</code> points at the shared CTS → cancelled → frame dropped, loop replaces the CTS at the top of the next iteration. Identical to today.</li>
+  <li><b>Between frames</b> — <code>_currentFrameCts</code> is null → no cancel. Identical to today.</li>
+  <li><b>New window:</b> system loop reads a non-null <code>_currentFrameCts</code>, the data loop finishes the frame and nulls it, <em>then</em> the system loop cancels the now-idle shared CTS. Today that cancel hit a disposed/finished per-frame CTS (no-op). With reuse, the next frame would start with a cancelled token — this is exactly what the <code>IsCancellationRequested</code> check at the top of the loop handles: it swaps in a fresh CTS before the frame runs. The check happens after the channel read, so no cancelled token can ever reach <code>ProcessFrameAsync</code> at iteration start. A cancel that lands <em>after</em> the check but before <code>ProcessFrameAsync</code> begins is indistinguishable from case 1 (frame legitimately preempted) — acceptable and matches Pipecat semantics.</li>
+</ol></div>
+<p><b>Tests to add</b> (<code>tests/Voxa.Core.Tests/FrameProcessorInterruptionTests.cs</code>):</p>
+<ol>
+  <li><code>Interruption_CancelsInFlightFrame</code> — processor whose <code>ProcessFrameAsync</code> awaits <code>Task.Delay(5s, ct)</code>; queue a data frame, then an <code>InterruptionFrame</code>; assert the data frame's token fired and the next data frame still processes normally (proves CTS replacement works).</li>
+  <li><code>Interruption_BetweenFrames_DoesNotPoisonNextFrame</code> — queue frame A, wait for completion, send interruption, queue frame B; assert B processes successfully.</li>
+  <li><code>TwoInterruptions_BackToBack</code> — interruption, frame, interruption, frame; both frames after each interruption must run.</li>
+  <li>Enable the WS0.2 allocation gate test (remove the Skip).</li>
+</ol>
+<p><b>Acceptance criteria:</b> all new tests green; <code>FrameLoopBenchmarks.Pump1000Frames</code> Allocated column drops to ≈ 0 B/op (record in <code>bench/BASELINE.md</code>); all existing Core tests green.</p>
+
+<!-- ================= WS2 ================= -->
+<h3 id="ws2">WS2 — Transport receive path: single-copy audio, UTF-8 parsing <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-02, F-14</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> low</span><span><b>Project:</b> <code>src/Voxa.Transports.WebSocket</code></span>
+</div>
+<p><b>Current behavior</b> (<code>WebSocketAudioSource.cs:35-90</code>): every binary message goes receive-buffer → <code>MemoryStream</code> (copy 1) → <code>ToArray()</code> (copy 2 + alloc). Text messages go bytes → per-segment <code>string</code> → <code>StringBuilder</code> → final <code>string</code> → parse.</p>
+<p><b>New behavior:</b></p>
+<ul>
+  <li><b>Binary fast path</b> (a 640 B audio chunk always fits the 16 KB buffer in one receive): allocate the exact-size array once and copy once. The allocation is intentional — it becomes the <code>AudioRawFrame.Pcm</code> backing store with unbounded downstream lifetime, so pooling it is a correctness hazard (see §11).</li>
+  <li><b>Binary slow path</b> (multi-receive message): accumulate in an <code>ArrayPool</code>-rented growable buffer, exact-size copy at end, return rented buffer in <code>finally</code>.</li>
+  <li><b>Text path:</b> accumulate UTF-8 <em>bytes</em> (same pooled accumulator) and parse via the new UTF-8 overload <code>WireProtocol.TryParseClientMessage(ReadOnlySpan&lt;byte&gt;)</code> (added in WS3 — if implementing WS2 first, add the overload now delegating to <code>JsonDocument.Parse</code> which accepts UTF-8 directly; no string materialization).</li>
+</ul>
+<div class="filelabel">src/Voxa.Transports.WebSocket/WebSocketAudioSource.cs — replacement for ReadLoopAsync</div>
+<pre><code>private async Task ReadLoopAsync(CancellationToken ct)
+{
+    var buffer = new byte[_options.ReadBufferSize];
+    byte[]? acc = null;          // rented; only for messages spanning multiple receives
+    int accLen = 0;
+
+    try
+    {
+        while (!ct.IsCancellationRequested &amp;&amp; _ws.State == WebSocketState.Open)
+        {
+            WebSocketReceiveResult result;
+            try
+            {
+                result = await _ws.ReceiveAsync(new ArraySegment&lt;byte&gt;(buffer), ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (WebSocketException ex)
+            {
+                await IngestAsync(
+                    new ErrorFrame($"WebSocket receive failed: {ex.Message}", ex) { Direction = FrameDirection.Upstream },
+                    ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await IngestAsync(new EndFrame(), ct).ConfigureAwait(false);
+                return;
+            }
+
+            ReadOnlyMemory&lt;byte&gt; message;
+            if (result.EndOfMessage &amp;&amp; accLen == 0)
+            {
+                // Fast path — whole message arrived in one receive (the overwhelmingly
+                // common case: 20 ms PCM chunks are ~640 B vs a 16 KB buffer).
+                message = buffer.AsMemory(0, result.Count);
+            }
+            else
+            {
+                // Slow path — accumulate across receives in a pooled buffer.
+                EnsureCapacity(ref acc, accLen + result.Count);
+                buffer.AsSpan(0, result.Count).CopyTo(acc.AsSpan(accLen));
+                accLen += result.Count;
+                if (!result.EndOfMessage) continue;
+                message = acc.AsMemory(0, accLen);
+                accLen = 0;
+            }
+
+            if (result.MessageType == WebSocketMessageType.Binary)
+            {
+                // Single exact-size copy: this array is owned by the frame and flows
+                // downstream with unbounded lifetime — do NOT pool it.
+                var pcm = message.ToArray();
+                await IngestAsync(
+                    new AudioRawFrame(pcm, _options.InputSampleRate, _options.Channels),
+                    ct).ConfigureAwait(false);
+            }
+            else // Text
+            {
+                var parsed = WireProtocol.TryParseClientMessage(message.Span);
+                if (parsed is not null)
+                {
+                    await IngestAsync(parsed, ct).ConfigureAwait(false);
+                }
+            }
+        }
+    }
+    finally
+    {
+        if (acc is not null) System.Buffers.ArrayPool&lt;byte&gt;.Shared.Return(acc);
+    }
+
+    static void EnsureCapacity(ref byte[]? acc, int needed)
+    {
+        if (acc is null)
+        {
+            acc = System.Buffers.ArrayPool&lt;byte&gt;.Shared.Rent(Math.Max(needed, 32 * 1024));
+        }
+        else if (acc.Length &lt; needed)
+        {
+            var bigger = System.Buffers.ArrayPool&lt;byte&gt;.Shared.Rent(Math.Max(needed, acc.Length * 2));
+            acc.AsSpan(0, acc.Length).CopyTo(bigger);
+            System.Buffers.ArrayPool&lt;byte&gt;.Shared.Return(acc);
+            acc = bigger;
+        }
+    }
+}</code></pre>
+<p>Remove the now-unused <code>using System.IO;</code> and <code>using System.Text;</code> imports. If WS3 hasn't landed yet, add this temporary overload to <code>WireProtocol</code> (it becomes the primary in WS3):</p>
+<pre><code>public static Frame? TryParseClientMessage(ReadOnlySpan&lt;byte&gt; utf8Json)
+{
+    try
+    {
+        var reader = new Utf8JsonReader(utf8Json);
+        using var doc = JsonDocument.ParseValue(ref reader);
+        // ... identical switch body to the string overload, operating on doc.RootElement ...
+    }
+    catch (JsonException) { return null; }
+}</code></pre>
+<p><b>Tests:</b> extend <code>tests/Voxa.Transports.WebSocket.Tests</code>: (1) binary message in one receive produces a frame with correct bytes; (2) binary message fragmented across 3 receives reassembles correctly (use the existing fake/loopback WebSocket pattern in that test project; if none exists, use <code>System.Net.WebSockets.WebSocket.CreateFromStream</code> over paired <code>System.IO.Pipelines</code> duplex streams); (3) fragmented <em>text</em> toolResult message parses; (4) interleaved text-then-binary messages both arrive (the accumulator must not leak state across message types — note <code>accLen</code> reset).</p>
+<p><b>Acceptance criteria:</b> tests green; <code>TransportBenchmarks</code> (add: assemble 1000× 640 B binary messages through a loopback socket) shows ≤ 1 allocation per message and ~50% fewer bytes allocated than baseline.</p>
+
+<!-- ================= WS3 ================= -->
+<h3 id="ws3">WS3 — Wire contract v2: source-generated JSON, UTF-8 end-to-end <span class="badge p1">Phase 2</span> <span class="badge breaking">BREAKING (internal)</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-03, F-14</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> low (wire format unchanged — only the serializer changes)</span><span><b>Project:</b> <code>src/Voxa.Transports.WebSocket</code></span>
+</div>
+<p><b>Guarantee:</b> the on-the-wire JSON is byte-for-byte compatible with today (same camelCase property names, same <code>type</code> discriminators, nulls omitted). Only the serialization machinery changes. Existing JS clients keep working — verify with the round-trip test below.</p>
+
+<h4>WS3.1 — Typed envelope DTOs</h4>
+<div class="filelabel">src/Voxa.Transports.WebSocket/Protocol/WireMessages.cs (new file)</div>
+<pre><code>using System.Text.Json.Serialization;
+
+namespace Voxa.Transports.WebSocket.Protocol;
+
+// Outbound (server → client) envelope DTOs. Field order matches the historical anonymous-type
+// output so the wire bytes are unchanged. 'Type' is always first.
+internal readonly record struct TranscriptionEnvelope(string Type, string Text, bool IsFinal, string? Language, string? SpeakerId);
+internal readonly record struct TextEnvelope(string Type, string Text);
+internal readonly record struct ToolCallEnvelope(string Type, string CallId, string Name, string ArgumentsJson);
+internal readonly record struct SpeakingEnvelope(string Type, string Who, bool Started);
+internal readonly record struct TypeOnlyEnvelope(string Type);                  // interruption, end
+internal readonly record struct MessageEnvelope(string Type, string Message);   // status, error
+
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    GenerationMode = JsonSourceGenerationMode.Serialization)]
+[JsonSerializable(typeof(TranscriptionEnvelope))]
+[JsonSerializable(typeof(TextEnvelope))]
+[JsonSerializable(typeof(ToolCallEnvelope))]
+[JsonSerializable(typeof(SpeakingEnvelope))]
+[JsonSerializable(typeof(TypeOnlyEnvelope))]
+[JsonSerializable(typeof(MessageEnvelope))]
+internal sealed partial class WireJsonContext : JsonSerializerContext { }</code></pre>
+
+<h4>WS3.2 — Rewrite WireProtocol to emit UTF-8 bytes</h4>
+<p>All <code>Build*</code> methods change return type <code>string → byte[]</code> (UTF-8, ready to hand to <code>WebSocket.SendAsync</code>). This is the <span class="badge breaking">BREAKING</span> part — <code>WireProtocol</code> is public; the sink (WS4) and any external callers must pass bytes through. One allocation per envelope, zero reflection, no string intermediate.</p>
+<div class="filelabel">src/Voxa.Transports.WebSocket/Protocol/WireProtocol.cs — full replacement of the Build* section + parse</div>
+<pre><code>using System.Text.Json;
+using Voxa.Frames;
+
+namespace Voxa.Transports.WebSocket.Protocol;
+
+public static class WireProtocol
+{
+    // ---------- Inbound (client → server) ----------
+
+    /// &lt;summary&gt;Parse one inbound UTF-8 JSON envelope. Returns null for unknown/malformed (drop).&lt;/summary&gt;
+    public static Frame? TryParseClientMessage(ReadOnlySpan&lt;byte&gt; utf8Json)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(utf8Json);
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("type"u8, out var t)) return null;
+
+            if (t.ValueEquals("end"u8)) return new EndFrame();
+            if (t.ValueEquals("text"u8))
+                return root.TryGetProperty("text"u8, out var txt)
+                    ? new TextFrame(txt.GetString() ?? string.Empty)
+                    : null;
+            if (t.ValueEquals("toolResult"u8)) return ParseToolResult(root);
+            return null; // includes "hello" (handled out-of-band) and unknowns
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// &lt;summary&gt;String overload retained for compatibility; prefer the UTF-8 overload.&lt;/summary&gt;
+    public static Frame? TryParseClientMessage(string json)
+    {
+        var byteCount = System.Text.Encoding.UTF8.GetByteCount(json);
+        var rented = System.Buffers.ArrayPool&lt;byte&gt;.Shared.Rent(byteCount);
+        try
+        {
+            var written = System.Text.Encoding.UTF8.GetBytes(json, rented);
+            return TryParseClientMessage(rented.AsSpan(0, written));
+        }
+        finally { System.Buffers.ArrayPool&lt;byte&gt;.Shared.Return(rented); }
+    }
+
+    private static Frame ParseToolResult(JsonElement root)
+    {
+        var callId = root.TryGetProperty("callId"u8, out var c) ? (c.GetString() ?? string.Empty) : string.Empty;
+        var resultJson = root.TryGetProperty("resultJson"u8, out var r) ? (r.GetString() ?? "{}") : "{}";
+        var isError = root.TryGetProperty("isError"u8, out var e) &amp;&amp; e.ValueKind == JsonValueKind.True;
+        return new ToolCallResultFrame(callId, resultJson, isError);
+    }
+
+    // ---------- Outbound (server → client): source-generated, UTF-8, 1 allocation ----------
+
+    public static byte[] BuildTranscription(TranscriptionFrame f)
+        => JsonSerializer.SerializeToUtf8Bytes(
+            new TranscriptionEnvelope("transcription", f.Text, f.IsFinal, f.Language, f.SpeakerId),
+            WireJsonContext.Default.TranscriptionEnvelope);
+
+    public static byte[] BuildText(string text)
+        => JsonSerializer.SerializeToUtf8Bytes(new TextEnvelope("text", text), WireJsonContext.Default.TextEnvelope);
+
+    public static byte[] BuildToolCall(ToolCallRequestFrame f)
+        => JsonSerializer.SerializeToUtf8Bytes(
+            new ToolCallEnvelope("toolCall", f.CallId, f.Name, f.ArgumentsJson),
+            WireJsonContext.Default.ToolCallEnvelope);
+
+    public static byte[] BuildSpeaking(string who, bool started)
+        => JsonSerializer.SerializeToUtf8Bytes(new SpeakingEnvelope("speaking", who, started), WireJsonContext.Default.SpeakingEnvelope);
+
+    // Fixed envelopes: serialize ONCE into static readonly arrays — zero per-send cost.
+    private static readonly byte[] InterruptionBytes =
+        JsonSerializer.SerializeToUtf8Bytes(new TypeOnlyEnvelope("interruption"), WireJsonContext.Default.TypeOnlyEnvelope);
+    private static readonly byte[] EndBytes =
+        JsonSerializer.SerializeToUtf8Bytes(new TypeOnlyEnvelope("end"), WireJsonContext.Default.TypeOnlyEnvelope);
+
+    public static byte[] BuildInterruption() => InterruptionBytes;
+    public static byte[] BuildEnd() => EndBytes;
+
+    public static byte[] BuildStatus(string message)
+        => JsonSerializer.SerializeToUtf8Bytes(new MessageEnvelope("status", message), WireJsonContext.Default.MessageEnvelope);
+
+    public static byte[] BuildError(string message)
+        => JsonSerializer.SerializeToUtf8Bytes(new MessageEnvelope("error", message), WireJsonContext.Default.MessageEnvelope);
+}</code></pre>
+<div class="callout"><b>Wire-compatibility check (mandatory test):</b> add <code>WireProtocolCompatibilityTests</code> asserting the UTF-8 output of every <code>Build*</code> decodes to <em>exactly</em> the JSON the old code produced, e.g. <code>{"type":"transcription","text":"hi","isFinal":true,"language":"en"}</code> (note: <code>speakerId</code> omitted when null — <code>WhenWritingNull</code> must apply to the DTOs). Hard-code the expected strings in the test; do not compute them with the serializer under test.</div>
+<p><b>Migration notes:</b> the custom-serializer hook on the sink (<code>Func&lt;Frame, string?&gt;</code>) keeps its string signature for host ergonomics; the sink UTF-8-encodes the custom result (rare path, fine). Update the sink call sites in WS4 (do WS3 and WS4 in the same phase; WS3 first).</p>
+<p><b>Acceptance criteria:</b> compatibility tests green; <code>WireProtocolBenchmarks</code> shows 1 allocation and ≥ 60% less allocated bytes per envelope vs baseline; sample server's JS client works unmodified against the rebuilt server.</p>
+
+<!-- ================= WS4 ================= -->
+<h3 id="ws4">WS4 — Send path: outbound queue, no lock-during-I/O, barge-in purge <span class="badge p1">Phase 2</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-04 + delivers ROADMAP P2's server half</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> medium (ordering + purge semantics)</span><span><b>Project:</b> <code>src/Voxa.Transports.WebSocket</code></span>
+</div>
+<p><b>Design:</b> replace the <code>SemaphoreSlim</code> with a bounded outbound channel drained by one writer task. Each queued message carries an <em>epoch</em>. An <code>InterruptionFrame</code> (which arrives on the processor's <em>system</em> loop, concurrent with the data loop — this is what makes the purge instant) bumps the epoch; the writer drops any <em>audio</em> message stamped with an older epoch. Non-audio messages (transcriptions, tool calls, status) always send — only stale TTS audio is purged. The interruption envelope itself is sent immediately so the client stops local playback.</p>
+<div class="filelabel">src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs — full replacement</div>
+<pre><code>using System.Diagnostics;
+using System.Text;
+using System.Threading.Channels;
+using Voxa.Frames;
+using Voxa.Processors;
+using Voxa.Transports.WebSocket.Protocol;
+
+namespace Voxa.Transports.WebSocket;
+
+/// &lt;summary&gt;
+/// Pipeline sink that mirrors the downstream frame stream onto a WebSocket. AudioRawFrames are
+/// sent as binary messages; everything else as JSON text per &lt;see cref="WireProtocol"/&gt;.
+///
+/// Outbound messages flow through a bounded single-writer queue: the data loop serializes and
+/// enqueues (never blocking on network I/O), one writer task drains to the socket. On
+/// &lt;see cref="InterruptionFrame"/&gt; the epoch is bumped and queued audio from the previous epoch
+/// is dropped — the client hears the bot stop almost immediately (barge-in).
+/// Caller owns the WebSocket's lifetime — this processor will not dispose it.
+/// &lt;/summary&gt;
+public sealed class WebSocketAudioSink : PipelineSink
+{
+    private readonly record struct Outbound(ReadOnlyMemory&lt;byte&gt; Payload, bool IsBinaryAudio, int Epoch);
+
+    private readonly System.Net.WebSockets.WebSocket _ws;
+    private readonly Func&lt;Frame, string?&gt;? _customSerializer;
+    private readonly Channel&lt;Outbound&gt; _outbound = Channel.CreateBounded&lt;Outbound&gt;(
+        new BoundedChannelOptions(256)
+        {
+            FullMode = BoundedChannelFullMode.Wait,   // backpressure into the pipeline, never drop silently
+            SingleReader = true,
+        });
+
+    private int _epoch;                  // bumped on interruption; writer drops older audio
+    private Task? _writerTask;
+    private long _turnT0;                // WS0.3: UserStoppedSpeaking timestamp for TTFB
+
+    public WebSocketAudioSink(
+        System.Net.WebSockets.WebSocket webSocket,
+        Func&lt;Frame, string?&gt;? customSerializer = null)
+        : base("WebSocketAudioSink")
+    {
+        _ws = webSocket ?? throw new ArgumentNullException(nameof(webSocket));
+        _customSerializer = customSerializer;
+    }
+
+    protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
+    {
+        _writerTask = Task.Run(() => WriteLoopAsync(ct), ct);
+        return ValueTask.CompletedTask;
+    }
+
+    protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+    {
+        if (frame.Direction == FrameDirection.Upstream)
+        {
+            await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (_ws.State == System.Net.WebSockets.WebSocketState.Open)
+        {
+            try
+            {
+                await EnqueueFrameAsync(frame, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { /* shutdown */ }
+            catch (ChannelClosedException) { /* writer died with the socket */ }
+        }
+
+        await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask EnqueueFrameAsync(Frame frame, CancellationToken ct)
+    {
+        // Interruption is special: it arrives on the SYSTEM loop (concurrent with the data
+        // loop), so the epoch bump takes effect immediately even while audio is queued.
+        if (frame is InterruptionFrame)
+        {
+            Interlocked.Increment(ref _epoch);
+            await WriteAsync(WireProtocol.BuildInterruption(), isBinaryAudio: false, ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (frame is UserStartedSpeakingFrame)
+        {
+            // Barge-in signal travels as a data frame in some compositions — bump epoch here
+            // too so pipelines without an explicit InterruptionFrame still purge stale audio.
+            Interlocked.Increment(ref _epoch);
+        }
+
+        if (frame is UserStoppedSpeakingFrame)
+        {
+            _turnT0 = Stopwatch.GetTimestamp();   // WS0.3
+        }
+
+        // Host-supplied custom serializer wins for any frame it claims (rare path; the
+        // string→UTF8 encode here is acceptable).
+        if (_customSerializer is not null)
+        {
+            var customJson = _customSerializer(frame);
+            if (customJson is not null)
+            {
+                await WriteAsync(Encoding.UTF8.GetBytes(customJson), isBinaryAudio: false, ct).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        switch (frame)
+        {
+            case AudioRawFrame audio:
+                await WriteAsync(audio.Pcm, isBinaryAudio: true, ct).ConfigureAwait(false);
+                break;
+            case TranscriptionFrame t:
+                await WriteAsync(WireProtocol.BuildTranscription(t), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case LlmTextChunkFrame chunk:
+                await WriteAsync(WireProtocol.BuildText(chunk.Text), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case TextFrame txt:
+                await WriteAsync(WireProtocol.BuildText(txt.Text), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case ToolCallRequestFrame call:
+                await WriteAsync(WireProtocol.BuildToolCall(call), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case BotStartedSpeakingFrame:
+                await WriteAsync(WireProtocol.BuildSpeaking("bot", started: true), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case BotStoppedSpeakingFrame:
+                await WriteAsync(WireProtocol.BuildSpeaking("bot", started: false), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case UserStartedSpeakingFrame:
+                await WriteAsync(WireProtocol.BuildSpeaking("user", started: true), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case UserStoppedSpeakingFrame:
+                await WriteAsync(WireProtocol.BuildSpeaking("user", started: false), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case StatusFrame status:
+                await WriteAsync(WireProtocol.BuildStatus(status.Message), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case ErrorFrame err:
+                await WriteAsync(WireProtocol.BuildError(err.Message), isBinaryAudio: false, ct).ConfigureAwait(false);
+                break;
+            case EndFrame:
+                await WriteAsync(WireProtocol.BuildEnd(), isBinaryAudio: false, ct).ConfigureAwait(false);
+                _outbound.Writer.TryComplete();
+                break;
+        }
+    }
+
+    private ValueTask WriteAsync(ReadOnlyMemory&lt;byte&gt; payload, bool isBinaryAudio, CancellationToken ct)
+    {
+        VoxaMetrics.SinkQueueDepth.Record(_outbound.Reader.Count);
+        return _outbound.Writer.WriteAsync(new Outbound(payload, isBinaryAudio, Volatile.Read(ref _epoch)), ct);
+    }
+
+    private async Task WriteLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var msg in _outbound.Reader.ReadAllAsync(ct))
+            {
+                // Barge-in purge: drop audio that was queued before the most recent interruption.
+                if (msg.IsBinaryAudio &amp;&amp; msg.Epoch != Volatile.Read(ref _epoch)) continue;
+
+                if (_ws.State != System.Net.WebSockets.WebSocketState.Open) continue;
+
+                if (msg.IsBinaryAudio &amp;&amp; _turnT0 != 0)   // WS0.3: first bot audio after end of user speech
+                {
+                    VoxaMetrics.TurnTtfbMs.Record(Stopwatch.GetElapsedTime(_turnT0).TotalMilliseconds);
+                    _turnT0 = 0;
+                }
+
+                try
+                {
+                    await _ws.SendAsync(
+                        msg.Payload,
+                        msg.IsBinaryAudio ? System.Net.WebSockets.WebSocketMessageType.Binary
+                                          : System.Net.WebSockets.WebSocketMessageType.Text,
+                        endOfMessage: true, ct).ConfigureAwait(false);
+                }
+                catch (System.Net.WebSockets.WebSocketException) { return; }  // connection died
+            }
+        }
+        catch (OperationCanceledException) { /* shutdown */ }
+        catch (ChannelClosedException) { /* shutdown */ }
+    }
+
+    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    {
+        _outbound.Writer.TryComplete();
+        if (_writerTask is not null)
+        {
+            try { await _writerTask.ConfigureAwait(false); } catch { /* best-effort drain */ }
+        }
+        await base.OnEndAsync(frame, ct).ConfigureAwait(false);
+    }
+}</code></pre>
+<div class="callout warn"><b>Implementation notes:</b>
+<ul>
+  <li>Check <code>PipelineSink</code>'s actual virtual surface before wiring <code>OnEndAsync</code>/<code>base.ProcessFrameAsync</code> — the current sink relies on <code>base.ProcessFrameAsync</code> to drive <code>EndFrameObserved</code> (see comment at <code>WebSocketAudioSink.cs:57</code>). Preserve that: the base call must still happen for <code>EndFrame</code> even when the socket is closed.</li>
+  <li>Ordering is preserved per epoch: the data loop enqueues in order, the single writer drains in order. The only reordering is the interruption envelope jumping ahead of queued audio — that is the point.</li>
+  <li><code>AudioRawFrame.Pcm</code> memory is queued by reference (zero copy). Its backing array is frame-owned (WS2 guarantees this), so queue lifetime is safe.</li>
+  <li>If a <code>StatusFrame</code> type doesn't exist by this name, keep the existing case list as found in the current file — the switch body above mirrors current behavior 1:1 apart from queueing.</li>
+</ul></div>
+<p><b>Tests:</b> (1) frames sent in order over a loopback socket; (2) <b>purge test</b> — enqueue 20 audio frames with a paused writer (don't start the loop yet, or use a slow fake socket), inject <code>InterruptionFrame</code> via <code>QueueFrameAsync</code> (system channel), resume, assert the client receives the interruption envelope and <em>zero</em> of the 20 stale audio payloads, but a post-interruption audio frame <em>does</em> arrive; (3) transcription queued before interruption still arrives (non-audio is never purged); (4) <code>EndFrame</code> drains the queue before the writer exits.</p>
+<p><b>Client follow-up (document, don't implement here):</b> the JS client should already handle <code>{"type":"interruption"}</code>; verify it stops/flushes its playback buffer on receipt. Note this in the sample server README.</p>
+<p><b>Acceptance criteria:</b> all tests green; manual run — speaking over the bot stops its audio within one network round-trip + ≤ 1 queued chunk; no audio stutter at normal load (queue depth histogram p99 &lt; 8).</p>
+
+<!-- ================= WS5 ================= -->
+<h3 id="ws5">WS5 — Silero VAD: zero-allocation inference <span class="badge p0">Phase 1</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-05, F-06</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> low (engine is fully unit-testable)</span><span><b>Project:</b> <code>src/Voxa.Audio.SileroVad</code></span>
+</div>
+<p><b>Changes to <code>SileroVadEngine</code>:</b> (1) allocate the input tensor, the state tensor, and the <code>NamedOnnxValue[]</code> once in the constructor and reuse them; (2) copy the output state <em>into</em> the preallocated state buffer (256 floats) instead of cloning a new tensor; (3) pin session threads — the model is ~1 MB, single-threaded inference is faster than ONNX spinning up its intra-op pool and avoids stealing cores from the pipeline.</p>
+<div class="filelabel">src/Voxa.Audio.SileroVad/SileroVadEngine.cs — replacement (constructor + Probability + Reset)</div>
+<pre><code>private readonly InferenceSession _session;
+private readonly DenseTensor&lt;float&gt; _inputTensor;     // reused every inference
+private readonly DenseTensor&lt;float&gt; _state;           // reused; output copied back in
+private readonly DenseTensor&lt;long&gt; _srWrapped;
+private readonly NamedOnnxValue[] _inputs;             // reused; wraps the tensors above
+
+public SileroVadEngine(int sampleRate = 16000)
+{
+    WindowSize = sampleRate switch
+    {
+        16000 => 512,
+        8000 => 256,
+        _ => throw new ArgumentException("Silero VAD v5 supports only 16000 or 8000 Hz.", nameof(sampleRate)),
+    };
+    SampleRate = sampleRate;
+
+    var modelBytes = LoadEmbeddedModel();
+    using var sessionOptions = new SessionOptions
+    {
+        // Tiny model: single-threaded inference is faster than fan-out and doesn't steal
+        // cores from the audio pipeline. Sequential execution mode for the same reason.
+        IntraOpNumThreads = 1,
+        InterOpNumThreads = 1,
+        ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+        GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+    };
+    _session = new InferenceSession(modelBytes, sessionOptions);
+
+    _srWrapped = new DenseTensor&lt;long&gt;(new[] { (long)sampleRate }, Array.Empty&lt;int&gt;());
+    _state = new DenseTensor&lt;float&gt;(new[] { 2, 1, 128 });
+    _inputTensor = new DenseTensor&lt;float&gt;(new[] { 1, WindowSize });
+    _inputs = new[]
+    {
+        NamedOnnxValue.CreateFromTensor("input", _inputTensor),
+        NamedOnnxValue.CreateFromTensor("state", _state),
+        NamedOnnxValue.CreateFromTensor("sr", _srWrapped),
+    };
+}
+
+public float Probability(ReadOnlySpan&lt;float&gt; window)
+{
+    if (window.Length != WindowSize)
+    {
+        throw new ArgumentException(
+            $"Silero VAD requires exactly {WindowSize} samples per inference at {SampleRate} Hz; got {window.Length}.",
+            nameof(window));
+    }
+
+    window.CopyTo(_inputTensor.Buffer.Span);
+
+    using var results = _session.Run(_inputs);
+
+    float prob = 0f;
+    foreach (var r in results)
+    {
+        if (r.Name == "stateN")
+        {
+            // Copy the new LSTM state back into our reusable buffer (256 floats) instead
+            // of cloning a fresh tensor per inference.
+            var stateN = r.AsTensor&lt;float&gt;();
+            if (stateN is DenseTensor&lt;float&gt; dense)
+            {
+                dense.Buffer.Span.CopyTo(_state.Buffer.Span);
+            }
+            else
+            {
+                int i = 0;
+                foreach (var v in stateN) _state.Buffer.Span[i++] = v;
+            }
+        }
+        else if (r.Name == "output")
+        {
+            prob = r.AsTensor&lt;float&gt;()[0, 0];
+        }
+    }
+    return prob;
+}
+
+public void Reset() => _state.Buffer.Span.Clear();</code></pre>
+<div class="callout warn"><b>Correctness check:</b> ONNX Runtime's <code>Run</code> reads inputs before returning and the result tensors own their buffers, so writing the output state back into <code>_state</code> after <code>Run</code> completes is safe — but the state copy MUST complete before the next <code>Run</code> begins. <code>Probability</code> is called from a single processor loop, so there's no concurrency; add a doc-comment stating the engine is <b>not thread-safe</b> (it already effectively wasn't — the LSTM state is stateful and ordered). Validate identical probabilities: run the existing VAD tests plus a new determinism test feeding 100 windows of a fixture WAV through old-vs-new code paths (record expected probabilities from the current implementation first, assert within 1e-5).</div>
+<p><b>Changes to <code>SileroVadProcessor</code>:</b> hoist the per-window <code>new float[_engine.WindowSize]</code> and <code>new byte[_engine.WindowSize * 2]</code> (current lines ~91 and ~140) into instance fields allocated in the constructor/<code>OnStartAsync</code>, reused every window. <b>Exception:</b> any <code>byte[]</code> that is handed to an <code>AudioRawFrame</code> that flows downstream (e.g. preroll/gated windows being forwarded) must remain a fresh allocation per frame — reuse only buffers that stay inside the processor. Read each use site and classify before changing it: if the array escapes into a frame, leave it allocated; if it's scratch (input to <code>Probability</code>, RMS computation), reuse it.</p>
+<p><b>Acceptance criteria:</b> determinism test green; <code>VadBenchmarks.Probability</code> Allocated drops to ≈ 0 B/op (from ~3–5 KB/op); existing SileroVad tests green; record before/after in <code>bench/BASELINE.md</code>.</p>
+
+<!-- ================= WS6 ================= -->
+<h3 id="ws6">WS6 — Speech providers: copies, streaming TTS, connection warmup <span class="badge p1">Phase 3</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-07, F-08, F-09, F-10, F-11, F-15, F-17</span><span><b>Effort:</b> ~1.5 days</span><span><b>Risk:</b> medium (Azure SDK behavior; contract change)</span><span><b>Projects:</b> <code>Voxa.Speech.*</code></span>
+</div>
+
+<h4>WS6.1 — TTS contract: yield <code>ReadOnlyMemory&lt;byte&gt;</code> <span class="badge breaking">BREAKING</span></h4>
+<p>Change <code>ITextToSpeechEngine.SynthesizeAsync</code>:</p>
+<pre><code>// Before
+IAsyncEnumerable&lt;byte[]&gt; SynthesizeAsync(string text, CancellationToken ct);
+// After
+/// &lt;summary&gt;
+/// Stream synthesized PCM. Yielded memory is only valid until the next MoveNextAsync —
+/// consumers that need to retain a chunk must copy it. (TextToSpeechProcessor copies into
+/// the AudioRawFrame it emits.)
+/// &lt;/summary&gt;
+IAsyncEnumerable&lt;ReadOnlyMemory&lt;byte&gt;&gt; SynthesizeAsync(string text, CancellationToken ct);</code></pre>
+<p>Update <code>PcmStreamReader.ReadEvenChunksAsync</code> to rent one chunk buffer from <code>ArrayPool&lt;byte&gt;.Shared</code>, fill it, <code>yield return buffer.AsMemory(0, n)</code>, and reuse it for the next chunk (valid because of the only-until-MoveNext contract); return it in a <code>finally</code>. Update <code>TextToSpeechProcessor.SynthesizeAsync</code> (currently line 83-86) to copy the yielded memory into the frame it emits:</p>
+<pre><code>await foreach (var pcm in _engine.SynthesizeAsync(text, ct).ConfigureAwait(false))
+{
+    // Engine memory is transient (pooled); the frame needs its own copy with frame lifetime.
+    await PushFrameAsync(new AudioRawFrame(pcm.ToArray(), _outputSampleRate, 1), ct).ConfigureAwait(false);
+}</code></pre>
+<p>Net effect today: same one-allocation-per-chunk as before (the copy moved from the engine to the processor), but the engine layer is now allocation-free and the contract permits future zero-copy sinks. All four engine implementations and their tests must be updated in this commit.</p>
+
+<h4>WS6.2 — Azure STT: remove the per-chunk copy (F-07)</h4>
+<p>In <code>AzureSpeechToTextEngine.WriteAudioAsync</code> (line 49-54): the SDK's <code>PushAudioInputStream.Write(byte[] dataBuffer, int size)</code> overload lets us use a pooled scratch buffer instead of an exact-size copy:</p>
+<pre><code>public ValueTask WriteAudioAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct)
+{
+    if (_pushStream is null) return ValueTask.CompletedTask;
+
+    if (MemoryMarshal.TryGetArray(pcm, out ArraySegment&lt;byte&gt; seg) &amp;&amp; seg.Offset == 0 &amp;&amp; seg.Count == seg.Array!.Length)
+    {
+        // Frame-owned, exactly-sized array (the common case from WebSocketAudioSource) — write directly.
+        _pushStream.Write(seg.Array, seg.Count);
+    }
+    else
+    {
+        var rented = ArrayPool&lt;byte&gt;.Shared.Rent(pcm.Length);
+        try
+        {
+            pcm.Span.CopyTo(rented);
+            _pushStream.Write(rented, pcm.Length);
+        }
+        finally { ArrayPool&lt;byte&gt;.Shared.Return(rented); }
+    }
+    return ValueTask.CompletedTask;
+}</code></pre>
+<div class="callout warn"><b>Verify before relying on the fast path:</b> the Speech SDK documents that <code>Write</code> copies the data internally (the push stream buffers it). Confirm with the SDK version in use (check the <code>.csproj</code> package version, then the SDK docs/source for <code>PushAudioInputStream.Write</code>). If it does <em>not</em> copy synchronously, keep only the rented-buffer path and copy always — still better than today because the pool absorbs the allocation.</div>
+
+<h4>WS6.3 — Azure TTS: stream instead of buffer (F-08)</h4>
+<p>Replace the full-buffer <code>SpeakTextAsync</code> path in <code>AzureTextToSpeechEngine</code> with <code>StartSpeakingTextAsync</code> + <code>AudioDataStream</code>, which yields audio as the service produces it:</p>
+<pre><code>public async IAsyncEnumerable&lt;ReadOnlyMemory&lt;byte&gt;&gt; SynthesizeAsync(
+    string text, [EnumeratorCancellation] CancellationToken ct)
+{
+    if (_synthesizer is null) yield break;
+
+    // StartSpeakingTextAsync returns as soon as synthesis STARTS; AudioDataStream then
+    // yields audio incrementally → first chunk in ~100-200 ms instead of after full synthesis.
+    using var result = await _synthesizer.StartSpeakingTextAsync(text).ConfigureAwait(false);
+    using var stream = AudioDataStream.FromResult(result);
+
+    var buffer = new byte[ChunkSize];
+    while (!ct.IsCancellationRequested)
+    {
+        // ReadData blocks the calling thread until data is available or synthesis ends.
+        // Hop to the thread pool so we don't block the TTS processor's data loop thread.
+        uint read = await Task.Run(() => stream.ReadData(buffer), ct).ConfigureAwait(false);
+        if (read == 0) yield break;
+        yield return buffer.AsMemory(0, (int)read);
+    }
+}</code></pre>
+<p>Keep the existing output-format configuration (<code>SetSpeechSynthesisOutputFormat</code> to raw 24 kHz 16-bit mono PCM) — <code>AudioDataStream</code> honors it. On cancellation, also call <code>_synthesizer.StopSpeakingAsync()</code> best-effort in a <code>finally</code> so the service stops billing/synthesizing (wrap in try/catch, ignore failures).</p>
+
+<h4>WS6.4 — Shared HTTP infrastructure + connection warmup (F-09)</h4>
+<p>Add one internal static class used by OpenAI, ElevenLabs, and Mistral engines:</p>
+<div class="filelabel">src/Voxa.Speech.Abstractions/VoxaHttp.cs (new file)</div>
+<pre><code>using System.Net;
+
+namespace Voxa.Speech;
+
+/// &lt;summary&gt;
+/// Process-wide HttpClient for speech providers. One SocketsHttpHandler means one connection
+/// pool shared by every engine instance across every concurrent session — no per-session
+/// TLS handshakes after the first, no socket exhaustion under load.
+/// Engines still accept an injected HttpClient (tests, custom policies); this is the default.
+/// &lt;/summary&gt;
+public static class VoxaHttp
+{
+    public static HttpClient Shared { get; } = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+        EnableMultipleHttp2Connections = true,
+        AutomaticDecompression = DecompressionMethods.None,  // audio payloads — don't waste CPU
+        ConnectTimeout = TimeSpan.FromSeconds(5),
+    }, disposeHandler: false)
+    {
+        Timeout = TimeSpan.FromSeconds(100),
+    };
+
+    /// &lt;summary&gt;
+    /// Pre-establish TCP+TLS to a provider so the session's first synthesis doesn't pay the
+    /// handshake (~100-300 ms). Best-effort: failures are ignored — the real request will
+    /// surface real errors.
+    /// &lt;/summary&gt;
+    public static async Task WarmupAsync(HttpClient client, string baseUrl, CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Head, baseUrl);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+            using var _ = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token)
+                                      .ConfigureAwait(false);
+        }
+        catch { /* warmup is best-effort; 4xx/timeout/HEAD-not-allowed are all fine — the TLS session is established either way */ }
+    }
+}</code></pre>
+<p>Wire it in each HTTP engine (OpenAI TTS, OpenAI Whisper, ElevenLabs, Mistral): (1) constructor default changes from <code>new HttpClient()</code> to <code>VoxaHttp.Shared</code> with <code>_ownsHttpClient = false</code> when defaulted — <b>never dispose the shared client</b>; keep dispose-if-owned for injected clients created by callers... actually simplest rule: only dispose when the caller injected nothing <em>and</em> you created a private instance — with this change you never create one, so delete the <code>_ownsHttpClient</code> disposal path entirely and document "engine never disposes the HttpClient"; (2) in <code>StartAsync</code>, fire-and-forget <code>_ = VoxaHttp.WarmupAsync(_http, _options.ApiBaseUrl, ct);</code> — by the time the first sentence reaches TTS, the connection is hot.</p>
+
+<h4>WS6.5 — Whisper flush: one copy instead of two (F-10)</h4>
+<p>In <code>OpenAIWhisperEngine.FlushAsync</code> (lines 108-117) + <code>TranscribeAsync</code>/<code>WrapPcmAsWav</code> (134-182), build the WAV directly from the buffer contents in a single allocation:</p>
+<pre><code>private async Task FlushAsync(bool force)
+{
+    byte[] wav;
+    lock (_bufferLock)
+    {
+        if (_buffer.Length == 0) return;
+        _ = force;
+        // Single allocation: WAV header + PCM copied straight out of the MemoryStream's
+        // internal buffer. Replaces ToArray() (copy 1) + WrapPcmAsWav (copy 2).
+        _buffer.TryGetBuffer(out ArraySegment&lt;byte&gt; seg);   // always true: we own this stream
+        wav = WrapPcmAsWav(seg.AsSpan(), _options.InputSampleRate, channels: 1);
+        _buffer.SetLength(0);
+    }
+
+    try
+    {
+        var text = await TranscribeAsync(wav).ConfigureAwait(false);
+        // ... unchanged ...
+    }
+    catch (Exception ex) { /* ... unchanged ... */ }
+}
+
+private static byte[] WrapPcmAsWav(ReadOnlySpan&lt;byte&gt; pcm, int sampleRate, int channels)
+{
+    // identical header writing as today, but parameterized on a span:
+    var wav = new byte[44 + pcm.Length];
+    // ... existing 44-byte header code, replacing pcm.Length reads accordingly ...
+    pcm.CopyTo(wav.AsSpan(44));
+    return wav;
+}</code></pre>
+<p><code>TranscribeAsync</code> changes its parameter from raw <code>pcm</code> to the ready <code>wav</code> bytes (delete its internal wrap call). Behavior identical; one large copy removed per utterance.</p>
+
+<h4>WS6.6 — SentenceAggregator: incremental boundary tracking (F-11)</h4>
+<p>Replace the scan-everything-per-chunk logic (lines 39-70). Track the last boundary incrementally — each appended character is examined exactly once, and <code>ToString</code> happens only on flush, only for the flushed region:</p>
+<div class="filelabel">src/Voxa.Speech.Abstractions/SentenceAggregator.cs — replacement for the LlmTextChunkFrame case + new fields</div>
+<pre><code>private readonly StringBuilder _buffer = new();
+private readonly object _lock = new();
+private int _lastBoundary = -1;   // index into _buffer of the last confirmed sentence boundary
+
+// inside ProcessFrameAsync:
+case LlmTextChunkFrame chunk when !string.IsNullOrEmpty(chunk.Text):
+{
+    string? toFlush = null;
+    lock (_lock)
+    {
+        var text = chunk.Text;
+        int baseLen = _buffer.Length;
+        _buffer.Append(text);
+
+        // Incremental scan: a boundary is . ! ? \n followed by whitespace (or end-of-buffer,
+        // which we treat as boundary only once the NEXT char arrives and is whitespace — the
+        // end-of-buffer case is handled below for the final char).
+        // First, the char straddling the chunk seam: if the previous buffer ended with a
+        // boundary char and this chunk starts with whitespace, that's a boundary.
+        if (baseLen &gt; 0 &amp;&amp; char.IsWhiteSpace(text[0]) &amp;&amp; IsBoundaryChar(_buffer[baseLen - 1]))
+        {
+            _lastBoundary = baseLen - 1;
+        }
+        for (int i = 0; i &lt; text.Length - 1; i++)
+        {
+            if (IsBoundaryChar(text[i]) &amp;&amp; char.IsWhiteSpace(text[i + 1]))
+            {
+                _lastBoundary = baseLen + i;
+            }
+        }
+        // Trailing boundary char at end-of-buffer counts (matches old FindLastSentenceBoundary
+        // semantics: "followed by whitespace OR end-of-input").
+        if (IsBoundaryChar(text[^1]))
+        {
+            _lastBoundary = _buffer.Length - 1;
+        }
+
+        if (_lastBoundary &gt;= 0)
+        {
+            toFlush = _buffer.ToString(0, _lastBoundary + 1).Trim();
+            _buffer.Remove(0, _lastBoundary + 1);
+            _lastBoundary = -1;
+        }
+        else if (_buffer.Length &gt;= MaxBufferChars)
+        {
+            toFlush = _buffer.ToString().Trim();
+            _buffer.Clear();
+            _lastBoundary = -1;
+        }
+    }
+
+    if (!string.IsNullOrEmpty(toFlush))
+    {
+        await PushFrameAsync(new TextFrame(toFlush), ct).ConfigureAwait(false);
+    }
+    return;
+}
+
+private static bool IsBoundaryChar(char c) => c is '.' or '!' or '?' or '\n';</code></pre>
+<div class="callout warn"><b>Semantic difference to encode in tests:</b> the old code re-scanned the whole buffer and could "un-confirm" nothing — but it found a trailing boundary char (end-of-input rule) on <em>every</em> chunk, so "Hello." followed by chunk " world" flushed "Hello." immediately on the first chunk. The incremental version preserves this (the <code>text[^1]</code> check). Also reset <code>_lastBoundary = -1</code> in the interruption/<code>OnEndAsync</code> clear paths. Port the existing SentenceAggregator tests and add: boundary char as last char of chunk N + whitespace as first char of chunk N+1; "Mr." mid-sentence not splitting ("Mr. Smith" — note: '.' followed by space <em>is</em> a boundary under both old and new rules, so behavior is unchanged — copy expectations from existing tests, do not invent new linguistics).</div>
+
+<h4>WS6.7 — Latency-bounded retry (F-17, minimal)</h4>
+<p>In TTS engines only (STT retry would delay a live turn unacceptably): on <code>HttpRequestException</code> / 429 / 5xx <em>before any audio byte has been yielded</em>, retry exactly once after 150 ms. Never retry mid-stream. Implement as a small private helper in each engine around the request-send section (~10 lines); no Polly dependency.</p>
+<p><b>Acceptance criteria (WS6 total):</b> all speech test projects green after the contract change; Azure TTS TTFB measured &lt; 200 ms in a manual run (log the histogram); aggregator benchmarks (add <code>SentenceAggregatorBenchmarks</code>: 500-chunk synthetic stream) show allocations proportional to flushes, not chunks; warmup observable as a faster first-turn TTFB in the sample server.</p>
+
+<!-- ================= WS7 ================= -->
+<h3 id="ws7">WS7 — Realtime services: base64 &amp; JSON fast paths <span class="badge p1">Phase 3</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-12, F-13</span><span><b>Effort:</b> ~0.5 day</span><span><b>Risk:</b> low</span><span><b>Projects:</b> <code>Voxa.Services.OpenAIRealtime</code>, <code>Voxa.Services.AzureVoiceLive</code> (apply identically to both — they are twins)</span>
+</div>
+<h4>WS7.1 — Uplink: write base64 directly into UTF-8 JSON</h4>
+<p><code>Utf8JsonWriter.WriteBase64String</code> encodes binary→base64→UTF-8 in one pass with no intermediate string. Replace <code>BuildInputAudioBufferAppend</code> in both codecs:</p>
+<pre><code>/// &lt;summary&gt;Build the input_audio_buffer.append event as UTF-8 bytes. One allocation (the returned array).&lt;/summary&gt;
+public static byte[] BuildInputAudioBufferAppendUtf8(ReadOnlyMemory&lt;byte&gt; pcm)
+{
+    var buffer = new ArrayBufferWriter&lt;byte&gt;(pcm.Length * 4 / 3 + 64);
+    using (var writer = new Utf8JsonWriter(buffer))
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type"u8, "input_audio_buffer.append"u8);
+        writer.WriteBase64String("audio"u8, pcm.Span);   // binary → base64 → UTF-8, zero intermediates
+        writer.WriteEndObject();
+    }
+    return buffer.WrittenSpan.ToArray();
+}</code></pre>
+<p>Change the transport's <code>SendEventAsync</code> to accept <code>ReadOnlyMemory&lt;byte&gt;</code> (UTF-8) alongside the existing string overload (which becomes a thin encode-and-delegate wrapper); the audio-append call site uses the byte path. This removes, per 20 ms uplink chunk: one base64 string (~1.3 KB), one JSON string (~1.4 KB), and one <code>UTF8.GetBytes</code> array.</p>
+<h4>WS7.2 — Downlink: decode base64 without the string</h4>
+<p>In both <code>RealtimeEventCodec.Decode</code> audio-delta branches, replace get-string-then-<code>Convert.FromBase64String</code> with <code>JsonElement.GetBytesFromBase64()</code>:</p>
+<pre><code>case "response.audio.delta":
+{
+    if (evt.TryGetProperty("delta", out var d) &amp;&amp; d.ValueKind == JsonValueKind.String)
+    {
+        byte[] pcm;
+        try { pcm = d.GetBytesFromBase64(); }       // decodes straight from the UTF-8 token
+        catch (FormatException) { yield break; }
+        if (pcm.Length &gt; 0) yield return new AudioRawFrame(pcm, outputSampleRate, 1);
+    }
+    yield break;
+}</code></pre>
+<h4>WS7.3 — Drop the per-event <code>Clone()</code></h4>
+<p>In both processors' <code>ReadEventsLoopAsync</code> (OpenAIRealtimeProcessor.cs:116-117 and the AzureVoiceLive twin), decode inside the document's scope instead of cloning the root:</p>
+<pre><code>using var doc = JsonDocument.Parse(json);
+foreach (var emitted in RealtimeEventCodec.Decode(doc.RootElement, _botSpeaking, _options.OutputSampleRate))
+{
+    if (emitted is BotStartedSpeakingFrame) _botSpeaking = true;
+    else if (emitted is BotStoppedSpeakingFrame) _botSpeaking = false;
+    await PushFrameAsync(emitted, ct).ConfigureAwait(false);
+}</code></pre>
+<div class="callout warn"><b>Safety condition:</b> this is only valid if <code>Decode</code> (and everything it yields) extracts all values <em>eagerly</em> — no <code>JsonElement</code> may be stored on a frame or escape the loop body. Audit <code>Decode</code> for both services: every yielded frame must carry strings/arrays materialized from the element, never the element itself. The explorer audit found this already true (frames carry extracted strings and decoded byte arrays), but re-verify before deleting the Clone. Also note <code>Decode</code> is lazy (<code>IEnumerable</code> via yield) — the <code>foreach</code> with awaits inside keeps the doc alive for the full enumeration since it's inside the <code>using</code> scope, so laziness is fine as written.</div>
+<p><b>Acceptance criteria:</b> both services' test projects green; add a codec round-trip test (encode append event → parse with JsonDocument → <code>GetBytesFromBase64</code> equals input PCM); manual smoke against the OpenAI Realtime API if a key is available (sample server <code>/realtime</code> path), otherwise the existing transport fakes suffice.</p>
+
+<!-- ================= WS8 ================= -->
+<h3 id="ws8">WS8 — Turn-latency workflow: VAD hangover, eager first sentence <span class="badge p2">Phase 4</span></h3>
+<div class="ws-head">
+  <span><b>Fixes:</b> F-16 (the controllable parts of ROADMAP P0)</span><span><b>Effort:</b> ~1 day</span><span><b>Risk:</b> low (all opt-in via options)</span><span><b>Projects:</b> <code>Voxa.Audio.SileroVad</code>, <code>Voxa.Speech.Abstractions</code>, sample server</span>
+</div>
+<h4>WS8.1 — Configurable VAD silence hangover + smart-turn seam</h4>
+<ol>
+  <li>Locate the silence-hangover duration in <code>SileroVadOptions</code> (the stop-speaking debounce). If it is hard-coded, lift it to an option <code>SilenceHangover</code> (TimeSpan, default = current value, document the latency trade-off in XML docs). If already an option, just verify the sample server can set it.</li>
+  <li>Add the smart-turn seam — an optional async confirmation hook in <code>SileroVadOptions</code>:</li>
+</ol>
+<pre><code>/// &lt;summary&gt;
+/// Optional turn-end confirmation. When set, the VAD's silence-end does NOT immediately emit
+/// UserStoppedSpeakingFrame; instead this callback decides. Return true → emit (turn over);
+/// false → suppress and keep listening (mid-sentence pause). Enables Pipecat-style smart turn
+/// detection with an aggressive (e.g. 200 ms) SilenceHangover.
+/// The ReadOnlyMemory&lt;byte&gt; is the most recent audio (preroll + utterance tail, 16-bit PCM).
+/// &lt;/summary&gt;
+public Func&lt;ReadOnlyMemory&lt;byte&gt;, CancellationToken, ValueTask&lt;bool&gt;&gt;? ConfirmTurnEnd { get; init; }</code></pre>
+<p>In <code>SileroVadProcessor</code>, at the exact point where the silence timer elapses and <code>UserStoppedSpeakingFrame</code> would be emitted: if <code>ConfirmTurnEnd</code> is null, behave exactly as today; otherwise call it (pass the tail of buffered audio), and emit only on <code>true</code>. On <code>false</code>, reset the silence timer (state machine returns to "speaking"). This is the full extent of smart-turn work in this spec — the classifier itself is the separate ROADMAP item and plugs into this delegate.</p>
+<h4>WS8.2 — Eager first sentence (perceived-latency win)</h4>
+<p>The first sentence of a bot turn dominates perceived latency: TTS cannot start until <code>SentenceAggregator</code> emits, and LLMs often open with a long first sentence. Add to <code>SentenceAggregator</code>:</p>
+<pre><code>/// &lt;summary&gt;
+/// When &gt; 0, the FIRST flush after a turn starts may also break at a clause boundary
+/// (',' ';' ':' followed by whitespace) once at least this many chars are buffered.
+/// Gets the first audio out 100-400 ms earlier on long opening sentences. Subsequent
+/// flushes use full sentence boundaries as usual. Default 0 (off).
+/// &lt;/summary&gt;
+public int EagerFirstChunkMinChars { get; init; } = 0;</code></pre>
+<p>Implementation: track <code>bool _firstFlushOfTurn = true</code>, reset to true on <code>LlmTurnStartedFrame</code> (forward it as usual), on interruption, and after <code>OnEndAsync</code>; set false after any flush. In the incremental scanner (WS6.6), when <code>_firstFlushOfTurn &amp;&amp; EagerFirstChunkMinChars &gt; 0 &amp;&amp; _buffer.Length &gt;= EagerFirstChunkMinChars</code>, also treat <code>, ; :</code>-followed-by-whitespace as boundaries. Enable in the sample server with <code>EagerFirstChunkMinChars = 40</code>.</p>
+<h4>WS8.3 — Sample server: wire everything up as the reference fast configuration</h4>
+<p>Update <code>samples/Voxa.Samples.AspNetServer/Program.cs</code> batch pipeline: set the tuned <code>SilenceHangover</code> (keep default unless testing shows the current value is conservative), <code>EagerFirstChunkMinChars = 40</code>, shared <code>VoxaHttp</code> clients, and log <code>voxa.turn.ttfb</code> per turn. Add a short <code>docs/performance-tuning.md</code> documenting every knob this spec introduced (one table: option, default, effect, trade-off).</p>
+<p><b>Acceptance criteria:</b> aggregator eager-mode unit tests (first flush at clause boundary, second flush requires sentence boundary, reset on interruption); VAD hook unit test (false suppresses the frame, true emits, null preserves byte-identical behavior); measured TTFB improvement recorded in <code>bench/BASELINE.md</code> from a manual conversation run.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Contract structure changes — summary</h2>
+<table>
+  <tr><th>Contract</th><th>Change</th><th>Compat impact</th><th>WS</th></tr>
+  <tr><td><code>WireProtocol.Build*</code></td><td>Return <code>byte[]</code> (UTF-8) instead of <code>string</code>; typed source-gen DTOs replace anonymous types</td><td>Wire bytes identical; compile break for direct callers (only the sink in-repo)</td><td>WS3</td></tr>
+  <tr><td><code>WireProtocol.TryParseClientMessage</code></td><td>Primary overload takes <code>ReadOnlySpan&lt;byte&gt;</code>; string overload retained</td><td>Additive</td><td>WS2/WS3</td></tr>
+  <tr><td><code>ITextToSpeechEngine.SynthesizeAsync</code></td><td><code>IAsyncEnumerable&lt;byte[]&gt;</code> → <code>IAsyncEnumerable&lt;ReadOnlyMemory&lt;byte&gt;&gt;</code> with valid-until-MoveNext semantics</td><td><b>Breaking</b> for external engine implementors (pre-1.0, accepted)</td><td>WS6.1</td></tr>
+  <tr><td><code>WebSocketAudioSink</code></td><td>Internally queued sends; new purge-on-interruption behavior; ctor unchanged</td><td>Behavioral: stale audio after barge-in no longer plays (desired)</td><td>WS4</td></tr>
+  <tr><td><code>SileroVadOptions</code></td><td>+ <code>SilenceHangover</code> (if not present), + <code>ConfirmTurnEnd</code> hook</td><td>Additive</td><td>WS8</td></tr>
+  <tr><td><code>SentenceAggregator</code></td><td>+ <code>EagerFirstChunkMinChars</code></td><td>Additive (default off)</td><td>WS8</td></tr>
+  <tr><td><code>VoxaMetrics</code> / <code>VoxaHttp</code></td><td>New public statics (Meter; shared HttpClient)</td><td>Additive</td><td>WS0/WS6</td></tr>
+  <tr><td>Realtime transports</td><td>+ <code>SendEventAsync(ReadOnlyMemory&lt;byte&gt;)</code> overload</td><td>Additive</td><td>WS7</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Plan of action — phases &amp; dependencies</h2>
+<table>
+  <tr><th>Phase</th><th>Workstreams</th><th>Depends on</th><th>Effort</th><th>Exit gate</th></tr>
+  <tr><td><b>0 — Measure</b></td><td>WS0 (bench project, alloc gates, TTFB metric)</td><td>—</td><td>0.5 d</td><td><code>bench/BASELINE.md</code> committed with baseline numbers</td></tr>
+  <tr><td><b>1 — Hot-loop allocations</b></td><td>WS1 (CTS reuse), WS2 (receive path), WS5 (VAD)</td><td>Phase 0</td><td>1.5 d</td><td>Pump1000Frames ≈ 0 B/op; VAD ≈ 0 B/op; transport ≤ 1 alloc/msg; all tests green</td></tr>
+  <tr><td><b>2 — Wire contract &amp; send path</b></td><td>WS3 (source-gen UTF-8), then WS4 (outbound queue + purge)</td><td>Phase 0 (WS2 helpful but not required)</td><td>2 d</td><td>Wire-compat tests green; JS client unmodified works; barge-in purge test green</td></tr>
+  <tr><td><b>3 — Providers</b></td><td>WS6 (contract, Azure STT/TTS, warmup, Whisper, aggregator, retry), WS7 (realtime base64/JSON)</td><td>Phase 0; WS6.6 pairs with WS8.2</td><td>2 d</td><td>Speech + services test projects green; Azure TTS TTFB &lt; 200 ms manual check</td></tr>
+  <tr><td><b>4 — Latency workflow</b></td><td>WS8 (hangover option, smart-turn seam, eager first sentence, sample wiring)</td><td>WS6.6 (aggregator rewrite)</td><td>1 d</td><td>Options covered by unit tests; sample server runs the fast config</td></tr>
+  <tr><td><b>5 — Verify &amp; document</b></td><td>Full benchmark re-run, end-to-end latency measurement, <code>docs/performance-tuning.md</code>, update ROADMAP P0/P2 status</td><td>All phases</td><td>0.5 d</td><td>§9 protocol passes; before/after table appended to <code>bench/BASELINE.md</code></td></tr>
+</table>
+<p>Total: ~7.5 engineering days. Phases 1, 2 and 3 are independent of each other after Phase 0 and may be reordered or parallelized; Phase 4 requires WS6.6.</p>
+<div class="callout"><b>Commit discipline:</b> conventional commits, one per workstream sub-item where independent, e.g. <code>perf(core): reuse linked CTS across frames in FrameProcessor data loop</code>, <code>perf(transport): single-copy binary receive path</code>, <code>feat(ws-protocol): source-generated UTF-8 wire serialization</code>, <code>feat(transport): outbound send queue with barge-in purge</code>, <code>perf(vad): zero-allocation Silero inference</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
+<p class="progress-note">Checkbox state persists in this browser via localStorage. The implementing agent should also mirror completion into commit messages.</p>
+
+<h4>Phase 0 — Measure</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-00"><span class="tid">P0-1</span>Create <code>bench/Voxa.Benchmarks</code> with WireProtocol, VAD, FrameLoop, Transport benchmark classes; add to solution.</label><span class="ac">AC: <code>dotnet run -c Release --project bench/Voxa.Benchmarks -- --list flat</code> lists all benchmarks.</span></li>
+  <li><label><input type="checkbox" id="t-01"><span class="tid">P0-2</span>Run full baseline; commit results to <code>bench/BASELINE.md</code>.</label><span class="ac">AC: file contains BenchmarkDotNet tables incl. Allocated column, with commit hash + machine specs noted.</span></li>
+  <li><label><input type="checkbox" id="t-02"><span class="tid">P0-3</span>Add <code>AllocationGateTests</code> (skipped pending WS1).</label><span class="ac">AC: test exists, compiles, skipped with reason "enabled by WS1".</span></li>
+  <li><label><input type="checkbox" id="t-03"><span class="tid">P0-4</span>Add <code>VoxaMetrics</code> (TTFB + queue-depth histograms); hook UserStoppedSpeaking→first-audio timing into the sink; surface in sample server logs.</label><span class="ac">AC: a live conversation logs "turn ttfb &lt;n&gt; ms" per turn.</span></li>
+</ul>
+
+<h4>Phase 1 — Hot-loop allocations</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-10"><span class="tid">P1-1</span>WS1: reusable linked CTS in <code>FrameProcessor.RunDataLoopAsync</code> per the spec code.</label><span class="ac">AC: 3 new interruption tests green; existing Core tests green.</span></li>
+  <li><label><input type="checkbox" id="t-11"><span class="tid">P1-2</span>Enable the allocation gate test; re-run FrameLoop benchmark.</label><span class="ac">AC: gate green; Pump1000Frames Allocated ≈ 0 B/op recorded in BASELINE.md.</span></li>
+  <li><label><input type="checkbox" id="t-12"><span class="tid">P1-3</span>WS2: rewrite <code>ReadLoopAsync</code> (fast/slow path, pooled accumulator, UTF-8 text parse).</label><span class="ac">AC: 4 new transport tests green (single-receive, fragmented binary, fragmented text, interleaved).</span></li>
+  <li><label><input type="checkbox" id="t-13"><span class="tid">P1-4</span>WS5: zero-alloc <code>SileroVadEngine</code> (reused tensors, state copy-back, pinned SessionOptions) + processor scratch-buffer hoisting.</label><span class="ac">AC: determinism test (±1e-5) green; VadBenchmarks ≈ 0 B/op; escape analysis done for each hoisted buffer (no frame-escaping buffer reused).</span></li>
+</ul>
+
+<h4>Phase 2 — Wire contract &amp; send path</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-20"><span class="tid">P2-1</span>WS3.1: add <code>WireMessages.cs</code> DTOs + <code>WireJsonContext</code> source-gen context.</label><span class="ac">AC: compiles with source generator (no JsonSerializerOptions at call sites).</span></li>
+  <li><label><input type="checkbox" id="t-21"><span class="tid">P2-2</span>WS3.2: rewrite <code>WireProtocol</code> — UTF-8 <code>Build*</code>, cached interruption/end bytes, UTF-8 parse overload.</label><span class="ac">AC: byte-for-byte wire-compat tests green (hard-coded expected JSON).</span></li>
+  <li><label><input type="checkbox" id="t-22"><span class="tid">P2-3</span>WS4: replace sink with outbound-queue implementation (epoch purge, TTFB hooks, EndFrame drain).</label><span class="ac">AC: order test, purge test, non-audio-survives test, drain test all green.</span></li>
+  <li><label><input type="checkbox" id="t-23"><span class="tid">P2-4</span>Verify sample-server JS client unmodified against rebuilt server (manual run: audio in/out, transcription display, interruption stops playback).</label><span class="ac">AC: manual checklist noted in PR description.</span></li>
+</ul>
+
+<h4>Phase 3 — Providers</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-30"><span class="tid">P3-1</span>WS6.1: TTS contract → <code>ReadOnlyMemory&lt;byte&gt;</code>; pooled <code>PcmStreamReader</code>; copy in <code>TextToSpeechProcessor</code>; update all 4 engines + tests.</label><span class="ac">AC: all Speech test projects green; XML docs state valid-until-MoveNext.</span></li>
+  <li><label><input type="checkbox" id="t-31"><span class="tid">P3-2</span>WS6.2: Azure STT pooled write (verify SDK copy semantics first — note finding in code comment).</label><span class="ac">AC: no <code>pcm.ToArray()</code> in WriteAudioAsync; SDK version + copy-semantics note in comment.</span></li>
+  <li><label><input type="checkbox" id="t-32"><span class="tid">P3-3</span>WS6.3: Azure TTS streaming via <code>StartSpeakingTextAsync</code> + <code>AudioDataStream</code> + stop-on-cancel.</label><span class="ac">AC: TTFB &lt; 200 ms in manual run (or recorded reason if no Azure key available — code review + unit test with SDK fake then suffices).</span></li>
+  <li><label><input type="checkbox" id="t-33"><span class="tid">P3-4</span>WS6.4: <code>VoxaHttp</code> shared handler + warmup wired into OpenAI/ElevenLabs/Mistral/Whisper engines; remove owned-HttpClient disposal of the shared instance.</label><span class="ac">AC: no engine constructs <code>new HttpClient()</code>; warmup fired in StartAsync; injected-client path still works in tests.</span></li>
+  <li><label><input type="checkbox" id="t-34"><span class="tid">P3-5</span>WS6.5: Whisper single-copy WAV flush (<code>TryGetBuffer</code> + span-based <code>WrapPcmAsWav</code>).</label><span class="ac">AC: existing Whisper tests green; only one large copy per flush (code-review assertion).</span></li>
+  <li><label><input type="checkbox" id="t-35"><span class="tid">P3-6</span>WS6.6: incremental SentenceAggregator + ported tests + seam tests.</label><span class="ac">AC: all old aggregator tests pass unmodified; new seam/boundary tests green; benchmark allocations scale with flushes not chunks.</span></li>
+  <li><label><input type="checkbox" id="t-36"><span class="tid">P3-7</span>WS6.7: single 150 ms retry before-first-byte in TTS engines.</label><span class="ac">AC: unit test — first request 503, second succeeds, audio arrives; mid-stream failure does NOT retry.</span></li>
+  <li><label><input type="checkbox" id="t-37"><span class="tid">P3-8</span>WS7: base64 fast paths + Clone removal in BOTH realtime services.</label><span class="ac">AC: codec round-trip tests green; no <code>Convert.ToBase64String</code>/<code>FromBase64String</code>/<code>RootElement.Clone()</code> remain in either service (grep check).</span></li>
+</ul>
+
+<h4>Phase 4 — Latency workflow</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-40"><span class="tid">P4-1</span>WS8.1: <code>SilenceHangover</code> option (if needed) + <code>ConfirmTurnEnd</code> smart-turn seam in SileroVadProcessor.</label><span class="ac">AC: null-hook behavior byte-identical (existing tests unmodified); true/false hook tests green.</span></li>
+  <li><label><input type="checkbox" id="t-41"><span class="tid">P4-2</span>WS8.2: <code>EagerFirstChunkMinChars</code> in SentenceAggregator.</label><span class="ac">AC: eager-flush + reset-on-turn/interruption tests green; default 0 keeps old behavior.</span></li>
+  <li><label><input type="checkbox" id="t-42"><span class="tid">P4-3</span>WS8.3: sample server fast config + <code>docs/performance-tuning.md</code> knob table.</label><span class="ac">AC: doc lists every option introduced by this spec with default/effect/trade-off.</span></li>
+</ul>
+
+<h4>Phase 5 — Verify &amp; document</h4>
+<ul class="cl">
+  <li><label><input type="checkbox" id="t-50"><span class="tid">P5-1</span>Re-run all benchmarks; append before/after table to <code>bench/BASELINE.md</code>.</label><span class="ac">AC: every §2.1 target either met or the miss is explained in the file.</span></li>
+  <li><label><input type="checkbox" id="t-51"><span class="tid">P5-2</span>Run §9 verification protocol end-to-end; record results.</label><span class="ac">AC: protocol results pasted into the final PR description.</span></li>
+  <li><label><input type="checkbox" id="t-52"><span class="tid">P5-3</span>Update <code>ROADMAP.md</code>: mark the delivered parts of P0 (TTS first byte, eager flush, hangover knob) and P2 (server-side purge) with what shipped and what remains (smart-turn classifier, JS playback flush).</label><span class="ac">AC: roadmap reflects reality.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Verification protocol</h2>
+<ol>
+  <li><b>Build &amp; tests:</b> <code>dotnet build Voxa.sln -warnaserror</code> then <code>dotnet test Voxa.sln -c Release</code> — all 14 test projects green.</li>
+  <li><b>Micro:</b> <code>dotnet run -c Release --project bench/Voxa.Benchmarks -- --filter *</code> — compare every Allocated/Mean column against <code>bench/BASELINE.md</code>; no benchmark may regress &gt; 5% mean time.</li>
+  <li><b>GC pressure (macro):</b> run the sample server, hold a 3-minute continuous conversation, observe <code>dotnet-counters monitor --process-id &lt;pid&gt; System.Runtime</code>: target Gen0 collections ≤ 1/min during active speech (baseline first for comparison), Gen2 = 0, <code>% Time in GC</code> ≈ 0.</li>
+  <li><b>Latency:</b> from the same session, collect ≥ 10 <code>voxa.turn.ttfb</code> samples; p50 must beat the baseline p50 by ≥ 300 ms on the chained pipeline (warmup + eager flush + streaming Azure TTS or OpenAI TTS).</li>
+  <li><b>Barge-in:</b> while the bot is mid-sentence, speak over it: bot audio stops within ~1 chunk; conversation continues correctly afterwards (next turn works; no poisoned tokens — this exercises WS1+WS4 together).</li>
+  <li><b>Wire compat:</b> existing JS demo client used unmodified for steps 3–5.</li>
+  <li><b>Soak:</b> 30-minute idle + intermittent-speech session: no memory growth trend (working set stable ±10%), no <code>ArrayPool</code> exhaustion warnings, no socket errors.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Risk register</h2>
+<table>
+  <tr><th>Risk</th><th>Workstream</th><th>Likelihood</th><th>Mitigation</th></tr>
+  <tr><td>CTS-reuse race drops a legitimate frame after an interruption</td><td>WS1</td><td>Low</td><td>Three dedicated tests incl. back-to-back interruptions; fresh-CTS check at loop top; semantics table in spec reviewed against system-loop code.</td></tr>
+  <tr><td>Pooled receive buffer escapes into a frame (use-after-return corruption)</td><td>WS2</td><td>Low</td><td>Spec mandates exact-size copy for frame payloads; pooled buffers never cross <code>IngestAsync</code>. Code-review checklist item.</td></tr>
+  <tr><td>Source-gen JSON output differs subtly (null handling, casing) and breaks JS clients</td><td>WS3</td><td>Medium</td><td>Hard-coded byte-for-byte compatibility tests for every envelope incl. null-field omission; manual JS client run.</td></tr>
+  <tr><td>Purge drops audio belonging to the <em>new</em> turn (epoch raced)</td><td>WS4</td><td>Low</td><td>Epoch stamped at enqueue, compared at dequeue; new-turn audio is enqueued after the increment by pipeline ordering. Purge test covers it.</td></tr>
+  <tr><td>Azure SDK <code>PushAudioInputStream.Write</code> does not copy synchronously → pooled buffer corruption</td><td>WS6.2</td><td>Medium</td><td>Spec requires verifying SDK semantics first; fallback path (always-copy-via-pool) defined.</td></tr>
+  <tr><td><code>AudioDataStream.ReadData</code> blocking semantics stall a pool thread per active synthesis</td><td>WS6.3</td><td>Low</td><td>One synthesis per session at a time; Task.Run hop is bounded; acceptable. If profiling shows pool starvation at high session counts, switch to a dedicated thread per active synthesis (note in code).</td></tr>
+  <tr><td>TTS contract change breaks external implementors</td><td>WS6.1</td><td>Accepted</td><td>Pre-1.0; release notes entry required; all in-repo implementations updated atomically.</td></tr>
+  <tr><td>SentenceAggregator incremental scan diverges from old boundary semantics</td><td>WS6.6</td><td>Medium</td><td>Old tests must pass unmodified (they are the semantic spec); seam-case tests added.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Out of scope / deferred (with rationale)</h2>
+<ul>
+  <li><b>Pooling <code>AudioRawFrame</code> payload buffers end-to-end.</b> Frames fan out (sink + observability + capture processors can all hold the same frame) and have no disposal point, so pooled payloads need reference counting (<code>IMemoryOwner</code> + ref-count wrapper). The risk of a use-after-return audio glitch outweighs the remaining Gen0 win once WS1/WS2/WS5 land. Revisit if profiling after this spec still shows audio-buffer churn dominating; the design sketch is: <code>AudioRawFrame</code> gains an optional <code>IMemoryOwner&lt;byte&gt;</code> with a pipeline-sink-owned release, and every processor that retains a frame must <code>Retain()</code>.</li>
+  <li><b>Frame record pooling / struct frames.</b> Records are ~64–96 B Gen0 objects; after the CTS and buffer fixes they are a rounding error. Struct frames would break the type-switch programming model.</li>
+  <li><b>Smart-turn classifier implementations</b> (OpenAI / local ONNX / HTTP) — separate ROADMAP P0 effort; WS8.1 delivers the seam they plug into.</li>
+  <li><b>Client-side (JS) playback flush on interruption</b> — the other half of ROADMAP P2; server half (purge + envelope) ships in WS4. Verify and, if missing, fix in the demo client as a follow-up.</li>
+  <li><b><code>AllowSynchronousContinuations</code> on pipeline channels.</b> Tempting (~µs/hop) but lets one processor's code run inside another's write call, breaking the isolation that makes the interruption model reasoned-about. Do not enable without a dedicated analysis.</li>
+  <li><b>Deepgram/Cartesia providers</b> — new packages per ROADMAP; orthogonal to this spec.</li>
+</ul>
+
+<hr style="border-color: var(--border); margin-top: 60px;">
+<p style="color: var(--muted); font-size: 0.8rem;">VPS-001 v1.0 — generated 2026-06-10 against Voxa <code>main@5c430de</code>. All file:line references verified against source at that commit. Companion files produced by this spec: <code>bench/BASELINE.md</code>, <code>docs/performance-tuning.md</code>.</p>
+</div>
+
+<script>
+// Persist checklist state per-browser.
+document.querySelectorAll('ul.cl input[type=checkbox]').forEach(cb => {
+  const key = 'vps001:' + cb.id;
+  cb.checked = localStorage.getItem(key) === '1';
+  cb.addEventListener('change', () => localStorage.setItem(key, cb.checked ? '1' : '0'));
+});
+</script>
+</body>
+</html>
