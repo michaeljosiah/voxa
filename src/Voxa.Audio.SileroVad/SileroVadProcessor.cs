@@ -29,6 +29,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly ILogger _logger;
 
     private readonly List<float> _samples = new();
+    private readonly float[] _window;   // reusable scratch for one inference window; never escapes into a frame
     private readonly TimeSpan _windowDuration;
     private bool _isSpeaking;
     private TimeSpan _voicedAccum = TimeSpan.Zero;
@@ -48,6 +49,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     {
         _options = options ?? new SileroVadOptions();
         _engine = new SileroVadEngine(_options.SampleRate);
+        _window = new float[_engine.WindowSize];
         _logger = logger ?? NullLogger.Instance;
         _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
         _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
@@ -88,7 +90,9 @@ public sealed class SileroVadProcessor : FrameProcessor
 
         while (_samples.Count >= _engine.WindowSize)
         {
-            var window = new float[_engine.WindowSize];
+            // Reused scratch buffer — this window feeds inference + RMS only and never escapes
+            // into a downstream frame, so it's safe to overwrite each iteration.
+            var window = _window;
             _samples.CopyTo(0, window, 0, _engine.WindowSize);
             _samples.RemoveRange(0, _engine.WindowSize);
 
