@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Microsoft.CognitiveServices.Speech;
 using Microsoft.CognitiveServices.Speech.Audio;
@@ -48,8 +50,26 @@ public sealed class AzureSpeechToTextEngine : ISpeechToTextEngine
 
     public ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
     {
-        if (_pushStream is null) return ValueTask.CompletedTask;
-        _pushStream.Write(pcm.ToArray());
+        if (_pushStream is null || pcm.IsEmpty) return ValueTask.CompletedTask;
+
+        // PushAudioInputStream.Write copies the data into its own buffer synchronously, so we can
+        // hand it a borrowed array and reuse/return it immediately.
+        if (MemoryMarshal.TryGetArray(pcm, out ArraySegment<byte> seg) &&
+            seg.Offset == 0 && seg.Count == seg.Array!.Length)
+        {
+            // Frame-owned, exactly-sized array (the common case from WebSocketAudioSource): no copy.
+            _pushStream.Write(seg.Array, seg.Count);
+        }
+        else
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(pcm.Length);
+            try
+            {
+                pcm.Span.CopyTo(rented);
+                _pushStream.Write(rented, pcm.Length);
+            }
+            finally { ArrayPool<byte>.Shared.Return(rented); }
+        }
         return ValueTask.CompletedTask;
     }
 

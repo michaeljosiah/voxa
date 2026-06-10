@@ -1,20 +1,47 @@
 using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace Voxa.Audio.SileroVad;
 
 /// <summary>
 /// Thin wrapper around the Silero VAD v5 ONNX model. Stateful — each <see cref="Probability"/>
 /// call carries the LSTM hidden state forward, so the model has memory of the previous ~250 ms.
+///
+/// <para>
+/// Zero-allocation steady state: input, state, and output tensors are all wrapped in
+/// <see cref="OrtValue"/>s created once and reused, and inference runs through the pre-bound
+/// <see cref="InferenceSession.Run(RunOptions, IReadOnlyCollection{string}, IReadOnlyCollection{OrtValue}, IReadOnlyCollection{string}, IReadOnlyCollection{OrtValue})"/>
+/// overload so ORT never materializes a result collection. Nothing is allocated per inference.
+/// </para>
+///
+/// <para>
+/// NOT thread-safe. The reused buffers mean <see cref="Probability"/> must be called from a single
+/// thread (the VAD processor's data loop does exactly this). The LSTM state is inherently ordered
+/// anyway.
+/// </para>
 /// </summary>
 public sealed class SileroVadEngine : IDisposable
 {
     private const string ResourceName = "Voxa.Audio.SileroVad.silero_vad.onnx";
 
     private readonly InferenceSession _session;
-    private readonly long[] _srTensor;
-    private readonly DenseTensor<long> _srWrapped;
-    private DenseTensor<float> _state;
+    private readonly RunOptions _runOptions;
+
+    // Pinned managed backing buffers — the OrtValues below read/write these directly.
+    private readonly float[] _inputBuf;
+    private readonly float[] _stateBuf;       // current state (model input)
+    private readonly float[] _stateOutBuf;    // next state (model output); copied into _stateBuf after each run
+    private readonly float[] _outBuf;         // probability (model output)
+
+    private readonly OrtValue _inputValue;
+    private readonly OrtValue _stateValue;
+    private readonly OrtValue _srValue;
+    private readonly OrtValue _outValue;
+    private readonly OrtValue _stateOutValue;
+
+    private readonly string[] _inputNames = { "input", "state", "sr" };
+    private readonly string[] _outputNames = { "output", "stateN" };
+    private readonly OrtValue[] _inputValues;
+    private readonly OrtValue[] _outputValues;
 
     /// <summary>Required input size for one inference. 512 at 16 kHz, 256 at 8 kHz.</summary>
     public int WindowSize { get; }
@@ -34,11 +61,38 @@ public sealed class SileroVadEngine : IDisposable
         SampleRate = sampleRate;
 
         var modelBytes = LoadEmbeddedModel();
-        _session = new InferenceSession(modelBytes);
+        using var sessionOptions = new SessionOptions
+        {
+            // Tiny (~1 MB) model: single-threaded sequential inference is faster than ONNX
+            // fanning out an intra-op pool, and it doesn't steal cores from the audio pipeline.
+            IntraOpNumThreads = 1,
+            InterOpNumThreads = 1,
+            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+        };
+        _session = new InferenceSession(modelBytes, sessionOptions);
+        _runOptions = new RunOptions();
 
-        _srTensor = new[] { (long)sampleRate };
-        _srWrapped = new DenseTensor<long>(_srTensor, Array.Empty<int>());
-        _state = new DenseTensor<float>(new[] { 2, 1, 128 });
+        const int stateLen = 2 * 1 * 128;
+        _inputBuf = new float[WindowSize];
+        _stateBuf = new float[stateLen];
+        _stateOutBuf = new float[stateLen];
+        _outBuf = new float[1];
+        var srBuf = new long[] { sampleRate };
+
+        // OrtValues wrap the managed arrays in place (pinned for the OrtValue's lifetime). Created
+        // once and reused — the contents of _inputBuf / _stateBuf are updated before each Run.
+        _inputValue = OrtValue.CreateTensorValueFromMemory(_inputBuf, new long[] { 1, WindowSize });
+        _stateValue = OrtValue.CreateTensorValueFromMemory(_stateBuf, new long[] { 2, 1, 128 });
+        // The model declares `sr` as a rank-0 scalar (shape []). ORT happens to accept a rank-1
+        // [1] tensor here too, but match the declared contract exactly with an empty shape rather
+        // than rely on that leniency holding across ORT versions.
+        _srValue = OrtValue.CreateTensorValueFromMemory(srBuf, Array.Empty<long>());
+        _outValue = OrtValue.CreateTensorValueFromMemory(_outBuf, new long[] { 1, 1 });
+        _stateOutValue = OrtValue.CreateTensorValueFromMemory(_stateOutBuf, new long[] { 2, 1, 128 });
+
+        _inputValues = new[] { _inputValue, _stateValue, _srValue };
+        _outputValues = new[] { _outValue, _stateOutValue };
     }
 
     /// <summary>Run one inference. Returns speech probability in [0, 1].</summary>
@@ -52,37 +106,37 @@ public sealed class SileroVadEngine : IDisposable
                 nameof(window));
         }
 
-        var inputTensor = new DenseTensor<float>(new[] { 1, WindowSize });
-        var inputSpan = inputTensor.Buffer.Span;
-        window.CopyTo(inputSpan);
+        // Copy the window into the pinned input buffer the input OrtValue points at.
+        window.CopyTo(_inputBuf);
 
-        var inputs = new[]
-        {
-            NamedOnnxValue.CreateFromTensor("input", inputTensor),
-            NamedOnnxValue.CreateFromTensor("state", _state),
-            NamedOnnxValue.CreateFromTensor("sr", _srWrapped),
-        };
+        // Pre-bound inputs AND outputs — ORT writes straight into _outBuf / _stateOutBuf and
+        // allocates nothing (no DisposableNamedOnnxValue result collection).
+        _session.Run(_runOptions, _inputNames, _inputValues, _outputNames, _outputValues);
 
-        using var results = _session.Run(inputs);
+        // Carry the new LSTM state forward for the next inference. Single-threaded, so this
+        // completes before the next Run reads _stateBuf.
+        Array.Copy(_stateOutBuf, _stateBuf, _stateOutBuf.Length);
 
-        DenseTensor<float>? newState = null;
-        float prob = 0f;
-        foreach (var r in results)
-        {
-            if (r.Name == "stateN") newState = r.AsTensor<float>().ToDenseTensor();
-            else if (r.Name == "output") prob = r.AsTensor<float>()[0, 0];
-        }
-        if (newState is not null) _state = newState;
-        return prob;
+        return _outBuf[0];
     }
 
     /// <summary>Reset the LSTM hidden state. Call between sessions or to flush context.</summary>
     public void Reset()
     {
-        _state = new DenseTensor<float>(new[] { 2, 1, 128 });
+        Array.Clear(_stateBuf);
+        Array.Clear(_stateOutBuf);
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        _inputValue.Dispose();
+        _stateValue.Dispose();
+        _srValue.Dispose();
+        _outValue.Dispose();
+        _stateOutValue.Dispose();
+        _runOptions.Dispose();
+        _session.Dispose();
+    }
 
     private static byte[] LoadEmbeddedModel()
     {

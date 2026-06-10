@@ -12,7 +12,11 @@ namespace Voxa.Processors;
 /// <item>System task — drains an unbounded priority channel for <see cref="SystemFrame"/>s.
 /// On <see cref="InterruptionFrame"/>, cancels the in-flight data frame's token.</item>
 /// <item>Data task — drains a bounded channel for <see cref="DataFrame"/>s and
-/// <see cref="ControlFrame"/>s in order. Each frame gets its own linked CTS.</item>
+/// <see cref="ControlFrame"/>s in order. Frames share one linked CTS that is replaced only
+/// after an interruption fires it (zero steady-state allocation). <see cref="IUninterruptible"/>
+/// frames and the <see cref="OnStartAsync"/>/<see cref="OnEndAsync"/> lifecycle hooks run on the
+/// processor-lifetime token instead, so they can't be preempted and loops started in
+/// <see cref="OnStartAsync"/> survive interruptions.</item>
 /// </list>
 ///
 /// Linking with <see cref="Link"/> wires both directions: this processor's downstream → next's input,
@@ -120,7 +124,16 @@ public abstract class FrameProcessor : IAsyncDisposable
                 if (frame is InterruptionFrame interruption)
                 {
                     // Preempt: cancel any in-flight data frame so long-running calls abort.
-                    _currentFrameCts?.Cancel();
+                    // The data loop may race us: it can null the field, then dispose the CTS at
+                    // its next iteration. Cancelling a disposed CTS throws — swallow it (the
+                    // frame we wanted to preempt already completed) instead of letting it kill
+                    // this loop and disable interruptions for the rest of the session.
+                    var inFlight = _currentFrameCts;
+                    if (inFlight is not null)
+                    {
+                        try { inFlight.Cancel(); }
+                        catch (ObjectDisposedException) { /* frame finished; CTS already replaced */ }
+                    }
                     await OnInterruptionAsync(interruption, ct).ConfigureAwait(false);
                 }
                 await ProcessFrameAsync(frame, ct).ConfigureAwait(false);
@@ -132,24 +145,45 @@ public abstract class FrameProcessor : IAsyncDisposable
 
     private async Task RunDataLoopAsync(CancellationToken ct)
     {
+        // One linked CTS reused across frames; replaced only after an interruption fires it.
+        // Interruptions are rare, frames are constant — this removes the dominant per-frame
+        // allocation in the pipeline (a linked CTS plus its parent-token registration per frame).
+        var frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
             await foreach (var frame in _dataChannel.Reader.ReadAllAsync(ct))
             {
-                using var frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                _currentFrameCts = frameCts;
+                // The system loop cancels the shared CTS (via _currentFrameCts) to preempt an
+                // in-flight frame. If a cancellation landed — whether it preempted the previous
+                // frame or arrived in the gap before this one — swap in a fresh CTS so this frame
+                // never starts on a cancelled token.
+                if (frameCts.IsCancellationRequested)
+                {
+                    frameCts.Dispose();
+                    frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                }
+
+                // IUninterruptible frames (EndFrame, tool-call frames) must survive a concurrent
+                // InterruptionFrame: they run on the processor-lifetime token and are never exposed
+                // to the system loop's preemption cancel (_currentFrameCts stays null for them).
+                bool interruptible = frame is not IUninterruptible;
+                var frameToken = interruptible ? frameCts.Token : ct;
+                if (interruptible) _currentFrameCts = frameCts;
                 try
                 {
                     switch (frame)
                     {
-                        case StartFrame s: await OnStartAsync(s, frameCts.Token).ConfigureAwait(false); break;
-                        case EndFrame e: await OnEndAsync(e, frameCts.Token).ConfigureAwait(false); break;
+                        // Lifecycle hooks get the processor-lifetime token: processors start
+                        // long-lived pumps (transport read/write loops) from OnStartAsync, and
+                        // those must not die when a later interruption fires the shared frame CTS.
+                        case StartFrame s: await OnStartAsync(s, ct).ConfigureAwait(false); break;
+                        case EndFrame e: await OnEndAsync(e, ct).ConfigureAwait(false); break;
                     }
-                    await ProcessFrameAsync(frame, frameCts.Token).ConfigureAwait(false);
+                    await ProcessFrameAsync(frame, frameToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (frameCts.IsCancellationRequested && !ct.IsCancellationRequested)
                 {
-                    // Frame was preempted by an interruption — that's fine, drop and continue.
+                    // Frame was preempted by an interruption — drop it and continue with a fresh CTS.
                 }
                 finally
                 {
@@ -161,6 +195,10 @@ public abstract class FrameProcessor : IAsyncDisposable
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (ChannelClosedException) { /* shutdown */ }
+        finally
+        {
+            frameCts.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()

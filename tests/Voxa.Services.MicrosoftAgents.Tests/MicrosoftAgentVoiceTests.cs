@@ -110,7 +110,11 @@ public class MicrosoftAgentVoiceTests
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("hi", IsFinal: true));
 
-            await captured.WaitForAsync(3, TimeSpan.FromSeconds(2));
+            // Wait for the terminal frame specifically, not a frame COUNT: the processor emits
+            // TranscriptionFrame, LlmTurnStartedFrame, LlmTextChunkFrame, LlmTurnEndedFrame — a
+            // count of 3 is satisfied by the text chunk before LlmTurnEndedFrame lands, which
+            // made this assert racily fail on loaded CI runners.
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
 
             var ordered = captured.Captured.ToList();
             var startIdx = ordered.FindIndex(f => f is LlmTurnStartedFrame);

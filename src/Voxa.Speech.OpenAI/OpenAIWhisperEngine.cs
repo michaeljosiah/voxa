@@ -20,7 +20,6 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
 {
     private readonly OpenAISpeechOptions _options;
     private readonly HttpClient _http;
-    private readonly bool _ownsHttpClient;
     private readonly Channel<TranscriptionResult> _transcripts =
         Channel.CreateUnbounded<TranscriptionResult>();
 
@@ -34,12 +33,15 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
     public OpenAIWhisperEngine(OpenAISpeechOptions options, HttpClient? httpClient = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _http = httpClient ?? new HttpClient();
-        _ownsHttpClient = httpClient is null;
+        _http = httpClient ?? VoxaHttp.Shared;
     }
 
     public Task StartAsync(CancellationToken ct)
     {
+        // Warm the shared TLS connection so the first transcription skips the handshake.
+        if (ReferenceEquals(_http, VoxaHttp.Shared))
+            _ = VoxaHttp.WarmupAsync(_http, _options.ApiBaseUrl, ct);
+
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _bytesPerChunk = (int)(_options.InputSampleRate * 2 * _options.SttBufferSeconds);
         // Periodic timer is now a SAFETY BACKSTOP (default 30s) — primary flush path is
@@ -82,8 +84,7 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
     public ValueTask DisposeAsync()
     {
         _cts?.Dispose();
-        if (_ownsHttpClient) _http.Dispose();
-        _buffer.Dispose();
+        _buffer.Dispose();   // never disposes the shared/injected HttpClient
         return ValueTask.CompletedTask;
     }
 
@@ -107,18 +108,24 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
 
     private async Task FlushAsync(bool force)
     {
-        byte[] pcm;
+        byte[] wav;
         lock (_bufferLock)
         {
             if (_buffer.Length == 0) return;
             _ = force; // unused — kept for API symmetry with StopAsync path
-            pcm = _buffer.ToArray();
+            // Single allocation: WAV header + PCM copied straight out of the MemoryStream's
+            // internal buffer. Replaces ToArray() (copy 1) + a second copy inside WrapPcmAsWav.
+            // TryGetBuffer always succeeds for our own `new MemoryStream()`, but stay correct
+            // if the stream type ever changes.
+            wav = _buffer.TryGetBuffer(out ArraySegment<byte> seg)
+                ? WrapPcmAsWav(seg.AsSpan(), _options.InputSampleRate, channels: 1)
+                : WrapPcmAsWav(_buffer.ToArray(), _options.InputSampleRate, channels: 1);
             _buffer.SetLength(0);
         }
 
         try
         {
-            var text = await TranscribeAsync(pcm).ConfigureAwait(false);
+            var text = await TranscribeAsync(wav).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(text))
             {
                 _transcripts.Writer.TryWrite(new TranscriptionResult(text, IsFinal: true, _options.SttLanguage));
@@ -131,10 +138,8 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         }
     }
 
-    private async Task<string> TranscribeAsync(byte[] pcm)
+    private async Task<string> TranscribeAsync(byte[] wav)
     {
-        var wav = WrapPcmAsWav(pcm, _options.InputSampleRate, channels: 1);
-
         using var form = new MultipartFormDataContent();
         var audioContent = new ByteArrayContent(wav);
         audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
@@ -157,7 +162,7 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         return json.TryGetProperty("text", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
     }
 
-    private static byte[] WrapPcmAsWav(byte[] pcm, int sampleRate, int channels)
+    private static byte[] WrapPcmAsWav(ReadOnlySpan<byte> pcm, int sampleRate, int channels)
     {
         const int bitsPerSample = 16;
         int byteRate = sampleRate * channels * (bitsPerSample / 8);
@@ -177,7 +182,7 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         BinaryPrimitives.WriteInt16LittleEndian(wav.AsSpan(34, 2), bitsPerSample);
         Encoding.ASCII.GetBytes("data").CopyTo(wav, 36);
         BinaryPrimitives.WriteInt32LittleEndian(wav.AsSpan(40, 4), pcm.Length);
-        Buffer.BlockCopy(pcm, 0, wav, 44, pcm.Length);
+        pcm.CopyTo(wav.AsSpan(44));
         return wav;
     }
 }

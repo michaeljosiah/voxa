@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Voxa.Frames;
@@ -57,6 +58,24 @@ internal static class RealtimeEventCodec
         return JsonSerializer.Serialize(new { type = "input_audio_buffer.append", audio = b64 }, Json);
     }
 
+    /// <summary>
+    /// Build the <c>input_audio_buffer.append</c> event as UTF-8 bytes, writing PCM straight to
+    /// base64 inside the JSON with no intermediate base64 string or JSON string. One allocation
+    /// (the returned array). Hot path: called once per ~20 ms uplink audio chunk.
+    /// </summary>
+    public static byte[] BuildInputAudioBufferAppendUtf8(ReadOnlyMemory<byte> pcm)
+    {
+        var buffer = new ArrayBufferWriter<byte>(pcm.Length * 4 / 3 + 64);
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type"u8, "input_audio_buffer.append"u8);
+            writer.WriteBase64String("audio"u8, pcm.Span);   // binary -> base64 -> UTF-8, no intermediates
+            writer.WriteEndObject();
+        }
+        return buffer.WrittenSpan.ToArray();
+    }
+
     public static string BuildToolCallOutput(string callId, string output)
     {
         return JsonSerializer.Serialize(new
@@ -114,13 +133,13 @@ internal static class RealtimeEventCodec
 
             case "response.audio.delta":
             {
-                var b64 = evt.TryGetProperty("delta", out var d) ? (d.GetString() ?? string.Empty) : string.Empty;
-                if (b64.Length > 0)
+                // Decode base64 straight from the UTF-8 token — no intermediate base64 string.
+                if (evt.TryGetProperty("delta", out var d) && d.ValueKind == JsonValueKind.String)
                 {
                     byte[] pcm;
-                    try { pcm = Convert.FromBase64String(b64); }
+                    try { pcm = d.GetBytesFromBase64(); }
                     catch (FormatException) { yield break; }
-                    yield return new AudioRawFrame(pcm, outputSampleRate, 1);
+                    if (pcm.Length > 0) yield return new AudioRawFrame(pcm, outputSampleRate, 1);
                 }
                 break;
             }

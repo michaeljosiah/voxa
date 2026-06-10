@@ -17,6 +17,23 @@ internal sealed class FakeWebSocket : System.Net.WebSockets.WebSocket
     private readonly List<(WebSocketMessageType Type, byte[] Data, bool EndOfMessage)> _sent = new();
     private readonly object _sentLock = new();
     private WebSocketState _state = WebSocketState.Open;
+    private volatile TaskCompletionSource? _sendGate;
+
+    /// <summary>Block every subsequent <see cref="SendAsync"/> until <see cref="ReleaseSends"/>.</summary>
+    public void BlockSends() => _sendGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Release a gate set by <see cref="BlockSends"/>; later sends are not blocked.</summary>
+    public void ReleaseSends()
+    {
+        var gate = _sendGate;
+        _sendGate = null;
+        gate?.TrySetResult();
+    }
+
+    public IReadOnlyList<byte[]> SentBinary
+    {
+        get { lock (_sentLock) return _sent.Where(s => s.Type == WebSocketMessageType.Binary).Select(s => s.Data).ToList(); }
+    }
 
     public IReadOnlyList<(WebSocketMessageType Type, byte[] Data, bool EndOfMessage)> Sent
     {
@@ -51,10 +68,11 @@ internal sealed class FakeWebSocket : System.Net.WebSockets.WebSocket
         return new WebSocketReceiveResult(len, msg.Type, msg.EndOfMessage);
     }
 
-    public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
+    public override async Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken)
     {
+        var gate = _sendGate;
+        if (gate is not null) await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         lock (_sentLock) _sent.Add((messageType, buffer.ToArray(), endOfMessage));
-        return Task.CompletedTask;
     }
 
     public ValueTask QueueIncomingBinaryAsync(byte[] pcm, bool endOfMessage = true)

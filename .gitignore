@@ -26,6 +26,9 @@ coverage/
 *.coveragexml
 *.opencover.xml
 
+# Benchmarks
+BenchmarkDotNet.Artifacts/
+
 # OS
 .DS_Store
 Thumbs.db

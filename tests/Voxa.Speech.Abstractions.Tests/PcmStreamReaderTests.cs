@@ -107,7 +107,7 @@ public class PcmStreamReaderTests
         var stream = new ChunkedStream(new[] { input });
         var chunks = new List<byte[]>();
         await foreach (var c in PcmStreamReader.ReadEvenChunksAsync(stream, chunkSize: 6, default))
-            chunks.Add(c);
+            chunks.Add(c.ToArray());   // copy: pooled buffer is reused on the next MoveNext
         Assert.True(chunks.Count >= 3);
         Assert.Equal(input, chunks.SelectMany(c => c).ToArray());
     }

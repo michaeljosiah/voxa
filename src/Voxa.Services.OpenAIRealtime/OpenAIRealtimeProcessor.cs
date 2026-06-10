@@ -87,7 +87,8 @@ public sealed class OpenAIRealtimeProcessor : FrameProcessor
             {
                 case AudioRawFrame audio:
                     // Audio is consumed by the Realtime API; assistant audio comes back via the read loop.
-                    await _transport.SendEventAsync(RealtimeEventCodec.BuildInputAudioBufferAppend(audio.Pcm), ct).ConfigureAwait(false);
+                    // UTF-8 byte path: PCM -> base64 -> JSON in one pass, no intermediate strings.
+                    await _transport.SendEventAsync(RealtimeEventCodec.BuildInputAudioBufferAppendUtf8(audio.Pcm), ct).ConfigureAwait(false);
                     return;
 
                 case ToolCallResultFrame tool:
@@ -110,11 +111,10 @@ public sealed class OpenAIRealtimeProcessor : FrameProcessor
         {
             await foreach (var json in transport.ReadEventsAsync(ct).ConfigureAwait(false))
             {
-                JsonElement root;
+                JsonDocument doc;
                 try
                 {
-                    using var doc = JsonDocument.Parse(json);
-                    root = doc.RootElement.Clone();
+                    doc = JsonDocument.Parse(json);
                 }
                 catch (JsonException ex)
                 {
@@ -122,12 +122,18 @@ public sealed class OpenAIRealtimeProcessor : FrameProcessor
                     continue;
                 }
 
-                foreach (var emitted in RealtimeEventCodec.Decode(root, _botSpeaking, _options.OutputSampleRate))
+                // Decode inside the document's lifetime — no RootElement.Clone(). Safe because
+                // Decode materializes every value it needs (strings, decoded byte[]) and never
+                // retains the JsonElement past the loop.
+                using (doc)
                 {
-                    if (emitted is BotStartedSpeakingFrame) _botSpeaking = true;
-                    else if (emitted is BotStoppedSpeakingFrame) _botSpeaking = false;
+                    foreach (var emitted in RealtimeEventCodec.Decode(doc.RootElement, _botSpeaking, _options.OutputSampleRate))
+                    {
+                        if (emitted is BotStartedSpeakingFrame) _botSpeaking = true;
+                        else if (emitted is BotStoppedSpeakingFrame) _botSpeaking = false;
 
-                    await PushFrameAsync(emitted, ct).ConfigureAwait(false);
+                        await PushFrameAsync(emitted, ct).ConfigureAwait(false);
+                    }
                 }
             }
         }

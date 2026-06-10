@@ -48,7 +48,7 @@ public class MistralTextToSpeechEngineTests
 
         var chunks = new List<byte[]>();
         await foreach (var chunk in engine.SynthesizeAsync("bonjour", default))
-            chunks.Add(chunk);
+            chunks.Add(chunk.ToArray());
 
         var snap = Assert.Single(handler.Snapshots);
         Assert.Equal(HttpMethod.Post, snap.Method);

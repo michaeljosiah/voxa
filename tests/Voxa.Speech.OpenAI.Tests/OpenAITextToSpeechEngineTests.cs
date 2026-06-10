@@ -30,7 +30,7 @@ public class OpenAITextToSpeechEngineTests
 
         var chunks = new List<byte[]>();
         await foreach (var chunk in engine.SynthesizeAsync("hello", default))
-            chunks.Add(chunk);
+            chunks.Add(chunk.ToArray());
 
         var captured = Assert.Single(handler.Captured);
         Assert.Equal(HttpMethod.Post, captured.Method);

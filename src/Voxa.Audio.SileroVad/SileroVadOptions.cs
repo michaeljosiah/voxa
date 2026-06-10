@@ -51,4 +51,21 @@ public sealed record SileroVadOptions
     /// triggered it" to hold.
     /// </summary>
     public TimeSpan PrerollDuration { get; init; } = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Optional turn-end confirmation (smart-turn seam). When set, the gate reaching its silence
+    /// timeout (<see cref="StopDuration"/>) does NOT immediately emit
+    /// <c>UserStoppedSpeakingFrame</c> — this callback decides. Return <c>true</c> to confirm the
+    /// turn is over (emit the frame); return <c>false</c> to treat it as a mid-sentence pause
+    /// (keep the gate open and re-evaluate after another <see cref="StopDuration"/> of silence).
+    /// This is what lets <see cref="StopDuration"/> be aggressive (e.g. 200 ms) without cutting
+    /// off speakers who pause to think — a smart-turn classifier plugs in here.
+    ///
+    /// <para>
+    /// The <see cref="ReadOnlyMemory{T}"/> is a snapshot of the most recent speech audio leading up
+    /// to the silence (up to ~1 s, 16-bit PCM at <see cref="SampleRate"/>). Default <c>null</c>
+    /// (classic silence-only behavior — byte-for-byte unchanged).
+    /// </para>
+    /// </summary>
+    public Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>>? ConfirmTurnEnd { get; init; }
 }
