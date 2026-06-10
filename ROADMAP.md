@@ -31,9 +31,9 @@ Voxa equivalent shape: a new `Voxa.Audio.SmartTurn` package with `ISmartTurnClas
 - `LocalSmartTurnClassifier` — bundled ONNX model (Pipecat's released one, MIT)
 - `HttpSmartTurnClassifier` — remote endpoint (matches Pipecat's HTTP smart turn)
 
-Insert between VAD and STT. When the VAD's silence-end fires, classifier evaluates the partial transcription + audio confidence. If "done" → forward `UserStoppedSpeakingFrame`. If "not done" → suppress, keep gate effectively open.
+~~Insert between VAD and STT~~ **Integration point already shipped (VPS-001):** `SileroVadOptions.ConfirmTurnEnd`. The VAD invokes the classifier at its silence timeout with the last ~1 s of speech audio; return `true` → emit `UserStoppedSpeakingFrame`, `false` → treat as a mid-sentence pause and keep the gate open (re-evaluated after another `StopDuration` of silence). The classifiers above plug into this delegate — no new processor insertion or frame suppression needed. With a classifier wired, `StopDuration` can safely drop to ~200 ms.
 
-Estimated effort: ~1 week including model integration + tests.
+Estimated effort: ~3 days (was ~1 week — the pipeline integration half is done; remaining work is the classifier implementations + model bundling + tests).
 
 ### Streaming STT alternatives
 
