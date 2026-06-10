@@ -1,0 +1,57 @@
+using Microsoft.Extensions.Configuration;
+using Voxa.Processors;
+
+namespace Voxa.Speech;
+
+/// <summary>
+/// Abstraction so descriptor factories can obtain an <see cref="HttpClient"/> without
+/// referencing Voxa.AspNetCore. Implemented by <c>VoxaHttpResolver</c> and registered
+/// by <c>AddVoxa()</c>. Returns null in manual-composition hosts that never called AddVoxa,
+/// in which case engines fall back to <see cref="VoxaHttp.Shared"/>.
+/// </summary>
+public interface IVoxaHttpClientProvider
+{
+    HttpClient? Resolve();
+}
+
+/// <summary>
+/// Self-description of an STT provider for config-driven composition ("Voxa:Stt": "OpenAI").
+/// Lives in abstractions so provider packages can describe themselves without referencing
+/// DI or ASP.NET. The factory runs once per connection — engines are per-session stateful.
+/// </summary>
+public sealed record VoxaSttDescriptor(
+    string Name,
+    string ConfigSection,
+    int PreferredInputSampleRate,
+    Func<IConfigurationSection, IReadOnlyList<string>> Validate,
+    Func<IServiceProvider, IConfigurationSection, SpeechToTextProcessor> CreateProcessor);
+
+/// <summary>TTS twin of <see cref="VoxaSttDescriptor"/>.</summary>
+public sealed record VoxaTtsDescriptor(
+    string Name,
+    string ConfigSection,
+    int OutputSampleRate,
+    Func<IConfigurationSection, IReadOnlyList<string>> Validate,
+    Func<IServiceProvider, IConfigurationSection, TextToSpeechProcessor> CreateProcessor);
+
+/// <summary>
+/// Settings derived from the active profile/config passed to a VAD descriptor factory.
+/// Defined here (in abstractions) so VAD packages can describe themselves without referencing
+/// the AspNetCore config model.
+/// </summary>
+public sealed record VoxaVadSettings(
+    int SampleRate,
+    float ConfidenceThreshold,
+    double MinRms,
+    TimeSpan StartDuration,
+    TimeSpan StopDuration,
+    TimeSpan PrerollDuration);
+
+/// <summary>
+/// Self-description of a VAD provider. VAD knobs are profile-mediated rather than per-provider
+/// credentials, so the factory receives already-resolved <see cref="VoxaVadSettings"/> instead
+/// of an <see cref="IConfigurationSection"/>.
+/// </summary>
+public sealed record VoxaVadDescriptor(
+    string Name,
+    Func<IServiceProvider, VoxaVadSettings, FrameProcessor> CreateProcessor);

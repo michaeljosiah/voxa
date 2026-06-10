@@ -79,6 +79,12 @@ public static class WireProtocol
 
     // ---------- Outbound (server -> client): source-generated, UTF-8, one allocation ----------
 
+    /// <summary>Serialize a session-info envelope to UTF-8 JSON bytes.</summary>
+    public static byte[] BuildSession(SessionInfoFrame f)
+        => JsonSerializer.SerializeToUtf8Bytes(
+            new SessionEnvelope("session", f.ProtocolVersion, f.InputSampleRate, f.OutputSampleRate),
+            WireJsonContext.Default.SessionEnvelope);
+
     /// <summary>Serialize a transcription envelope to UTF-8 JSON bytes.</summary>
     public static byte[] BuildTranscription(TranscriptionFrame f)
         => JsonSerializer.SerializeToUtf8Bytes(

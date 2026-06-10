@@ -7,7 +7,7 @@ namespace Voxa.AspNetCore;
 
 /// <summary>
 /// Fluent accumulator for a Voxa voice pipeline. Created by
-/// <see cref="MapVoxaVoiceExtensions.MapVoxaVoice"/>; the configured builder is invoked per
+/// <see cref="MapVoxaVoiceExtensions"/>; the configured builder is invoked per
 /// connection to materialise the actual pipeline.
 ///
 /// <para>
@@ -30,6 +30,16 @@ public sealed class VoicePipelineBuilder
     internal IReadOnlyList<string> CorsPolicies => _corsPolicies;
     internal Func<HttpContext, WebSocket, CancellationToken, ValueTask>? HelloReader => _helloReader;
     internal Func<Frame, string?>? CustomSerializer => _customSerializer;
+
+    /// <summary>
+    /// Set by <see cref="DefaultVoicePipelineComposer"/> when composing the default pipeline.
+    /// When set, the handler injects a <c>SessionInfoFrame</c> immediately after pipeline start
+    /// so clients receive the announced sample rates before audio flows.
+    /// </summary>
+    internal int? SessionInputSampleRate { get; set; }
+
+    /// <inheritdoc cref="SessionInputSampleRate"/>
+    internal int? SessionOutputSampleRate { get; set; }
 
     // ── Generic processor registration ─────────────────────────────────────
 
@@ -60,7 +70,7 @@ public sealed class VoicePipelineBuilder
 
     /// <summary>
     /// Apply authorization policies to the mapped endpoint. Equivalent to chaining
-    /// <c>RouteHandlerBuilder.RequireAuthorization(...)</c> on the route in <see cref="MapVoxaVoiceExtensions.MapVoxaVoice"/>.
+    /// <c>RouteHandlerBuilder.RequireAuthorization(...)</c> on the route in <see cref="MapVoxaVoiceExtensions"/>.
     /// </summary>
     public VoicePipelineBuilder RequireAuthorization(params string[] policies)
     {
