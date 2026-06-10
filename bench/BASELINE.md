@@ -72,10 +72,11 @@ byte-for-byte unchanged by `WireProtocolCompatibilityTests`.
 
 ## WS1 — Frame loop (`FrameLoopBenchmarks.Pump1000Frames`)
 
-Validated by the xunit allocation gate `AllocationGateTests.DataLoop_SteadyState_DoesNotAllocatePerFrame`:
-steady-state drain allocates **< 160 B/frame** (the irreducible `System.Threading.Channels`
-async-wait floor is ~100 B/frame; the removed per-frame linked CTS added ~150 B/frame on top, so a
-regression would push past the budget). Full BenchmarkDotNet capture _to be filled in at Phase 5_.
+After WS1 (`FrameLoopBenchmarks.Pump1000Frames`, ShortRun): **25 B/frame** allocated (with a
+high-capacity channel so the reader rarely parks). The removed per-frame linked CTS cost ~150 B/frame
+on top of this, so pre-WS1 was ~175+ B/frame. Also guarded by the xunit allocation gate
+`AllocationGateTests.DataLoop_SteadyState_DoesNotAllocatePerFrame` (budget < 160 B/frame in the
+bounded-64 scenario, where the `System.Threading.Channels` async-wait floor is ~100 B/frame).
 
 ---
 

@@ -4,6 +4,14 @@ Items below are explicitly *not* in v0.x but are tracked here so they don't get 
 
 ## P0 — Latency: get the cheap chain to ~600 ms end-to-end
 
+> **VPS-001 update (perf optimization spec, `docs/specifications/voxa-performance-optimization-spec.html`).**
+> Several P0 levers have shipped: **streaming Azure TTS** (`StartSpeakingTextAsync` + `AudioDataStream`,
+> TTFB ~150 ms vs 300–500 ms buffered), **connection warmup** on HTTP speech engines (first-turn TLS
+> handshake moved to session start), a configurable **`StopDuration`** hangover, an **eager first
+> sentence** flush (`SentenceAggregator.EagerFirstChunkMinChars`), and a **`voxa.turn.ttfb`** metric so
+> the number is finally measurable. The **smart-turn classifier** is still outstanding, but its
+> integration seam now exists: `SileroVadOptions.ConfirmTurnEnd`. See `docs/performance-tuning.md`.
+
 The chained `Whisper → gpt-4o-mini → TTS` pipeline currently sits at ~1.6 s from end-of-spoken-words to first bot audio. Realtime API is ~250–400 ms. Here's the breakdown and where to cut:
 
 | Component | Today | Target | How |
@@ -46,6 +54,13 @@ Fix: VAD processor listens for `BotStartedSpeakingFrame` / `BotStoppedSpeakingFr
 Estimated effort: ~2 days. Requires a small change to frame direction conventions.
 
 ## P2 — True barge-in / interruption
+
+> **VPS-001 update.** The server half shipped: `WebSocketAudioSink` now drains sends through an
+> epoch-stamped outbound queue and **purges queued bot audio from before an interruption** (the
+> `interruption` envelope jumps ahead of the stale audio). So the bot's already-queued audio no
+> longer plays out after a barge-in. Remaining: cancel the in-flight LLM/TTS run through
+> `MicrosoftAgentsProcessor`, and confirm the JS client flushes its local playback buffer on the
+> `{"type":"interruption"}` envelope.
 
 Today: user starts talking → SentenceAggregator drops its buffer (good), but the TTS audio already in the WebSocket send queue still plays out (user hears bot finish current sentence). LLM may still be generating. Net effect: bot keeps talking for ~1 sentence after the interrupt.
 
