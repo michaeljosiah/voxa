@@ -188,7 +188,14 @@ public sealed class WebSocketAudioSink : PipelineSink
     private ValueTask WriteAsync(ReadOnlyMemory<byte> payload, bool isBinaryAudio, CancellationToken ct)
     {
         VoxaMetrics.SinkQueueDepth.Record(_outbound.Reader.Count);
-        return _outbound.Writer.WriteAsync(new Outbound(payload, isBinaryAudio, Volatile.Read(ref _epoch)), ct);
+        // Use the processor-lifetime token (not the per-frame preemptible token) for the outbound
+        // channel write. Channel.WriteAsync checks the token before writing even when there is
+        // capacity; passing the frame token means an InterruptionFrame firing concurrently can
+        // cancel the write and silently drop non-audio messages (transcripts, text, tool calls)
+        // before they ever reach the queue. Binary audio is correctly gate-kept by the epoch
+        // purge in WriteLoopAsync — it does not need cancellation here.
+        _ = ct; // kept for call-site symmetry; not needed for the channel write
+        return _outbound.Writer.WriteAsync(new Outbound(payload, isBinaryAudio, Volatile.Read(ref _epoch)), CancellationToken.None);
     }
 
     private async Task WriteLoopAsync(CancellationToken ct)

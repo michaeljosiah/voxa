@@ -73,8 +73,13 @@ public class WebSocketAudioSinkPurgeTests
             ws.BlockSends();
             await runner.StartAsync();
 
+            // Fire the transcription AND the interruption with no delay between them.
+            // The InterruptionFrame (system channel) may reach the sink and cancel the
+            // in-flight frame CTS while TranscriptionFrame's EnqueueFrameAsync is still
+            // executing. The outbound-queue write must not use the cancellable frame token,
+            // otherwise Channel.WriteAsync throws before the item is enqueued and the
+            // transcript is silently lost (regression: VPS-001 bug found in CI).
             await pipeline.Source.IngestAsync(new TranscriptionFrame("before interruption", IsFinal: true));
-            await Task.Delay(40);
             await pipeline.Source.IngestAsync(new InterruptionFrame());
             ws.ReleaseSends();
 
