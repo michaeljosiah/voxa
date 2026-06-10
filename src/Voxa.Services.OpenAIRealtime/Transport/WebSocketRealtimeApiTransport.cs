@@ -46,6 +46,15 @@ public sealed class WebSocketRealtimeApiTransport : IRealtimeApiTransport
     public async ValueTask SendEventAsync(string json, CancellationToken ct)
     {
         var bytes = Encoding.UTF8.GetBytes(json);
+        await SendBytesAsync(bytes, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Send UTF-8 JSON bytes directly — no string round-trip (audio uplink hot path).</summary>
+    public ValueTask SendEventAsync(ReadOnlyMemory<byte> utf8Json, CancellationToken ct)
+        => SendBytesAsync(utf8Json, ct);
+
+    private async ValueTask SendBytesAsync(ReadOnlyMemory<byte> bytes, CancellationToken ct)
+    {
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
