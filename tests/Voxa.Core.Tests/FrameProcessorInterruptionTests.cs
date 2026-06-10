@@ -86,6 +86,92 @@ public class FrameProcessorInterruptionTests
         await WaitForAsync(p, () => p.Completed.OfType<AudioRawFrame>().Count() == 2, TimeSpan.FromSeconds(2));
     }
 
+    /// <summary>
+    /// Processor that captures the token handed to OnStartAsync and can gate uninterruptible
+    /// tool-result frames, for asserting which token classes an interruption may cancel.
+    /// </summary>
+    private sealed class SeamProcessor : FrameProcessor
+    {
+        public CancellationToken StartToken { get; private set; }
+        public volatile bool BlockAudio;
+        public TaskCompletionSource? ToolGate;
+        public List<Frame> Completed { get; } = new();
+
+        public SeamProcessor() : base("seam") { }
+
+        protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
+        {
+            StartToken = ct;
+            return ValueTask.CompletedTask;
+        }
+
+        protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+        {
+            if (frame is AudioRawFrame && BlockAudio)
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            if (frame is ToolCallResultFrame && ToolGate is { } gate)
+            {
+                // If an interruption wrongly cancels this uninterruptible frame's token, this
+                // throws OCE and the frame never reaches Completed.
+                await gate.Task.WaitAsync(ct);
+            }
+            lock (Completed) { Completed.Add(frame); }
+        }
+    }
+
+    private static async Task WaitForSeamAsync(SeamProcessor p, Func<bool> cond, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            bool ok;
+            lock (p.Completed) { ok = cond(); }
+            if (ok) return;
+            await Task.Delay(5);
+        }
+        throw new TimeoutException("condition not met within timeout");
+    }
+
+    [Fact]
+    public async Task Interruption_DoesNotCancel_TokenGivenToOnStart()
+    {
+        // Regression for VPS-001 WS1: processors start long-lived pumps (WebSocket read/write
+        // loops) from OnStartAsync. With the shared frame CTS, an interruption that preempts a
+        // data frame must NOT also fire the token those pumps were started with.
+        await using var p = new SeamProcessor();
+        p.Start();
+
+        await p.QueueFrameAsync(new StartFrame());
+        await WaitForSeamAsync(p, () => p.Completed.OfType<StartFrame>().Any(), TimeSpan.FromSeconds(2));
+
+        p.BlockAudio = true;
+        await p.QueueFrameAsync(Audio(1));        // in flight — interruption will fire the shared CTS
+        await Task.Delay(50);
+        await p.QueueFrameAsync(new InterruptionFrame());
+        await WaitForSeamAsync(p, () => p.Completed.OfType<InterruptionFrame>().Any(), TimeSpan.FromSeconds(2));
+
+        Assert.False(p.StartToken.IsCancellationRequested,
+            "OnStartAsync's token was cancelled by an interruption — background pumps started there would have died");
+    }
+
+    [Fact]
+    public async Task Interruption_DoesNotCancel_UninterruptibleFrame()
+    {
+        // IUninterruptible contract: an in-flight ToolCallResultFrame must survive an interruption.
+        await using var p = new SeamProcessor { ToolGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) };
+        p.Start();
+
+        await p.QueueFrameAsync(new ToolCallResultFrame("c1", "{}"));   // blocks at the gate
+        await Task.Delay(50);
+        await p.QueueFrameAsync(new InterruptionFrame());
+        await WaitForSeamAsync(p, () => p.Completed.OfType<InterruptionFrame>().Any(), TimeSpan.FromSeconds(2));
+
+        p.ToolGate!.TrySetResult();   // release — the frame must complete, not have been dropped
+        await WaitForSeamAsync(p, () => p.Completed.OfType<ToolCallResultFrame>().Any(), TimeSpan.FromSeconds(2));
+    }
+
     [Fact]
     public async Task TwoInterruptions_BackToBack_SubsequentFramesProcess()
     {
