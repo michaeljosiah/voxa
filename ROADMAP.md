@@ -94,8 +94,32 @@ Estimated effort: ~2 weeks (server adapter ~1w + mobile client ~1w).
 
 - `LlmResponseStartFrame` / `EndFrame` for explicit turn boundaries (currently inferred from text + speaking events)
 - 3-phase function call frames (started / in-progress / done) + WireProtocol envelopes
-- `Voxa.Observability` metrics frames + observer (TTFB, token counts, stage latencies) — wires up the Metrics tab placeholder in the demo
+- `Voxa.Observability` metrics frames + observer (TTFB, token counts, stage latencies) — wires up the Metrics tab placeholder in the demo. *(Partially shipped by VPS-001: `VoxaMetrics` meter with `voxa.turn.ttfb` + `voxa.sink.queue_depth`; per-stage latencies tracked in P7 below.)*
 - Fix the empty-bot-bubble that occasionally appears when SentenceAggregator emits a near-empty fragment
+
+## P5 — Developer experience: five lines to a voice bot
+
+The biggest adoption lever. Target: a working voice endpoint in ~5 lines plus one config block, with no knowledge of frames required.
+
+- **`AddVoxa()` + config-bound providers** — `services.AddVoxa(builder.Configuration)` reads a `"Voxa"` config section (`"Stt": "OpenAI"`, `"Tts": "ElevenLabs"`, `"Profile": "LowLatency"`) and registers engines/options in DI, so `app.MapVoxaVoice("/voice").UseDefaults()` composes the whole chained pipeline. Named **profiles** ("LowLatency" / "Quality" / "Cheap") bundle the tuning knobs from `docs/performance-tuning.md` (VAD hangover, eager first chunk, channel capacities) so users never have to learn them individually. `IHttpClientFactory` integration feeds/replaces `VoxaHttp.Shared` for hosts that need custom handlers or proxies.
+- **`Voxa` meta-package + `dotnet new voxa-server` template** — one NuGet package pulling Core + Transports.WebSocket + AspNetCore with sensible defaults, and a project template that scaffolds the sample-server shape (voice endpoint, JS client page, appsettings placeholders).
+- **Official JS client — `@voxa/client` on npm** — typed wire protocol generated from the `WireMessages` DTOs (so client and server can't drift), mic capture via AudioWorklet, streaming PCM playback, and playback-buffer **flush on the `interruption` envelope** — the missing client half of barge-in (P2); today every consumer reimplements this by hand.
+
+Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS client ~4d).
+
+## P6 — Capability
+
+- **Local/offline speech tier** — `Voxa.Speech.WhisperCpp` (STT) + `Voxa.Speech.Piper` (TTS) engines: develop without API keys, air-gapped deployments, zero-cost CI conversations. Models resolved like Silero's (embedded or first-run download).
+- **Session resilience / reconnect** — a dropped mobile WebSocket shouldn't lose the conversation. The hello envelope gains an optional resume token; the host maps it to conversation state (AONIK already has `ChatThread.Id` for exactly this). On resume the sink replays the last unfinished bot turn.
+- **Typed frontend tools** — source-generate the JSON schema from a C# delegate so tool calling becomes `voice.UseTool("show_chart", (string city, int days) => ...)` instead of hand-written `ArgumentsJson` plumbing; include an approval-required wrapper matching MAF's `ApprovalRequiredAIFunction`.
+- **Multi-agent handoff** — switch the active `IAgentTurnDriver` (persona / department) mid-call on a control frame, preserving transport and VAD state.
+
+## P7 — Operability & configurability
+
+- **Per-stage latency waterfall** — frames already carry `PtsMicros`; a lightweight `StageLatencyProcessor` + per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → first audio on the wire) recorded as `voxa.stage.latency` histograms makes `voxa.turn.ttfb` *diagnosable*, not just observable. A small `/voxa/debug` page in the sample (live waterfall per turn) doubles as the demo's "wow" view.
+- **Runtime control envelope** — client-sent `{"type":"configure", ...}` to adjust VAD thresholds / voice / language mid-session (mobile acoustic environments vary wildly), guarded by a host-side allowlist.
+- **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load).
+- **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking.
 
 ## Not planned (deferred from original Pipecat scope)
 

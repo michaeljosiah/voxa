@@ -6,7 +6,7 @@
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
-> See [`ROADMAP.md`](ROADMAP.md) for tracked work — latency improvements, smart turn detection, echo suppression, AONIK integration.
+> See [`ROADMAP.md`](ROADMAP.md) for tracked work — latency improvements, smart turn detection, echo suppression, developer-experience (`AddVoxa()`, JS client, profiles), local/offline speech, AONIK integration.
 
 > **Status: pre-alpha (0.1.x).** Public API stabilising. Not yet on NuGet.
 
@@ -90,7 +90,7 @@ Mix-and-match: use any STT vendor with any LLM with any TTS vendor.
                     (upstream)
 ```
 
-Each `FrameProcessor` runs two concurrent tasks: a **system task** draining priority frames (`InterruptionFrame`, speaking events, errors) and a **data task** draining ordered frames. An interruption mid-frame cancels the in-flight data frame's `CancellationToken` so long-running calls (LLM streaming, TTS synthesis) abort cleanly.
+Each `FrameProcessor` runs two concurrent tasks: a **system task** draining priority frames (`InterruptionFrame`, speaking events, errors) and a **data task** draining ordered frames. An interruption mid-frame cancels the in-flight data frame's `CancellationToken` so long-running calls (LLM streaming, TTS synthesis) abort cleanly — while frames marked `IUninterruptible` (tool calls, `EndFrame`) are guaranteed to survive it. The data loop is allocation-free at steady state: the per-frame cancellation source is reused and only replaced after an interruption fires it.
 
 ## The agent loop
 
@@ -187,7 +187,22 @@ Binary WebSocket frames carry raw 16-bit PCM @ 24 kHz mono. Text WebSocket frame
 
 `WebSocketAudioSink` accepts a `customSerializer` hook so hosts can add their own envelopes (e.g. AONIK's `threadReady`) without subclassing.
 
+Envelopes are serialized straight to UTF-8 via `System.Text.Json` source generation — no reflection, no intermediate strings, one allocation per envelope (zero for the fixed `interruption`/`end` envelopes). The wire format is locked byte-for-byte by compatibility tests, so existing clients are unaffected.
+
 See [`WireProtocol.cs`](src/Voxa.Transports.WebSocket/Protocol/WireProtocol.cs) for the codec.
+
+## Performance
+
+Voxa's hot paths are engineered for real-time audio — GC pauses are the worst failure mode for a voice pipeline, so the steady-state audio path allocates (almost) nothing:
+
+- **Frame loop:** ~25 B/frame through a processor (the per-frame linked `CancellationTokenSource` is reused, not reallocated).
+- **Silero VAD:** ~272 B/inference (~18× less than naive ONNX usage) via pre-bound `OrtValue` inputs *and* outputs.
+- **Transport:** single-copy binary receive; pooled buffers for fragmented messages; outbound sends drain through a single-writer queue instead of a lock held across network I/O.
+- **Barge-in purge:** when the user interrupts, bot audio already queued for the socket is dropped (epoch-stamped queue) and the `interruption` envelope jumps ahead — the bot actually stops talking.
+- **TTS time-to-first-byte:** all four TTS engines stream chunk-by-chunk (Azure included, via `AudioDataStream`); HTTP engines share one connection pool (`VoxaHttp.Shared`) and pre-warm TLS at session start.
+- **Latency knobs:** eager first-sentence flush (`SentenceAggregator.EagerFirstChunkMinChars`), configurable VAD hangover, and a smart-turn seam (`SileroVadOptions.ConfirmTurnEnd`).
+
+Measured numbers live in [`bench/BASELINE.md`](bench/BASELINE.md) (BenchmarkDotNet project under `bench/`); every knob is documented with its trade-off in [`docs/performance-tuning.md`](docs/performance-tuning.md). The full engineering spec is [`docs/specifications/voxa-performance-optimization-spec.html`](docs/specifications/voxa-performance-optimization-spec.html).
 
 ## Observability
 
@@ -208,6 +223,20 @@ Wire OpenTelemetry to capture them:
 services.AddOpenTelemetry()
     .WithTracing(t => t.AddSource("Voxa").AddOtlpExporter());
 ```
+
+Voxa.Core also publishes a `System.Diagnostics.Metrics` meter named `Voxa` (`VoxaMetrics.MeterName`):
+
+| Instrument | Meaning |
+|---|---|
+| `voxa.turn.ttfb` | Voice-to-voice latency: user stopped speaking → first bot audio byte on the wire. |
+| `voxa.sink.queue_depth` | Outbound WebSocket queue depth — sustained growth means the client/network can't keep up. |
+
+```csharp
+services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddMeter(VoxaMetrics.MeterName).AddOtlpExporter());
+```
+
+The sample server also logs `turn ttfb {n} ms` per turn via a plain `MeterListener`, no OTel backend required.
 
 ## Sample app
 
@@ -231,6 +260,9 @@ services.AddOpenTelemetry()
 ```bash
 dotnet build
 dotnet test
+
+# benchmarks (BenchmarkDotNet):
+dotnet run -c Release --project bench/Voxa.Benchmarks -- --filter *
 ```
 
 Targets `net10.0`. Requires .NET 10 SDK.
@@ -244,10 +276,11 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | 3 | ✅ WebSocket transport + Microsoft Agents adapter |
 | 5 | ✅ AzureSpeech STT/TTS standalone + ASP.NET sample |
 | 5.5 | ✅ Generic `AgentLoopProcessor` + delegate-based MAF surface + fluent `MapVoxaVoice` |
+| 5.6 | ✅ VPS-001 performance pass — zero-allocation hot path, source-generated wire protocol, streaming Azure TTS, server-side barge-in purge, `voxa.turn.ttfb` metric, benchmark suite |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 
-(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.)
+(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `AddVoxa()` developer experience, `@voxa/client` JS package, local/offline speech, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
 
 ## Contributing
 
