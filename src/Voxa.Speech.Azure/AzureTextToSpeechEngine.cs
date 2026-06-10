@@ -5,8 +5,9 @@ namespace Voxa.Speech.Azure;
 
 /// <summary>
 /// <see cref="ITextToSpeechEngine"/> implementation backed by the Microsoft Cognitive Services
-/// Speech SDK. Synthesises to raw 24 kHz 16-bit mono PCM and yields the audio in fixed-size
-/// chunks so consumers can stream while synthesis continues.
+/// Speech SDK. Synthesises to raw 24 kHz 16-bit mono PCM and streams the audio incrementally via
+/// <see cref="AudioDataStream"/> as the service produces it — first chunk in ~100–200 ms instead
+/// of after the whole utterance is synthesized.
 /// </summary>
 public sealed class AzureTextToSpeechEngine : ITextToSpeechEngine
 {
@@ -32,26 +33,45 @@ public sealed class AzureTextToSpeechEngine : ITextToSpeechEngine
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<byte[]> SynthesizeAsync(
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> SynthesizeAsync(
         string text,
         [EnumeratorCancellation] CancellationToken ct)
     {
         if (_synthesizer is null) yield break;
         if (string.IsNullOrWhiteSpace(text)) yield break;
 
-        using var result = await _synthesizer.SpeakTextAsync(text).ConfigureAwait(false);
-        if (result.Reason != ResultReason.SynthesizingAudioCompleted) yield break;
+        // StartSpeakingTextAsync returns as soon as synthesis STARTS; AudioDataStream then yields
+        // audio incrementally instead of buffering the whole utterance first.
+        using var result = await _synthesizer.StartSpeakingTextAsync(text).ConfigureAwait(false);
+        if (result.Reason != ResultReason.SynthesizingAudioStarted) yield break;
 
-        var data = result.AudioData;
-        if (data.Length == 0) yield break;
-
-        for (int i = 0; i < data.Length; i += ChunkSize)
+        using var audioStream = AudioDataStream.FromResult(result);
+        var buffer = new byte[ChunkSize];   // reused; consumer copies into its frame (valid-until-MoveNext)
+        bool completed = false;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            int len = Math.Min(ChunkSize, data.Length - i);
-            var chunk = new byte[len];
-            Array.Copy(data, i, chunk, 0, len);
-            yield return chunk;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                // ReadData blocks the calling thread until data is available or synthesis ends;
+                // hop to the thread pool so we don't block the TTS processor's data loop.
+                uint read = await Task.Run(() => audioStream.ReadData(buffer), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    completed = true;
+                    yield break;
+                }
+                yield return buffer.AsMemory(0, (int)read);
+            }
+        }
+        finally
+        {
+            // On cancellation (barge-in), tell the service to stop synthesizing — best-effort.
+            if (!completed)
+            {
+                try { await _synthesizer.StopSpeakingAsync().ConfigureAwait(false); }
+                catch { /* best-effort */ }
+            }
         }
     }
 

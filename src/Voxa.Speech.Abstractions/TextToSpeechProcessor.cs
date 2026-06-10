@@ -82,7 +82,9 @@ public sealed class TextToSpeechProcessor : FrameProcessor
         {
             await foreach (var pcm in _engine.SynthesizeAsync(text, ct).ConfigureAwait(false))
             {
-                await PushFrameAsync(new AudioRawFrame(pcm, _outputSampleRate, 1), ct).ConfigureAwait(false);
+                // Engine memory is transient (pooled, valid only until the next MoveNext); the frame
+                // needs its own copy with frame lifetime as it flows downstream asynchronously.
+                await PushFrameAsync(new AudioRawFrame(pcm.ToArray(), _outputSampleRate, 1), ct).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { /* shutdown */ }

@@ -15,18 +15,23 @@ public sealed class OpenAITextToSpeechEngine : ITextToSpeechEngine
 
     private readonly OpenAISpeechOptions _options;
     private readonly HttpClient _http;
-    private readonly bool _ownsHttpClient;
 
     public OpenAITextToSpeechEngine(OpenAISpeechOptions options, HttpClient? httpClient = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _http = httpClient ?? new HttpClient();
-        _ownsHttpClient = httpClient is null;
+        _http = httpClient ?? VoxaHttp.Shared;
     }
 
-    public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken ct)
+    {
+        // Warm the shared connection pool so the first synthesis of the session skips the TLS
+        // handshake. Only for the shared client — an injected client is the caller's to manage.
+        if (ReferenceEquals(_http, VoxaHttp.Shared))
+            _ = VoxaHttp.WarmupAsync(_http, _options.ApiBaseUrl, ct);
+        return Task.CompletedTask;
+    }
 
-    public async IAsyncEnumerable<byte[]> SynthesizeAsync(
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> SynthesizeAsync(
         string text,
         [EnumeratorCancellation] CancellationToken ct)
     {
@@ -39,12 +44,17 @@ public sealed class OpenAITextToSpeechEngine : ITextToSpeechEngine
             voice = _options.TtsVoice,
             response_format = "pcm",
         });
+        var url = $"{_options.ApiBaseUrl.TrimEnd('/')}/audio/speech";
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{_options.ApiBaseUrl.TrimEnd('/')}/audio/speech");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
-        req.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        HttpRequestMessage MakeRequest()
+        {
+            var r = new HttpRequestMessage(HttpMethod.Post, url);
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
+            r.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+            return r;
+        }
 
-        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var resp = await VoxaHttp.SendWithSingleRetryAsync(_http, MakeRequest, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -54,9 +64,5 @@ public sealed class OpenAITextToSpeechEngine : ITextToSpeechEngine
         }
     }
 
-    public ValueTask DisposeAsync()
-    {
-        if (_ownsHttpClient) _http.Dispose();
-        return ValueTask.CompletedTask;
-    }
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;   // never disposes the shared/injected client
 }

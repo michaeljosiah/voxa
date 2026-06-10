@@ -88,8 +88,8 @@ public class BuilderConvenienceExtensionsTests
     {
         public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        public IAsyncEnumerable<byte[]> SynthesizeAsync(string text, CancellationToken ct)
-            => AsyncEnumerable.Empty<byte[]>();
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> SynthesizeAsync(string text, CancellationToken ct)
+            => AsyncEnumerable.Empty<ReadOnlyMemory<byte>>();
     }
 
     private static class AsyncEnumerable

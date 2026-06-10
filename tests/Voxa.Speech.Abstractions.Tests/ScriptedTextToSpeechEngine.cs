@@ -24,7 +24,7 @@ internal sealed class ScriptedTextToSpeechEngine : ITextToSpeechEngine
 
     public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
 
-    public async IAsyncEnumerable<byte[]> SynthesizeAsync(
+    public async IAsyncEnumerable<ReadOnlyMemory<byte>> SynthesizeAsync(
         string text,
         [EnumeratorCancellation] CancellationToken ct)
     {

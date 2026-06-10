@@ -26,6 +26,7 @@ public sealed class SentenceAggregator : FrameProcessor
 {
     private readonly StringBuilder _buffer = new();
     private readonly object _lock = new();
+    private int _lastBoundary = -1;   // index in _buffer of the last confirmed sentence boundary
 
     /// <summary>Maximum chars to buffer before forcing a flush even without a sentence boundary. Default 500.</summary>
     public int MaxBufferChars { get; init; } = 500;
@@ -41,18 +42,40 @@ public sealed class SentenceAggregator : FrameProcessor
                     string? toFlush = null;
                     lock (_lock)
                     {
-                        _buffer.Append(chunk.Text);
+                        var text = chunk.Text;
+                        int baseLen = _buffer.Length;
+                        _buffer.Append(text);
 
-                        // Find the LAST sentence boundary in the buffer; flush everything up to and
-                        // including it. Anything after stays buffered (might be the start of the next sentence).
-                        var content = _buffer.ToString();
-                        var lastBoundary = FindLastSentenceBoundary(content);
+                        // Incremental boundary scan — each new character is examined exactly once,
+                        // instead of re-stringifying and rescanning the whole buffer per chunk.
+                        // A boundary is . ! ? \n followed by whitespace, or such a char at the very
+                        // end of the buffer (end-of-input rule) — same as the old FindLastSentenceBoundary.
 
-                        if (lastBoundary >= 0)
+                        // Seam: the previous buffer's last char is a boundary char and this chunk
+                        // starts with whitespace.
+                        if (baseLen > 0 && char.IsWhiteSpace(text[0]) && IsBoundaryChar(_buffer[baseLen - 1]))
                         {
-                            toFlush = content[..(lastBoundary + 1)].Trim();
-                            _buffer.Clear();
-                            _buffer.Append(content[(lastBoundary + 1)..]);
+                            _lastBoundary = baseLen - 1;
+                        }
+                        // Interior of this chunk: boundary char followed by whitespace.
+                        for (int i = 0; i < text.Length - 1; i++)
+                        {
+                            if (IsBoundaryChar(text[i]) && char.IsWhiteSpace(text[i + 1]))
+                            {
+                                _lastBoundary = baseLen + i;
+                            }
+                        }
+                        // Trailing boundary char at end-of-buffer (end-of-input rule).
+                        if (IsBoundaryChar(text[^1]))
+                        {
+                            _lastBoundary = _buffer.Length - 1;
+                        }
+
+                        if (_lastBoundary >= 0)
+                        {
+                            toFlush = _buffer.ToString(0, _lastBoundary + 1).Trim();
+                            _buffer.Remove(0, _lastBoundary + 1);
+                            _lastBoundary = -1;
                         }
                         else if (_buffer.Length >= MaxBufferChars)
                         {
@@ -72,7 +95,7 @@ public sealed class SentenceAggregator : FrameProcessor
             case UserStartedSpeakingFrame:
             case InterruptionFrame:
                 // Drop the buffered partial sentence — interrupted, so the response is no longer relevant.
-                lock (_lock) _buffer.Clear();
+                lock (_lock) { _buffer.Clear(); _lastBoundary = -1; }
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
@@ -89,6 +112,7 @@ public sealed class SentenceAggregator : FrameProcessor
         {
             leftover = _buffer.Length > 0 ? _buffer.ToString().Trim() : null;
             _buffer.Clear();
+            _lastBoundary = -1;
         }
         if (!string.IsNullOrEmpty(leftover))
         {
@@ -96,21 +120,6 @@ public sealed class SentenceAggregator : FrameProcessor
         }
     }
 
-    /// <summary>
-    /// Returns the index of the last char that ends a sentence. A boundary is one of <c>. ! ? \n</c>
-    /// followed by whitespace or end-of-input — protects "Mr." / "3.14" from being split.
-    /// </summary>
-    private static int FindLastSentenceBoundary(string s)
-    {
-        for (int i = s.Length - 1; i >= 0; i--)
-        {
-            var c = s[i];
-            if (c == '.' || c == '!' || c == '?' || c == '\n')
-            {
-                bool followedByWhitespaceOrEnd = i == s.Length - 1 || char.IsWhiteSpace(s[i + 1]);
-                if (followedByWhitespaceOrEnd) return i;
-            }
-        }
-        return -1;
-    }
+    /// <summary>A char that can end a sentence: <c>. ! ? \n</c>.</summary>
+    private static bool IsBoundaryChar(char c) => c is '.' or '!' or '?' or '\n';
 }
