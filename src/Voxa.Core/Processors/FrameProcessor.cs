@@ -132,11 +132,24 @@ public abstract class FrameProcessor : IAsyncDisposable
 
     private async Task RunDataLoopAsync(CancellationToken ct)
     {
+        // One linked CTS reused across frames; replaced only after an interruption fires it.
+        // Interruptions are rare, frames are constant — this removes the dominant per-frame
+        // allocation in the pipeline (a linked CTS plus its parent-token registration per frame).
+        var frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
             await foreach (var frame in _dataChannel.Reader.ReadAllAsync(ct))
             {
-                using var frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                // The system loop cancels the shared CTS (via _currentFrameCts) to preempt an
+                // in-flight frame. If a cancellation landed — whether it preempted the previous
+                // frame or arrived in the gap before this one — swap in a fresh CTS so this frame
+                // never starts on a cancelled token.
+                if (frameCts.IsCancellationRequested)
+                {
+                    frameCts.Dispose();
+                    frameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                }
+
                 _currentFrameCts = frameCts;
                 try
                 {
@@ -149,7 +162,7 @@ public abstract class FrameProcessor : IAsyncDisposable
                 }
                 catch (OperationCanceledException) when (frameCts.IsCancellationRequested && !ct.IsCancellationRequested)
                 {
-                    // Frame was preempted by an interruption — that's fine, drop and continue.
+                    // Frame was preempted by an interruption — drop it and continue with a fresh CTS.
                 }
                 finally
                 {
@@ -161,6 +174,10 @@ public abstract class FrameProcessor : IAsyncDisposable
         }
         catch (OperationCanceledException) { /* shutdown */ }
         catch (ChannelClosedException) { /* shutdown */ }
+        finally
+        {
+            frameCts.Dispose();
+        }
     }
 
     public async ValueTask DisposeAsync()
