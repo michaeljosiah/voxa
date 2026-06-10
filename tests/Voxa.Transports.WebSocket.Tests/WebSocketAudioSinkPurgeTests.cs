@@ -85,6 +85,26 @@ public class WebSocketAudioSinkPurgeTests
     }
 
     [Fact]
+    public async Task EndFrame_AfterSocketLeftOpen_StillCompletesRunner()
+    {
+        var (runner, ws, _) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+
+            // Client disconnect: the socket leaves Open BEFORE the EndFrame reaches the sink.
+            // Regression (VPS-001 review): the sink skipped EnqueueFrameAsync for non-Open
+            // sockets, so the outbound channel was never completed and `await _writerTask`
+            // deadlocked the data loop — StopAsync burned its full grace period and WaitAsync
+            // ended cancelled instead of gracefully.
+            ws.Abort();
+
+            await runner.StopAsync(TimeSpan.FromSeconds(2));
+            await runner.WaitAsync().WaitAsync(Timeout);   // must complete gracefully, not cancel
+        }
+    }
+
+    [Fact]
     public async Task EndFrame_DrainsQueue_BeforeRunnerCompletes()
     {
         var (runner, ws, _) = Build();

@@ -85,16 +85,23 @@ public sealed class WebSocketAudioSink : PipelineSink
         }
 
         // Graceful end: flush the queue (incl. the "end" envelope) before the runner observes end.
-        if (frame is EndFrame && _writerTask is not null)
-        {
-            try { await _writerTask.ConfigureAwait(false); } catch { /* best-effort drain */ }
-        }
-
-        // Only EndFrame reaches the base sink buffer (it drives EndFrameObserved for the runner).
-        // Mirroring every data frame into the inherited unbounded output channel would retain all
-        // session audio in memory — nothing drains that channel when this sink IS the transport.
         if (frame is EndFrame)
         {
+            // Complete the channel unconditionally. When the socket already left Open (client
+            // disconnect — the most common way a session ends) the enqueue above was skipped,
+            // so the EndFrame case inside it never ran TryComplete; without this the writer
+            // task stays parked in ReadAllAsync and the await below deadlocks the data loop —
+            // and with it EndFrameObserved / runner completion. No-op on the graceful path.
+            _outbound.Writer.TryComplete();
+            if (_writerTask is not null)
+            {
+                try { await _writerTask.ConfigureAwait(false); } catch { /* best-effort drain */ }
+            }
+
+            // Only EndFrame reaches the base sink buffer (it drives EndFrameObserved for the
+            // runner). Mirroring every data frame into the inherited unbounded output channel
+            // would retain all session audio in memory — nothing drains that channel when this
+            // sink IS the transport.
             await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);
         }
     }
