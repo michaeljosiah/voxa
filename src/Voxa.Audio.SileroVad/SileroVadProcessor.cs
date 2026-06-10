@@ -39,6 +39,10 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly Queue<byte[]> _preroll = new();
     private readonly int _prerollWindows;
 
+    // Rolling tail of recent speech audio passed to a smart-turn ConfirmTurnEnd callback.
+    private readonly Queue<byte[]> _recentSpeech = new();
+    private readonly int _recentSpeechWindows;
+
     private float _peakProbThisSecond;
     private double _peakRmsThisSecond;
     private int _windowsThisSecond;
@@ -54,6 +58,8 @@ public sealed class SileroVadProcessor : FrameProcessor
         _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
         _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
         _prerollWindows = Math.Max(1, (int)Math.Ceiling(_options.PrerollDuration.TotalMilliseconds / _windowDuration.TotalMilliseconds));
+        // ~1 s of recent speech for the smart-turn seam.
+        _recentSpeechWindows = Math.Max(1, (int)Math.Ceiling(1000.0 / _windowDuration.TotalMilliseconds));
     }
 
     /// <summary>The configured sample rate. Audio frames at other rates are forwarded untouched (with a warning).</summary>
@@ -121,7 +127,24 @@ public sealed class SileroVadProcessor : FrameProcessor
             }
             else if (_isSpeaking && !voiced && _unvoicedAccum >= _options.StopDuration)
             {
-                _isSpeaking = false;
+                // Silence timeout reached. If a smart-turn confirmer is wired, let it decide whether
+                // the turn is really over; otherwise close the gate (classic behavior).
+                bool confirmed = true;
+                if (_options.ConfirmTurnEnd is { } confirm)
+                {
+                    confirmed = await confirm(SnapshotRecentSpeech(), ct).ConfigureAwait(false);
+                }
+
+                if (confirmed)
+                {
+                    _isSpeaking = false;
+                }
+                else
+                {
+                    // Mid-sentence pause — keep the gate open and wait another StopDuration of
+                    // silence before asking again.
+                    _unvoicedAccum = TimeSpan.Zero;
+                }
             }
 
             // Per-second diagnostic so users can tune.
@@ -155,6 +178,9 @@ public sealed class SileroVadProcessor : FrameProcessor
                     prob, rms, _preroll.Count, (int)(_preroll.Count * _windowDuration.TotalMilliseconds));
                 await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
 
+                // Start a fresh recent-speech tail for this utterance (smart-turn seam).
+                _recentSpeech.Clear();
+
                 // Flush the pre-roll buffer so the first syllable of the utterance reaches STT.
                 while (_preroll.Count > 0)
                 {
@@ -170,6 +196,13 @@ public sealed class SileroVadProcessor : FrameProcessor
 
             if (_isSpeaking)
             {
+                // Keep a rolling tail of recent speech for the smart-turn confirmer (shares the
+                // pcmOut reference — no extra allocation; the array is immutable once built).
+                if (_options.ConfirmTurnEnd is not null)
+                {
+                    _recentSpeech.Enqueue(pcmOut);
+                    while (_recentSpeech.Count > _recentSpeechWindows) _recentSpeech.Dequeue();
+                }
                 await PushFrameAsync(new AudioRawFrame(pcmOut, audio.SampleRate, audio.Channels), ct).ConfigureAwait(false);
             }
             else
@@ -179,6 +212,22 @@ public sealed class SileroVadProcessor : FrameProcessor
                 while (_preroll.Count > _prerollWindows) _preroll.Dequeue();
             }
         }
+    }
+
+    /// <summary>Concatenate the rolling recent-speech tail into one PCM buffer for ConfirmTurnEnd.</summary>
+    private ReadOnlyMemory<byte> SnapshotRecentSpeech()
+    {
+        if (_recentSpeech.Count == 0) return ReadOnlyMemory<byte>.Empty;
+        int total = 0;
+        foreach (var w in _recentSpeech) total += w.Length;
+        var buf = new byte[total];
+        int offset = 0;
+        foreach (var w in _recentSpeech)
+        {
+            w.CopyTo(buf.AsSpan(offset));
+            offset += w.Length;
+        }
+        return buf;
     }
 
     private static double ComputeRms(ReadOnlySpan<float> window)

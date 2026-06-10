@@ -20,6 +20,19 @@ using Voxa.Transports.WebSocket;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
+// Surface the voice-to-voice latency metric (voxa.turn.ttfb) in the console without needing an
+// OpenTelemetry backend — one log line per turn. Hosts with OTel can instead
+// AddMeter(VoxaMetrics.MeterName) on their MeterProviderBuilder.
+var ttfbListener = new System.Diagnostics.Metrics.MeterListener();
+ttfbListener.InstrumentPublished = (instrument, listener) =>
+{
+    if (instrument.Meter.Name == Voxa.VoxaMetrics.MeterName && instrument.Name == "voxa.turn.ttfb")
+        listener.EnableMeasurementEvents(instrument);
+};
+ttfbListener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
+    app.Logger.LogInformation("turn ttfb {Ms:F0} ms", measurement));
+ttfbListener.Start();
+
 // VAD selector — `Voxa:Vad` config: "Silence" (default, energy-only), "Silero" (ML-based), "None".
 // Default is the energy gate because (a) it's the known-good for the demo, (b) Silero's defaults
 // take per-environment tuning to match user mic characteristics — opt-in once you've verified
@@ -202,7 +215,9 @@ app.Map("/voice/openai-batch", async (HttpContext ctx) =>
                 return ValueTask.CompletedTask;
             };
         }))
-        .Then(new SentenceAggregator())
+        // EagerFirstChunkMinChars: get the bot's opening audio out ~100-400ms sooner by letting
+        // the first flush of a turn break at a clause boundary (see docs/performance-tuning.md).
+        .Then(new SentenceAggregator { EagerFirstChunkMinChars = 40 })
         .Then(OpenAISpeech.Synthesis(openai))
         .Sink(new WebSocketAudioSink(ws));
 

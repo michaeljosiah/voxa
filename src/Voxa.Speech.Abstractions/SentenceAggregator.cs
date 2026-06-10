@@ -26,10 +26,20 @@ public sealed class SentenceAggregator : FrameProcessor
 {
     private readonly StringBuilder _buffer = new();
     private readonly object _lock = new();
-    private int _lastBoundary = -1;   // index in _buffer of the last confirmed sentence boundary
+    private int _lastBoundary = -1;     // index in _buffer of the last confirmed sentence boundary
+    private bool _firstFlushOfTurn = true;
 
     /// <summary>Maximum chars to buffer before forcing a flush even without a sentence boundary. Default 500.</summary>
     public int MaxBufferChars { get; init; } = 500;
+
+    /// <summary>
+    /// When &gt; 0, the FIRST flush of a turn may also break at a clause boundary (<c>, ; :</c>
+    /// followed by whitespace) once at least this many characters are buffered — getting the bot's
+    /// first audio out 100–400 ms earlier on long opening sentences. Subsequent flushes use full
+    /// sentence boundaries as usual. Default 0 (off). A turn boundary is detected from
+    /// <see cref="LlmTurnStartedFrame"/> (or reset by an interruption).
+    /// </summary>
+    public int EagerFirstChunkMinChars { get; init; }
 
     public SentenceAggregator() : base("SentenceAggregator") { }
 
@@ -71,17 +81,40 @@ public sealed class SentenceAggregator : FrameProcessor
                             _lastBoundary = _buffer.Length - 1;
                         }
 
+                        // Eager first chunk: on the first flush of a turn, a clause boundary
+                        // (, ; :) followed by whitespace also counts, once enough is buffered —
+                        // gets the opening audio out sooner. Only fills in if no stronger
+                        // sentence boundary was already found.
+                        if (_lastBoundary < 0 && _firstFlushOfTurn && EagerFirstChunkMinChars > 0 &&
+                            _buffer.Length >= EagerFirstChunkMinChars)
+                        {
+                            if (baseLen > 0 && char.IsWhiteSpace(text[0]) && IsClauseChar(_buffer[baseLen - 1]))
+                            {
+                                _lastBoundary = baseLen - 1;
+                            }
+                            for (int i = 0; i < text.Length - 1; i++)
+                            {
+                                if (IsClauseChar(text[i]) && char.IsWhiteSpace(text[i + 1]))
+                                {
+                                    _lastBoundary = baseLen + i;
+                                }
+                            }
+                        }
+
                         if (_lastBoundary >= 0)
                         {
                             toFlush = _buffer.ToString(0, _lastBoundary + 1).Trim();
                             _buffer.Remove(0, _lastBoundary + 1);
                             _lastBoundary = -1;
+                            _firstFlushOfTurn = false;
                         }
                         else if (_buffer.Length >= MaxBufferChars)
                         {
                             // Hard cap — emit whatever we have so TTS doesn't stall on a runaway response.
                             toFlush = _buffer.ToString().Trim();
                             _buffer.Clear();
+                            _lastBoundary = -1;
+                            _firstFlushOfTurn = false;
                         }
                     }
 
@@ -92,10 +125,16 @@ public sealed class SentenceAggregator : FrameProcessor
                     return;
                 }
 
+            case LlmTurnStartedFrame:
+                // New turn — the next flush is the turn's first (re-enables eager first-chunk mode).
+                lock (_lock) _firstFlushOfTurn = true;
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
             case UserStartedSpeakingFrame:
             case InterruptionFrame:
                 // Drop the buffered partial sentence — interrupted, so the response is no longer relevant.
-                lock (_lock) { _buffer.Clear(); _lastBoundary = -1; }
+                lock (_lock) { _buffer.Clear(); _lastBoundary = -1; _firstFlushOfTurn = true; }
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
@@ -122,4 +161,7 @@ public sealed class SentenceAggregator : FrameProcessor
 
     /// <summary>A char that can end a sentence: <c>. ! ? \n</c>.</summary>
     private static bool IsBoundaryChar(char c) => c is '.' or '!' or '?' or '\n';
+
+    /// <summary>A clause boundary used only for the eager first chunk: <c>, ; :</c>.</summary>
+    private static bool IsClauseChar(char c) => c is ',' or ';' or ':';
 }
