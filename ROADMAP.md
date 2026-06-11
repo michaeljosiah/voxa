@@ -116,10 +116,23 @@ Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS clien
 
 ## P7 — Operability & configurability
 
-- **Per-stage latency waterfall** — frames already carry `PtsMicros`; a lightweight `StageLatencyProcessor` + per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → first audio on the wire) recorded as `voxa.stage.latency` histograms makes `voxa.turn.ttfb` *diagnosable*, not just observable. A small `/voxa/debug` page in the sample (live waterfall per turn) doubles as the demo's "wow" view.
+- **Per-stage latency waterfall** — frames already carry `PtsMicros`; a lightweight `StageLatencyProcessor` + per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → first audio on the wire) recorded as `voxa.stage.latency` histograms makes `voxa.turn.ttfb` *diagnosable*, not just observable. A small `/voxa/debug` page in the sample (live waterfall per turn) doubles as the demo's "wow" view. *(Specced: VST-001 WS0 delivers the processor, the histograms, and the underlying `VoxaDiagnosticsHub` event stream — see P8.)*
 - **Runtime control envelope** — client-sent `{"type":"configure", ...}` to adjust VAD thresholds / voice / language mid-session (mobile acoustic environments vary wildly), guarded by a host-side allowlist.
 - **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load).
 - **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking.
+
+## P8 — Voxa Studio (developer desktop app)
+
+Specced as **VST-001** ([spec](docs/specifications/voxa-studio-spec.html)). An Avalonia desktop app (`apps/Voxa.Studio`, Windows-first audio behind an `IStudioAudioDevice` seam) that hosts the real composed pipeline in-process against the developer's mic and speakers:
+
+- **Talk** — live conversation with a scrolling VAD probability trace and a per-turn stage-latency waterfall (the view that would have caught the Silero v5 context bug in seconds)
+- **Voices** — audition / A/B the Piper and Kokoro catalogs with TTFB + RTF measured on local hardware
+- **Models** — model-cache inventory, SHA-256 verify, prefetch-all (air-gap provisioning), purge
+- **Config** — registry-driven pipeline composer that exports a validated `appsettings.json` block
+
+Foundation: **WS0 `VoxaDiagnosticsHub`** — a per-session typed pipeline event stream (VAD windows, turn edges, transcripts, stage latencies) that is zero-cost when unobserved, ships in the framework (not the app), and also delivers the P7 latency-waterfall item for server hosts. Keyless out of the box thanks to the VLS-001 local tier.
+
+Estimated effort: ~2.5 weeks (WS0 diagnostics ~4d, shell + audio ~4d, Talk ~3d, Voices/Models/Config ~4d, CI + docs ~2d).
 
 ## Not planned (deferred from original Pipecat scope)
 
