@@ -56,10 +56,14 @@ public sealed class PiperTtsEngine : ITextToSpeechEngine
         string voicePath;
         if (!string.IsNullOrEmpty(_options.VoicePath))
         {
-            voicePath = _options.VoicePath;
+            // Root the path against the app's current directory NOW. The piper child runs with
+            // WorkingDirectory set to a temp output dir, so a relative --model would be resolved
+            // against that temp dir — not the CWD where validation and ReadVoiceSampleRate found
+            // the file — and piper would fail to start despite startup validation passing.
+            voicePath = Path.GetFullPath(_options.VoicePath);
             if (!File.Exists(voicePath))
                 throw new VoxaModelUnavailableException(
-                    $"Voxa:Piper:VoicePath is set to '{voicePath}' but no file exists there.");
+                    $"Voxa:Piper:VoicePath is set to '{_options.VoicePath}' but no file exists there.");
             if (!File.Exists(voicePath + ".json"))
                 throw new VoxaModelUnavailableException(
                     $"piper requires the voice config next to the model: '{voicePath}.json' was not found.");
@@ -133,10 +137,13 @@ public sealed class PiperTtsEngine : ITextToSpeechEngine
     {
         if (!string.IsNullOrEmpty(_options.ExecutablePath))
         {
-            if (!File.Exists(_options.ExecutablePath))
+            // Root it for the same reason as the voice path: the child runs in a temp dir, so a
+            // relative executable would be resolved against that dir rather than the app's CWD.
+            var exePath = Path.GetFullPath(_options.ExecutablePath);
+            if (!File.Exists(exePath))
                 throw new VoxaModelUnavailableException(
                     $"Voxa:Piper:ExecutablePath is set to '{_options.ExecutablePath}' but no file exists there.");
-            return _options.ExecutablePath;
+            return exePath;
         }
 
         if (PiperExecutableCatalog.FindOnPath() is { } onPath)

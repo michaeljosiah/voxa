@@ -77,6 +77,46 @@ public class PiperIntegrationTests
         catch (ArgumentException) { return false; } // no such process — fully reaped
     }
 
+    [Fact]
+    [Trait("Category", "LocalModels")]
+    public async Task Relative_VoicePath_Resolves_Against_App_Cwd_Not_The_Child_Working_Dir()
+    {
+        // Regression: a relative VoicePath must reach piper as a rooted path. The child runs with
+        // WorkingDirectory set to a temp output dir, so a relative --model would be resolved there
+        // (not the app's CWD where validation found the file) and piper would fail to start —
+        // even though startup validation passed.
+        var cache = new VoxaModelCache(
+            new VoxaModelCacheOptions(VoxaModelCacheOptions.DefaultCacheRoot(), Offline: false));
+        Assert.True(PiperVoiceCatalog.TryGet("en_US-amy-low", out var voice));
+        var onnxAbs = await cache.ResolveAsync(voice.Onnx, CancellationToken.None);
+        var jsonAbs = await cache.ResolveAsync(voice.Json, CancellationToken.None);
+
+        // Stage the voice (+ its required .json sibling) in a directory directly under the current
+        // directory so the path is genuinely relative on every platform/volume.
+        var stageRel = Path.Combine("voxa-rel-voice-" + Guid.NewGuid().ToString("N"), "amy.onnx");
+        var stageAbs = Path.GetFullPath(stageRel);
+        Directory.CreateDirectory(Path.GetDirectoryName(stageAbs)!);
+        File.Copy(onnxAbs, stageAbs);
+        File.Copy(jsonAbs, stageAbs + ".json");
+        try
+        {
+            Assert.False(Path.IsPathRooted(stageRel)); // precondition: the path really is relative
+
+            var options = new PiperOptions { VoicePath = stageRel, OutputSampleRate = 16000, MaxProcesses = 1 };
+            await using var engine = new PiperTtsEngine(options, cache);
+            await engine.StartAsync(CancellationToken.None);
+
+            var pcm = await CollectPcmAsync(engine, "Relative voice path.");
+            Assert.NotEmpty(pcm);            // piper found the voice and synthesized
+            Assert.Contains(pcm, b => b != 0);
+        }
+        finally
+        {
+            PiperProcessPool.DisposeAll();
+            try { Directory.Delete(Path.GetDirectoryName(stageAbs)!, recursive: true); } catch { }
+        }
+    }
+
     private static async Task<byte[]> CollectPcmAsync(PiperTtsEngine engine, string text)
     {
         using var ms = new MemoryStream();
