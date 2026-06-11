@@ -77,9 +77,9 @@
   <h1>VST-001 — Voxa Studio Specification</h1>
   <div class="sub">A desktop application — <code>Voxa.Studio</code> — that runs the real Voxa pipeline in-process against the developer's microphone and speakers, and gives them what a sample web page never can: a live VAD probability trace, a per-turn latency waterfall, a voice audition lab for the local TTS catalogs, a visual model-cache manager, and an <code>appsettings.json</code> composer driven by the provider registry. Built on a new <b>pipeline diagnostics surface</b> (<code>VoxaDiagnosticsHub</code>) that is independently useful to every Voxa host.</div>
   <div class="meta-grid">
-    <div><b>Document</b> VST-001 v1.0</div>
-    <div><b>Date</b> 2026-06-11</div>
-    <div><b>Status</b> Draft — for review</div>
+    <div><b>Document</b> VST-001 v1.1</div>
+    <div><b>Date</b> 2026-06-11 (impl. notes 2026-06-12)</div>
+    <div><b>Status</b> Implemented — see §9 checklist</div>
     <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
     <div><b>Repository</b> Voxa (branch from <code>main</code> after VLS-001 merges)</div>
     <div><b>Roadmap item</b> P8 — Voxa Studio (also delivers the P7 latency-waterfall item)</div>
@@ -255,7 +255,7 @@ public abstract record DiagnosticEvent
     public long PtsMicros { get; init; }
 }
 
-public sealed record VadWindowEvent(float Probability, float Rms, bool GateOpen) : DiagnosticEvent;
+public sealed record VadWindowEvent(float Probability, double Rms, bool Voiced, bool GateOpen) : DiagnosticEvent;  <span class="cm">// Voiced = prob AND energy passed — anchors vad_close</span>
 public enum TurnEdge { UserStarted, UserStopped, BotStarted, BotStopped, Interrupted }
 public sealed record TurnEvent(TurnEdge Edge) : DiagnosticEvent;
 public sealed record TranscriptEvent(string Text, bool IsFinal) : DiagnosticEvent;
@@ -282,9 +282,9 @@ public sealed class VoxaDiagnosticsHub
 <h4>WS0 publish sites</h4>
 <table>
   <tr><th>Event</th><th>Emitted from</th><th>Mechanism</th></tr>
-  <tr><td><code>VadWindowEvent</code></td><td><code>SileroVadProcessor</code></td><td>New <code>SileroVadOptions.ProbabilityObserver</code> (<code>Action&lt;float prob, float rms, bool gateOpen&gt;?</code>) invoked synchronously on the VAD thread after each window — the engine itself stays observer-free (it is not thread-safe and should not grow responsibilities). The composer wires the observer to the hub when one is resolvable.</td></tr>
+  <tr><td><code>VadWindowEvent</code></td><td><code>SileroVadProcessor</code></td><td>New <code>SileroVadOptions.ProbabilityObserver</code> (<code>Action&lt;float prob, double rms, bool voiced, bool gateOpen&gt;?</code>, carried on <code>VoxaVadSettings</code> so any VAD provider can honour it) invoked synchronously on the VAD thread after each window — the engine itself stays observer-free (it is not thread-safe and should not grow responsibilities). The composer wires the observer to the hub when one is resolvable.</td></tr>
   <tr><td><code>TurnEvent</code>, <code>TranscriptEvent</code>, <code>AgentDeltaEvent</code>, <code>TtsChunkEvent</code>, <code>PipelineErrorEvent</code></td><td><code>DiagnosticsTapProcessor</code></td><td>Pass-through <code>FrameProcessor</code> (the <code>TracingProcessor</code> pattern) mapping <code>UserStarted/StoppedSpeakingFrame</code>, <code>TranscriptionFrame</code>, text deltas, <code>AudioRawFrame</code> (downstream), <code>InterruptionFrame</code>, <code>ErrorFrame</code> to events. The composer inserts taps after VAD/STT/agent/TTS when the hub has listeners.</td></tr>
-  <tr><td><code>StageLatencyEvent</code></td><td><code>StageLatencyProcessor</code></td><td>Per turn, measures deltas between <code>PtsMicros</code> anchors (user-stopped → STT final → first agent delta → first TTS byte → sink enqueue). Publishes to the hub <em>and</em> records <code>voxa.stage.latency</code> on <code>VoxaMetrics</code> (tag: <code>stage</code>) — this completes the roadmap P7 waterfall item for all hosts.</td></tr>
+  <tr><td><code>StageLatencyEvent</code></td><td><code>StageLatencyTracker</code> (inside the hub)</td><td><b>Implementation refinement:</b> rather than a pipeline processor reading <code>PtsMicros</code> (zero on frames created mid-pipeline), a tracker inside the hub's publish path derives stages from the hub-stamped timestamps of the anchor events (last voiced window → gate close → final transcript → first agent delta → first TTS chunk). Derived events ride the same ordered stream after their anchors, and every stage — tracker-derived or sink-published (<code>audio_out</code>) — is recorded on <code>voxa.stage.latency</code> (tag: <code>stage</code>), completing the roadmap P7 waterfall item for all hosts.</td></tr>
 </table>
 
 <div class="callout"><b>Wiring rule.</b> All taps are inserted by <code>DefaultVoicePipelineComposer</code> only when <code>Voxa:Diagnostics:Enabled</code> is true (default: <code>false</code> for servers, forced <code>true</code> by Studio). A production pipeline with diagnostics off composes byte-identically to today's.</div>
@@ -318,7 +318,7 @@ public void Purge(CachedModelInfo entry);                          <span class="
   <span><b>Unblocks</b> WS2–WS5</span>
 </div>
 
-<p>New top-level <code>apps/</code> folder (it is a product surface, not a sample). The app uses the Generic Host so <code>AddVoxa(builder.Configuration)</code> works verbatim; Avalonia runs on the main thread, the host runs alongside.</p>
+<p>New top-level <code>apps/</code> folder (it is a product surface, not a sample). <b>Implementation refinement:</b> a plain <code>ServiceCollection</code> + <code>AddVoxa(configuration)</code> instead of the Generic Host — hosted services (the startup guard's eager warm-up) must NOT run in Studio, which never touches the network before the user acts (WS1-A2).</p>
 
 <span class="filelabel">apps/Voxa.Studio/ (layout)</span>
 <pre><code>Voxa.Studio.csproj            <span class="cm">// net10.0, Avalonia 11.x, CommunityToolkit.Mvvm, NAudio (MIT)</span>
@@ -480,13 +480,13 @@ Phase D   WS5  Config Composer
 <h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
 <p class="progress-note">Tick as workstreams land. Acceptance ids reference §5.</p>
 <ul class="cl">
-  <li><input type="checkbox"> <span class="tid">WS0</span><code>VoxaDiagnosticsHub</code>, events, taps, <code>ProbabilityObserver</code>, <code>Compose(IServiceProvider)</code>, <code>voxa.stage.latency</code>, cache inventory <span class="ac">WS0-A1…A5 green; golden composition test unchanged with diagnostics off</span></li>
-  <li><input type="checkbox"> <span class="tid">WS1</span>Studio shell, <code>IStudioAudioDevice</code> + WASAPI, mic source / speaker sink <span class="ac">WS1-A1…A4 green; app boots keyless</span></li>
-  <li><input type="checkbox"> <span class="tid">WS2</span>Talk view: transcript, VAD trace, waterfall, event log <span class="ac">WS2-A1…A2 green; WS2-A3 manual protocol recorded</span></li>
-  <li><input type="checkbox"> <span class="tid">WS3</span>Voice Lab: catalog, audition, A/B, RTF/TTFB, WAV export <span class="ac">WS3-A1…A3 green</span></li>
-  <li><input type="checkbox"> <span class="tid">WS4</span>Models view: inventory, verify, prefetch-all, purge <span class="ac">WS4-A1…A2 green</span></li>
-  <li><input type="checkbox"> <span class="tid">WS5</span>Config Composer + export <span class="ac">WS5-A1…A2 green</span></li>
-  <li><input type="checkbox"> <span class="tid">WS6</span>Windows CI lane, docs/studio.md, README, GPL gate extension <span class="ac">CI green on ubuntu + windows; docs build</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS0</span><code>VoxaDiagnosticsHub</code>, events, taps, <code>ProbabilityObserver</code>, <code>Compose(IServiceProvider)</code>, <code>voxa.stage.latency</code>, cache inventory <span class="ac">WS0-A1…A5 green; golden composition test unchanged with diagnostics off</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span>Studio shell, <code>IStudioAudioDevice</code> + WASAPI, mic source / speaker sink <span class="ac">WS1-A1/A2/A4 green (headless boot + resampler); WS1-A3 covered at the VM level + manual barge-in check — TalkSession's pump is exercised live, not unit-mocked</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS2</span>Talk view: transcript, VAD trace, waterfall, event log <span class="ac">WS2-A1…A2 green (synthetic golden turn); WS2-A3 manual protocol — see §10.4</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS3</span>Voice Lab: catalog, audition, A/B, RTF/TTFB, WAV export <span class="ac">WS3-A1/A3 green; WS3-A2 (real synthesis) requires cached models — LocalModels-style, run locally</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span>Models view: inventory, verify, prefetch-all, purge <span class="ac">WS4-A1…A2 green (real temp cache, corruption + lock paths)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span>Config Composer + export <span class="ac">WS5-A1…A2 green (validation matrix + byte-stable golden export)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span>Windows CI lane, docs/studio.md, README, GPL gate extension <span class="ac">studio job on windows-latest; Studio tests also run in the ubuntu default suite</span></li>
 </ul>
 
 <!-- ============================================================ -->

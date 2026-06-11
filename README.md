@@ -70,6 +70,18 @@ Set `"Tts": "Kokoro"` for markedly more natural speech (heavier on CPU), and swa
 real agent when you have keys. Details — model catalogs, latency expectations, air-gapped
 deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
 
+### Voxa Studio — talk to the pipeline and watch it think
+
+```bash
+dotnet run --project apps/Voxa.Studio
+```
+
+A desktop app (Windows, keyless out of the box) that runs the real pipeline against your mic
+and speakers with a live VAD probability trace, a per-turn latency waterfall (VAD → STT →
+agent → TTS → out), a voice audition lab for the Piper/Kokoro catalogs with locally-measured
+TTFB/RTF, a model-cache manager with one-button air-gap prefetch, and a config composer that
+exports validated `appsettings.json`. See [`docs/studio.md`](docs/studio.md).
+
 ## À-la-carte configuration
 
 For hosts that install only specific provider packages or need custom pipeline composition:
@@ -407,6 +419,7 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | 5.6 | ✅ VPS-001 performance pass — zero-allocation hot path, source-generated wire protocol, streaming Azure TTS, server-side barge-in purge, `voxa.turn.ttfb` metric, benchmark suite |
 | P5 | ✅ VDX-001 developer experience — `AddVoxa()` + `UseDefaults()`, typed config, named latency profiles, provider descriptors, `Voxa` meta-package, fail-fast startup validation, conversation memory, `session` wire envelope |
 | P6 (partial) | ✅ VLS-001 local/offline speech tier — `WhisperCpp` STT, `Piper` + `Kokoro` TTS, SHA-256-pinned model cache with offline mode, keyless `Echo` agent, startup warm-up, zero-network CI conversation lane ([docs](docs/local-speech.md)) |
+| P8 | ✅ VST-001 Voxa Studio — desktop app with live VAD trace + latency waterfall over the new `VoxaDiagnosticsHub` pipeline event stream (also closes the P7 stage-latency item: `voxa.stage.latency`), voice lab, model-cache manager, config composer ([docs](docs/studio.md)) |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 

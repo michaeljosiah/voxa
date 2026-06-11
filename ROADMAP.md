@@ -116,14 +116,14 @@ Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS clien
 
 ## P7 — Operability & configurability
 
-- **Per-stage latency waterfall** — frames already carry `PtsMicros`; a lightweight `StageLatencyProcessor` + per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → first audio on the wire) recorded as `voxa.stage.latency` histograms makes `voxa.turn.ttfb` *diagnosable*, not just observable. A small `/voxa/debug` page in the sample (live waterfall per turn) doubles as the demo's "wow" view. *(Specced: VST-001 WS0 delivers the processor, the histograms, and the underlying `VoxaDiagnosticsHub` event stream — see P8.)*
+- ✅ **Per-stage latency waterfall** — shipped by VST-001 WS0: the per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → audio out) is derived inside `VoxaDiagnosticsHub` (a `StageLatencyTracker` over the hub's anchor events) and recorded as `voxa.stage.latency` histograms (tag `stage`), making `voxa.turn.ttfb` *diagnosable*. Enable with `Voxa:Diagnostics:Enabled`. Voxa Studio's Talk view renders it live; a `/voxa/debug` browser page over the same hub remains open for a follow-up.
 - **Runtime control envelope** — client-sent `{"type":"configure", ...}` to adjust VAD thresholds / voice / language mid-session (mobile acoustic environments vary wildly), guarded by a host-side allowlist.
 - **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load).
 - **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking.
 
 ## P8 — Voxa Studio (developer desktop app)
 
-Specced as **VST-001** ([spec](docs/specifications/voxa-studio-spec.html)). An Avalonia desktop app (`apps/Voxa.Studio`, Windows-first audio behind an `IStudioAudioDevice` seam) that hosts the real composed pipeline in-process against the developer's mic and speakers:
+✅ **Shipped as VST-001** ([spec](docs/specifications/voxa-studio-spec.html), [guide](docs/studio.md)). An Avalonia desktop app (`apps/Voxa.Studio`, Windows-first audio behind an `IStudioAudioDevice` seam) that hosts the real composed pipeline in-process against the developer's mic and speakers:
 
 - **Talk** — live conversation with a scrolling VAD probability trace and a per-turn stage-latency waterfall (the view that would have caught the Silero v5 context bug in seconds)
 - **Voices** — audition / A/B the Piper and Kokoro catalogs with TTFB + RTF measured on local hardware
