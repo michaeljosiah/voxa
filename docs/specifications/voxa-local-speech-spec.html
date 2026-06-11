@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-001 — Voxa Local Speech Tier Specification</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; } /* comment */
+  pre .kw { color: #79b8ff; } /* keyword-ish hint (manual) */
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p0 { background: #4a1416; color: #ff8a80; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .progress-note { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-001 — Voxa Local Speech Tier Specification</h1>
+  <div class="sub">Local/offline speech: <code>Voxa.Speech.WhisperCpp</code> (speech-to-text on your own CPU via whisper.cpp), <code>Voxa.Speech.Piper</code> (fast text-to-speech via Piper), and <code>Voxa.Speech.Kokoro</code> (high-quality text-to-speech via Kokoro-82M), with a shared model cache that downloads and verifies models on first run — so a Voxa voice bot can be developed, tested in CI, and deployed air-gapped with <b>zero API keys and zero cloud spend</b>.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-001 v1.0</div>
+    <div><b>Date</b> 2026-06-10</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code> @ 8457fa2)</div>
+    <div><b>Roadmap item</b> P6 — Capability: Local/offline speech tier</div>
+    <div><b>Depends on</b> VDX-001 (provider registry, <code>AddVoxa</code>, descriptors)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where local engines plug in</a></li>
+    <li><a href="#s5">Model &amp; binary resolution — the "like Silero, but bigger" problem</a></li>
+    <li><a href="#s6">Workstreams (WS0–WS5) with code</a>
+      <ol>
+        <li><a href="#ws0">WS0 — <code>VoxaModelCache</code>: download, verify, cache, offline mode</a></li>
+        <li><a href="#ws1">WS1 — <code>Voxa.Speech.WhisperCpp</code>: STT engine + descriptor</a></li>
+        <li><a href="#ws2">WS2 — <code>Voxa.Speech.Piper</code>: TTS engine + descriptor</a></li>
+        <li><a href="#ws3">WS3 — <code>Voxa.Speech.Kokoro</code>: quality-tier TTS engine + descriptor</a></li>
+        <li><a href="#ws4">WS4 — Echo agent: closing the no-API-key loop</a></li>
+        <li><a href="#ws5">WS5 — Meta-package, guard validation, sample, CI conversation test, docs</a></li>
+      </ol>
+    </li>
+    <li><a href="#s7">Configuration reference</a></li>
+    <li><a href="#s8">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What is the feature, in one sentence?</b>
+    <p>Three new plug-in packages that let a Voxa voice bot hear and speak using AI models running <em>on your own machine</em>, instead of calling a cloud service like OpenAI or Azure.</p>
+  </div>
+  <div class="qa">
+    <b>How does Voxa work today?</b>
+    <p>A Voxa voice bot has three "brains": one that turns your speech into text (STT), one that decides what to say (the agent / LLM), and one that turns the reply back into audio (TTS). Today the STT and TTS brains are <em>all cloud services</em> — OpenAI, Azure, ElevenLabs, Mistral. Every one of them needs an account, an API key, a network connection, and a credit card. Even running the project's own test suite end-to-end costs real money and needs real secrets.</p>
+  </div>
+  <div class="qa">
+    <b>What changes?</b>
+    <p>We add three new options to the existing provider menu. Set <code>"Stt": "WhisperCpp"</code> and Voxa transcribes speech with <a href="https://github.com/ggml-org/whisper.cpp">whisper.cpp</a> — OpenAI's open-source Whisper model running locally on the CPU. Set <code>"Tts": "Piper"</code> and Voxa speaks with <a href="https://github.com/rhasspy/piper">Piper</a> — a fast, natural-sounding open-source voice that also runs locally. Prefer a richer voice? Set <code>"Tts": "Kokoro"</code> for <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro</a> — a small open model whose speech quality rivals commercial cloud voices, still running entirely on your CPU. The first time you use them, Voxa downloads the model files automatically (the same way a game downloads assets on first launch), checks their integrity, and caches them. After that, no network is needed at all.</p>
+  </div>
+  <div class="qa">
+    <b>Why would a user care?</b>
+    <ul>
+      <li><b>Start in minutes, not days.</b> A newcomer can clone a sample and have a talking bot running before they've created a single cloud account. The biggest onboarding wall — "first, obtain three API keys" — disappears.</li>
+      <li><b>Free, deterministic CI.</b> Tests can run a full microphone-to-speaker conversation on every pull request: no secrets in the build, no per-minute charges, no flaky network calls, no rate limits.</li>
+      <li><b>Air-gapped deployments.</b> Hospitals, factories, defence networks, and ships have no route to api.openai.com. With models pre-copied onto the box and one config flag, Voxa runs entirely inside the firewall.</li>
+      <li><b>Privacy by default.</b> Audio never leaves the machine — relevant wherever recordings are sensitive (healthcare, legal, HR).</li>
+      <li><b>No surprise bills while developing.</b> Iterating on a voice UI means hundreds of test utterances a day. Locally they cost nothing.</li>
+    </ul>
+  </div>
+  <div class="qa">
+    <b>What does switching look like?</b>
+    <p>It is a two-line config change. Nothing else in the five-line program from VDX-001 moves:</p>
+<pre><code>"Voxa": {
+  "Stt": "WhisperCpp",   <span class="cm">// was "OpenAI" — no API key needed</span>
+  "Tts": "Piper",        <span class="cm">// was "ElevenLabs" — "Piper" is fastest, "Kokoro" sounds best</span>
+  "Agent": { "Provider": "Echo" }   <span class="cm">// optional: a local parrot agent for key-free demos &amp; CI</span>
+}</code></pre>
+  </div>
+  <div class="qa">
+    <b>What's the catch?</b>
+    <p>Local models are smaller than cloud ones, so transcription is a little less accurate and the voices a little less polished than ElevenLabs — though the Kokoro option narrows that gap considerably at the cost of more CPU. That is the right trade for development, CI, privacy-sensitive and offline scenarios — and because providers are just config, users can develop locally and flip to a cloud provider for production with one line.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+<p>VDX-001 made composition trivial: <code>AddVoxa(config)</code> + <code>MapVoxaVoice("/voice").UseDefaults()</code> and the provider registry resolves <code>"Stt": "OpenAI"</code> to a descriptor. But every STT/TTS descriptor in the registry today fronts a metered cloud API. The five-line bot still has a hidden sixth line: <em>go get API keys</em>. That blocks three audiences the ROADMAP P6 entry names explicitly: developers who want to try Voxa without accounts, CI pipelines that want full-conversation tests at zero cost, and air-gapped deployments that cannot reach a cloud endpoint at all.</p>
+<p>This spec adds the local tier as three ordinary provider packages plus the shared plumbing they need:</p>
+<ol>
+  <li><b><code>VoxaModelCache</code> (WS0)</b> — a small model resolver in <code>Voxa.Speech.Abstractions</code>. Silero's model is 1&nbsp;MB and ships embedded in the assembly; Whisper models are 75–488&nbsp;MB and Piper voices 20–120&nbsp;MB, so embedding is off the table. The cache implements the other half of the roadmap's "embedded <em>or first-run download</em>" rule: resolve from explicit path → local cache → verified download (SHA-256, atomic rename), with an <code>Offline</code> flag that turns a missing model into an actionable startup error instead of a surprise network call.</li>
+  <li><b><code>Voxa.Speech.WhisperCpp</code> (WS1)</b> — an <code>ISpeechToTextEngine</code> over <a href="https://github.com/sandrohanea/whisper.net">Whisper.net</a> (the maintained MIT .NET binding of whisper.cpp). Whisper is an utterance transcriber, not a streaming recognizer — which matches Voxa's pipeline shape exactly: the VAD already gates audio and <code>SpeechToTextProcessor</code> already calls <code>FlushAsync()</code> on <code>UserStoppedSpeakingFrame</code>, so the engine buffers PCM during speech and transcribes once per utterance. Ships a <code>VoxaSttDescriptor</code> named <code>"WhisperCpp"</code>.</li>
+  <li><b><code>Voxa.Speech.Piper</code> (WS2)</b> — an <code>ITextToSpeechEngine</code> that drives the official <code>piper</code> executable as a warm child process (process isolation deliberately keeps GPL-licensed espeak-ng out of our MIT package — §6.WS2.1). Voxa's <code>SentenceAggregator</code> already feeds TTS one sentence at a time, so per-sentence synthesis latency (~200–800&nbsp;ms on CPU) is the natural unit. Ships a <code>VoxaTtsDescriptor</code> named <code>"Piper"</code>.</li>
+  <li><b><code>Voxa.Speech.Kokoro</code> (WS3)</b> — the quality tier: an <code>ITextToSpeechEngine</code> running <a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M</a> (Apache-2.0, StyleTTS2-based, 24&nbsp;kHz, 54 voices across 8 languages) <em>in-process</em> on ONNX Runtime — already in the dependency tree via SileroVad. The GPL isolation pattern inverts Piper's: only phonemization leaves the process (a stateless per-sentence espeak-ng CLI call), so there is no long-lived child process and no utterance-demarcation problem. Markedly more natural than Piper; heavier on CPU. Ships a <code>VoxaTtsDescriptor</code> named <code>"Kokoro"</code>.</li>
+  <li><b>Echo agent (WS4)</b> — <code>"Voxa:Agent:Provider": "Echo"</code>: a trivial built-in agent that repeats the transcript back. Without it, the "no API keys" promise dies at the LLM hop; with it, a complete audio-in → audio-out conversation runs with zero credentials — exactly what CI and first-touch demos need. (Real local LLMs via Ollama/MEAI remain a host concern — §12.)</li>
+  <li><b>Integration (WS5)</b> — all three local descriptors registered by the <code>Voxa</code> meta-package, <code>VoxaDefaultsGuard</code> extended so model availability is a <em>startup</em> error in offline mode and an eager warm-up otherwise, an offline sample config, the flagship CI test (<code>LocalConversationEndToEnd</code>: WAV in → Whisper transcript → Echo → Piper PCM out, network access blocked), and docs.</li>
+</ol>
+<p><b>Expected outcome:</b> API keys required for a working dev bot drops from ≥ 2 to <b>0</b>; a full-conversation e2e test runs on every PR at <b>$0</b> with no secrets; an air-gapped install is a documented, tested path (<code>Offline: true</code> + pre-provisioned cache); and the provider menu gains its first entries whose <code>Validate</code> never asks for a credential. Everything is additive — no public API changes, no wire-protocol changes, no behavior change for existing cloud configs.</p>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>3.1 Quantified budgets</h3>
+<p>VDX-001 measured lines and minutes; this spec measures credentials, dollars, and latency. Each budget names its enforcement mechanism.</p>
+<table>
+  <tr><th>Metric</th><th>Baseline (today)</th><th>Target</th><th>How verified</th></tr>
+  <tr><td>API keys / cloud accounts for a working dev bot</td><td>≥ 2 (STT/TTS provider + OpenAI agent)</td><td><b>0</b></td><td><code>LocalConversationEndToEnd</code> runs with an empty secret store (WS5)</td></tr>
+  <tr><td>Cloud cost of a full-conversation CI test</td><td>Not run in CI (cost + secrets)</td><td><b>$0, no secrets, no network</b> after model cache warm-up</td><td>CI job runs the e2e test with outbound network blocked once the cache step has run (WS5)</td></tr>
+  <tr><td>Air-gapped operation</td><td>Impossible (all STT/TTS providers are cloud HTTP)</td><td>Documented + tested: <code>Models:Offline=true</code> with pre-provisioned cache</td><td>Offline-mode unit tests (WS0) + air-gap runbook section in docs (WS5)</td></tr>
+  <tr><td>Misconfiguration feedback (missing model, offline cache miss, bad voice name)</td><td>n/a (feature absent)</td><td>Startup failure naming the exact config key, the cache path probed, and the fix</td><td>Descriptor <code>Validate</code> + guard unit tests (WS1/WS2/WS3/WS5)</td></tr>
+  <tr><td>STT finalization latency — <code>base.en</code>, 5 s utterance, 4 CPU threads</td><td>n/a</td><td>≤ 2.5 s after flush (RTF ≤ 0.5) on the reference dev box</td><td>Local benchmark harness, smoke-checked not CI-gated (hardware-dependent — §10)</td></tr>
+  <tr><td>TTS first-audio latency — Piper medium voice, ~12-word sentence, warm process</td><td>n/a</td><td>≤ 1.0 s</td><td>Same harness</td></tr>
+  <tr><td>TTS first-audio latency — Kokoro <code>af_heart</code> fp16, ~12-word sentence, warm session</td><td>n/a</td><td>≤ 1.5 s</td><td>Same harness</td></tr>
+  <tr><td>First-run download, default models (<code>base.en</code> + <code>en_US-lessac-medium</code> + piper binary)</td><td>n/a</td><td>≤ ~250 MB total, with progress logged at startup, resumable on failure (re-run restarts the file)</td><td>Manual verification + size assertion in catalog tests (WS0)</td></tr>
+</table>
+
+<h3>3.2 Non-goals</h3>
+<ul>
+  <li><b>Not</b> matching cloud STT accuracy or ElevenLabs voice quality. The local tier is positioned for dev/CI/offline/privacy, not as the flagship production voice.</li>
+  <li><b>Not</b> GPU acceleration in v1. Whisper.net has CUDA/CoreML runtime packages; the descriptor leaves a config seam (<code>UseGpu</code>) but only the CPU runtime ships and is tested. (§12)</li>
+  <li><b>Not</b> streaming/interim transcripts from Whisper. v1 emits final-only transcriptions per utterance; the UI simply shows no partials. Sliding-window partial decode is deferred. (§12)</li>
+  <li><b>Not</b> a local LLM. The Echo agent closes the loop for CI/demos; real local inference (Ollama, ONNX LLMs) is already reachable today by registering an <code>IChatClient</code> in DI and is documented, not implemented. (§12)</li>
+  <li><b>Not</b> a general model-management CLI (<code>voxa models pull</code> etc.). The cache is library-internal; a CLI is deferred. (§12)</li>
+</ul>
+
+<h3>3.3 Hard rules for the implementer</h3>
+<ul>
+  <li><b>Additive only.</b> No changes to <code>ISpeechToTextEngine</code> / <code>ITextToSpeechEngine</code>, the wire protocol, or any existing descriptor. Existing cloud configs must behave byte-for-byte identically.</li>
+  <li><b>Never download silently at request time.</b> Model resolution happens at startup (guard/eager warm-up) or fails at startup. A WebSocket request must never block on a 250 MB download.</li>
+  <li><b>Fail with the fix in the message.</b> Every resolution failure names the config key, the path(s) probed, and the exact remediation (the URL to fetch, the flag to flip, or the key to set) — the VDX-001 standard.</li>
+  <li><b>No GPL code linked into Voxa assemblies.</b> espeak-ng (GPL-3.0) stays behind a process boundary — for Piper via the piper executable (§6.WS2.1), for Kokoro via per-sentence CLI calls (§6.WS3.1). Never reference packages that link espeak-ng or copy its natives into the consumer's output (this rules out the KokoroSharp NuGet — §6.WS3.1). whisper.cpp / Whisper.net / Kokoro-82M / Piper / ONNX Runtime are MIT/Apache and fine to link.</li>
+  <li><b>Honour the effective-rate contract from VDX-001.</b> Descriptors must report effective sample rates via the existing <code>GetEffectiveInputSampleRate</code>/<code>GetEffectiveOutputSampleRate</code> mechanism so the session envelope, VAD, and <code>WebSocketAudioSource</code> stay in agreement (the defect class fixed in 2ee5686/21101f4 must not regress here).</li>
+  <li><b>Tests poll, never sleep-and-assert</b> for positive assertions (the flaky-test rule established repo-wide). Local inference is the slowest thing this repo will ever run in CI — budgets must be generous and condition-based.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where local engines plug in</h2>
+<p>Nothing about the pipeline shape changes. The local engines are ordinary providers behind the existing abstractions; only the box contents differ:</p>
+
+<div class="arrowflow">                       TODAY (cloud)                                THIS SPEC (local)
+WebSocket PCM in ──▶ SileroVAD ──▶ SpeechToTextProcessor ──▶ ...    same pipeline, same frames
+                                   │                                 │
+                                   ▼                                 ▼
+                          OpenAI / Azure STT (HTTPS)        WhisperCppSttEngine (in-proc, CPU)
+                                                            buffers utterance, transcribes on Flush
+
+... agent ──▶ SentenceAggregator ──▶ TextToSpeechProcessor ──▶ WebSocket PCM out
+                                     │                               │
+                                     ▼                               ▼
+                       ElevenLabs / Mistral TTS (HTTPS)     PiperTtsEngine ──(stdin/stdout)──▶ warm
+                                                            piper child process (GPL isolated)
+                                                            — or —
+                                                            KokoroTtsEngine (in-proc ONNX) ──▶
+                                                            espeak-ng CLI per sentence (GPL isolated)</div>
+
+<p>Three existing seams carry all the weight, which is why the workstreams are small:</p>
+<table>
+  <tr><th>Existing seam</th><th>Where</th><th>Why it fits the local tier</th></tr>
+  <tr><td><code>SpeechToTextProcessor</code> calls <code>FlushAsync()</code> on <code>UserStoppedSpeakingFrame</code></td><td><code>src/Voxa.Speech.Abstractions/ISpeechToTextEngine.cs</code></td><td>Whisper is an utterance transcriber, not a streaming recognizer. VAD-gated flush <em>is</em> its natural invocation model — the engine just buffers between flushes. No interface change needed.</td></tr>
+  <tr><td><code>SentenceAggregator</code> precedes TTS in the default chain</td><td><code>DefaultVoicePipelineComposer</code></td><td>Piper and Kokoro both synthesize a sentence in one pass. The aggregator already delivers exactly that unit, so "non-streaming per sentence" is invisible to the rest of the pipeline.</td></tr>
+  <tr><td>Descriptor effective-rate resolution</td><td><code>VoxaSttDescriptor.GetEffectiveInputSampleRate</code> / <code>VoxaTtsDescriptor.GetEffectiveOutputSampleRate</code></td><td>Whisper requires 16 kHz mono (matches the existing STT default). Piper voices are 22 050 Hz (medium/high) or 16 000 Hz (low/x_low) — resolvable from the voice <em>name</em> without loading the model, via the descriptor's <code>ResolveOutputSampleRate</code> hook. Kokoro is fixed at 24 000 Hz — identical to the cloud-TTS default, so swapping a cloud voice for Kokoro leaves the session envelope unchanged.</td></tr>
+</table>
+
+<div class="callout"><b>Latency model honesty.</b> Cloud streaming STT emits interim transcripts while the user is still talking and finals shortly after they stop. WhisperCpp emits nothing until the VAD closes the utterance, then one final after RTF×duration. Perceived turn latency therefore grows by roughly the transcription time (~0.5–2.5 s depending on model). The docs (WS5) must state this plainly and recommend <code>tiny.en</code>/<code>base.en</code> + the <code>LowLatency</code> profile for interactive local dev.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Model &amp; binary resolution — the "like Silero, but bigger" problem</h2>
+<p>The roadmap says models are "resolved like Silero's (embedded or first-run download)". Silero takes the embedded branch because its ONNX model is ~1 MB (<code>SileroVadEngine.LoadEmbeddedModel</code> reads it from assembly resources). The local-tier artifacts cannot:</p>
+<table>
+  <tr><th>Artifact</th><th>Source of truth</th><th>Size</th><th>Strategy</th></tr>
+  <tr><td>Silero VAD ONNX (existing)</td><td>embedded resource</td><td>~1 MB</td><td>Embedded (unchanged)</td></tr>
+  <tr><td>Whisper GGML models (<code>tiny</code>…<code>small</code>, <code>.en</code> + quantized variants)</td><td><code>huggingface.co/ggerganov/whisper.cpp</code></td><td>75–488 MB</td><td>First-run download → cache</td></tr>
+  <tr><td>Piper voices (<code>.onnx</code> + <code>.onnx.json</code> pairs)</td><td><code>huggingface.co/rhasspy/piper-voices</code></td><td>20–120 MB</td><td>First-run download → cache</td></tr>
+  <tr><td>Piper executable (per-RID)</td><td>piper GitHub releases (pinned version)</td><td>~20 MB</td><td>First-run download → cache (or found on <code>PATH</code>)</td></tr>
+  <tr><td>Kokoro ONNX model (fp32 / fp16 / int8)</td><td>pinned kokoro-onnx export on Hugging Face</td><td>~88–330 MB</td><td>First-run download → cache</td></tr>
+  <tr><td>Kokoro voice style vectors</td><td><code>huggingface.co/hexgrad/Kokoro-82M</code></td><td>~0.5 MB each</td><td>First-run download → cache (per configured voice)</td></tr>
+  <tr><td>espeak-ng CLI (per-RID, Kokoro G2P)</td><td>pinned static builds, hosted as Voxa release artifacts</td><td>~3–12 MB</td><td>First-run download → cache (or found on <code>PATH</code>)</td></tr>
+</table>
+
+<h3>5.1 Resolution order (uniform for all artifacts)</h3>
+<ol>
+  <li><b>Explicit path wins:</b> <code>Voxa:WhisperCpp:ModelPath</code> / <code>Voxa:Piper:VoicePath</code> / <code>Voxa:Piper:ExecutablePath</code>. If set and missing → startup error naming the key and the path. No fallback — an explicit path that's wrong is a config bug, not a download trigger.</li>
+  <li><b>Cache hit:</b> <code>&lt;cache-root&gt;/whisper/ggml-base.en.bin</code> etc. Cache root = <code>VOXA_MODEL_CACHE</code> env var → <code>Voxa:Models:CachePath</code> → OS default (<code>%LOCALAPPDATA%\voxa\models</code> on Windows, <code>~/.cache/voxa/models</code> elsewhere).</li>
+  <li><b>Download</b> (unless <code>Voxa:Models:Offline = true</code>): from the pinned catalog URL, to <code>&lt;target&gt;.partial</code>, SHA-256 verified against the catalog, then atomic rename. Progress logged via <code>ILogger</code> at 10% increments. Concurrent resolution of the same artifact (parallel test hosts) is serialized with a lock file.</li>
+  <li><b>Offline miss:</b> error message includes the artifact name, the exact cache path expected, the catalog URL to fetch out-of-band, and the SHA-256 — i.e. a copy-pasteable air-gap provisioning instruction.</li>
+</ol>
+
+<div class="callout warn"><b>Pinned catalog, not "latest".</b> The catalog (artifact → URL + SHA-256 + size) is a compiled-in static table per package version. Upstream re-uploads or tampering fail the hash check loudly. Bumping a model version is a code change with a test, never a floating reference.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Workstreams</h2>
+
+<!-- ─────────────────────────── WS0 ─────────────────────────── -->
+<h3 id="ws0">WS0 — <code>VoxaModelCache</code>: download, verify, cache, offline mode <span class="badge p0">Phase 0</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Package:</b> <code>Voxa.Speech.Abstractions</code> (new files, no new package)</span>
+  <span><b>New deps:</b> none (BCL <code>HttpClient</code> + <code>SHA256</code>)</span>
+  <span><b>Consumed by:</b> WS1, WS2</span>
+</div>
+<p>One resolver, two consumers. It lives in <code>Voxa.Speech.Abstractions</code> because both provider packages already reference it (the same reasoning that put <code>IVoxaHttpClientProvider</code> there), and because a separate <code>Voxa.Models</code> package for ~3 files is ceremony without benefit.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/Models/VoxaModelCache.cs (new — shape)</span>
+<pre><code><span class="kw">public sealed record</span> VoxaModelArtifact(
+    <span class="kw">string</span> Id,            <span class="cm">// "whisper/ggml-base.en.bin" — also the cache-relative path</span>
+    Uri DownloadUrl,
+    <span class="kw">string</span> Sha256,
+    <span class="kw">long</span> SizeBytes);
+
+<span class="kw">public sealed class</span> VoxaModelCache
+{
+    <span class="kw">public</span> VoxaModelCache(VoxaModelCacheOptions options, HttpClient? http, ILogger? logger);
+
+    <span class="cm">// Resolution order per §5.1. Throws VoxaModelUnavailableException with the full</span>
+    <span class="cm">// remediation message on offline miss / hash mismatch / download failure.</span>
+    <span class="kw">public</span> Task&lt;<span class="kw">string</span>&gt; ResolveAsync(VoxaModelArtifact artifact, CancellationToken ct);
+
+    <span class="cm">// Probe only — used by descriptor Validate() so config validation NEVER downloads.</span>
+    <span class="kw">public</span> <span class="kw">bool</span> IsCached(VoxaModelArtifact artifact);
+    <span class="kw">public</span> <span class="kw">string</span> PathFor(VoxaModelArtifact artifact);
+}
+
+<span class="kw">public sealed record</span> VoxaModelCacheOptions(<span class="kw">string</span> CacheRoot, <span class="kw">bool</span> Offline)
+{
+    <span class="cm">// VOXA_MODEL_CACHE env → Voxa:Models:CachePath → OS default; Offline from Voxa:Models:Offline.</span>
+    <span class="kw">public static</span> VoxaModelCacheOptions FromConfiguration(IConfigurationSection voxaRoot);
+}</code></pre>
+
+<h4>WS0 requirements</h4>
+<ul>
+  <li><b>Atomic + verified:</b> download to <code>&lt;path&gt;.partial</code>, hash while streaming (no second read pass), rename on match, delete on mismatch with an error that prints expected/actual hashes.</li>
+  <li><b>Cross-process safety:</b> a <code>&lt;path&gt;.lock</code> file (FileStream exclusive create, retry loop with timeout) serializes concurrent first-run downloads from parallel test hosts; the loser of the race re-probes the cache and returns the winner's file.</li>
+  <li><b>Validate-vs-resolve split:</b> <code>Validate</code>-time code may only call <code>IsCached</code>; <code>ResolveAsync</code> (which may download) runs from the startup guard / engine <code>StartAsync</code>. This is what keeps "never download at request time" and "validation has no side effects" simultaneously true.</li>
+  <li><b>HttpClient discipline:</b> use <code>IVoxaHttpClientProvider</code> when available (proxy support in locked-down corp networks — precisely the audience for this feature), falling back to a static shared client. Timeout generous (models are large): 30 min per artifact, cancellable.</li>
+  <li><b>Tests</b> (no real network): fake <code>HttpMessageHandler</code> — happy path, hash mismatch deletes partial + throws with both hashes, offline miss message contains cache path + URL + SHA-256, lock-file race (two concurrent resolves, one download), env-var/config/default cache-root precedence.</li>
+</ul>
+
+<!-- ─────────────────────────── WS1 ─────────────────────────── -->
+<h3 id="ws1">WS1 — <code>Voxa.Speech.WhisperCpp</code>: STT engine + descriptor <span class="badge p0">Phase 1</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Package:</b> <code>Voxa.Speech.WhisperCpp</code> (new)</span>
+  <span><b>Deps:</b> <code>Whisper.net</code> + <code>Whisper.net.Runtime</code> (CPU; MIT), <code>Voxa.Speech.Abstractions</code></span>
+  <span><b>Registry name:</b> <code>"WhisperCpp"</code>, config section <code>"WhisperCpp"</code></span>
+</div>
+
+<h4>WS1.1 Engine model — buffer, flush, transcribe</h4>
+<p>Whisper transcribes a complete utterance; Voxa's VAD decides what an utterance is. The engine is therefore a buffer with a transcriber attached:</p>
+
+<span class="filelabel">src/Voxa.Speech.WhisperCpp/WhisperCppSttEngine.cs (new — behavioral contract)</span>
+<pre><code><span class="kw">public sealed class</span> WhisperCppSttEngine : ISpeechToTextEngine
+{
+    <span class="cm">// StartAsync: ResolveAsync the GGML model (may download on cold cache — startup-path only,</span>
+    <span class="cm">// the guard has normally warmed it already), then get/create the shared WhisperFactory.</span>
+    <span class="cm">//   • WhisperFactory is cached per model path in a static ConcurrentDictionary — model</span>
+    <span class="cm">//     weights load once per process (~140 MB for base.en), NOT once per connection.</span>
+    <span class="cm">//   • A WhisperProcessor is created per engine instance (per connection) — cheap, holds</span>
+    <span class="cm">//     decode state. Builder: .WithLanguage(opts.Language) or .WithLanguageDetection(),</span>
+    <span class="cm">//     .WithThreads(opts.Threads ?? Math.Min(4, Environment.ProcessorCount)).</span>
+
+    <span class="cm">// WriteAudioAsync: convert 16-bit LE PCM → float into a pooled, growable buffer.</span>
+    <span class="cm">//   • Engine is mono 16 kHz (PreferredInputSampleRate). Mismatched input is a config bug</span>
+    <span class="cm">//     upstream — the composer already aligns source/VAD/STT rates (VDX-001).</span>
+    <span class="cm">//   • Hard cap: 30 s of audio (Whisper's context window). On overflow, transcribe the</span>
+    <span class="cm">//     buffered 30 s as a final segment and continue buffering — never drop audio silently</span>
+    <span class="cm">//     (log a warning; a 30 s monologue between VAD stops is rare but legal).</span>
+
+    <span class="cm">// FlushAsync (called by SpeechToTextProcessor on UserStoppedSpeakingFrame):</span>
+    <span class="cm">//   • No buffered audio (&lt; ~0.3 s) → no-op; avoids hallucinated transcripts on VAD blips.</span>
+    <span class="cm">//   • Else run processor.ProcessAsync(samples) on a worker (Task.Run — whisper.cpp is</span>
+    <span class="cm">//     CPU-bound native code; never block the pipeline data loop), concatenate segments,</span>
+    <span class="cm">//     write one TranscriptionResult(text, IsFinal: true) to the transcript channel, clear</span>
+    <span class="cm">//     the buffer. Serialized: a flush that arrives while a transcription is running queues</span>
+    <span class="cm">//     behind it (per-engine SemaphoreSlim(1,1)).</span>
+
+    <span class="cm">// ReadTranscriptsAsync: drains the bounded channel; completes on StopAsync.</span>
+    <span class="cm">// StopAsync: final implicit flush, complete channel. DisposeAsync: processor only —</span>
+    <span class="cm">// the factory is shared and process-lifetime.</span>
+}</code></pre>
+
+<div class="callout"><b>No interim transcripts in v1.</b> The engine only ever emits <code>IsFinal: true</code>. <code>TranscriptionFilter</code> and the agent loop already ignore non-final/empty transcripts, so the absence of partials is behaviorally safe — it only affects UI sparkle. A sliding-window partial decoder is §12 material.</div>
+
+<h4>WS1.2 Model catalog</h4>
+<table>
+  <tr><th><code>Model</code> value</th><th>File</th><th>Size</th><th>Notes</th></tr>
+  <tr><td><code>tiny</code> / <code>tiny.en</code></td><td><code>ggml-tiny[.en].bin</code></td><td>~75 MB</td><td>Fastest; CI default</td></tr>
+  <tr><td><code>base</code> / <code>base.en</code></td><td><code>ggml-base[.en].bin</code></td><td>~148 MB</td><td><b>Default</b> (<code>base.en</code>) — best speed/accuracy balance on dev CPUs</td></tr>
+  <tr><td><code>small</code> / <code>small.en</code></td><td><code>ggml-small[.en].bin</code></td><td>~488 MB</td><td>Accuracy-leaning; document RTF cost</td></tr>
+  <tr><td><code>*-q5_1</code> quantized variants</td><td><code>ggml-*-q5_1.bin</code></td><td>~⅓ smaller</td><td>In catalog; same names + <code>-q5_1</code> suffix</td></tr>
+</table>
+<p>Unknown <code>Model</code> values fail <code>Validate</code> with the full list of known names — unless <code>ModelPath</code> is set, which bypasses the catalog entirely (bring-your-own-GGML).</p>
+
+<h4>WS1.3 Descriptor</h4>
+<span class="filelabel">src/Voxa.Speech.WhisperCpp/WhisperCppDescriptors.cs (new)</span>
+<pre><code><span class="kw">public static class</span> WhisperCppDescriptors
+{
+    <span class="kw">public static</span> VoxaSttDescriptor Stt { <span class="kw">get</span>; } = <span class="kw">new</span>(
+        Name: <span class="kw">"WhisperCpp"</span>,
+        ConfigSection: <span class="kw">"WhisperCpp"</span>,
+        PreferredInputSampleRate: 16000,        <span class="cm">// hard requirement of the model family</span>
+        Validate: root =&gt;
+        {
+            <span class="cm">// NO credentials — the local tier's whole point. Checks instead:</span>
+            <span class="cm">//  • Model name in catalog (or ModelPath set)</span>
+            <span class="cm">//  • ModelPath, if set, exists on disk</span>
+            <span class="cm">//  • Offline mode: IsCached(model) — else error with the §5.1 provisioning text</span>
+            <span class="cm">//  • InputSampleRate override ≠ 16000 → error (whisper.cpp is 16 kHz-only;</span>
+            <span class="cm">//    fail at startup, not with garbage transcripts at runtime)</span>
+        },
+        CreateProcessor: (sp, root) =&gt;
+            <span class="kw">new</span> SpeechToTextProcessor(<span class="kw">new</span> WhisperCppSttEngine(Bind(root), Cache(sp, root))));
+}</code></pre>
+
+<h4>WS1.4 Tests</h4>
+<ul>
+  <li><b>Unit (no model, fake transcriber seam):</b> PCM→float conversion exactness; 30 s cap emits-and-continues; sub-0.3 s flush is a no-op; concurrent flush serialization; channel completes on <code>StopAsync</code>.</li>
+  <li><b>Descriptor:</b> unknown model name lists catalog; offline + cold cache error contains path/URL/hash; <code>InputSampleRate: 8000</code> override rejected; <code>ModelPath</code> bypasses catalog.</li>
+  <li><b>Integration (trait <code>Category=LocalModels</code>, runs in the cached-CI lane and locally):</b> real <code>tiny.en</code> transcribes the checked-in <code>jfk.wav</code> fixture (the whisper.cpp canonical sample, ~350 KB); asserts case-insensitive containment of "country", not exact text — model updates must not flake the suite.</li>
+</ul>
+
+<!-- ─────────────────────────── WS2 ─────────────────────────── -->
+<h3 id="ws2">WS2 — <code>Voxa.Speech.Piper</code>: TTS engine + descriptor <span class="badge p0">Phase 1</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Package:</b> <code>Voxa.Speech.Piper</code> (new)</span>
+  <span><b>Deps:</b> <code>Voxa.Speech.Abstractions</code> only (the piper <em>binary</em> is a resolved artifact, not a NuGet dep)</span>
+  <span><b>Registry name:</b> <code>"Piper"</code>, config section <code>"Piper"</code></span>
+</div>
+
+<h4>WS2.1 Why a child process, not in-proc ONNX</h4>
+<p>Piper voices are VITS models — ONNX Runtime (already in the dependency tree via SileroVad) could run them in-proc. The blocker is the front half: text→phoneme conversion requires <b>espeak-ng, which is GPL-3.0</b>. Linking it (P/Invoke counts) would force the package off MIT. The official <code>piper</code> executable bundles espeak-ng <em>behind its own process boundary</em>, which is the well-trodden GPL isolation line. Secondary benefits: zero native-interop surface for us to maintain, and piper's exact upstream phonemization behavior. The costs — process lifecycle management and a per-RID binary to resolve — are contained in this workstream. (Kokoro — WS3 — takes the inverse split: synthesis in-proc, only G2P out of process. For Piper, fully in-proc remains §12 material.)</p>
+
+<h4>WS2.2 Process model — warm host, per-utterance files</h4>
+<p>The two naive shapes both fail: <em>spawn-per-utterance</em> pays model load (~0.5–1.5 s) per sentence — kills latency; <em>one process streaming raw PCM for many utterances</em> gives no reliable utterance demarcation on the byte stream. The design that works:</p>
+
+<span class="filelabel">src/Voxa.Speech.Piper/PiperProcessHost.cs (new — behavioral contract)</span>
+<pre><code><span class="cm">// One long-lived piper process per (voice, options) key, started on first use:</span>
+<span class="cm">//   piper --model &lt;voice.onnx&gt; --json-input --output_dir &lt;session-temp-dir&gt;</span>
+<span class="cm">//</span>
+<span class="cm">// Per synthesis request:</span>
+<span class="cm">//   1. Write one JSON line to stdin: { "text": "...", "output_file": "&lt;temp&gt;/u-&lt;seq&gt;.wav" }</span>
+<span class="cm">//   2. Await completion: piper prints the output path on stdout when an utterance is done.</span>
+<span class="cm">//      Fallback detector (behind the same awaiter, for piper builds that don't echo):</span>
+<span class="cm">//      poll for file-exists + size-stable-across-two-reads, 25 ms period.</span>
+<span class="cm">//   3. Read the WAV, validate the header against the announced sample rate, strip it, hand</span>
+<span class="cm">//      the PCM to the engine. Delete the temp file.</span>
+<span class="cm">//</span>
+<span class="cm">// Concurrency: SemaphoreSlim(1,1) per host — piper processes stdin lines sequentially, so</span>
+<span class="cm">// in-flight = 1 per process. MaxProcesses (default 2) hosts per voice, leased round-robin,</span>
+<span class="cm">// so two simultaneous calls don't serialize behind one process. Singleton registry in DI.</span>
+<span class="cm">//</span>
+<span class="cm">// Crash recovery: process exit while requests pending → fault pending awaiters with the</span>
+<span class="cm">// captured stderr tail, restart lazily on next request. ErrorFrame semantics upstream are</span>
+<span class="cm">// unchanged (TextToSpeechProcessor already maps engine exceptions).</span></code></pre>
+
+<span class="filelabel">src/Voxa.Speech.Piper/PiperTtsEngine.cs (new — behavioral contract)</span>
+<pre><code><span class="kw">public sealed class</span> PiperTtsEngine : ITextToSpeechEngine
+{
+    <span class="cm">// StartAsync: resolve voice (.onnx + .onnx.json) and executable via VoxaModelCache</span>
+    <span class="cm">// (ExecutablePath config → PATH probe → cache/download per-RID; chmod +x on unix);</span>
+    <span class="cm">// parse the voice's .onnx.json; if json sample_rate ≠ the rate the descriptor announced,</span>
+    <span class="cm">// throw a config-key-naming error (envelope already told the client the wrong rate —</span>
+    <span class="cm">// that's a startup-fail, not a runtime mystery). Lease a PiperProcessHost.</span>
+
+    <span class="cm">// SynthesizeAsync(text): one host round-trip; yield the PCM in ~4096-sample chunks</span>
+    <span class="cm">// (per the ITextToSpeechEngine pooled-buffer contract — TextToSpeechProcessor copies).</span>
+    <span class="cm">// Chunked yield keeps the sink's pacing/barge-in flush behavior identical to cloud TTS:</span>
+    <span class="cm">// an interruption mid-sentence stops emission between chunks.</span>
+
+    <span class="cm">// DisposeAsync: return the lease; hosts outlive connections, die with the app</span>
+    <span class="cm">// (IHostApplicationLifetime hook kills child processes — no orphan piper.exe).</span>
+}</code></pre>
+
+<h4>WS2.3 Voice catalog &amp; sample-rate inference</h4>
+<table>
+  <tr><th><code>Voice</code> value (initial catalog)</th><th>Quality</th><th>Rate</th><th>Size</th></tr>
+  <tr><td><code>en_US-lessac-medium</code></td><td>medium</td><td>22 050 Hz</td><td>~63 MB</td></tr>
+  <tr><td><code>en_US-lessac-high</code></td><td>high</td><td>22 050 Hz</td><td>~109 MB</td></tr>
+  <tr><td><code>en_US-amy-low</code></td><td>low</td><td>16 000 Hz</td><td>~25 MB</td></tr>
+  <tr><td><code>en_GB-alan-medium</code>, <code>de_DE-thorsten-medium</code>, <code>fr_FR-siwis-medium</code>, <code>es_ES-davefx-medium</code></td><td>medium</td><td>22 050 Hz</td><td>~63 MB each</td></tr>
+</table>
+<p>Default: <code>en_US-lessac-medium</code>. The descriptor infers the announced rate from the quality suffix — deterministic from the config string, no model load needed at composition time (the VDX-001 effective-rate rule):</p>
+
+<span class="filelabel">src/Voxa.Speech.Piper/PiperDescriptors.cs (new)</span>
+<pre><code><span class="kw">public static class</span> PiperDescriptors
+{
+    <span class="kw">public static</span> VoxaTtsDescriptor Tts { <span class="kw">get</span>; } = <span class="kw">new</span>(
+        Name: <span class="kw">"Piper"</span>, ConfigSection: <span class="kw">"Piper"</span>, OutputSampleRate: 22050,
+        Validate: root =&gt;
+        {
+            <span class="cm">// Voice in catalog (or VoicePath set + exists); offline → IsCached(voice, json,</span>
+            <span class="cm">// executable); LengthScale ∈ (0, 4]; no credentials, ever.</span>
+        },
+        CreateProcessor: (sp, root) =&gt;
+            <span class="kw">new</span> TextToSpeechProcessor(<span class="kw">new</span> PiperTtsEngine(Bind(root), Cache(sp, root), Hosts(sp))))
+    {
+        <span class="cm">// Explicit override &gt; quality-suffix inference (-low/-x_low → 16000, else 22050).</span>
+        <span class="cm">// PiperTtsEngine.StartAsync re-verifies against the voice json and fails loudly</span>
+        <span class="cm">// on mismatch, so a custom VoicePath with an odd rate can't silently desync the</span>
+        <span class="cm">// session envelope.</span>
+        ResolveOutputSampleRate = root =&gt;
+            root.GetSection(<span class="kw">"Piper"</span>).GetValue&lt;<span class="kw">int</span>?&gt;(<span class="kw">"OutputSampleRate"</span>)
+            ?? InferRateFromVoiceName(root[<span class="kw">"Piper:Voice"</span>] ?? <span class="kw">"en_US-lessac-medium"</span>)
+    };
+}</code></pre>
+
+<h4>WS2.4 Tests</h4>
+<ul>
+  <li><b>Unit (fake process host):</b> WAV header validation/strip; chunked yield sizes; rate-mismatch error names <code>Voxa:Piper:OutputSampleRate</code>; crash → faulted awaiters carry stderr tail → next request restarts; <code>MaxProcesses</code> leasing.</li>
+  <li><b>Descriptor:</b> suffix inference (<code>-low</code>→16000, <code>-medium</code>→22050, explicit override wins); unknown voice lists catalog; offline cold-cache error text.</li>
+  <li><b>Integration (<code>Category=LocalModels</code>):</b> real <code>en_US-amy-low</code> (smallest) synthesizes "Hello from Voxa." — asserts non-empty PCM, header rate 16 000, duration within 0.5–10 s; second call on the warm host completes &lt; 2 s.</li>
+  <li><b>Orphan check:</b> disposing the host registry leaves no child piper process (poll process table by id).</li>
+</ul>
+
+<!-- ─────────────────────────── WS3 ─────────────────────────── -->
+<h3 id="ws3">WS3 — <code>Voxa.Speech.Kokoro</code>: quality-tier TTS engine + descriptor <span class="badge p0">Phase 1</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Package:</b> <code>Voxa.Speech.Kokoro</code> (new)</span>
+  <span><b>Deps:</b> <code>Microsoft.ML.OnnxRuntime</code> (already in the tree via SileroVad), <code>Voxa.Speech.Abstractions</code></span>
+  <span><b>Registry name:</b> <code>"Kokoro"</code>, config section <code>"Kokoro"</code></span>
+</div>
+<p><a href="https://huggingface.co/hexgrad/Kokoro-82M">Kokoro-82M</a> (Apache-2.0, StyleTTS2-based, 82M parameters, fixed 24 kHz output, 54 voices across 8 languages) is the local tier's quality option — markedly more natural than Piper, competitive with commercial cloud voices, at the cost of a heavier model and slower CPU inference. The positioning is stated explicitly everywhere it appears: <b>Piper is the speed/CI tier; Kokoro is the voice you demo and deploy with.</b></p>
+
+<h4>WS3.1 Isolation pattern — Piper's split, inverted</h4>
+<p>Kokoro has the same GPL constraint as Piper — its grapheme-to-phoneme step depends on espeak-ng — but the shape of the problem is friendlier: synthesis itself is a plain ONNX graph (token ids + voice style vector + speed in, float PCM out), and only the small G2P front half touches GPL code. So WS2's split inverts: run synthesis <em>in-process</em> on ONNX Runtime (which Voxa already ships for SileroVad), and push only phonemization out of process as a per-sentence <code>espeak-ng --ipa -q "&lt;text&gt;"</code> CLI call — stateless, ~10–30 ms, output delimited by process exit. This eliminates the two ugliest Piper risks for this engine: there is no warm child process to manage (R7) and no utterance-demarcation heuristic (R1) — process EOF <em>is</em> the demarcation.</p>
+
+<div class="callout danger"><b>Do not reference the KokoroSharp NuGet.</b> <a href="https://github.com/Lyrcaxis/KokoroSharp">KokoroSharp</a> is MIT-licensed and an excellent <em>reference implementation</em>, but it links espeak-ng in-proc and copies espeak-ng native binaries into the consumer's build output — both sides of the GPL line §3.3 forbids. We consume the published model contract directly: the ONNX graph and the phoneme→token-id vocabulary are documented artifacts. KokoroSharp informs the implementation; it does not enter the dependency graph.</div>
+
+<h4>WS3.2 Engine</h4>
+<span class="filelabel">src/Voxa.Speech.Kokoro/KokoroTtsEngine.cs (new — behavioral contract)</span>
+<pre><code><span class="kw">public sealed class</span> KokoroTtsEngine : ITextToSpeechEngine
+{
+    <span class="cm">// StartAsync: resolve via VoxaModelCache — the model ONNX (per configured Precision), the</span>
+    <span class="cm">// configured voice's style vector, and the espeak-ng CLI (EspeakPath config → PATH probe →</span>
+    <span class="cm">// cache/download per-RID; chmod +x on unix). The InferenceSession is cached per model path</span>
+    <span class="cm">// in a static ConcurrentDictionary (the WhisperFactory pattern, WS1): weights load once per</span>
+    <span class="cm">// process (~330 MB fp32 / ~88 MB int8); engine instances are per-connection and cheap.</span>
+
+    <span class="cm">// SynthesizeAsync(text) — one sentence per call (SentenceAggregator upstream guarantees it):</span>
+    <span class="cm">//   1. espeak-ng CLI → IPA phoneme string. Per-sentence process; EOF = done; non-zero exit</span>
+    <span class="cm">//      surfaces the stderr tail in the engine exception.</span>
+    <span class="cm">//   2. IPA → token ids via the compiled-in vocabulary map. Hard cap 510 tokens (model</span>
+    <span class="cm">//      context): split into multiple runs at phrase boundaries — never truncate silently.</span>
+    <span class="cm">//   3. session.Run — one pass per sentence on a worker thread (CPU-bound native code; never</span>
+    <span class="cm">//      block the pipeline data loop). Output float PCM @ 24 000 Hz → 16-bit LE.</span>
+    <span class="cm">//   4. Yield ~4096-sample chunks per the ITextToSpeechEngine pooled-buffer contract —</span>
+    <span class="cm">//      barge-in stops emission between chunks, identical to WS2 and the cloud engines.</span>
+
+    <span class="cm">// Concurrency: InferenceSession.Run is thread-safe; a process-wide SemaphoreSlim</span>
+    <span class="cm">// (MaxConcurrentSyntheses, default 2) caps parallel runs so synthesis can't starve the</span>
+    <span class="cm">// audio pipeline's cores.</span>
+
+    <span class="cm">// DisposeAsync: per-engine state only — the session is process-lifetime, and espeak-ng</span>
+    <span class="cm">// calls leave nothing running (no orphan surface at all).</span>
+}</code></pre>
+
+<h4>WS3.3 Catalog &amp; descriptor</h4>
+<table>
+  <tr><th><code>Precision</code> value</th><th>Size</th><th>Notes</th></tr>
+  <tr><td><code>fp32</code></td><td>~330 MB</td><td>Reference quality</td></tr>
+  <tr><td><code>fp16</code></td><td>~170 MB</td><td><b>Default</b> — near-identical output, half the download</td></tr>
+  <tr><td><code>int8</code></td><td>~88 MB</td><td>CI default; fastest on CPU, slight quality cost</td></tr>
+</table>
+<p>Initial voice catalog (style vectors, ~0.5 MB each, resolved per configured voice): <code>af_heart</code> (default), <code>af_bella</code>, <code>am_michael</code>, <code>bf_emma</code>, <code>bm_george</code> — extended per the standard catalog policy (§12). Unknown <code>Voice</code>/<code>Precision</code> values fail <code>Validate</code> listing the valid set; <code>ModelPath</code>/<code>VoicePath</code> bypass the catalog.</p>
+
+<span class="filelabel">src/Voxa.Speech.Kokoro/KokoroDescriptors.cs (new)</span>
+<pre><code><span class="kw">public static class</span> KokoroDescriptors
+{
+    <span class="kw">public static</span> VoxaTtsDescriptor Tts { <span class="kw">get</span>; } = <span class="kw">new</span>(
+        Name: <span class="kw">"Kokoro"</span>, ConfigSection: <span class="kw">"Kokoro"</span>, OutputSampleRate: 24000,
+        Validate: root =&gt;
+        {
+            <span class="cm">// Voice in catalog (or VoicePath set + exists); Precision ∈ {fp32, fp16, int8};</span>
+            <span class="cm">// Speed ∈ (0, 3]; offline → IsCached(model, voice, espeak-ng); no credentials.</span>
+            <span class="cm">// OutputSampleRate override ≠ 24000 → startup error (the model is 24 kHz-only —</span>
+            <span class="cm">// same rule as Whisper's 16 kHz input).</span>
+        },
+        CreateProcessor: (sp, root) =&gt;
+            <span class="kw">new</span> TextToSpeechProcessor(<span class="kw">new</span> KokoroTtsEngine(Bind(root), Cache(sp, root))));
+    <span class="cm">// No ResolveOutputSampleRate hook — the rate is a model constant, and it equals the</span>
+    <span class="cm">// cloud-TTS default (24 000 Hz), so swapping ElevenLabs→Kokoro leaves the session</span>
+    <span class="cm">// envelope unchanged.</span>
+}</code></pre>
+
+<h4>WS3.4 Tests</h4>
+<ul>
+  <li><b>Unit (fake G2P + fake-session seam):</b> IPA→token-id golden cases incl. punctuation and out-of-vocabulary symbols; 510-token split at phrase boundaries; float→16-bit conversion; chunk sizing; rejected <code>OutputSampleRate</code> override names the key; espeak non-zero exit surfaces the stderr tail.</li>
+  <li><b>Descriptor:</b> unknown voice/precision lists valid values; offline cold-cache remediation text; explicit paths bypass catalog.</li>
+  <li><b>Integration (<code>Category=LocalModels</code>):</b> real <code>int8</code> model + <code>af_heart</code> synthesizes "Hello from Voxa." — non-empty PCM at 24 000 Hz, duration within 0.5–10 s, warm second call faster than the first; real espeak-ng CLI resolution exercised.</li>
+  <li><b>Dependency-graph gate:</b> a test asserts <code>Voxa.Speech.Kokoro</code>'s closure contains no KokoroSharp / espeak-ng assembly or native — the §3.3 GPL rule enforced mechanically, not by review.</li>
+</ul>
+
+<!-- ─────────────────────────── WS4 ─────────────────────────── -->
+<h3 id="ws4">WS4 — Echo agent: closing the no-API-key loop <span class="badge p0">Phase 1</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Package:</b> <code>Voxa</code> (meta-package, alongside <code>OpenAIChatAgentFactory</code>)</span>
+  <span><b>Config:</b> <code>"Voxa:Agent:Provider": "Echo"</code></span>
+  <span><b>Size:</b> ~60 lines</span>
+</div>
+<p>STT and TTS going local still leaves the agent hop demanding an OpenAI key — <code>OpenAIChatAgentFactory.Validate</code> rejects everything else by design. The smallest honest fix is a built-in parrot: <code>Provider: "Echo"</code> yields an <code>AIAgent</code> that streams back <code>"You said: &lt;transcript&gt;"</code>. It exercises every pipeline stage (turn lifecycle, sentence aggregation, TTS, barge-in) with deterministic output — exactly what an e2e test wants — and it makes the first-touch demo fully credential-free.</p>
+<ul>
+  <li>Restructure: rename the internal factory to <code>DefaultAgentFactory</code>, dispatching on <code>options.Provider</code> — <code>null</code>/<code>"OpenAI"</code> → existing OpenAI path (unchanged), <code>"Echo"</code> → <code>EchoAgent</code>; anything else → the existing "register a custom IVoiceAgentFactory" error, now also naming <code>"Echo"</code> as a valid value. <code>Validate("Echo")</code> returns no errors unconditionally.</li>
+  <li><code>EchoAgent</code> streams its reply in 2–3 chunks (not one) so sentence aggregation and incremental TTS are genuinely exercised in tests.</li>
+  <li>Docs position it as a diagnostic/demo agent, and point users who want a real keyless agent at registering an Ollama-backed <code>IChatClient</code> (the DI seam already wins over the factory — §12).</li>
+  <li><b>Tests:</b> <code>Validate</code> matrix (Echo passes keyless; unknown provider error message lists Echo); guard end-to-end passes with Echo + no secrets; echoed text round-trips through a pipeline with fake STT/TTS.</li>
+</ul>
+
+<!-- ─────────────────────────── WS5 ─────────────────────────── -->
+<h3 id="ws5">WS5 — Meta-package, guard validation, sample, CI conversation test, docs <span class="badge p1">Phase 2</span><span class="badge additive">Additive</span></h3>
+<div class="ws-head">
+  <span><b>Touches:</b> <code>Voxa</code>, <code>VoxaDefaultsGuard</code>, <code>samples/</code>, CI workflow, READMEs</span>
+  <span><b>Depends on:</b> WS0–WS4</span>
+</div>
+
+<h4>WS5.1 Meta-package registration</h4>
+<p><code>VoxaDefaultsExtensions.AddVoxa</code> gains three lines — <code>voxa.AddProvider(WhisperCppDescriptors.Stt)</code>, <code>voxa.AddProvider(PiperDescriptors.Tts)</code>, and <code>voxa.AddProvider(KokoroDescriptors.Tts)</code> — so <code>"Stt": "WhisperCpp"</code> / <code>"Tts": "Kokoro"</code> resolve with zero extra packages. Cost analysis: the meta-package already ships ONNX Runtime (~30 MB of native bits) via SileroVad; <code>Whisper.net</code>'s CPU runtime adds ~15 MB of natives, and neither <code>Voxa.Speech.Piper</code> nor <code>Voxa.Speech.Kokoro</code> adds natives at all (the piper and espeak-ng binaries are cache artifacts; Kokoro reuses the existing ONNX Runtime). Verdict: include all three; the headline benefit <em>is</em> the meta-package working keyless out of the box. À-la-carte hosts reference the packages and <code>AddProvider</code> manually, exactly like every other provider.</p>
+
+<h4>WS5.2 Guard: validate cold, warm eagerly</h4>
+<ul>
+  <li><code>Validate</code> (descriptor) stays side-effect-free: catalog/path/offline checks only (WS0's <code>IsCached</code> split).</li>
+  <li><code>VoxaDefaultsGuard</code> gains an eager warm-up step for the active local providers: resolve models (download if needed, progress logged) and pre-load the <code>WhisperFactory</code> / first <code>PiperProcessHost</code> / Kokoro <code>InferenceSession</code> <em>at startup</em>, gated by <code>Voxa:Models:EagerWarmup</code> (default <code>true</code> when guard is armed). The first WebSocket caller must never pay a 250 MB download or a model load.</li>
+  <li>Warm-up failure = host startup failure with the §5.1 remediation text — consistent with the guard's existing fail-fast contract.</li>
+</ul>
+
+<h4>WS5.3 Offline sample config</h4>
+<p><code>samples/Voxa.Samples.MinimalServer</code> gains <code>appsettings.Local.json</code> (activated by <code>--environment Local</code>): WhisperCpp + Piper + Echo. The README one-liner becomes literally true: <em>clone → <code>dotnet run --environment Local</code> → talk to it</em>, no keys. <code>Program.cs</code> is untouched — still the golden-file-checked six lines.</p>
+
+<h4>WS5.4 The flagship CI test</h4>
+<span class="filelabel">tests/Voxa.LocalSpeech.Tests/LocalConversationEndToEndTests.cs (new)</span>
+<pre><code><span class="cm">// Trait Category=LocalModels. TestServer host, AddVoxa(config) with Stt=WhisperCpp(tiny.en),</span>
+<span class="cm">// Tts=Piper(en_US-amy-low), Agent=Echo. Over the WebSocket:</span>
+<span class="cm">//   1. Receive session envelope — assert inputSampleRate 16000, outputSampleRate 16000.</span>
+<span class="cm">//   2. Stream the jfk.wav fixture as 20 ms binary frames, then ~600 ms of silence so the</span>
+<span class="cm">//      real Silero VAD closes the utterance (no fakes anywhere in this test).</span>
+<span class="cm">//   3. Await a transcription envelope whose text contains "country" (case-insensitive).</span>
+<span class="cm">//   4. Await bot text envelopes containing "You said".</span>
+<span class="cm">//   5. Await ≥ 1 s of binary PCM frames — Piper actually spoke.</span>
+<span class="cm">// Budgets: condition-polled waits, 60 s outer timeout (whisper tiny on a cold CI core is slow;</span>
+<span class="cm">// the repo's no-fixed-sleeps rule applies). Zero secrets, zero network (models pre-cached).</span></code></pre>
+<p><b>CI wiring:</b> a <code>local-speech</code> job — restore model cache via <code>actions/cache</code> (key = catalog hashes, so a model bump invalidates it), run a tiny cache-warm step on miss (the only networked step), then run <code>--filter Category=LocalModels</code> with outbound network blocked to prove the zero-network claim. The lane also carries Kokoro's int8 integration test (WS3.4); the flagship <em>conversation</em> test stays on the smallest artifacts (tiny.en + amy-low) so its timing budget is owned by Whisper, not the TTS tier. The default test job continues to exclude the trait, so the everyday inner loop stays fast.</p>
+
+<h4>WS5.5 Docs</h4>
+<ul>
+  <li>Root README: provider table gains WhisperCpp, Piper, and Kokoro rows with "API key: <b>none</b>"; new "Run it fully local" subsection under the quickstart; config reference gains the §7 keys.</li>
+  <li>New <code>docs/local-speech.md</code>: model/voice catalogs with sizes; a Piper-vs-Kokoro chooser (speed vs quality, sizes, sample rates); latency expectations table (the §4 honesty callout, expanded); air-gap runbook (provision cache offline, set <code>Offline: true</code>, verify hashes); CI recipe; troubleshooting (proxy via <code>IVoxaHttpClientProvider</code>, cache relocation, piper process diagnostics).</li>
+  <li>Package READMEs for both new packages, following the existing per-package README pattern.</li>
+  <li>ROADMAP: move the P6 local-tier entry to the shipped section with a pointer to this spec.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Configuration reference</h2>
+<span class="filelabel">appsettings.json — full local-tier surface (all keys optional unless noted)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "WhisperCpp",                 <span class="cm">// activates WS1</span>
+    "Tts": "Piper",                      <span class="cm">// activates WS2 — or "Kokoro" (WS3) for the quality tier</span>
+    "Agent": { "Provider": "Echo" },     <span class="cm">// WS4 — or omit and bring your own agent/key</span>
+
+    "Models": {
+      "CachePath": null,                 <span class="cm">// default: %LOCALAPPDATA%\voxa\models | ~/.cache/voxa/models</span>
+      "Offline": false,                  <span class="cm">// true = never download; missing model = startup error</span>
+      "EagerWarmup": true                <span class="cm">// guard resolves + pre-loads models at startup</span>
+    },
+
+    "WhisperCpp": {
+      "Model": "base.en",                <span class="cm">// catalog name (§6.WS1.2)</span>
+      "ModelPath": null,                 <span class="cm">// explicit GGML path — bypasses catalog + cache</span>
+      "Language": "en",                  <span class="cm">// null = auto-detect (slower)</span>
+      "Threads": null,                   <span class="cm">// default min(4, processor count)</span>
+      "Translate": false                 <span class="cm">// translate-to-English mode</span>
+      <span class="cm">// InputSampleRate override is REJECTED at startup — whisper is 16 kHz-only</span>
+    },
+
+    "Piper": {
+      "Voice": "en_US-lessac-medium",    <span class="cm">// catalog name (§6.WS2.3)</span>
+      "VoicePath": null,                 <span class="cm">// explicit .onnx path (json expected alongside)</span>
+      "ExecutablePath": null,            <span class="cm">// explicit piper binary; else PATH, else cache</span>
+      "OutputSampleRate": null,          <span class="cm">// default inferred from voice quality suffix</span>
+      "LengthScale": 1.0,                <span class="cm">// &lt;1 faster speech, &gt;1 slower</span>
+      "MaxProcesses": 2                  <span class="cm">// warm piper hosts per voice</span>
+    },
+
+    "Kokoro": {
+      "Voice": "af_heart",               <span class="cm">// catalog name (§6.WS3.3)</span>
+      "Precision": "fp16",               <span class="cm">// fp32 | fp16 | int8 — size/speed trade</span>
+      "ModelPath": null,                 <span class="cm">// explicit ONNX path — bypasses catalog + cache</span>
+      "VoicePath": null,                 <span class="cm">// explicit style-vector path</span>
+      "EspeakPath": null,                <span class="cm">// explicit espeak-ng binary; else PATH, else cache</span>
+      "Speed": 1.0,                      <span class="cm">// &gt;1 faster speech</span>
+      "MaxConcurrentSyntheses": 2        <span class="cm">// parallel ONNX runs cap</span>
+      <span class="cm">// OutputSampleRate override is REJECTED at startup — Kokoro is 24 kHz-only</span>
+    }
+  }
+}</code></pre>
+<p>Environment variable <code>VOXA_MODEL_CACHE</code> overrides <code>Models:CachePath</code> (highest precedence) — the CI- and container-friendly knob.</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases &amp; dependencies</h2>
+<div class="arrowflow">Phase 0          Phase 1 (parallelizable)             Phase 2
+─────────        ─────────────────────────            ────────────────────────────
+WS0 model  ──┬──▶ WS1 WhisperCpp (needs WS0)    ──┬──▶ WS5 meta-package + guard +
+cache        ├──▶ WS2 Piper      (needs WS0)      │     sample + CI e2e + docs
+             ├──▶ WS3 Kokoro     (needs WS0)      │     (needs all of WS1–WS4)
+             └──▶ WS4 Echo agent (independent) ───┘</div>
+<table>
+  <tr><th>Phase</th><th>Contents</th><th>Exit criterion</th></tr>
+  <tr><td><b>0</b></td><td>WS0</td><td><code>VoxaModelCache</code> merged with full no-network unit coverage; offline-miss message reviewed for copy-pasteability</td></tr>
+  <tr><td><b>1</b></td><td>WS1 ∥ WS2 ∥ WS3 ∥ WS4</td><td>All three provider packages build with descriptors registered manually; <code>LocalModels</code>-trait integration tests pass locally; Echo agent validates keyless</td></tr>
+  <tr><td><b>2</b></td><td>WS5</td><td><code>LocalConversationEndToEnd</code> green in the network-blocked CI lane; sample runs keyless; docs merged; ROADMAP reconciled</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<p class="progress-note">Tick as completed. IDs are referenced from commit messages (e.g. <code>feat(local): VLS-T03 …</code>).</p>
+<ul class="cl">
+  <li><input type="checkbox"> <span class="tid">VLS-T01</span> <b>WS0</b> — <code>VoxaModelCache</code> + options + exception type
+    <span class="ac">AC: resolution order per §5.1; atomic verified download; lock-file race safety; Validate/Resolve split; unit tests green with zero real network</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T02</span> <b>WS1</b> — <code>Voxa.Speech.WhisperCpp</code> package: engine + factory cache + catalog
+    <span class="ac">AC: buffer/flush contract incl. 30 s cap + min-utterance guard + flush serialization; shared WhisperFactory per model path; unit tests green</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T03</span> <b>WS1</b> — <code>WhisperCppDescriptors.Stt</code> + validation
+    <span class="ac">AC: keyless Validate per §6.WS1.3 incl. 16 kHz-only rejection; <code>jfk.wav</code> integration test (LocalModels trait) passes</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T04</span> <b>WS2</b> — <code>PiperProcessHost</code>: warm process, json-input, completion detection, crash recovery, leasing
+    <span class="ac">AC: fake-host unit tests green; orphan-process check green; stderr tail surfaces in faults</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T05</span> <b>WS2</b> — <code>PiperTtsEngine</code> + executable resolution + <code>PiperDescriptors.Tts</code>
+    <span class="ac">AC: rate inference + override + StartAsync json re-verification; <code>en_US-amy-low</code> integration test passes; warm second call &lt; 2 s</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T06</span> <b>WS3</b> — <code>Voxa.Speech.Kokoro</code> package: engine + vocabulary map + session cache + espeak-ng CLI resolution
+    <span class="ac">AC: in-proc ONNX synthesis with per-sentence out-of-proc G2P; 510-token split at phrase boundaries; dependency-graph gate proves no KokoroSharp/espeak-ng in the closure; unit tests green</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T07</span> <b>WS3</b> — <code>KokoroDescriptors.Tts</code> + validation + integration test
+    <span class="ac">AC: keyless Validate per §6.WS3.3 incl. 24 kHz-only rejection; int8 <code>af_heart</code> integration test (LocalModels trait) passes; warm second call faster than first</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T08</span> <b>WS4</b> — <code>DefaultAgentFactory</code> dispatch + <code>EchoAgent</code>
+    <span class="ac">AC: Echo validates keyless; OpenAI path byte-identical; unknown-provider error lists Echo; multi-chunk streaming reply</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T09</span> <b>WS5</b> — meta-package registration + guard eager warm-up
+    <span class="ac">AC: <code>"Stt": "WhisperCpp"</code> / <code>"Tts": "Kokoro"</code> resolve with only the <code>Voxa</code> package; warm-up failure fails startup with remediation text; <code>EagerWarmup: false</code> defers to engine StartAsync</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T10</span> <b>WS5</b> — <code>LocalConversationEndToEnd</code> + CI lane with model cache + network block
+    <span class="ac">AC: green on PR with zero secrets; cache key invalidates on catalog change; default test job unaffected</span></li>
+  <li><input type="checkbox"> <span class="tid">VLS-T11</span> <b>WS5</b> — sample <code>appsettings.Local.json</code> + docs (<code>docs/local-speech.md</code>, READMEs, ROADMAP)
+    <span class="ac">AC: clone → <code>dotnet run --environment Local</code> → working bot, no keys; air-gap runbook tested by following it verbatim on a cache-cold machine with networking disabled</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+<ol>
+  <li><b>Every commit:</b> <code>dotnet build Voxa.sln -warnaserror</code> and the default test suite (LocalModels trait excluded) — the everyday loop must not get slower or need models.</li>
+  <li><b>Phase exits:</b> <code>dotnet test --filter Category=LocalModels</code> locally with a warm cache; then once with <code>VOXA_MODEL_CACHE</code> pointed at an empty dir to exercise first-run download end-to-end.</li>
+  <li><b>Zero-network proof:</b> the CI lane runs the LocalModels suite with outbound traffic blocked after cache restore. A test that secretly phones home fails the lane — this is the enforcement of the headline claim, not an aspiration.</li>
+  <li><b>Air-gap drill (manual, once per release):</b> follow <code>docs/local-speech.md</code>'s runbook verbatim on a machine with networking disabled: provision cache from a USB-copied directory, set <code>Offline: true</code>, confirm startup, hold a conversation.</li>
+  <li><b>Latency smoke (manual):</b> the §3.1 RTF/first-audio budgets measured on the reference dev box via the benchmark harness; recorded in the PR description, not CI-gated (hardware variance would make a gate flaky — the lesson of the allocation-gate saga applies doubly to wall-clock).</li>
+  <li><b>Regression sweep:</b> the full existing suite (cloud descriptors, composer rate tests, route e2e) green — proves the additive-only rule held.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>#</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>Piper utterance-completion detection</b> proves unreliable (stdout echo behavior varies across piper builds)</td><td class="sev-high">High</td><td>Dual detector (stdout echo + file-size-stable fallback) specified up front in §6.WS2.2; pinned piper version in the catalog so behavior can't drift under us; integration test exercises the real binary. Worst case: per-utterance process spawn behind the same engine API — slower, not broken.</td></tr>
+  <tr><td>R2</td><td><b>espeak-ng GPL contamination</b> via a future "optimize to in-proc" change or a careless dependency</td><td class="sev-crit">Critical</td><td>Process boundary is a hard rule (§3.3) recorded here and in both TTS package READMEs; the Kokoro workstream additionally bans the KokoroSharp NuGet (bundles espeak-ng natives — §6.WS3.1) and enforces the rule mechanically with a dependency-graph gate test (WS3.4); §12 names the only acceptable fully-in-proc path (non-GPL phonemizer).</td></tr>
+  <tr><td>R3</td><td><b>Whisper latency disappoints</b> users expecting cloud-streaming responsiveness</td><td class="sev-med">Medium</td><td>Docs lead with the latency table; default <code>base.en</code> balances; <code>tiny.en</code> + LowLatency profile recommended for interactive dev; positioning language ("dev/CI/offline tier") consistent everywhere.</td></tr>
+  <tr><td>R4</td><td><b>Model hosting drift</b> (Hugging Face URL scheme changes, files re-uploaded)</td><td class="sev-med">Medium</td><td>Pinned URLs + SHA-256 in a compiled catalog; hash mismatch is a loud, named failure; catalog bump is a tested code change. <code>ModelPath</code>/<code>VoicePath</code> escape hatch always works.</td></tr>
+  <tr><td>R5</td><td><b>CI cache eviction</b> re-downloads ~200 MB occasionally</td><td class="sev-low">Low</td><td>CI uses the smallest artifacts (tiny.en + amy-low + Kokoro int8 ≈ 200 MB); single networked warm step on miss; cache key stable until a catalog bump.</td></tr>
+  <tr><td>R6</td><td><b>Native crash in whisper.cpp</b> takes down the host process (in-proc native code, unlike piper)</td><td class="sev-med">Medium</td><td>Whisper.net is mature and widely deployed; engine confines calls to worker threads with defensive try/catch for managed-surfaced errors; pinned runtime version; sandboxing behind a process is the documented fallback if field reports demand it (§12).</td></tr>
+  <tr><td>R7</td><td><b>Orphaned piper processes</b> on abnormal host exit</td><td class="sev-low">Low</td><td>Children killed via <code>IHostApplicationLifetime</code>; started with kill-on-job-close semantics where the platform supports it (Windows Job Objects / POSIX process groups); orphan test in WS2.4. (Kokoro has no orphan surface — espeak-ng calls are run-to-exit.)</td></tr>
+  <tr><td>R8</td><td><b>espeak-ng CLI sourcing</b> — no official static binaries published for every RID (needed by Kokoro's out-of-proc G2P)</td><td class="sev-high">High</td><td>Pin and host verified static builds as Voxa release artifacts in the WS0 catalog (hash-checked like models); <code>EspeakPath</code> / <code>PATH</code> escape hatches always work; worst case Kokoro documents "install espeak-ng from your package manager" while the Piper and Whisper tiers are entirely unaffected.</td></tr>
+  <tr><td>R9</td><td><b>Kokoro CPU inference too slow</b> on low-end machines for the 1.5 s first-audio budget</td><td class="sev-med">Medium</td><td>int8 precision for CI and weak hardware; documented Piper-vs-Kokoro chooser (WS5.5); <code>MaxConcurrentSyntheses</code> cap protects the audio pipeline's cores; Piper remains the speed tier and the recommendation when budgets miss.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred (with rationale)</h2>
+<table>
+  <tr><th>Item</th><th>Why deferred</th><th>Revisit when</th></tr>
+  <tr><td>Streaming/interim Whisper transcripts (sliding-window partial decode)</td><td>Meaningful complexity (overlap windows, dedup heuristics) for UI sparkle only — final-transcript correctness is unaffected</td><td>User demand for live captions on the local tier</td></tr>
+  <tr><td>GPU runtimes (CUDA/CoreML/Vulkan)</td><td>Multiplies the test matrix; CPU meets the dev/CI/offline budgets</td><td>A production-grade local deployment story emerges</td></tr>
+  <tr><td>Fully in-proc TTS (no espeak-ng CLI hop) via a non-GPL phonemizer</td><td>Kokoro (WS3) already keeps synthesis in-proc; only G2P leaves the process. Eliminating that last hop — and doing the same for Piper — needs a mature MIT-compatible espeak-ng replacement, which doesn't exist today</td><td>A viable phonemizer appears, or sherpa-onnx-style bundling clarifies its licensing position</td></tr>
+  <tr><td>Local LLM agent (Ollama/ONNX)</td><td>Already achievable today: register an <code>IChatClient</code> in DI and it wins over the factory — needs a docs recipe, not code</td><td>Recipe ships in WS5 docs; built-in provider only if the registry pattern proves insufficient</td></tr>
+  <tr><td><code>voxa models</code> CLI (pull/list/verify)</td><td>The cache is self-managing; a CLI is surface area without a driving scenario</td><td>Air-gap users report provisioning friction the runbook can't solve</td></tr>
+  <tr><td>Whisper out-of-proc sandboxing</td><td>Premature absent field evidence of crashes (R6)</td><td>Crash reports attributable to whisper.cpp natives</td></tr>
+  <tr><td>Additional voice/model catalog breadth</td><td>Catalog bumps are cheap, tested code changes; start curated</td><td>Continuously, by request</td></tr>
+</table>
+
+</div>
+</body>
+</html>
