@@ -197,7 +197,18 @@ internal sealed class PiperProcessHost : IDisposable
         _process = null;
         _stdin = null;
         if (process is null) return;
-        try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { /* already gone */ }
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                // Reap synchronously so the child can't linger as a zombie (Linux) between Kill
+                // and the OS/runtime SIGCHLD handler running — otherwise an orphan check racing
+                // disposal sees a process that is dead but not yet reaped.
+                process.WaitForExit(5000);
+            }
+        }
+        catch { /* already gone */ }
         process.Dispose();
     }
 

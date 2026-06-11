@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Voxa.Speech;
 using Voxa.Speech.Kokoro;
 
@@ -28,13 +27,12 @@ public class KokoroIntegrationTests
         Assert.InRange(seconds, 0.5, 10.0);
         Assert.Contains(first, b => b != 0); // actual audio, not digital silence
 
-        // Warm call: session is loaded, espeak is per-call but tiny.
-        var sw = Stopwatch.StartNew();
+        // Warm call: session is loaded, espeak is per-call but tiny. Correctness only — Kokoro's
+        // CPU wall-clock is hardware-dependent (int8 on a contended 2-core CI runner is several
+        // seconds) and measured by the benchmark harness, not gated here (VLS-001 §3.1).
         var second = await CollectPcmAsync(engine, "Second sentence, warm session.");
-        sw.Stop();
         Assert.NotEmpty(second);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
-            $"warm synthesis took {sw.Elapsed.TotalSeconds:F1}s");
+        Assert.Contains(second, b => b != 0);
     }
 
     private static async Task<byte[]> CollectPcmAsync(KokoroTtsEngine engine, string text)

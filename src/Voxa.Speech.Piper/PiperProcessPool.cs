@@ -87,6 +87,14 @@ internal sealed class PiperProcessPool : IDisposable
         lock (_gate) return _hosts.Select(h => h.ProcessId).Where(p => p.HasValue).Select(p => p!.Value).ToList();
     }
 
+    /// <summary>
+    /// Live child pids across every pool, for orphan-check tests. Captures this run's processes
+    /// by id so the assertion doesn't race a machine-global process name against other test
+    /// assemblies running their own piper concurrently.
+    /// </summary>
+    internal static IReadOnlyList<int> AllLiveProcessIds()
+        => Pools.Values.SelectMany(p => p.LiveProcessIds()).ToList();
+
     public void Dispose()
     {
         lock (_gate)
