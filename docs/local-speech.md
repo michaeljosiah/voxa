@@ -21,6 +21,19 @@ downloads the models (SHA-256-verified, with progress logged at startup); afterw
 is local. Swap `"Echo"` for `"OpenAI"` (plus a key) when you want a real LLM — or register any
 `IChatClient` in DI (e.g. an Ollama client) for a fully local brain.
 
+### Try it in a browser
+
+The `MinimalServer` sample ships this config as `appsettings.Local.json` plus a tiny test page:
+
+```bash
+dotnet run --project samples/Voxa.Samples.MinimalServer --launch-profile Local
+```
+
+Open <http://localhost:5170>, allow the mic, and talk. The page derives both sample rates from the
+server's `session` envelope (it hardcodes nothing), so every voice plays at the right pitch:
+16 kHz `en_US-amy-low`, 22.05 kHz `en_US-lessac-medium`, 24 kHz Kokoro. It also flushes playback on
+barge-in. First run downloads the models, so give it a moment before the first reply.
+
 ## The three local providers
 
 | Provider | Role | Default model | Quality / speed |

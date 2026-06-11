@@ -593,7 +593,7 @@ WebSocket PCM in ──▶ SileroVAD ──▶ SpeechToTextProcessor ──▶ .
 </ul>
 
 <h4>WS5.3 Offline sample config</h4>
-<p><code>samples/Voxa.Samples.MinimalServer</code> gains <code>appsettings.Local.json</code> (activated by <code>--environment Local</code>): WhisperCpp + Piper + Echo. The README one-liner becomes literally true: <em>clone → <code>dotnet run --environment Local</code> → talk to it</em>, no keys. <code>Program.cs</code> is untouched — still the golden-file-checked six lines.</p>
+<p><code>samples/Voxa.Samples.MinimalServer</code> gains <code>appsettings.Local.json</code> + a <code>Local</code> launch profile: WhisperCpp + Piper + Echo. The README one-liner becomes literally true: <em>clone → <code>dotnet run --launch-profile Local</code> → talk to it</em>, no keys. A <code>wwwroot</code> browser test page (served by one <code>app.UseFileServer()</code> line, excluded from the golden-file budget) reads the <code>session</code> envelope for sample rates so any local voice plays at the correct pitch; the voice-bot wiring itself is still the golden-file-checked six lines.</p>
 
 <h4>WS5.4 The flagship CI test</h4>
 <span class="filelabel">tests/Voxa.LocalSpeech.Tests/LocalConversationEndToEndTests.cs (new)</span>
@@ -704,7 +704,7 @@ cache        ├──▶ WS2 Piper      (needs WS0)      │     sample + CI e2
   <li><input type="checkbox"> <span class="tid">VLS-T10</span> <b>WS5</b> — <code>LocalConversationEndToEnd</code> + CI lane with model cache + network block
     <span class="ac">AC: green on PR with zero secrets; cache key invalidates on catalog change; default test job unaffected</span></li>
   <li><input type="checkbox"> <span class="tid">VLS-T11</span> <b>WS5</b> — sample <code>appsettings.Local.json</code> + docs (<code>docs/local-speech.md</code>, READMEs, ROADMAP)
-    <span class="ac">AC: clone → <code>dotnet run --environment Local</code> → working bot, no keys; air-gap runbook tested by following it verbatim on a cache-cold machine with networking disabled</span></li>
+    <span class="ac">AC: clone → <code>dotnet run --launch-profile Local</code> → working bot + browser test page, no keys; air-gap runbook tested by following it verbatim on a cache-cold machine with networking disabled</span></li>
 </ul>
 
 <!-- ============================================================ -->

@@ -352,11 +352,14 @@ dotnet run --project samples/Voxa.Samples.MinimalServer
 ```
 
 Or run it **fully local with no API key at all** (`appsettings.Local.json`: WhisperCpp + Piper +
-the Echo agent; first run downloads the models):
+the Echo agent; first run downloads the models), then open <http://localhost:5170> and talk:
 
 ```bash
-dotnet run --project samples/Voxa.Samples.MinimalServer --environment Local
+dotnet run --project samples/Voxa.Samples.MinimalServer --launch-profile Local
 ```
+
+The browser test page reads the server's `session` envelope for sample rates, so any local voice
+(16 kHz Piper, 22.05 kHz Piper, 24 kHz Kokoro) plays at the correct pitch.
 
 ### Full sample server
 
