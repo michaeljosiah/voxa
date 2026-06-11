@@ -68,16 +68,25 @@ public static class KokoroCatalog
 
     private static readonly Dictionary<string, VoxaModelArtifact> EspeakByRid = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Windows archives use "piper-phonemize/", unix tarballs "piper_phonemize/".
+        // Upstream archive root naming is inconsistent: Windows and macOS use "piper-phonemize/"
+        // (hyphen), Linux tarballs use "piper_phonemize/" (underscore) — the ArchiveEntry must
+        // match each exactly.
         ["win-x64"]     = EspeakEntry("piper-phonemize_windows_amd64.zip",   "piper-phonemize/bin/espeak-ng.exe", "a6f1a3f80eba222c1b8eb3904a9c18781f3c21827bd2dc36bd85b216a306d945", 61_911_468),
         ["linux-x64"]   = EspeakEntry("piper-phonemize_linux_x86_64.tar.gz", "piper_phonemize/bin/espeak-ng",     "3fb3d58b4ac42bd69d38948acdbeab335eee7e599984169d28fb0082496649ad", 25_676_144),
         ["linux-arm64"] = EspeakEntry("piper-phonemize_linux_aarch64.tar.gz","piper_phonemize/bin/espeak-ng",     "f216660f6225a165155839110cd387947d69618f014f3d1c56729fdedb6557cc", 25_224_970),
-        ["osx-x64"]     = EspeakEntry("piper-phonemize_macos_x64.tar.gz",    "piper_phonemize/bin/espeak-ng",     "9ec6e300c0d012a663758bc45a097b47ee759761a3b91c7742de042af789d84b", 26_641_959),
-        ["osx-arm64"]   = EspeakEntry("piper-phonemize_macos_aarch64.tar.gz","piper_phonemize/bin/espeak-ng",     "78a9c28b3c94baf6e9526b2e386ce547909abaec4f31aadd7e16b01fbfe5f322", 26_641_933),
+        ["osx-x64"]     = EspeakEntry("piper-phonemize_macos_x64.tar.gz",    "piper-phonemize/bin/espeak-ng",     "9ec6e300c0d012a663758bc45a097b47ee759761a3b91c7742de042af789d84b", 26_641_959),
+        // NO osx-arm64: the upstream 2023.11.14-4 piper-phonemize_macos_aarch64.tar.gz ships an
+        // x86_64 espeak-ng mislabeled as aarch64 (verified: Mach-O cputype 0x01000007), so it
+        // fails on Apple Silicon without Rosetta. Apple Silicon is PATH/EspeakPath-only —
+        // `brew install espeak-ng` provides a native arm64 binary.
     };
 
     public static VoxaModelArtifact? EspeakForCurrentPlatform()
         => EspeakByRid.TryGetValue(CurrentRid(), out var a) ? a : null;
+
+    /// <summary>Look up the pinned espeak-ng artifact for a RID. Internal — for catalog tests.</summary>
+    internal static bool TryGetEspeak(string rid, out VoxaModelArtifact artifact)
+        => EspeakByRid.TryGetValue(rid, out artifact!);
 
     public static string CurrentRid()
     {

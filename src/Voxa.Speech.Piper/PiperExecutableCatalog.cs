@@ -22,7 +22,11 @@ public static class PiperExecutableCatalog
         ["linux-x64"]   = Entry("piper_linux_x86_64.tar.gz", "piper/piper",     "a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992", 26_460_462),
         ["linux-arm64"] = Entry("piper_linux_aarch64.tar.gz","piper/piper",     "fea0fd2d87c54dbc7078d0f878289f404bd4d6eea6e7444a77835d1537ab88eb", 26_004_717),
         ["osx-x64"]     = Entry("piper_macos_x64.tar.gz",    "piper/piper",     "ced85c0a3df13945b1e623b878a48fdc2854d5c485b4b67f62857cf551deaf8b", 19_146_927),
-        ["osx-arm64"]   = Entry("piper_macos_aarch64.tar.gz","piper/piper",     "6b1eb03b3735946cb35216e063e7eebcc33a6bbf5dd96ec0217959bf1cdcb0cc", 19_146_957),
+        // NO osx-arm64: the upstream 2023.11.14-2 piper_macos_aarch64.tar.gz ships an x86_64
+        // binary mislabeled as aarch64 (verified: Mach-O cputype 0x01000007). It fails at process
+        // start on Apple Silicon without Rosetta, so Apple Silicon is PATH/ExecutablePath-only —
+        // `brew install piper` provides a native arm64 binary. Do not re-add until a verified
+        // arm64 build is pinned.
     };
 
     /// <summary>The catalog artifact for the current OS/architecture, or null when unsupported.</summary>

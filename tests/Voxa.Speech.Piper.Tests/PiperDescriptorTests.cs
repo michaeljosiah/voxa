@@ -139,6 +139,24 @@ public class PiperDescriptorTests
     }
 
     [Fact]
+    public void Executable_Catalog_Omits_The_Broken_Macos_Arm64_Asset()
+    {
+        // The upstream piper_macos_aarch64.tar.gz ships an x86_64 binary mislabeled as aarch64,
+        // so Apple Silicon must resolve piper via PATH / Voxa:Piper:ExecutablePath instead of the
+        // catalog. Re-adding it would silently break the default Voxa:Tts=Piper path on Apple
+        // Silicon without Rosetta.
+        Assert.False(PiperExecutableCatalog.TryGet("osx-arm64", out _));
+
+        // The other RIDs remain available with correct per-archive entry paths.
+        Assert.True(PiperExecutableCatalog.TryGet("osx-x64", out var osxX64));
+        Assert.Equal("piper/piper", osxX64.ArchiveEntry);
+        Assert.True(PiperExecutableCatalog.TryGet("win-x64", out var win));
+        Assert.Equal("piper/piper.exe", win.ArchiveEntry);
+        Assert.True(PiperExecutableCatalog.TryGet("linux-x64", out _));
+        Assert.True(PiperExecutableCatalog.TryGet("linux-arm64", out _));
+    }
+
+    [Fact]
     public void Catalog_Entries_Are_Well_Formed()
     {
         foreach (var name in PiperVoiceCatalog.KnownVoices)

@@ -112,6 +112,11 @@ Silero VAD → whisper → Echo agent → Piper and asserts on the audio that co
 - **"No pinned piper/espeak-ng build exists for this platform"** — install the tool from your
   package manager and set `Voxa:Piper:ExecutablePath` / `Voxa:Kokoro:EspeakPath`, or just add it
   to `PATH`.
+- **Apple Silicon (macOS arm64)** — there is deliberately no auto-download here: the upstream
+  `*_macos_aarch64` release assets ship x86_64 binaries mislabeled as aarch64, which fail to start
+  on Apple Silicon without Rosetta. Install native arm64 builds instead — `brew install piper`
+  and/or `brew install espeak-ng` — and Voxa picks them up from `PATH` automatically (or set the
+  explicit path options). Intel Macs (`osx-x64`) auto-download as normal.
 - **Hash mismatch on download** — retry once (corrupted transfer); if it persists the upstream
   file changed and the catalog pin caught it — update the Voxa packages.
 - **A stale `.lock` file after a hard crash** — delete it; the error message names the path.

@@ -112,6 +112,23 @@ public class KokoroDescriptorTests
     }
 
     [Fact]
+    public void Espeak_Catalog_Omits_Broken_Macos_Arm64_And_Uses_Correct_Macos_Entry_Path()
+    {
+        // The upstream piper-phonemize_macos_aarch64.tar.gz ships an x86_64 espeak-ng mislabeled
+        // as aarch64 — Apple Silicon resolves espeak-ng via PATH / Voxa:Kokoro:EspeakPath instead.
+        Assert.False(KokoroCatalog.TryGetEspeak("osx-arm64", out _));
+
+        // macOS archives root at "piper-phonemize/" (hyphen), NOT "piper_phonemize/" (underscore,
+        // used by the Linux tarballs). An entry-path mismatch makes extraction resolution fail.
+        Assert.True(KokoroCatalog.TryGetEspeak("osx-x64", out var osxX64));
+        Assert.Equal("piper-phonemize/bin/espeak-ng", osxX64.ArchiveEntry);
+        Assert.True(KokoroCatalog.TryGetEspeak("win-x64", out var win));
+        Assert.Equal("piper-phonemize/bin/espeak-ng.exe", win.ArchiveEntry);
+        Assert.True(KokoroCatalog.TryGetEspeak("linux-x64", out var linux));
+        Assert.Equal("piper_phonemize/bin/espeak-ng", linux.ArchiveEntry); // Linux uses underscore
+    }
+
+    [Fact]
     public void EspeakVoice_Is_Inferred_From_The_Kokoro_Voice_Prefix()
     {
         Assert.Equal("en-us", new KokoroOptions { Voice = "af_heart" }.ResolveEspeakVoice());
