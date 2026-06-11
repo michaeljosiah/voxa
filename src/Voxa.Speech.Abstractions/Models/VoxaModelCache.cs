@@ -138,6 +138,127 @@ public sealed class VoxaModelCache
         return finalPath;
     }
 
+    // ── inventory (VST-001 WS0) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Snapshot the cache contents (no downloads, no verification). Logical entries: plain
+    /// cached files, plus each <c>*.extracted</c> archive directory as ONE entry (recursive
+    /// size) — matching how <see cref="ResolveAsync"/> manages them. In-flight artifacts
+    /// (<c>.partial</c>, <c>.lock</c>, temp extraction dirs) are excluded.
+    /// </summary>
+    public IReadOnlyList<CachedModelInfo> Enumerate()
+    {
+        var root = new DirectoryInfo(_options.CacheRoot);
+        if (!root.Exists) return [];
+
+        var entries = new List<CachedModelInfo>();
+        Walk(root);
+        return entries;
+
+        void Walk(DirectoryInfo dir)
+        {
+            foreach (var sub in dir.EnumerateDirectories())
+            {
+                if (sub.Name.Contains(".tmp-", StringComparison.Ordinal)) continue;
+                if (sub.Name.EndsWith(".extracted", StringComparison.Ordinal))
+                {
+                    long size = sub.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+                    entries.Add(new CachedModelInfo(
+                        RelativeId(sub.FullName), sub.FullName, size, sub.LastWriteTimeUtc, IsExtractedArchive: true));
+                }
+                else
+                {
+                    Walk(sub);
+                }
+            }
+
+            foreach (var file in dir.EnumerateFiles())
+            {
+                if (file.Name.EndsWith(".partial", StringComparison.Ordinal)) continue;
+                if (file.Name.EndsWith(".lock", StringComparison.Ordinal)) continue;
+                entries.Add(new CachedModelInfo(
+                    RelativeId(file.FullName), file.FullName, file.Length, file.LastWriteTimeUtc, IsExtractedArchive: false));
+            }
+        }
+
+        string RelativeId(string fullPath)
+            => Path.GetRelativePath(_options.CacheRoot, fullPath).Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    /// <summary>
+    /// Re-verify a cached artifact against its pinned SHA-256 by streaming the file — catches
+    /// on-disk corruption or tampering after download. Archive artifacts (the pin covers the
+    /// archive, which is deleted after extraction) verify by entry existence only.
+    /// Returns false when the artifact is not cached at all.
+    /// </summary>
+    public async Task<bool> VerifyAsync(VoxaModelArtifact artifact, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+        var path = PathFor(artifact);
+        if (!File.Exists(path)) return false;
+        if (artifact.ArchiveEntry is not null) return true;
+
+        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        await using (var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true))
+        {
+            var buffer = new byte[81920];
+            int read;
+            while ((read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                sha.AppendData(buffer, 0, read);
+        }
+
+        var actual = Convert.ToHexString(sha.GetHashAndReset());
+        return string.Equals(actual, artifact.Sha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolve a set of artifacts up front (air-gap provisioning, Studio's "prefetch all").
+    /// Reuses <see cref="ResolveAsync"/> per artifact — verified download, atomic rename,
+    /// cross-process lock — and reports per-artifact completion. Already-cached artifacts
+    /// complete instantly.
+    /// </summary>
+    public async Task PrefetchAsync(
+        IReadOnlyList<VoxaModelArtifact> artifacts,
+        IProgress<VoxaPrefetchProgress>? progress = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(artifacts);
+        for (int i = 0; i < artifacts.Count; i++)
+        {
+            progress?.Report(new VoxaPrefetchProgress(artifacts[i].Id, i, artifacts.Count, Completed: false));
+            await ResolveAsync(artifacts[i], ct).ConfigureAwait(false);
+            progress?.Report(new VoxaPrefetchProgress(artifacts[i].Id, i + 1, artifacts.Count, Completed: true));
+        }
+    }
+
+    /// <summary>
+    /// Remove one inventory entry (file, or whole extracted-archive directory). Refuses while a
+    /// concurrent download holds the entry's lock — Studio and a running server share this cache.
+    /// </summary>
+    /// <exception cref="IOException">The entry's <c>.lock</c> file exists.</exception>
+    public void Purge(CachedModelInfo entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var lockPath = entry.IsExtractedArchive
+            ? entry.FullPath[..^".extracted".Length] + ".lock"
+            : entry.FullPath + ".lock";
+        if (File.Exists(lockPath))
+            throw new IOException(
+                $"Cannot purge '{entry.Id}': another Voxa process is currently downloading it " +
+                $"(lock: {lockPath}). Retry once the download completes.");
+
+        if (entry.IsExtractedArchive)
+        {
+            if (Directory.Exists(entry.FullPath)) Directory.Delete(entry.FullPath, recursive: true);
+        }
+        else
+        {
+            if (File.Exists(entry.FullPath)) File.Delete(entry.FullPath);
+        }
+    }
+
     // ── download + verify ───────────────────────────────────────────────────
 
     private async Task DownloadAndVerifyAsync(VoxaModelArtifact artifact, string partialPath, CancellationToken ct)
@@ -331,3 +452,22 @@ public sealed class VoxaModelCache
         try { if (File.Exists(path)) File.Delete(path); } catch { /* best-effort */ }
     }
 }
+
+/// <summary>
+/// One logical cache entry from <see cref="VoxaModelCache.Enumerate"/>: a cached file, or an
+/// extracted archive directory as a single unit. <see cref="Id"/> is the cache-root-relative
+/// path with forward slashes — for plain artifacts it equals the catalog artifact id.
+/// </summary>
+public sealed record CachedModelInfo(
+    string Id,
+    string FullPath,
+    long SizeBytes,
+    DateTime LastWriteUtc,
+    bool IsExtractedArchive);
+
+/// <summary>Per-artifact progress from <see cref="VoxaModelCache.PrefetchAsync"/>.</summary>
+public sealed record VoxaPrefetchProgress(
+    string ArtifactId,
+    int CompletedCount,
+    int TotalCount,
+    bool Completed);

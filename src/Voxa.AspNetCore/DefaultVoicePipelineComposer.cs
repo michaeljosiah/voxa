@@ -39,8 +39,20 @@ public sealed class DefaultVoicePipelineComposer
         _logger = logger;
     }
 
+    /// <summary>HTTP-host entry point — forwards to the transport-agnostic overload.</summary>
     public ComposedVoice Compose(HttpContext httpContext)
     {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        return Compose(httpContext.RequestServices);
+    }
+
+    /// <summary>
+    /// Transport-agnostic composition (VST-001 WS0): any host with a per-session service scope —
+    /// a WebSocket connection, Voxa Studio's in-process audio transport — gets the same pipeline.
+    /// </summary>
+    public ComposedVoice Compose(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
         var o = _options.Value;
         var tuning = _resolver.Resolve(o);
         var root = _configuration.GetSection(VoxaOptions.SectionName);
@@ -61,7 +73,17 @@ public sealed class DefaultVoicePipelineComposer
         if (!_registry.TryGetTts(o.Tts, out var tts))
             throw new InvalidOperationException($"TTS provider '{o.Tts}' not found in registry. This should have been caught by VoxaDefaultsGuard.");
 
-        var parts = new List<Func<HttpContext, FrameProcessor>>();
+        var parts = new List<Func<IServiceProvider, FrameProcessor>>();
+
+        // Diagnostics taps (VST-001 WS0): inserted only when enabled, so a production pipeline
+        // with diagnostics off composes byte-identically to one built before taps existed.
+        var diagnostics = o.Diagnostics.Enabled;
+        void Tap(Voxa.Diagnostics.DiagnosticsTapScope scope)
+        {
+            if (diagnostics)
+                parts.Add(sp => new Voxa.Diagnostics.DiagnosticsTapProcessor(
+                    sp.GetRequiredService<Voxa.Diagnostics.VoxaDiagnosticsHub>(), scope));
+        }
 
         // Effective rates honour per-provider config overrides (e.g. Voxa:OpenAI:InputSampleRate).
         // The descriptor constants are only defaults — the processors bind the override, so the
@@ -86,7 +108,7 @@ public sealed class DefaultVoicePipelineComposer
             }
             else if (_registry.TryGetVad(o.Vad.Engine, out var vadDesc))
             {
-                parts.Add(ctx => vadDesc.CreateProcessor(ctx.RequestServices, vadSettings));
+                parts.Add(sp => vadDesc.CreateProcessor(sp, WithVadObserver(sp, vadSettings, diagnostics)));
             }
             else
             {
@@ -96,18 +118,22 @@ public sealed class DefaultVoicePipelineComposer
                 parts.Add(_ => new SilenceGateProcessor(vadSettings.MinRms, vadSettings.StopDuration));
             }
         }
+        Tap(Voxa.Diagnostics.DiagnosticsTapScope.Vad);
 
         // 2. STT
-        parts.Add(ctx => stt.CreateProcessor(ctx.RequestServices, root));
+        parts.Add(sp => stt.CreateProcessor(sp, root));
 
-        // 3. Transcription filter
+        // 3. Transcription filter. The Stt tap sits after it so diagnostics report the
+        // transcripts that actually drive the agent, not ones the filter rejected.
         parts.Add(_ => new TranscriptionFilter());
+        Tap(Voxa.Diagnostics.DiagnosticsTapScope.Stt);
 
         // 4. Agent with built-in conversation memory
         var history = o.Agent.ConversationMemory
             ? new InMemoryChatHistory(o.Agent.MaxHistoryMessages)
             : null;
-        parts.Add(ctx => CreateAgentProcessor(ctx, o.Agent, history));
+        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, history));
+        Tap(Voxa.Diagnostics.DiagnosticsTapScope.Agent);
 
         // 5. Sentence aggregator (profile-tuned)
         parts.Add(_ => new SentenceAggregator
@@ -117,7 +143,8 @@ public sealed class DefaultVoicePipelineComposer
         });
 
         // 6. TTS
-        parts.Add(ctx => tts.CreateProcessor(ctx.RequestServices, root));
+        parts.Add(sp => tts.CreateProcessor(sp, root));
+        Tap(Voxa.Diagnostics.DiagnosticsTapScope.Tts);
 
         return new ComposedVoice(
             Parts:            parts,
@@ -125,17 +152,35 @@ public sealed class DefaultVoicePipelineComposer
             OutputSampleRate: outputSampleRate);
     }
 
+    /// <summary>
+    /// Attach the diagnostics hub's per-window observer to the VAD settings (VST-001 WS0).
+    /// The delegate is a guarded TryWrite — safe on the audio hot path.
+    /// </summary>
+    private static VoxaVadSettings WithVadObserver(
+        IServiceProvider sp, VoxaVadSettings settings, bool diagnostics)
+    {
+        if (!diagnostics) return settings;
+        var hub = sp.GetService<Voxa.Diagnostics.VoxaDiagnosticsHub>();
+        if (hub is null) return settings;
+        return settings with
+        {
+            ProbabilityObserver = (probability, rms, voiced, gateOpen) =>
+            {
+                if (hub.HasListeners)
+                    hub.Publish(new Voxa.Diagnostics.VadWindowEvent(probability, rms, voiced, gateOpen));
+            },
+        };
+    }
+
     private FrameProcessor CreateAgentProcessor(
-        HttpContext ctx,
+        IServiceProvider sp,
         VoxaAgentOptions agentOpts,
         InMemoryChatHistory? history)
     {
-        var sp = ctx.RequestServices;
-
         // Resolution order: AIAgent (DI) → IChatClient (DI) → IVoiceAgentFactory (provider-backed)
         AIAgent? agent = sp.GetService<AIAgent>()
             ?? WrapChatClient(sp.GetService<IChatClient>(), agentOpts)
-            ?? sp.GetService<IVoiceAgentFactory>()?.Create(ctx, agentOpts);
+            ?? sp.GetService<IVoiceAgentFactory>()?.Create(sp, agentOpts);
 
         if (agent is null)
             throw new InvalidOperationException(
@@ -176,8 +221,12 @@ public sealed class DefaultVoicePipelineComposer
     }
 }
 
-/// <summary>Per-connection composition result: processor factories + announced sample rates.</summary>
+/// <summary>
+/// Per-connection composition result: processor factories + announced sample rates. Factories
+/// take the session's <see cref="IServiceProvider"/> (transport-agnostic since VST-001 WS0) —
+/// HTTP hosts pass the connection's <c>RequestServices</c>.
+/// </summary>
 public sealed record ComposedVoice(
-    IReadOnlyList<Func<HttpContext, FrameProcessor>> Parts,
+    IReadOnlyList<Func<IServiceProvider, FrameProcessor>> Parts,
     int InputSampleRate,
     int OutputSampleRate);

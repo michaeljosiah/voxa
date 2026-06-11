@@ -324,4 +324,129 @@ public class VoxaModelCacheTests : IDisposable
         var artifact = new VoxaModelArtifact(id, new Uri("https://x.test/a"), new string('0', 64), 1);
         Assert.Throws<ArgumentException>(() => cache.PathFor(artifact));
     }
+
+    // ── inventory (VST-001 WS0-A5) ──────────────────────────────────────────
+
+    [Fact]
+    public async Task Enumerate_Lists_Files_And_Extracted_Dirs_Skipping_Inflight_Noise()
+    {
+        var payload = "inventory model"u8.ToArray();
+        var cache = CacheWith(new CountingHandler(payload));
+        await cache.ResolveAsync(ArtifactFor(payload, id: "whisper/tiny.bin"));
+        await cache.ResolveAsync(ArtifactFor(payload, id: "piper/voices/amy.onnx"));
+
+        // In-flight noise that a live download would leave around — must not appear.
+        await File.WriteAllBytesAsync(Path.Combine(_root, "whisper", "huge.bin.partial"), payload);
+        await File.WriteAllTextAsync(Path.Combine(_root, "whisper", "huge.bin.lock"), "");
+
+        // A fake extracted archive: one logical entry, recursive size.
+        var extracted = Directory.CreateDirectory(Path.Combine(_root, "espeak", "espeak.tar.gz.extracted"));
+        Directory.CreateDirectory(Path.Combine(extracted.FullName, "bin"));
+        await File.WriteAllBytesAsync(Path.Combine(extracted.FullName, "bin", "espeak-ng"), new byte[10]);
+        await File.WriteAllBytesAsync(Path.Combine(extracted.FullName, "readme.txt"), new byte[5]);
+
+        var entries = new VoxaModelCache(new VoxaModelCacheOptions(_root, Offline: true)).Enumerate();
+
+        Assert.Equal(3, entries.Count);
+        Assert.Contains(entries, e => e.Id == "whisper/tiny.bin" && !e.IsExtractedArchive && e.SizeBytes == payload.Length);
+        Assert.Contains(entries, e => e.Id == "piper/voices/amy.onnx");
+        var archive = Assert.Single(entries, e => e.IsExtractedArchive);
+        Assert.Equal("espeak/espeak.tar.gz.extracted", archive.Id);
+        Assert.Equal(15, archive.SizeBytes);
+    }
+
+    [Fact]
+    public async Task Verify_Detects_OnDisk_Corruption_And_Purge_Then_Resolve_Repairs()
+    {
+        var payload = "verify me"u8.ToArray();
+        var handler = new CountingHandler(payload);
+        var cache = CacheWith(handler);
+        var artifact = ArtifactFor(payload, id: "test/verify.bin");
+
+        var path = await cache.ResolveAsync(artifact);
+        Assert.True(await cache.VerifyAsync(artifact));
+
+        // Corrupt the cached file on disk — Verify must flag it.
+        await File.WriteAllBytesAsync(path, "tampered!"u8.ToArray());
+        Assert.False(await cache.VerifyAsync(artifact));
+
+        // Purge + re-resolve repairs through the normal verified-download path.
+        var entry = Assert.Single(cache.Enumerate(), e => e.Id == "test/verify.bin");
+        cache.Purge(entry);
+        Assert.False(cache.IsCached(artifact));
+        await cache.ResolveAsync(artifact);
+        Assert.True(await cache.VerifyAsync(artifact));
+        Assert.Equal(2, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Verify_Returns_False_For_Uncached_And_True_For_Extracted_Entries()
+    {
+        var cache = new VoxaModelCache(new VoxaModelCacheOptions(_root, Offline: true));
+        var missing = ArtifactFor("nope"u8.ToArray(), id: "test/missing.bin");
+        Assert.False(await cache.VerifyAsync(missing));
+
+        // Archive artifact: the pin covered the (deleted) archive — existence is the contract.
+        var archive = ArtifactFor("zip"u8.ToArray(), id: "tool/pack.zip", archiveEntry: "bin/tool");
+        var entryPath = cache.PathFor(archive);
+        Directory.CreateDirectory(Path.GetDirectoryName(entryPath)!);
+        await File.WriteAllBytesAsync(entryPath, new byte[3]);
+        Assert.True(await cache.VerifyAsync(archive));
+    }
+
+    [Fact]
+    public async Task Purge_Refuses_While_A_Download_Lock_Is_Held()
+    {
+        var payload = "locked"u8.ToArray();
+        var cache = CacheWith(new CountingHandler(payload));
+        var artifact = ArtifactFor(payload, id: "test/locked.bin");
+        var path = await cache.ResolveAsync(artifact);
+
+        // Simulate a concurrent downloader holding the lock.
+        await File.WriteAllTextAsync(path + ".lock", "");
+        var entry = Assert.Single(cache.Enumerate(), e => e.Id == "test/locked.bin");
+
+        var ex = Assert.Throws<IOException>(() => cache.Purge(entry));
+        Assert.Contains("lock", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(path)); // nothing was deleted
+
+        File.Delete(path + ".lock");
+        cache.Purge(entry);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task Prefetch_Resolves_Each_Artifact_And_Reports_Progress()
+    {
+        var payload = "prefetch"u8.ToArray();
+        var handler = new CountingHandler(payload);
+        var cache = CacheWith(handler);
+        var artifacts = new[]
+        {
+            ArtifactFor(payload, id: "set/a.bin"),
+            ArtifactFor(payload, id: "set/b.bin"),
+        };
+
+        // Pre-cache one of them: prefetch must not re-download it.
+        await cache.ResolveAsync(artifacts[0]);
+        Assert.Equal(1, handler.Calls);
+
+        var reports = new List<VoxaPrefetchProgress>();
+        await cache.PrefetchAsync(artifacts, new SynchronousProgress(reports));
+
+        Assert.Equal(2, handler.Calls); // only the uncached artifact hit the network
+        Assert.True(cache.IsCached(artifacts[1]));
+        Assert.Equal(4, reports.Count); // started + completed per artifact
+        Assert.Equal(2, reports[^1].CompletedCount);
+        Assert.Equal(2, reports[^1].TotalCount);
+        Assert.True(reports[^1].Completed);
+    }
+
+    /// <summary>IProgress without the SynchronizationContext post — reports land synchronously.</summary>
+    private sealed class SynchronousProgress : IProgress<VoxaPrefetchProgress>
+    {
+        private readonly List<VoxaPrefetchProgress> _reports;
+        public SynchronousProgress(List<VoxaPrefetchProgress> reports) => _reports = reports;
+        public void Report(VoxaPrefetchProgress value) { lock (_reports) _reports.Add(value); }
+    }
 }

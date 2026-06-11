@@ -16,7 +16,7 @@ public class VoxaDefaultsGuardTests
 {
     private sealed class RejectingFactory : IVoiceAgentFactory
     {
-        public AIAgent Create(HttpContext context, VoxaAgentOptions options)
+        public AIAgent Create(IServiceProvider services, VoxaAgentOptions options)
             => throw new NotSupportedException();
 
         public IReadOnlyList<string> Validate(VoxaAgentOptions options)
@@ -26,7 +26,7 @@ public class VoxaDefaultsGuardTests
     /// <summary>Relies on the default interface implementation of Validate (no errors).</summary>
     private sealed class NonValidatingFactory : IVoiceAgentFactory
     {
-        public AIAgent Create(HttpContext context, VoxaAgentOptions options)
+        public AIAgent Create(IServiceProvider services, VoxaAgentOptions options)
             => throw new NotSupportedException();
     }
 

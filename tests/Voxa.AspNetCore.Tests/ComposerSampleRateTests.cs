@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Voxa.Processors;
@@ -20,6 +21,9 @@ public class ComposerSampleRateTests
         => new ConfigurationBuilder()
             .AddInMemoryCollection(pairs.ToDictionary(p => p.Key, p => (string?)p.Value))
             .Build();
+
+    private static IServiceProvider EmptyServices()
+        => new ServiceCollection().BuildServiceProvider();
 
     private static VoxaSttDescriptor Stt(int defaultRate = 16000) => new(
         Name: "FakeStt", ConfigSection: "FakeStt", PreferredInputSampleRate: defaultRate,
@@ -98,7 +102,7 @@ public class ComposerSampleRateTests
                    ("Voxa:FakeTts:OutputSampleRate", "48000")),
             FakeProviderOptions());
 
-        var composed = composer.Compose(new DefaultHttpContext());
+        var composed = composer.Compose(EmptyServices());
 
         Assert.Equal(8000,  composed.InputSampleRate);
         Assert.Equal(48000, composed.OutputSampleRate);
@@ -107,7 +111,7 @@ public class ComposerSampleRateTests
     [Fact]
     public void Composed_Session_Rates_Default_To_Descriptor_Rates()
     {
-        var composed = Composer(Config(), FakeProviderOptions()).Compose(new DefaultHttpContext());
+        var composed = Composer(Config(), FakeProviderOptions()).Compose(EmptyServices());
 
         Assert.Equal(16000, composed.InputSampleRate);
         Assert.Equal(24000, composed.OutputSampleRate);
@@ -132,9 +136,10 @@ public class ComposerSampleRateTests
             FakeProviderOptions(vadEngine: "CapturingVad"),
             vad);
 
-        var composed = composer.Compose(new DefaultHttpContext());
+        var services = EmptyServices();
+        var composed = composer.Compose(services);
         // The VAD factory is deferred; invoke it the way the route handler would.
-        _ = composed.Parts[0](new DefaultHttpContext());
+        _ = composed.Parts[0](services);
 
         Assert.NotNull(captured);
         Assert.Equal(8000, captured!.SampleRate);

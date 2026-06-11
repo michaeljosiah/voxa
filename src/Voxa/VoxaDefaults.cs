@@ -1,7 +1,6 @@
 using System.ClientModel;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,7 +78,7 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
-    public AIAgent Create(HttpContext context, VoxaAgentOptions options)
+    public AIAgent Create(IServiceProvider services, VoxaAgentOptions options)
     {
         // Same checks VoxaDefaultsGuard runs at startup via Validate() — repeated here so
         // hosts that never arm the guard still get config-key-level messages, not the opaque

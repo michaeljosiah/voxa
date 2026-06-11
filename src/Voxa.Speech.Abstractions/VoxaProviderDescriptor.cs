@@ -93,7 +93,18 @@ public sealed record VoxaVadSettings(
     double MinRms,
     TimeSpan StartDuration,
     TimeSpan StopDuration,
-    TimeSpan PrerollDuration);
+    TimeSpan PrerollDuration)
+{
+    /// <summary>
+    /// Optional per-window observer (VST-001 WS0): invoked synchronously on the VAD's
+    /// processing thread after each inference window with
+    /// <c>(probability, rms, voiced, gateOpen)</c>. Wired by the composer to the pipeline
+    /// diagnostics hub when <c>Voxa:Diagnostics:Enabled</c> is true; null otherwise.
+    /// The callback runs ~31×/s in the audio hot path — it must not block or allocate beyond
+    /// what it publishes.
+    /// </summary>
+    public Action<float, double, bool, bool>? ProbabilityObserver { get; init; }
+}
 
 /// <summary>
 /// Self-description of a VAD provider. VAD knobs are profile-mediated rather than per-provider
