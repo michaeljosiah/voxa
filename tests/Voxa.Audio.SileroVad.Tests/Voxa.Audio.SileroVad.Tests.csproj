@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\Voxa.Speech.WhisperCpp.Tests\fixtures\jfk.wav" Link="fixtures\jfk.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
     <ProjectReference Include="..\..\src\Voxa.Testing\Voxa.Testing.csproj" />
   </ItemGroup>

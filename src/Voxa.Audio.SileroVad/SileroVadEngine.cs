@@ -7,6 +7,15 @@ namespace Voxa.Audio.SileroVad;
 /// call carries the LSTM hidden state forward, so the model has memory of the previous ~250 ms.
 ///
 /// <para>
+/// Silero v5's ONNX contract takes (context + window) per inference: the last 64 samples of the
+/// previous window (32 at 8 kHz) are prepended to the new 512-sample window, making the actual
+/// model input 576 samples. The reference OnnxWrapper does this concatenation internally; feeding
+/// a bare window instead yields near-zero probabilities for everything — including clear speech —
+/// so the context handling here is load-bearing, not an optimization (regression-tested against
+/// recorded speech in SileroVadRealSpeechTests).
+/// </para>
+///
+/// <para>
 /// Zero-allocation steady state: input, state, and output tensors are all wrapped in
 /// <see cref="OrtValue"/>s created once and reused, and inference runs through the pre-bound
 /// <see cref="InferenceSession.Run(RunOptions, IReadOnlyCollection{string}, IReadOnlyCollection{OrtValue}, IReadOnlyCollection{string}, IReadOnlyCollection{OrtValue})"/>
@@ -46,16 +55,19 @@ public sealed class SileroVadEngine : IDisposable
     /// <summary>Required input size for one inference. 512 at 16 kHz, 256 at 8 kHz.</summary>
     public int WindowSize { get; }
 
+    /// <summary>Context samples prepended per the v5 contract. 64 at 16 kHz, 32 at 8 kHz.</summary>
+    public int ContextSize { get; }
+
     /// <summary>Sample rate the engine was constructed for.</summary>
     public int SampleRate { get; }
 
     /// <param name="sampleRate">16000 or 8000. Other rates throw.</param>
     public SileroVadEngine(int sampleRate = 16000)
     {
-        WindowSize = sampleRate switch
+        (WindowSize, ContextSize) = sampleRate switch
         {
-            16000 => 512,
-            8000 => 256,
+            16000 => (512, 64),
+            8000 => (256, 32),
             _ => throw new ArgumentException("Silero VAD v5 supports only 16000 or 8000 Hz.", nameof(sampleRate)),
         };
         SampleRate = sampleRate;
@@ -74,7 +86,9 @@ public sealed class SileroVadEngine : IDisposable
         _runOptions = new RunOptions();
 
         const int stateLen = 2 * 1 * 128;
-        _inputBuf = new float[WindowSize];
+        // Layout: [context | window]. The first ContextSize floats persist between calls — they
+        // are overwritten with the tail of each window after inference (the v5 context contract).
+        _inputBuf = new float[ContextSize + WindowSize];
         _stateBuf = new float[stateLen];
         _stateOutBuf = new float[stateLen];
         _outBuf = new float[1];
@@ -82,7 +96,7 @@ public sealed class SileroVadEngine : IDisposable
 
         // OrtValues wrap the managed arrays in place (pinned for the OrtValue's lifetime). Created
         // once and reused — the contents of _inputBuf / _stateBuf are updated before each Run.
-        _inputValue = OrtValue.CreateTensorValueFromMemory(_inputBuf, new long[] { 1, WindowSize });
+        _inputValue = OrtValue.CreateTensorValueFromMemory(_inputBuf, new long[] { 1, ContextSize + WindowSize });
         _stateValue = OrtValue.CreateTensorValueFromMemory(_stateBuf, new long[] { 2, 1, 128 });
         // The model declares `sr` as a rank-0 scalar (shape []). ORT happens to accept a rank-1
         // [1] tensor here too, but match the declared contract exactly with an empty shape rather
@@ -106,8 +120,8 @@ public sealed class SileroVadEngine : IDisposable
                 nameof(window));
         }
 
-        // Copy the window into the pinned input buffer the input OrtValue points at.
-        window.CopyTo(_inputBuf);
+        // Copy the window after the persisted context (first ContextSize floats of _inputBuf).
+        window.CopyTo(_inputBuf.AsSpan(ContextSize));
 
         // Pre-bound inputs AND outputs — ORT writes straight into _outBuf / _stateOutBuf and
         // allocates nothing (no DisposableNamedOnnxValue result collection).
@@ -117,14 +131,18 @@ public sealed class SileroVadEngine : IDisposable
         // completes before the next Run reads _stateBuf.
         Array.Copy(_stateOutBuf, _stateBuf, _stateOutBuf.Length);
 
+        // The window's tail becomes the next call's context (v5 contract).
+        Array.Copy(_inputBuf, _inputBuf.Length - ContextSize, _inputBuf, 0, ContextSize);
+
         return _outBuf[0];
     }
 
-    /// <summary>Reset the LSTM hidden state. Call between sessions or to flush context.</summary>
+    /// <summary>Reset the LSTM hidden state and audio context. Call between sessions.</summary>
     public void Reset()
     {
         Array.Clear(_stateBuf);
         Array.Clear(_stateOutBuf);
+        Array.Clear(_inputBuf, 0, ContextSize);
     }
 
     public void Dispose()
