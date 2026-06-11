@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/Voxa.Studio/Voxa.Studio.csproj" />
+  </Folder>
   <Folder Name="/bench/">
     <Project Path="bench/Voxa.Benchmarks/Voxa.Benchmarks.csproj" />
   </Folder>
@@ -43,6 +46,7 @@
     <Project Path="tests/Voxa.Speech.OpenAI.Tests/Voxa.Speech.OpenAI.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Piper.Tests/Voxa.Speech.Piper.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
+    <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />
   </Folder>
 </Solution>

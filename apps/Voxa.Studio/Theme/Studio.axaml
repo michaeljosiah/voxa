@@ -1,0 +1,183 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ════════ Voxa Studio design language: slick, minimalist, futuristic. ════════
+       One accent (cyan), near-black blue-grey surfaces, 1px hairline borders, 8px radii,
+       generous whitespace, mono type for numbers. No gradients louder than 6% opacity. -->
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{StaticResource VxBgBrush}" />
+    <Setter Property="FontFamily" Value="Inter, Segoe UI Variable, Segoe UI, sans-serif" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+  </Style>
+
+  <!-- ── typography ─────────────────────────────────────────────────────── -->
+
+  <Style Selector="TextBlock.vx-h1">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <Style Selector="TextBlock.vx-sub">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.vx-muted">
+    <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.vx-mono">
+    <Setter Property="FontFamily" Value="{StaticResource VxMono}" />
+  </Style>
+
+  <Style Selector="TextBlock.vx-label">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1.5" />
+    <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+  </Style>
+
+  <!-- ── surfaces ───────────────────────────────────────────────────────── -->
+
+  <Style Selector="Border.vx-card">
+    <Setter Property="Background" Value="{StaticResource VxPanelBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <Style Selector="Border.vx-card-flush">
+    <Setter Property="Background" Value="{StaticResource VxPanelBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+
+  <Style Selector="Border.vx-chip">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,3" />
+  </Style>
+
+  <!-- ── buttons ────────────────────────────────────────────────────────── -->
+
+  <Style Selector="Button.vx-primary">
+    <Setter Property="Background" Value="{StaticResource VxAccentBrush}" />
+    <Setter Property="Foreground" Value="#06151D" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="18,9" />
+  </Style>
+  <Style Selector="Button.vx-primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#82D7FF" />
+    <Setter Property="Foreground" Value="#06151D" />
+  </Style>
+  <Style Selector="Button.vx-primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VxAccentDimBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+  </Style>
+
+  <Style Selector="Button.vx-ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="14,8" />
+  </Style>
+  <Style Selector="Button.vx-ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.vx-danger">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource VxBadBrush}" />
+    <Setter Property="BorderBrush" Value="#3A2326" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="14,8" />
+  </Style>
+
+  <!-- ── nav rail ───────────────────────────────────────────────────────── -->
+
+  <Style Selector="RadioButton.vx-nav">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="navBorder"
+                Width="44" Height="44"
+                CornerRadius="10"
+                Background="Transparent"
+                Margin="0,2"
+                ToolTip.Tip="{TemplateBinding Tag}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.vx-nav /template/ Border#navBorder">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.vx-nav:pointerover /template/ Border#navBorder">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+  </Style>
+  <Style Selector="RadioButton.vx-nav:checked /template/ Border#navBorder">
+    <Setter Property="Background" Value="{StaticResource VxAccentDimBrush}" />
+  </Style>
+  <Style Selector="RadioButton.vx-nav PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+    <Setter Property="Width" Value="19" />
+    <Setter Property="Height" Value="19" />
+  </Style>
+  <Style Selector="RadioButton.vx-nav:checked PathIcon">
+    <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
+  </Style>
+
+  <!-- ── inputs ─────────────────────────────────────────────────────────── -->
+
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxBorderBrush}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="SelectionBrush" Value="{StaticResource VxAccentDimBrush}" />
+  </Style>
+
+  <!-- ── lists ──────────────────────────────────────────────────────────── -->
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBoxItem">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="12,8" />
+  </Style>
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VxAccentDimBrush}" />
+  </Style>
+
+  <!-- ── status dots ────────────────────────────────────────────────────── -->
+
+  <Style Selector="Ellipse.vx-dot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+  </Style>
+
+</Styles>

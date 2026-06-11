@@ -1,0 +1,45 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Voxa.Studio.App"
+             RequestedThemeVariant="Dark">
+
+  <!-- Resources MUST precede Styles: the theme stylesheet resolves these via StaticResource
+       at parse time, and XAML processes the file top-to-bottom. -->
+  <Application.Resources>
+    <ResourceDictionary>
+      <!-- The Voxa Studio palette: near-black blue-greys, hairline borders, a single cyan
+           accent with restrained glow. Matches the spec documents' visual language. -->
+      <Color x:Key="VxBg">#0B0F14</Color>
+      <Color x:Key="VxPanel">#11161D</Color>
+      <Color x:Key="VxPanel2">#161D26</Color>
+      <Color x:Key="VxBorder">#222B36</Color>
+      <Color x:Key="VxText">#D7DDE6</Color>
+      <Color x:Key="VxMuted">#76849B</Color>
+      <Color x:Key="VxAccent">#4FC3F7</Color>
+      <Color x:Key="VxAccentDim">#1B3B4D</Color>
+      <Color x:Key="VxGood">#66BB6A</Color>
+      <Color x:Key="VxWarn">#FFB74D</Color>
+      <Color x:Key="VxBad">#EF5350</Color>
+
+      <SolidColorBrush x:Key="VxBgBrush" Color="{StaticResource VxBg}" />
+      <SolidColorBrush x:Key="VxPanelBrush" Color="{StaticResource VxPanel}" />
+      <SolidColorBrush x:Key="VxPanel2Brush" Color="{StaticResource VxPanel2}" />
+      <SolidColorBrush x:Key="VxBorderBrush" Color="{StaticResource VxBorder}" />
+      <SolidColorBrush x:Key="VxTextBrush" Color="{StaticResource VxText}" />
+      <SolidColorBrush x:Key="VxMutedBrush" Color="{StaticResource VxMuted}" />
+      <SolidColorBrush x:Key="VxAccentBrush" Color="{StaticResource VxAccent}" />
+      <SolidColorBrush x:Key="VxAccentDimBrush" Color="{StaticResource VxAccentDim}" />
+      <SolidColorBrush x:Key="VxGoodBrush" Color="{StaticResource VxGood}" />
+      <SolidColorBrush x:Key="VxWarnBrush" Color="{StaticResource VxWarn}" />
+      <SolidColorBrush x:Key="VxBadBrush" Color="{StaticResource VxBad}" />
+
+      <FontFamily x:Key="VxMono">Cascadia Code, Consolas, Menlo, monospace</FontFamily>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Voxa.Studio/Theme/Studio.axaml" />
+  </Application.Styles>
+
+</Application>
