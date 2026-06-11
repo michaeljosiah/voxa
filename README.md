@@ -361,6 +361,11 @@ dotnet run --project samples/Voxa.Samples.MinimalServer --launch-profile Local
 The browser test page reads the server's `session` envelope for sample rates, so any local voice
 (16 kHz Piper, 22.05 kHz Piper, 24 kHz Kokoro) plays at the correct pitch.
 
+> **First run downloads ~250 MB of models** (Whisper + the Piper voice/binary) before the server
+> finishes starting — progress is logged to the console. It isn't hung; subsequent runs start
+> instantly from the cache, and an air-gapped box can pre-provision it (see
+> [docs/local-speech.md](docs/local-speech.md)).
+
 ### Full sample server
 
 [`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — ASP.NET Core server demonstrating each pipeline shape side-by-side:
