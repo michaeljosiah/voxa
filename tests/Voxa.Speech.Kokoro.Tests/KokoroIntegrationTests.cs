@@ -15,7 +15,7 @@ public class KokoroIntegrationTests
     public async Task Int8_AfHeart_Synthesizes_Real_Audio()
     {
         var cache = new VoxaModelCache(
-            new VoxaModelCacheOptions(VoxaModelCacheOptions.DefaultCacheRoot(), Offline: false));
+            new VoxaModelCacheOptions(VoxaModelCacheOptions.ResolveCacheRoot(), Offline: false));
         var options = new KokoroOptions { Voice = "af_heart", Precision = "int8" };
 
         await using var engine = new KokoroTtsEngine(options, cache);

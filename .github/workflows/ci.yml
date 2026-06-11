@@ -43,8 +43,9 @@ jobs:
     name: Local speech (zero network)
     runs-on: ubuntu-latest
     env:
-      # Models cache inside the workspace so actions/cache can persist it. The key hashes the
-      # pinned catalogs — bumping a model invalidates the cache, nothing else does.
+      # Models cache inside the workspace so actions/cache can persist it. The integration tests
+      # resolve their cache root via VoxaModelCacheOptions.ResolveCacheRoot(), which honours this
+      # env var, so every consumer reads/writes this one directory — the directory we cache.
       VOXA_MODEL_CACHE: ${{ github.workspace }}/.voxa-models
     steps:
       - uses: actions/checkout@v4
@@ -59,7 +60,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .voxa-models
-          key: voxa-models-${{ runner.os }}-${{ hashFiles('src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs', 'src/Voxa.Speech.Piper/PiperVoiceCatalog.cs', 'src/Voxa.Speech.Piper/PiperExecutableCatalog.cs', 'src/Voxa.Speech.Kokoro/KokoroCatalog.cs') }}
+          # The key hashes the pinned catalogs; a model bump invalidates it, nothing else does.
+          # The vN prefix is a manual epoch — bump it to discard a cache saved by buggy plumbing
+          # (v1 cached an incomplete dir because the tests ignored VOXA_MODEL_CACHE).
+          key: voxa-models-v2-${{ runner.os }}-${{ hashFiles('src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs', 'src/Voxa.Speech.Piper/PiperVoiceCatalog.cs', 'src/Voxa.Speech.Piper/PiperExecutableCatalog.cs', 'src/Voxa.Speech.Kokoro/KokoroCatalog.cs') }}
 
       - name: Restore
         run: dotnet restore Voxa.slnx

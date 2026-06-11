@@ -36,6 +36,19 @@ public sealed record VoxaModelCacheOptions(string CacheRoot, bool Offline)
         return new VoxaModelCacheOptions(root, models.GetValue("Offline", false));
     }
 
+    /// <summary>
+    /// The effective cache root honoring the <c>VOXA_MODEL_CACHE</c> environment variable, falling
+    /// back to <see cref="DefaultCacheRoot"/> — for hosts and tests that construct a cache directly
+    /// without an <see cref="IConfigurationSection"/>. (<see cref="FromConfiguration"/> additionally
+    /// consults <c>Voxa:Models:CachePath</c> between the two.) Using this instead of
+    /// <see cref="DefaultCacheRoot"/> is what lets CI point every consumer at one cached directory.
+    /// </summary>
+    public static string ResolveCacheRoot()
+    {
+        var root = Environment.GetEnvironmentVariable(CacheRootEnvVar);
+        return string.IsNullOrWhiteSpace(root) ? DefaultCacheRoot() : root;
+    }
+
     /// <summary>The OS-conventional cache directory used when nothing overrides it.</summary>
     public static string DefaultCacheRoot()
     {

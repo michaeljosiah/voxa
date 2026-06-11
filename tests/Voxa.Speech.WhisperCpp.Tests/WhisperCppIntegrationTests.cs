@@ -42,7 +42,7 @@ public class WhisperCppIntegrationTests
         Assert.Equal(WhisperCppSttEngine.RequiredSampleRate, rate);
 
         var cache = new VoxaModelCache(
-            new VoxaModelCacheOptions(VoxaModelCacheOptions.DefaultCacheRoot(), Offline: false));
+            new VoxaModelCacheOptions(VoxaModelCacheOptions.ResolveCacheRoot(), Offline: false));
 
         await using var engine = new WhisperCppSttEngine(
             new WhisperCppOptions { Model = "tiny.en", Language = "en" }, cache);

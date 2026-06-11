@@ -278,6 +278,27 @@ public class VoxaModelCacheTests : IDisposable
     }
 
     [Fact]
+    public void ResolveCacheRoot_Honors_The_Env_Var_Then_Falls_Back_To_Default()
+    {
+        // Regression: the LocalModels integration tests build a cache from ResolveCacheRoot(), and
+        // CI points VOXA_MODEL_CACHE at the directory it caches. If this stopped honouring the env
+        // var, tests would read a different directory than CI populates and fail network-blocked.
+        var prior = Environment.GetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar, @"Z:\ci\models");
+            Assert.Equal(@"Z:\ci\models", VoxaModelCacheOptions.ResolveCacheRoot());
+
+            Environment.SetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar, null);
+            Assert.Equal(VoxaModelCacheOptions.DefaultCacheRoot(), VoxaModelCacheOptions.ResolveCacheRoot());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar, prior);
+        }
+    }
+
+    [Fact]
     public void Options_EnvVar_Overrides_Config()
     {
         var prior = Environment.GetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar);

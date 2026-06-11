@@ -16,7 +16,7 @@ public class PiperIntegrationTests
     public async Task AmyLow_Synthesizes_Real_Audio_And_Leaves_No_Orphans()
     {
         var cache = new VoxaModelCache(
-            new VoxaModelCacheOptions(VoxaModelCacheOptions.DefaultCacheRoot(), Offline: false));
+            new VoxaModelCacheOptions(VoxaModelCacheOptions.ResolveCacheRoot(), Offline: false));
         var options = new PiperOptions { Voice = "en_US-amy-low", MaxProcesses = 1 };
 
         IReadOnlyList<int> spawnedPids;
@@ -86,7 +86,7 @@ public class PiperIntegrationTests
         // (not the app's CWD where validation found the file) and piper would fail to start —
         // even though startup validation passed.
         var cache = new VoxaModelCache(
-            new VoxaModelCacheOptions(VoxaModelCacheOptions.DefaultCacheRoot(), Offline: false));
+            new VoxaModelCacheOptions(VoxaModelCacheOptions.ResolveCacheRoot(), Offline: false));
         Assert.True(PiperVoiceCatalog.TryGet("en_US-amy-low", out var voice));
         var onnxAbs = await cache.ResolveAsync(voice.Onnx, CancellationToken.None);
         var jsonAbs = await cache.ResolveAsync(voice.Json, CancellationToken.None);
