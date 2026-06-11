@@ -34,6 +34,15 @@ public sealed record VoxaSttDescriptor(
     public Func<IConfigurationSection, int>? ResolveInputSampleRate { get; init; }
 
     /// <summary>
+    /// Optional startup warm-up (VLS-001 WS5.2), invoked by <c>VoxaDefaultsGuard</c> after
+    /// validation when this provider is active and <c>Voxa:Models:EagerWarmup</c> is true
+    /// (default). Local providers resolve their models here (first-run download with progress
+    /// logging) and pre-load shared state, so the first WebSocket caller never pays a download
+    /// or a model load. Cloud providers leave this null.
+    /// </summary>
+    public Func<IServiceProvider, IConfigurationSection, CancellationToken, Task>? WarmUpAsync { get; init; }
+
+    /// <summary>
     /// The sample rate the STT processor will actually be configured with for the given config —
     /// the host's <c>&lt;ConfigSection&gt;:InputSampleRate</c> override when present, otherwise
     /// <see cref="PreferredInputSampleRate"/>. The session envelope and VAD must use this value,
@@ -57,6 +66,11 @@ public sealed record VoxaTtsDescriptor(
     /// <c>&lt;ConfigSection&gt;:OutputSampleRate</c> key convention.
     /// </summary>
     public Func<IConfigurationSection, int>? ResolveOutputSampleRate { get; init; }
+
+    /// <summary>
+    /// Optional startup warm-up — see <see cref="VoxaSttDescriptor.WarmUpAsync"/>.
+    /// </summary>
+    public Func<IServiceProvider, IConfigurationSection, CancellationToken, Task>? WarmUpAsync { get; init; }
 
     /// <summary>
     /// The sample rate the TTS processor will actually be configured with for the given config —

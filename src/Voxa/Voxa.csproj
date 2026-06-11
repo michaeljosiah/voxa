@@ -27,6 +27,10 @@
     <ProjectReference Include="..\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />
     <ProjectReference Include="..\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
+    <!-- Local/offline speech tier (VLS-001): no API keys, no network after first-run download. -->
+    <ProjectReference Include="..\Voxa.Speech.WhisperCpp\Voxa.Speech.WhisperCpp.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Piper\Voxa.Speech.Piper.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Kokoro\Voxa.Speech.Kokoro.csproj" />
   </ItemGroup>
 
   <!-- OpenAI client for the default chat-agent factory. -->

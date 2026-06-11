@@ -27,8 +27,10 @@ jobs:
       - name: Build
         run: dotnet build Voxa.slnx --configuration Release --no-restore
 
+      # LocalModels tests run in their own cached, network-blocked lane below — the everyday
+      # inner loop stays fast and download-free.
       - name: Test
-        run: dotnet test Voxa.slnx --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test Voxa.slnx --configuration Release --no-build --verbosity normal --filter "Category!=LocalModels" --logger "trx;LogFileName=test-results.trx"
 
       - name: Upload test results
         if: always()
@@ -36,3 +38,56 @@ jobs:
         with:
           name: test-results
           path: '**/TestResults/*.trx'
+
+  local-speech:
+    name: Local speech (zero network)
+    runs-on: ubuntu-latest
+    env:
+      # Models cache inside the workspace so actions/cache can persist it. The integration tests
+      # resolve their cache root via VoxaModelCacheOptions.ResolveCacheRoot(), which honours this
+      # env var, so every consumer reads/writes this one directory — the directory we cache.
+      VOXA_MODEL_CACHE: ${{ github.workspace }}/.voxa-models
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore model cache
+        id: models
+        uses: actions/cache@v4
+        with:
+          path: .voxa-models
+          # The key hashes the pinned catalogs; a model bump invalidates it, nothing else does.
+          # The vN prefix is a manual epoch — bump it to discard a cache saved by buggy plumbing
+          # (v1 cached an incomplete dir because the tests ignored VOXA_MODEL_CACHE).
+          key: voxa-models-v2-${{ runner.os }}-${{ hashFiles('src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs', 'src/Voxa.Speech.Piper/PiperVoiceCatalog.cs', 'src/Voxa.Speech.Piper/PiperExecutableCatalog.cs', 'src/Voxa.Speech.Kokoro/KokoroCatalog.cs') }}
+
+      - name: Restore
+        run: dotnet restore Voxa.slnx
+
+      - name: Build
+        run: dotnet build Voxa.slnx --configuration Release --no-restore
+
+      # The ONLY networked step, and only on a cache miss: running the suite once populates the
+      # cache through the same SHA-256-verified resolver production uses.
+      - name: Warm model cache (first run after a catalog change)
+        if: steps.models.outputs.cache-hit != 'true'
+        run: dotnet test Voxa.slnx --configuration Release --no-build --filter "Category=LocalModels"
+
+      # The enforcement of the zero-network claim (VLS-001): outbound HTTP is routed into a black
+      # hole, so a test that secretly phones home fails this lane.
+      - name: Local-model tests with outbound network blocked
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+        run: dotnet test Voxa.slnx --configuration Release --no-build --filter "Category=LocalModels" --logger "trx;LogFileName=local-speech-results.trx"
+
+      - name: Upload local-speech test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-speech-results
+          path: '**/TestResults/local-speech-results.trx'

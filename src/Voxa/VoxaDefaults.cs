@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
@@ -10,8 +11,11 @@ using Voxa.AspNetCore;
 using Voxa.Audio.SileroVad;
 using Voxa.Speech.Azure;
 using Voxa.Speech.ElevenLabs;
+using Voxa.Speech.Kokoro;
 using Voxa.Speech.Mistral;
 using Voxa.Speech.OpenAI;
+using Voxa.Speech.Piper;
+using Voxa.Speech.WhisperCpp;
 
 namespace Voxa;
 
@@ -22,9 +26,10 @@ namespace Voxa;
 public static class VoxaDefaultsExtensions
 {
     /// <summary>
-    /// Register all built-in speech providers (OpenAI, Azure, ElevenLabs, Mistral), the Silero
-    /// VAD engine, and the default OpenAI chat agent factory. Settings are bound from the
-    /// <c>Voxa</c> section of <paramref name="configuration"/>.
+    /// Register all built-in speech providers — cloud (OpenAI, Azure, ElevenLabs, Mistral) and
+    /// local/offline (WhisperCpp STT, Piper and Kokoro TTS) — the Silero VAD engine, and the
+    /// default agent factory (OpenAI chat, or the keyless Echo agent for demos/CI). Settings are
+    /// bound from the <c>Voxa</c> section of <paramref name="configuration"/>.
     /// </summary>
     public static IServiceCollection AddVoxa(
         this IServiceCollection services,
@@ -42,28 +47,34 @@ public static class VoxaDefaultsExtensions
             voxa.AddProvider(ElevenLabsDescriptors.Tts);
             voxa.AddProvider(MistralDescriptors.Tts);
             voxa.AddProvider(SileroVadDescriptors.Vad);
+            // The local/offline tier (VLS-001): no API keys, no network after first-run download.
+            voxa.AddProvider(WhisperCppDescriptors.Stt);
+            voxa.AddProvider(PiperDescriptors.Tts);
+            voxa.AddProvider(KokoroDescriptors.Tts);
         });
 
         // TryAdd: a host-registered IVoiceAgentFactory always wins, whether it was added
         // before this call (TryAdd skips ours) or after (later registration wins at resolve).
         services.TryAddSingleton<IVoiceAgentFactory>(sp =>
-            new OpenAIChatAgentFactory(sp.GetRequiredService<IConfiguration>()));
+            new DefaultAgentFactory(sp.GetRequiredService<IConfiguration>()));
 
         return services;
     }
 }
 
 /// <summary>
-/// Default <see cref="IVoiceAgentFactory"/> registered by the Voxa meta-package. Creates a
-/// <see cref="ChatClientAgent"/> backed by the OpenAI chat completions API.
-/// The model and API key come from <c>Voxa:Agent:Model</c> / <c>Voxa:Agent:ApiKey</c>,
-/// falling back to <c>Voxa:OpenAI:ApiKey</c> for the key.
+/// Default <see cref="IVoiceAgentFactory"/> registered by the Voxa meta-package, dispatching on
+/// <c>Voxa:Agent:Provider</c>: null/<c>"OpenAI"</c> → a <see cref="ChatClientAgent"/> over the
+/// OpenAI chat completions API (model/key from <c>Voxa:Agent:Model</c> / <c>Voxa:Agent:ApiKey</c>,
+/// key falling back to <c>Voxa:OpenAI:ApiKey</c>); <c>"Echo"</c> → a keyless diagnostic agent
+/// that repeats the transcript back — it closes the no-API-key loop for first-touch demos and
+/// zero-cost CI conversations (VLS-001 WS4).
 /// </summary>
-internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
+internal sealed class DefaultAgentFactory : IVoiceAgentFactory
 {
     private readonly IConfiguration _configuration;
 
-    public OpenAIChatAgentFactory(IConfiguration configuration)
+    public DefaultAgentFactory(IConfiguration configuration)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
@@ -76,6 +87,14 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
         var errors = CheckUsable(options);
         if (errors.Count > 0)
             throw new InvalidOperationException(string.Join(" ", errors));
+
+        if (IsEcho(options))
+        {
+            return new ChatClientAgent(new EchoChatClient(), new ChatClientAgentOptions
+            {
+                Name = "VoxaEchoAgent",
+            });
+        }
 
         var apiKey = ResolveApiKey(options);
 
@@ -97,15 +116,20 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
     /// </summary>
     public IReadOnlyList<string> Validate(VoxaAgentOptions options) => CheckUsable(options);
 
+    private static bool IsEcho(VoxaAgentOptions options)
+        => string.Equals(options.Provider, "Echo", StringComparison.OrdinalIgnoreCase);
+
     private IReadOnlyList<string> CheckUsable(VoxaAgentOptions options)
     {
-        // Agent:Provider must be null or "OpenAI" when using the default factory.
+        // Echo is keyless by design — always usable.
+        if (IsEcho(options)) return [];
+
         if (options.Provider is not null &&
             !string.Equals(options.Provider, "OpenAI", StringComparison.OrdinalIgnoreCase))
         {
             return
             [
-                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI' " +
+                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI' or 'Echo' " +
                 $"(got '{options.Provider}'). " +
                 "Register a custom IVoiceAgentFactory singleton for other providers.",
             ];
@@ -117,7 +141,8 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
             [
                 "No OpenAI API key configured for the default voice agent. " +
                 "Set Voxa:Agent:ApiKey or Voxa:OpenAI:ApiKey (user-secrets or environment variable " +
-                "Voxa__OpenAI__ApiKey), or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.",
+                "Voxa__OpenAI__ApiKey), set Voxa:Agent:Provider to 'Echo' for a keyless demo agent, " +
+                "or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.",
             ];
         }
 
@@ -126,4 +151,56 @@ internal sealed class OpenAIChatAgentFactory : IVoiceAgentFactory
 
     private string? ResolveApiKey(VoxaAgentOptions options)
         => !string.IsNullOrEmpty(options.ApiKey) ? options.ApiKey : _configuration["Voxa:OpenAI:ApiKey"];
+}
+
+/// <summary>
+/// The keyless parrot behind <c>Voxa:Agent:Provider = "Echo"</c>. Streams the reply in several
+/// chunks deliberately, so sentence aggregation and incremental TTS are genuinely exercised in
+/// demos and e2e tests — not collapsed into one degenerate chunk.
+/// </summary>
+internal sealed class EchoChatClient : IChatClient
+{
+    private static string ReplyFor(IEnumerable<ChatMessage> messages)
+    {
+        var lastUser = messages.LastOrDefault(m => m.Role == ChatRole.User)?.Text ?? string.Empty;
+        var reply = $"You said: {lastUser.Trim()}";
+        return reply[^1] is '.' or '!' or '?' ? reply : reply + ".";
+    }
+
+    /// <summary>Split into 2–3 chunks at word boundaries.</summary>
+    internal static IReadOnlyList<string> Chunk(string reply)
+    {
+        var words = reply.Split(' ');
+        if (words.Length <= 2) return [reply];
+        var firstCut = words.Length / 3 + 1;
+        var secondCut = 2 * words.Length / 3 + 1;
+        return
+        [
+            string.Join(' ', words[..firstCut]) + " ",
+            string.Join(' ', words[firstCut..secondCut]) + (secondCut < words.Length ? " " : string.Empty),
+            .. secondCut < words.Length ? new[] { string.Join(' ', words[secondCut..]) } : Array.Empty<string>(),
+        ];
+    }
+
+    public Task<ChatResponse> GetResponseAsync(
+        IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, ReplyFor(messages))));
+
+    public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+        IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var chunk in Chunk(ReplyFor(messages)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new ChatResponseUpdate(ChatRole.Assistant, chunk);
+            await Task.Yield(); // genuinely incremental — updates arrive across awaits
+        }
+    }
+
+    public object? GetService(Type serviceType, object? serviceKey = null) => null;
+    public void Dispose() { }
 }

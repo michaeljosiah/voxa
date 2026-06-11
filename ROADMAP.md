@@ -109,7 +109,7 @@ Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS clien
 
 ## P6 — Capability
 
-- **Local/offline speech tier** — `Voxa.Speech.WhisperCpp` (STT) + `Voxa.Speech.Piper` (TTS) engines: develop without API keys, air-gapped deployments, zero-cost CI conversations. Models resolved like Silero's (embedded or first-run download).
+- ✅ **Local/offline speech tier** — shipped as VLS-001 ([spec](docs/specifications/voxa-local-speech-spec.html), [guide](docs/local-speech.md)): `Voxa.Speech.WhisperCpp` (STT), `Voxa.Speech.Piper` (fast TTS), and `Voxa.Speech.Kokoro` (quality TTS) with a shared SHA-256-pinned model cache (first-run download / offline mode), a keyless `Echo` agent, startup model warm-up, and a zero-network CI conversation lane. Develop without API keys, deploy air-gapped, run zero-cost CI conversations.
 - **Session resilience / reconnect** — a dropped mobile WebSocket shouldn't lose the conversation. The hello envelope gains an optional resume token; the host maps it to conversation state (AONIK already has `ChatThread.Id` for exactly this). On resume the sink replays the last unfinished bot turn.
 - **Typed frontend tools** — source-generate the JSON schema from a C# delegate so tool calling becomes `voice.UseTool("show_chart", (string city, int days) => ...)` instead of hand-written `ArgumentsJson` plumbing; include an approval-required wrapper matching MAF's `ApprovalRequiredAIFunction`.
 - **Multi-agent handoff** — switch the active `IAgentTurnDriver` (persona / department) mid-call on a control frame, preserving transport and VAD state.

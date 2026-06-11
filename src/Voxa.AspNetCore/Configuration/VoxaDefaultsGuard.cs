@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -33,9 +34,9 @@ public sealed class VoxaDefaultsGuard : IHostedService
     /// <summary>Called by <c>UseDefaults()</c> to activate the startup check.</summary>
     public void Arm() => _armed = true;
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!_armed) return Task.CompletedTask;
+        if (!_armed) return;
 
         var o = _options.Value;
         var errors = new List<string>();
@@ -66,8 +67,8 @@ public sealed class VoxaDefaultsGuard : IHostedService
             if (factory is null)
             {
                 errors.Add("UseDefaults() needs an agent. Either register an AIAgent or IChatClient in DI, " +
-                           "or set Voxa:Agent:Provider (requires the Voxa meta-package which registers " +
-                           "OpenAIChatAgentFactory). See docs/getting-started.md.");
+                           "or set Voxa:Agent:Provider to 'OpenAI' or 'Echo' (requires the Voxa meta-package " +
+                           "which registers the default agent factory). See docs/getting-started.md.");
             }
             else
             {
@@ -80,7 +81,23 @@ public sealed class VoxaDefaultsGuard : IHostedService
                 $"Voxa UseDefaults() startup validation failed:{Environment.NewLine}" +
                 string.Join(Environment.NewLine, errors.Select(e => "  - " + e)));
 
-        return Task.CompletedTask;
+        // Eager warm-up (VLS-001 WS5.2): local providers resolve their models NOW — first-run
+        // download with progress logging, model weights pre-loaded — so the first WebSocket
+        // caller never pays a 100+ MB download or a model load. A warm-up failure is a host
+        // startup failure with the model cache's remediation message, consistent with the
+        // fail-fast contract above. Cloud providers have no WarmUpAsync and skip this entirely.
+        var configuration = scoped.GetService<IConfiguration>();
+        if (configuration is not null)
+        {
+            var root = configuration.GetSection(VoxaOptions.SectionName);
+            if (root.GetValue("Models:EagerWarmup", true))
+            {
+                if (o.Stt is not null && _registry.TryGetStt(o.Stt, out var stt) && stt.WarmUpAsync is not null)
+                    await stt.WarmUpAsync(scoped, root, cancellationToken).ConfigureAwait(false);
+                if (o.Tts is not null && _registry.TryGetTts(o.Tts, out var tts) && tts.WarmUpAsync is not null)
+                    await tts.WarmUpAsync(scoped, root, cancellationToken).ConfigureAwait(false);
+            }
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

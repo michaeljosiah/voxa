@@ -50,6 +50,26 @@ Configure via `appsettings.json`:
 
 **Startup validation:** if `Voxa:Stt`, `Voxa:Tts`, or an agent are missing, the host refuses to start with a clear error listing the registered providers and what to set.
 
+### Run it fully local — zero API keys
+
+Swap the providers for the local tier and the same five lines run **without any cloud account**
+(whisper.cpp STT + Piper TTS + a built-in echo agent; first run downloads the models, after that
+no network is needed at all):
+
+```json
+{
+  "Voxa": {
+    "Stt": "WhisperCpp",
+    "Tts": "Piper",
+    "Agent": { "Provider": "Echo" }
+  }
+}
+```
+
+Set `"Tts": "Kokoro"` for markedly more natural speech (heavier on CPU), and swap `"Echo"` for a
+real agent when you have keys. Details — model catalogs, latency expectations, air-gapped
+deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
+
 ## À-la-carte configuration
 
 For hosts that install only specific provider packages or need custom pipeline composition:
@@ -99,15 +119,18 @@ All keys live under the `Voxa` section. Provider sub-sections (e.g. `Voxa:OpenAI
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `Voxa:Profile` | string | `"Default"` | Named latency preset. `Default`, `LowLatency`, `Quality`, or `Cheap`. |
-| `Voxa:Stt` | string | — | STT provider name, e.g. `"OpenAI"`, `"Azure"`. Required when using `UseDefaults()`. |
-| `Voxa:Tts` | string | — | TTS provider name, e.g. `"OpenAI"`, `"ElevenLabs"`, `"Azure"`, `"Mistral"`. Required when using `UseDefaults()`. |
+| `Voxa:Stt` | string | — | STT provider name: `"OpenAI"`, `"Azure"`, or `"WhisperCpp"` (local, no key). Required when using `UseDefaults()`. |
+| `Voxa:Tts` | string | — | TTS provider name: `"OpenAI"`, `"ElevenLabs"`, `"Azure"`, `"Mistral"`, or local/no-key `"Piper"` / `"Kokoro"`. Required when using `UseDefaults()`. |
 | `Voxa:Vad:Engine` | string | `"Silero"` | `"Silero"`, `"SilenceGate"` (energy-only), or `"None"`. |
-| `Voxa:Agent:Provider` | string | — | `"OpenAI"` uses the built-in factory. Omit to supply your own `AIAgent` / `IChatClient` via DI. |
+| `Voxa:Agent:Provider` | string | — | `"OpenAI"` uses the built-in factory; `"Echo"` is a keyless diagnostic agent for demos/CI. Omit to supply your own `AIAgent` / `IChatClient` via DI. |
 | `Voxa:Agent:Model` | string | `"gpt-4o-mini"` | Chat model passed to the agent factory. |
 | `Voxa:Agent:Instructions` | string | (brief assistant) | System prompt. |
 | `Voxa:Agent:ApiKey` | string | — | API key. Falls back to `Voxa:OpenAI:ApiKey`. |
 | `Voxa:Agent:ConversationMemory` | bool | `true` | Per-connection bounded chat history. |
 | `Voxa:Agent:MaxHistoryMessages` | int | `50` | History cap; oldest user/assistant pairs trimmed first. |
+| `Voxa:Models:CachePath` | string | OS cache dir | Local-tier model cache root. `VOXA_MODEL_CACHE` env var overrides. |
+| `Voxa:Models:Offline` | bool | `false` | Never download; a missing model is a startup error with provisioning instructions. |
+| `Voxa:Models:EagerWarmup` | bool | `true` | Resolve + pre-load local models at startup so the first caller never pays a download or model load. |
 
 ## Why not just call Voice Live (or OpenAI Realtime) directly
 
@@ -145,6 +168,9 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 | `Voxa.Speech.OpenAI` | ✅ | ✅ | Whisper REST + OpenAI TTS (`/v1/audio/speech`). Works against OpenAI-compatible proxies. |
 | `Voxa.Speech.ElevenLabs` | — | ✅ | Streaming TTS, voice cloning, voice settings. |
 | `Voxa.Speech.Mistral` | — | ✅ | Voxtral-TTS via Mistral's OpenAI-compatible audio API. |
+| `Voxa.Speech.WhisperCpp` | ✅ | — | **Local, API key: none.** whisper.cpp on your CPU (via Whisper.net). VAD-gated per-utterance transcription; models SHA-256-pinned, first-run download. |
+| `Voxa.Speech.Piper` | — | ✅ | **Local, API key: none.** Piper as a pooled warm child process — the fast local voice (RTF ≈ 0.05 on CPU). |
+| `Voxa.Speech.Kokoro` | — | ✅ | **Local, API key: none.** Kokoro-82M in-process on ONNX Runtime — the quality local voice (24 kHz, rivals cloud voices). |
 
 ### Audio
 
@@ -325,6 +351,21 @@ The sample server also logs `turn ttfb {n} ms` per turn via a plain `MeterListen
 dotnet run --project samples/Voxa.Samples.MinimalServer
 ```
 
+Or run it **fully local with no API key at all** (`appsettings.Local.json`: WhisperCpp + Piper +
+the Echo agent; first run downloads the models), then open <http://localhost:5170> and talk:
+
+```bash
+dotnet run --project samples/Voxa.Samples.MinimalServer --launch-profile Local
+```
+
+The browser test page reads the server's `session` envelope for sample rates, so any local voice
+(16 kHz Piper, 22.05 kHz Piper, 24 kHz Kokoro) plays at the correct pitch.
+
+> **First run downloads ~250 MB of models** (Whisper + the Piper voice/binary) before the server
+> finishes starting — progress is logged to the console. It isn't hung; subsequent runs start
+> instantly from the cache, and an air-gapped box can pre-provision it (see
+> [docs/local-speech.md](docs/local-speech.md)).
+
 ### Full sample server
 
 [`samples/Voxa.Samples.AspNetServer`](samples/Voxa.Samples.AspNetServer) — ASP.NET Core server demonstrating each pipeline shape side-by-side:
@@ -365,10 +406,11 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | 5.5 | ✅ Generic `AgentLoopProcessor` + delegate-based MAF surface + fluent `MapVoxaVoice` |
 | 5.6 | ✅ VPS-001 performance pass — zero-allocation hot path, source-generated wire protocol, streaming Azure TTS, server-side barge-in purge, `voxa.turn.ttfb` metric, benchmark suite |
 | P5 | ✅ VDX-001 developer experience — `AddVoxa()` + `UseDefaults()`, typed config, named latency profiles, provider descriptors, `Voxa` meta-package, fail-fast startup validation, conversation memory, `session` wire envelope |
+| P6 (partial) | ✅ VLS-001 local/offline speech tier — `WhisperCpp` STT, `Piper` + `Kokoro` TTS, SHA-256-pinned model cache with offline mode, keyless `Echo` agent, startup warm-up, zero-network CI conversation lane ([docs](docs/local-speech.md)) |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 
-(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `@voxa/client` JS package, local/offline speech, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
+(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `@voxa/client` JS package, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
 
 ## Contributing
 
