@@ -127,7 +127,7 @@ public class VoxaDefaultsGuardTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(configuration);
-        services.AddVoxa(configuration); // meta-package 2-arg: registers OpenAIChatAgentFactory
+        services.AddVoxa(configuration); // meta-package 2-arg: registers the default agent factory
 
         var sp = services.BuildServiceProvider();
         var guard = sp.GetRequiredService<VoxaDefaultsGuard>();
