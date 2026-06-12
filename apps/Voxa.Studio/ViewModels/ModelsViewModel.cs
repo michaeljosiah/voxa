@@ -164,25 +164,48 @@ public sealed partial class ModelsViewModel : ObservableObject
 
             var totalMb = missing.Sum(a => a.SizeBytes) / (1024 * 1024);
             StatusText = $"Prefetching {missing.Count} artifacts, ~{totalMb} MB…";
-            var progress = new Progress<VoxaPrefetchProgress>(p =>
-            {
-                PrefetchProgress = (double)p.CompletedCount / p.TotalCount;
-                StatusText = $"({p.CompletedCount}/{p.TotalCount}) {p.ArtifactId}";
-            });
-            await _services.ModelCache.PrefetchAsync(missing, progress);
-            StatusText = $"Prefetch complete — copy {CacheRoot} to provision an air-gapped machine.";
+
+            var failures = await PrefetchEachAsync(
+                missing, a => _services.ModelCache.PrefetchAsync([a]));
+
+            StatusText = failures.Count == 0
+                ? $"Prefetch complete — copy {CacheRoot} to provision an air-gapped machine."
+                : $"Prefetched {missing.Count - failures.Count}/{missing.Count} — " +
+                  $"failed: {string.Join(", ", failures.Select(f => f.Id))}.";
+            if (failures.Count > 0)
+                ErrorText = string.Join("\n\n", failures.Select(f => f.Error));
             Refresh();
-        }
-        catch (Exception ex)
-        {
-            ErrorText = ex.Message;
-            StatusText = "Prefetch stopped.";
         }
         finally
         {
             IsPrefetching = false;
             PrefetchProgress = 0;
         }
+    }
+
+    /// <summary>
+    /// Bulk provisioning fetches each artifact independently: one stale pin or flaky download
+    /// must not abort the other 20 — a Talk session needs ALL of its artifacts, but air-gap
+    /// prefetch wants as many as it can get, with the casualties listed at the end.
+    /// </summary>
+    internal async Task<List<(string Id, string Error)>> PrefetchEachAsync(
+        IReadOnlyList<VoxaModelArtifact> missing, Func<VoxaModelArtifact, Task> fetch)
+    {
+        var failures = new List<(string, string)>();
+        for (int i = 0; i < missing.Count; i++)
+        {
+            StatusText = $"({i + 1}/{missing.Count}) {missing[i].Id}";
+            try
+            {
+                await fetch(missing[i]);
+            }
+            catch (Exception ex)
+            {
+                failures.Add((missing[i].Id, ex.Message));
+            }
+            PrefetchProgress = (double)(i + 1) / missing.Count;
+        }
+        return failures;
     }
 
     [RelayCommand]

@@ -53,6 +53,34 @@ public class ModelsViewModelTests
     }
 
     [Fact]
+    public async Task Bulk_Prefetch_Survives_A_Failing_Artifact_And_Lists_The_Casualty()
+    {
+        // Regression: one stale pin (a SHA-256 mismatch on download) used to abort the entire
+        // "Prefetch full catalog" run — 1 bad artifact cancelled the other 20-odd downloads.
+        // Bulk provisioning must fetch each independently and report failures at the end.
+        var vm = new ModelsViewModel(TestSupport.Services());
+        var artifacts = Voxa.Speech.WhisperCpp.WhisperCppModelCatalog.KnownModels
+            .Take(3)
+            .Select(m => { Voxa.Speech.WhisperCpp.WhisperCppModelCatalog.TryGet(m, out var a); return a; })
+            .ToList();
+
+        var fetched = new List<string>();
+        var failures = await vm.PrefetchEachAsync(artifacts, a =>
+        {
+            if (a.Id == artifacts[1].Id)
+                throw new InvalidOperationException($"Downloaded artifact '{a.Id}' failed SHA-256 verification.");
+            fetched.Add(a.Id);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal([artifacts[0].Id, artifacts[2].Id], fetched); // the rest still downloaded
+        var failure = Assert.Single(failures);
+        Assert.Equal(artifacts[1].Id, failure.Id);
+        Assert.Contains("SHA-256", failure.Error);
+        Assert.Equal(1, vm.PrefetchProgress); // the bar reached the end despite the casualty
+    }
+
+    [Fact]
     public void Empty_Cache_Reports_Itself_And_The_Effective_Root()
     {
         var cacheRoot = TestSupport.TempDir();

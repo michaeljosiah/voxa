@@ -50,8 +50,12 @@ public static class KokoroCatalog
         ["af_heart"]   = VoiceEntry("af_heart",   "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"),
         ["af_bella"]   = VoiceEntry("af_bella",   "f69d836209b78eb8c66e75e3cda491e26ea838a3674257e9d4e5703cbaf55c8b"),
         ["am_michael"] = VoiceEntry("am_michael", "1d1f21dd8da39c30705cd4c75d039d265e9bc4a2a93ed09bc9e1b1225eb95ba1"),
-        ["bf_emma"]    = VoiceEntry("bf_emma",    "3754352c4aaa46d17f27654ab7518d65b62ad6163a0f55a5f4330c2da2c4e94f"),
-        ["bm_george"]  = VoiceEntry("bm_george",  "b8f671cef828c30e66fdf0b0756a76bba58f6bb3398cbbf27058642acbcedb97"),
+        // The two British voices were re-pinned 2026-06-12 from the repo's LFS metadata
+        // (huggingface.co/<repo>/raw/main/voices/*.bin → "oid sha256:"): the original pins never
+        // matched what upstream serves, and only download-time verification could catch it —
+        // CI's LocalModels lane runs against a pre-seeded cache and exercises American voices.
+        ["bf_emma"]    = VoiceEntry("bf_emma",    "669fe0647f9dd04fcab92f1439a40eeb4c8b4ab1f82e4996fe3d918ce4a63b73"),
+        ["bm_george"]  = VoiceEntry("bm_george",  "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc"),
     };
 
     public static bool TryGetVoice(string voice, out VoxaModelArtifact artifact)
