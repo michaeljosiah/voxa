@@ -45,6 +45,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedPiperVoice = voxa["Piper:Voice"] ?? "en_US-amy-low";
         _selectedKokoroVoice = voxa["Kokoro:Voice"] ?? "af_heart";
         _selectedKokoroPrecision = voxa["Kokoro:Precision"] ?? "int8";
+        _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
 
         Regenerate();
     }
@@ -71,9 +72,28 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedKokoroVoice;
     [ObservableProperty] private string _selectedKokoroPrecision;
 
+    // ── LLM agent (the "talk to a real model" path) ──────────────────────────
+
+    /// <summary>Chat model for the OpenAI agent provider (e.g. gpt-4o-mini).</summary>
+    [ObservableProperty] private string _agentModel;
+
+    /// <summary>
+    /// API key for the OpenAI agent. Optional even when the provider is OpenAI: blank falls back
+    /// to whatever the environment already provides (<c>Voxa__OpenAI__ApiKey</c>, user-secrets).
+    /// Never written into the exported JSON — only applied to the live app.
+    /// </summary>
+    [ObservableProperty] private string _agentApiKey = "";
+
+    /// <summary>True while a Talk session is live — applying a config swap mid-call is blocked.</summary>
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    private bool _applyBlocked;
+
+    [ObservableProperty] private string? _applyStatus;
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
+    public bool ShowAgentOptions => string.Equals(SelectedAgent, "OpenAI", StringComparison.OrdinalIgnoreCase);
 
     [ObservableProperty] private string _exportJson = "";
     [ObservableProperty] private string _validationText = "";
@@ -89,16 +109,22 @@ public sealed partial class ConfigViewModel : ObservableObject
     }
     partial void OnSelectedVadChanged(string value) => Regenerate();
     partial void OnSelectedProfileChanged(string value) => Regenerate();
-    partial void OnSelectedAgentChanged(string value) => Regenerate();
+    partial void OnSelectedAgentChanged(string value) { OnPropertyChanged(nameof(ShowAgentOptions)); Regenerate(); }
     partial void OnSelectedWhisperModelChanged(string value) => Regenerate();
     partial void OnSelectedPiperVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroPrecisionChanged(string value) => Regenerate();
+    partial void OnAgentModelChanged(string value) => Regenerate();
+    partial void OnAgentApiKeyChanged(string value) => Regenerate();
 
     // ── draft → JSON + validation ────────────────────────────────────────────
 
-    /// <summary>The draft as flat configuration pairs — both the validator's and the JSON's source.</summary>
-    internal Dictionary<string, string?> DraftPairs()
+    /// <summary>
+    /// The draft as flat configuration pairs — the validator's, the JSON's, and (with secrets)
+    /// the Apply path's source. The API key is only ever included when
+    /// <paramref name="includeSecrets"/> is true: it goes to the live container, never the export.
+    /// </summary>
+    internal Dictionary<string, string?> DraftPairs(bool includeSecrets = false)
     {
         var pairs = new Dictionary<string, string?>
         {
@@ -117,33 +143,53 @@ public sealed partial class ConfigViewModel : ObservableObject
             pairs["Voxa:Kokoro:Voice"] = SelectedKokoroVoice;
             pairs["Voxa:Kokoro:Precision"] = SelectedKokoroPrecision;
         }
+        if (ShowAgentOptions)
+        {
+            pairs["Voxa:Agent:Model"] = AgentModel;
+            if (includeSecrets && !string.IsNullOrWhiteSpace(AgentApiKey))
+                pairs["Voxa:Agent:ApiKey"] = AgentApiKey.Trim();
+        }
         return pairs;
     }
 
     internal void Regenerate()
     {
-        var pairs = DraftPairs();
-        ExportJson = ToNestedJson(pairs);
-        Validate(pairs);
+        ExportJson = ToNestedJson(DraftPairs());
+        Validate(DraftPairs(includeSecrets: true));
+        ApplyCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
     /// Validate the draft through the SAME registration + options-validation path a server runs
-    /// at startup: "Studio says valid" ⇒ "the exported block boots".
+    /// at startup, plus the agent factory's credential check: "Studio says valid" ⇒ "the
+    /// exported block boots" AND "a Talk session gets an agent". The draft is layered over the
+    /// app's live configuration so keys already present in the environment/user-secrets count.
     /// </summary>
     private void Validate(Dictionary<string, string?> pairs)
     {
         ValidationErrors.Clear();
         try
         {
-            var draftConfig = new ConfigurationBuilder().AddInMemoryCollection(pairs).Build();
+            var draftConfig = new ConfigurationBuilder()
+                .AddConfiguration(_services.Configuration)
+                .AddInMemoryCollection(pairs)
+                .Build();
             var services = new ServiceCollection();
+            services.AddSingleton<IConfiguration>(draftConfig); // DefaultAgentFactory resolves it
             services.AddVoxa(draftConfig);
             using var provider = services.BuildServiceProvider();
-            _ = provider.GetRequiredService<IOptions<VoxaOptions>>().Value; // triggers the validator
+            var options = provider.GetRequiredService<IOptions<VoxaOptions>>().Value; // triggers the validator
 
-            IsValid = true;
-            ValidationText = "Valid — a server boots with this block.";
+            // The options validator covers providers/profile; agent usability (provider support,
+            // credentials) is the factory's check — the same one VoxaDefaultsGuard arms.
+            var factory = provider.GetRequiredService<IVoiceAgentFactory>();
+            foreach (var problem in factory.Validate(options.Agent))
+                ValidationErrors.Add(problem);
+
+            IsValid = ValidationErrors.Count == 0;
+            ValidationText = IsValid
+                ? "Valid — a server boots with this block."
+                : $"{ValidationErrors.Count} problem(s):";
         }
         catch (OptionsValidationException ex)
         {
@@ -158,6 +204,31 @@ public sealed partial class ConfigViewModel : ObservableObject
             ValidationText = "Validation failed:";
         }
     }
+
+    // ── apply to the live app ────────────────────────────────────────────────
+
+    private bool CanApply() => IsValid && !ApplyBlocked;
+
+    /// <summary>
+    /// Rebuild the live container from this draft (including the API key, which never touches
+    /// disk). The NEXT Talk session — and Voice Lab synthesis — composes with these settings.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApply))]
+    private void Apply()
+    {
+        try
+        {
+            _services.Reconfigure(DraftPairs(includeSecrets: true));
+            var agent = ShowAgentOptions ? $"{SelectedAgent} ({AgentModel})" : SelectedAgent;
+            ApplyStatus = $"Applied — next Talk session: {SelectedStt} → {agent} → {SelectedTts}.";
+        }
+        catch (Exception ex)
+        {
+            ApplyStatus = $"Apply failed: {ex.Message}";
+        }
+    }
+
+    partial void OnIsValidChanged(bool value) => ApplyCommand.NotifyCanExecuteChanged();
 
     /// <summary>Flat "A:B:C" pairs → pretty-printed nested JSON with a "Voxa" root.</summary>
     internal static string ToNestedJson(IReadOnlyDictionary<string, string?> pairs)

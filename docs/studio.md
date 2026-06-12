@@ -67,9 +67,25 @@ it came from (`VOXA_MODEL_CACHE` → `Voxa:Models:CachePath` → OS default).
 ### Config
 
 Build a pipeline from dropdowns populated by the **live provider registry** — the choices can't
-drift from the code. Validation runs the exact options path a server boots with, so *valid here
-means the exported block boots there*. Copy the generated `appsettings.json` or save it to a
-file.
+drift from the code. Validation runs the exact options path a server boots with (plus the agent
+factory's credential check), so *valid here means the exported block boots there*. Copy the
+generated `appsettings.json` or save it to a file.
+
+**Talking to a real LLM.** The default agent is the keyless `Echo` parrot. To have the pipeline
+answer with a model:
+
+1. Set **Agent** to `OpenAI`.
+2. Enter the chat model (e.g. `gpt-4o-mini`) and your API key. Leave the key blank to fall back
+   to what the environment already provides (`Voxa__OpenAI__ApiKey` or user-secrets) — the
+   validation dot tells you immediately whether a usable key was found.
+3. Press **⚡ Apply to Studio**. The running app rebuilds with the draft (a server restart,
+   without the restart) and the next Talk session streams the model's replies through TTS —
+   complete with the agent's first-token latency in the waterfall.
+
+Apply is disabled while a Talk session is live (stop it first). The API key is applied to the
+running app only — it is **never** written into the exported JSON or to disk; for servers, use
+user-secrets or the environment variable. Apply works for every selection here, not just the
+agent: swap Piper→Kokoro or change the Whisper model the same way.
 
 ## Diagnostics for servers (not just Studio)
 

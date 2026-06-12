@@ -75,7 +75,23 @@
         </Grid>
       </Border>
 
-      <!-- validation -->
+      <!-- LLM agent: pick OpenAI above and the local pipeline answers with a real model. -->
+      <Border Classes="vx-card" IsVisible="{Binding ShowAgentOptions}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Chat model" />
+            <TextBox Grid.Column="1" Margin="0,0,0,8" Text="{Binding AgentModel}"
+                     Watermark="gpt-4o-mini" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="API key" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AgentApiKey}"
+                     PasswordChar="●" Watermark="sk-… (blank = use environment / user-secrets)" />
+          </Grid>
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     Text="The key is applied to the running app only — it is never written into the exported JSON or to disk. For servers, set Voxa__OpenAI__ApiKey or user-secrets." />
+        </StackPanel>
+      </Border>
+
+      <!-- validation + apply -->
       <StackPanel Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <Ellipse Classes="vx-dot" Fill="{StaticResource VxGoodBrush}" IsVisible="{Binding IsValid}" />
@@ -90,6 +106,17 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+          <Button Classes="vx-primary" Content="⚡ Apply to Studio"
+                  Command="{Binding ApplyCommand}"
+                  ToolTip.Tip="Rebuild the running app with this draft — the next Talk session uses it." />
+          <TextBlock Classes="vx-sub" VerticalAlignment="Center" TextWrapping="Wrap"
+                     Text="{Binding ApplyStatus}" />
+        </StackPanel>
+        <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}"
+                   Text="Stop the live Talk session to apply a new configuration."
+                   IsVisible="{Binding ApplyBlocked}" />
       </StackPanel>
     </StackPanel>
 

@@ -88,4 +88,86 @@ public class ConfigViewModelTests
         Assert.DoesNotContain("Piper", vm.ExportJson);
         Assert.True(vm.IsValid);
     }
+
+    // ── LLM agent configuration (talk to a real model) ──────────────────────
+
+    [Fact]
+    public void OpenAI_Agent_Without_A_Key_Is_Invalid_With_Actionable_Guidance()
+    {
+        var vm = Vm();
+        vm.SelectedAgent = "OpenAI";
+
+        // The agent factory's own credential check runs at draft time, so the user learns
+        // about the missing key in the Config tab — not when the Talk session fails to start.
+        Assert.False(vm.IsValid);
+        Assert.Contains(vm.ValidationErrors, e => e.Contains("ApiKey", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void OpenAI_Agent_With_A_Key_Validates_And_The_Key_Never_Reaches_The_Export()
+    {
+        var vm = Vm();
+        vm.SelectedAgent = "OpenAI";
+        vm.AgentModel = "gpt-4o-mini";
+        vm.AgentApiKey = "sk-test-secret";
+
+        Assert.True(vm.IsValid, string.Join("; ", vm.ValidationErrors));
+
+        // Export carries the provider + model, NEVER the secret.
+        Assert.Contains("\"OpenAI\"", vm.ExportJson);
+        Assert.Contains("gpt-4o-mini", vm.ExportJson);
+        Assert.DoesNotContain("sk-test-secret", vm.ExportJson);
+
+        // The apply path (and only the apply path) carries it.
+        Assert.Equal("sk-test-secret", vm.DraftPairs(includeSecrets: true)["Voxa:Agent:ApiKey"]);
+        Assert.False(vm.DraftPairs(includeSecrets: false).ContainsKey("Voxa:Agent:ApiKey"));
+    }
+
+    [Fact]
+    public void Apply_Reconfigures_The_Live_Container()
+    {
+        var services = TestSupport.Services();
+        var vm = new ConfigViewModel(services);
+        vm.SelectedAgent = "OpenAI";
+        vm.AgentApiKey = "sk-test-secret";
+        vm.SelectedTts = "Kokoro";
+
+        Assert.True(vm.ApplyCommand.CanExecute(null));
+        vm.ApplyCommand.Execute(null);
+
+        // The LIVE configuration — what the next Talk session composes from — now has the draft.
+        Assert.Equal("Kokoro", services.Configuration["Voxa:Tts"]);
+        Assert.Equal("OpenAI", services.Configuration["Voxa:Agent:Provider"]);
+        Assert.Equal("sk-test-secret", services.Configuration["Voxa:Agent:ApiKey"]);
+        Assert.NotNull(vm.ApplyStatus);
+        Assert.Contains("Applied", vm.ApplyStatus);
+    }
+
+    [Fact]
+    public void Apply_Is_Blocked_While_A_Talk_Session_Is_Live_Or_Draft_Is_Invalid()
+    {
+        var vm = Vm();
+        Assert.True(vm.ApplyCommand.CanExecute(null));
+
+        vm.ApplyBlocked = true; // MainWindowViewModel sets this from Talk.IsRunning
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+
+        vm.ApplyBlocked = false;
+        vm.SelectedAgent = "OpenAI"; // no key anywhere → invalid draft
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Apply_Propagates_To_The_Talk_Header_Through_The_Shell()
+    {
+        var services = TestSupport.Services();
+        var shell = new Voxa.Studio.ViewModels.MainWindowViewModel(services);
+
+        shell.Config.SelectedAgent = "OpenAI";
+        shell.Config.AgentModel = "gpt-4o";
+        shell.Config.AgentApiKey = "sk-test-secret";
+        shell.Config.ApplyCommand.Execute(null);
+
+        Assert.Contains("OpenAI / gpt-4o", shell.Talk.ProviderChain);
+    }
 }

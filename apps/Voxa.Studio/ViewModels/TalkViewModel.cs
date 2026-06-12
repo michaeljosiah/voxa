@@ -65,14 +65,27 @@ public sealed partial class TalkViewModel : ObservableObject
     {
         _services = services;
         RefreshDevices();
+        RefreshFromConfig();
+    }
 
-        var voxa = services.Configuration.GetSection("Voxa");
+    /// <summary>Re-read the provider chip and VAD threshold — called after a Config "Apply".</summary>
+    public void RefreshFromConfig()
+    {
+        var voxa = _services.Configuration.GetSection("Voxa");
+        var agent = voxa["Agent:Provider"] ?? "OpenAI";
+        if (string.Equals(agent, "OpenAI", StringComparison.OrdinalIgnoreCase))
+            agent = $"OpenAI / {voxa["Agent:Model"] ?? "gpt-4o-mini"}";
+        var tts = voxa["Tts"] ?? "?";
+        var voice = string.Equals(tts, "Piper", StringComparison.OrdinalIgnoreCase) ? voxa["Piper:Voice"]
+                  : string.Equals(tts, "Kokoro", StringComparison.OrdinalIgnoreCase) ? voxa["Kokoro:Voice"]
+                  : null;
+
         ProviderChain = string.Join("  ·  ", new[]
         {
             voxa["Vad:Engine"] ?? "Silero",
             voxa["Stt"] ?? "?",
-            voxa["Agent:Provider"] ?? "OpenAI",
-            $"{voxa["Tts"] ?? "?"}{(voxa["Piper:Voice"] is { } v ? $" / {v}" : "")}",
+            agent,
+            $"{tts}{(voice is null ? "" : $" / {voice}")}",
         });
         VadThreshold = float.TryParse(voxa["Vad:ConfidenceThreshold"], out var t) ? t : 0.5f;
     }
@@ -98,8 +111,8 @@ public sealed partial class TalkViewModel : ObservableObject
     /// <summary>Immutable snapshot for the trace control; replaced on each drain that saw VAD windows.</summary>
     [ObservableProperty] private IReadOnlyList<VadSample> _traceSnapshot = [];
 
-    public string ProviderChain { get; }
-    public float VadThreshold { get; }
+    [ObservableProperty] private string _providerChain = "";
+    [ObservableProperty] private float _vadThreshold = 0.5f;
     public bool HasAudioDevices => Microphones.Count > 0 && Speakers.Count > 0;
 
     public void RefreshDevices()

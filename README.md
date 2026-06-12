@@ -72,15 +72,33 @@ deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
 
 ### Voxa Studio — talk to the pipeline and watch it think
 
+A desktop app (Windows) that runs the real pipeline against your mic and speakers and shows
+you what's happening inside it. Keyless out of the box — no cloud account needed.
+
 ```bash
 dotnet run --project apps/Voxa.Studio
 ```
 
-A desktop app (Windows, keyless out of the box) that runs the real pipeline against your mic
-and speakers with a live VAD probability trace, a per-turn latency waterfall (VAD → STT →
-agent → TTS → out), a voice audition lab for the Piper/Kokoro catalogs with locally-measured
-TTFB/RTF, a model-cache manager with one-button air-gap prefetch, and a config composer that
-exports validated `appsettings.json`. See [`docs/studio.md`](docs/studio.md).
+**How to use it:**
+
+1. **Talk** — pick a microphone and speaker, press **● Start session**, and speak. The first
+   session downloads the default models (~155 MB, progress shown); after that it's fully
+   offline. You get a streaming transcript, a **live VAD probability trace** (watch the gate
+   open as you speak), and a **per-turn latency waterfall** showing exactly where the response
+   time went: `VAD → STT → AGENT → TTS → OUT`. Talk over the bot to test barge-in.
+2. **Voices** — type a sentence and press ▶ on any Piper or Kokoro voice to hear it through
+   the real engine, with TTFB and RTF measured on your hardware. Pin two voices to **A**/**B**
+   for instant comparison; `⤓ wav` exports the audio.
+3. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
+   **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
+4. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
+   export the `appsettings.json` block for your server. **To talk to a real LLM instead of the
+   echo agent:** set *Agent* to `OpenAI`, enter a chat model (e.g. `gpt-4o-mini`) and your API
+   key (or leave it blank to use `Voxa__OpenAI__ApiKey` from the environment), then press
+   **⚡ Apply to Studio** — the next Talk session answers with the model. The key is applied to
+   the running app only; it is never written to disk or into the exported JSON.
+
+Full guide — every view, server-side diagnostics, troubleshooting: [`docs/studio.md`](docs/studio.md).
 
 ## À-la-carte configuration
 

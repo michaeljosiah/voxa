@@ -22,8 +22,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             if (e.PropertyName == nameof(TalkViewModel.IsRunning))
             {
                 Voices.PlaybackBlocked = Talk.IsRunning;
+                Config.ApplyBlocked = Talk.IsRunning; // a live session's scope belongs to the old container
                 OnPropertyChanged(nameof(IsLive));
             }
+        };
+
+        // Config "Apply" rebuilt the container — every view re-reads from it.
+        services.Reconfigured += () =>
+        {
+            Talk.RefreshFromConfig();
+            Voices.RefreshCacheState();
+            Models.Refresh();
         };
     }
 
