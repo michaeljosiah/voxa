@@ -118,6 +118,9 @@
           <Button Classes="vx-primary" Content="Apply to Studio"
                   Command="{Binding ApplyCommand}"
                   ToolTip.Tip="Rebuild the running app with this draft — the next Talk session uses it." />
+          <Button Classes="vx-ghost" Content="Open in Builder"
+                  Command="{Binding OpenInBuilderCommand}"
+                  ToolTip.Tip="See this selection as a graph on the Builder canvas." />
           <TextBlock Classes="vx-sub" VerticalAlignment="Center" TextWrapping="Wrap"
                      Text="{Binding ApplyStatus}" />
         </StackPanel>

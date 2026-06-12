@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Pipeline Builder (VST-002 D3).** A new top-level *Builder* section — a node
+  canvas over the live provider registry. The palette generates from registered STT/TTS/VAD
+  providers plus the built-ins (TranscriptionFilter, SentenceAggregator, Echo/OpenAI agent);
+  ports are typed by frame kind (the stage palette), incompatible wires snap back with the
+  reason in words, and a dangling port's **+** offers only type-compatible follow-ups. The
+  canvas enforces single-in/single-out wiring — Voxa pipelines are a linear chain, and the
+  geometry stays honest about that (§8.3). **Run graph** compiles the drawn chain through the
+  same descriptors `UseDefaults()` uses, inside an ephemeral container layered over the live
+  config, and runs it against the mic/speakers; live mode renders real hub events only — edge
+  pulses per final transcript/agent delta/TTS chunk, gate-open shimmer, stage-node glow with
+  measured latency, per-node queue depth, and a last-turn waterfall strip. **Export** produces
+  the `appsettings.json` block when the chain matches the default shape, or generated C#
+  composition code when it doesn't. Canvas furniture: drag + snap-to-grid, Tidy auto-layout,
+  Ctrl+wheel zoom, undo/redo, save/load as JSON in the user profile. The Config view gains
+  **Open in Builder** (the §5 cross-navigation), and the canvas opens with the active config
+  as a graph. Out of scope by design (the R1 fence): no branching, groups, comments, subgraphs,
+  or minimap; explicit DiagnosticsTap palette nodes wait for configurable taps in the framework
+  (the builder auto-instruments the four stage taps instead).
 - **Brand reach (VST-002 open question #4, resolved: yes).** The animated mark extends beyond the app: the README and the new docs index ([docs/README.md](docs/README.md)) carry a CSS-animated SVG of the mark (the splash's draw-on choreography, plays once, honors `prefers-reduced-motion`, dark/light variants via GitHub's theme switcher), and every NuGet package under `src/` now ships a `PackageIcon` — a 128 px raster of the app icon generated from code (`VOXA_BRAND_EXPORT=1` regenerates it) and wired through a shared `src/Directory.Build.props`.
 - **Voxa Studio: STT and TTS playgrounds (VST-002 D2).** The nav's *Voices* section grew into
   *Playgrounds* — two standalone labs behind a segmented switch. The **STT lab** drives

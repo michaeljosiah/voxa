@@ -108,6 +108,10 @@ public sealed partial class TalkViewModel : ObservableObject
     [ObservableProperty] private bool _isBotSpeaking;
     [ObservableProperty] private bool _showEventLog;
 
+    /// <summary>True while a Builder run owns the audio device — starting Talk is blocked.</summary>
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    private bool _startBlocked;
+
     /// <summary>Immutable snapshot for the trace control; replaced on each drain that saw VAD windows.</summary>
     [ObservableProperty] private IReadOnlyList<VadSample> _traceSnapshot = [];
 
@@ -128,7 +132,7 @@ public sealed partial class TalkViewModel : ObservableObject
 
     // ── session lifecycle ────────────────────────────────────────────────────
 
-    private bool CanStart() => !IsRunning;
+    private bool CanStart() => !IsRunning && !StartBlocked;
     private bool CanStop() => IsRunning;
 
     [RelayCommand(CanExecute = nameof(CanStart))]

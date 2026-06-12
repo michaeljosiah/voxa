@@ -216,6 +216,27 @@ public class BrandTests
             ttsWindow.Show();
             ttsWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "playground-tts.png"));
             ttsWindow.Close();
+
+            // D3: the Builder canvas — idle with selection, and live with real-shaped fake state.
+            var builder = new BuilderViewModel(TestSupport.Services());
+            builder.Select(builder.Nodes.First(n => n.Kind == BuilderNodeKind.Stt));
+            var builderWindow = new Window
+            {
+                Width = 1280, Height = 760, Background = Avalonia.Media.Brush.Parse("#0B0F14"),
+                Content = new BuilderView { DataContext = builder },
+            };
+            builderWindow.Show();
+            builderWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "builder-idle.png"));
+
+            builder.EnqueueForTest(new Voxa.Diagnostics.VadWindowEvent(0.9f, 0.1, true, true));
+            builder.EnqueueForTest(new Voxa.Diagnostics.StageLatencyEvent("vad_close", 112));
+            builder.EnqueueForTest(new Voxa.Diagnostics.StageLatencyEvent("stt_final", 58));
+            builder.EnqueueForTest(new Voxa.Diagnostics.StageLatencyEvent("agent_first_token", 21));
+            builder.EnqueueForTest(new Voxa.Diagnostics.StageLatencyEvent("tts_first_byte", 34));
+            builder.EnqueueForTest(new Voxa.Diagnostics.StageLatencyEvent("audio_out", 8));
+            builder.DrainPending();
+            builderWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "builder-live.png"));
+            builderWindow.Close();
         }
         finally
         {

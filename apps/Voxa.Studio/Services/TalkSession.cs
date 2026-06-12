@@ -53,12 +53,20 @@ public sealed class TalkSession : IAsyncDisposable
 
     /// <summary>Compose a session from the app's root provider. Throws the composer/validator errors verbatim.</summary>
     public static TalkSession Create(IServiceProvider root, IStudioAudioDevice device)
+        => Create(root, device,
+            sp => sp.GetRequiredService<DefaultVoicePipelineComposer>().Compose(sp));
+
+    /// <summary>
+    /// Compose with a caller-supplied composition (VST-002 D3): the Builder canvas runs its
+    /// compiled chain through the same session — scope, pumps, barge-in — Talk uses.
+    /// </summary>
+    public static TalkSession Create(
+        IServiceProvider root, IStudioAudioDevice device, Func<IServiceProvider, ComposedVoice> compose)
     {
         var scope = root.CreateScope();
         try
         {
-            var composer = scope.ServiceProvider.GetRequiredService<DefaultVoicePipelineComposer>();
-            return new TalkSession(scope, device, composer.Compose(scope.ServiceProvider));
+            return new TalkSession(scope, device, compose(scope.ServiceProvider));
         }
         catch
         {
@@ -66,6 +74,9 @@ public sealed class TalkSession : IAsyncDisposable
             throw;
         }
     }
+
+    /// <summary>[source, parts…, sink] — index i+1 is composed part i. Queue-depth badges read this.</summary>
+    internal IReadOnlyList<FrameProcessor> Processors => _pipeline.Processors;
 
     /// <summary>Start the pipeline and both audio pumps.</summary>
     public async Task StartAsync(AudioEndpoint microphone, AudioEndpoint speaker)

@@ -1,6 +1,8 @@
+using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Voxa.Studio.Controls;
 using Voxa.Studio.Services;
 
 namespace Voxa.Studio.Views;
@@ -39,6 +41,59 @@ public static class Converters
             WerOp.Deletion => DangerSoftBrush,
             _ => Brushes.Transparent,
         });
+
+    // ── builder canvas (§8): stage accents on node cards, frame-type port dots ──
+
+    public static readonly IValueConverter StageBrush =
+        new FuncValueConverter<string?, IBrush?>(key => key switch
+        {
+            "vad" => StageVadBrush,
+            "stt" => StageSttBrush,
+            "agent" => StageAgentBrush,
+            "tts" => StageTtsBrush,
+            "out" => StageOutBrush,
+            _ => StageVadBrush,
+        });
+
+    public static readonly IValueConverter PortBrush =
+        new FuncValueConverter<BuilderPortType?, IBrush?>(type =>
+            type is { } t ? BuilderEdgesControl.PortBrushes[t] : Brushes.Transparent);
+
+    public static readonly IValueConverter PortLabel =
+        new FuncValueConverter<BuilderPortType?, string>(type =>
+            type is { } t ? BuilderGraph.PortLabel(t) : "—");
+
+    /// <summary>(IsSelected, StageKey) → border ring: stage accent when selected, hairline otherwise.</summary>
+    public static readonly IMultiValueConverter NodeRing =
+        new FuncMultiValueConverter<object?, IBrush?>(values =>
+        {
+            var items = values.ToList();
+            return items is [bool selected, string key]
+                ? selected ? (IBrush?)StageBrush.Convert(key, typeof(IBrush), null, CultureInfo.InvariantCulture) : Line2Brush
+                : Line2Brush;
+        });
+
+    /// <summary>(IsActive, StageKey) → the live stage glow (§8.4); none while idle.</summary>
+    public static readonly IMultiValueConverter NodeGlow =
+        new FuncMultiValueConverter<object?, BoxShadows>(values =>
+        {
+            var items = values.ToList();
+            if (items is not [true, string key]) return default;
+            var brush = (ISolidColorBrush?)StageBrush.Convert(key, typeof(IBrush), null, CultureInfo.InvariantCulture);
+            var color = brush?.Color ?? Colors.Transparent;
+            return new BoxShadows(new BoxShadow
+            {
+                Blur = 22, Spread = -4, Color = Color.FromArgb(0x66, color.R, color.G, color.B),
+            });
+        });
+
+    private static readonly IBrush Line2Brush = new SolidColorBrush(Color.Parse("#29A6B2C2")); // line-2
+
+    private static readonly IBrush StageVadBrush = new SolidColorBrush(Color.Parse("#76849B"));
+    private static readonly IBrush StageSttBrush = new SolidColorBrush(Color.Parse("#4FC3F7"));
+    private static readonly IBrush StageAgentBrush = new SolidColorBrush(Color.Parse("#CE93D8"));
+    private static readonly IBrush StageTtsBrush = new SolidColorBrush(Color.Parse("#FFB74D"));
+    private static readonly IBrush StageOutBrush = new SolidColorBrush(Color.Parse("#66BB6A"));
 
     private static readonly IBrush MatchBrush = new SolidColorBrush(Color.Parse("#A6B2C2"));      // text-2
     private static readonly IBrush WarnBrush = new SolidColorBrush(Color.Parse("#FFB74D"));

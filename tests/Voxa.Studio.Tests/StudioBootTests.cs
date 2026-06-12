@@ -63,7 +63,7 @@ public class StudioBootTests
         window.Show();
 
         // Switching sections must not throw (each view's bindings resolve against its VM).
-        foreach (var section in new[] { 1, 2, 3, 0 })
+        foreach (var section in new[] { 1, 2, 3, 4, 0 })
             vm.SelectedSection = section;
 
         window.Close();

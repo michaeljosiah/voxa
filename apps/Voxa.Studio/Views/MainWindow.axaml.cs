@@ -25,6 +25,22 @@ public partial class MainWindow : Window
             if (DataContext is not MainWindowViewModel vm) return;
             vm.PropertyChanged += (_, e) =>
             {
+                // Cross-navigation (Config's "Open in Builder") changes SelectedSection from
+                // the VM side — reflect it onto the rail, which drives host visibility.
+                if (e.PropertyName == nameof(MainWindowViewModel.SelectedSection))
+                {
+                    var radio = vm.SelectedSection switch
+                    {
+                        1 => NavPlaygrounds,
+                        2 => NavBuilder,
+                        3 => NavModels,
+                        4 => NavConfig,
+                        _ => NavTalk,
+                    };
+                    radio.IsChecked = true;
+                    return;
+                }
+
                 if (e.PropertyName != nameof(MainWindowViewModel.IsLive)) return;
                 if (vm.IsLive)
                 {
@@ -48,8 +64,9 @@ public partial class MainWindow : Window
         var section = radio.Tag switch
         {
             "Playgrounds" => 1,
-            "Models" => 2,
-            "Config" => 3,
+            "Builder" => 2,
+            "Models" => 3,
+            "Config" => 4,
             _ => 0,
         };
 
@@ -58,7 +75,8 @@ public partial class MainWindow : Window
 
         TalkHost.IsVisible = section == 0;
         PlaygroundsHost.IsVisible = section == 1;
-        ModelsHost.IsVisible = section == 2;
-        ConfigHost.IsVisible = section == 3;
+        BuilderHost.IsVisible = section == 2;
+        ModelsHost.IsVisible = section == 3;
+        ConfigHost.IsVisible = section == 4;
     }
 }
