@@ -4,8 +4,9 @@ using Voxa.Studio.Services;
 namespace Voxa.Studio.ViewModels;
 
 /// <summary>
-/// Shell view model: the nav rail's four sections and the shared session coordination
-/// (one audio device — playground playback/capture disables while a Talk session is live).
+/// Shell view model: the nav rail's five sections and the shared session coordination
+/// (one audio device — playground playback/capture and Builder/Talk runs disable each other
+/// while a session is live).
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {

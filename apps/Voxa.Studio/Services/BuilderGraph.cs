@@ -183,7 +183,36 @@ public sealed class BuilderGraph
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    /// <summary>
+    /// Option keys that hold secrets — stripped from any artifact that leaves memory. The
+    /// graph file lands in the user profile, so it follows the Config view's rule: credentials
+    /// reach the live container only, never disk (and never an export).
+    /// </summary>
+    internal static readonly IReadOnlySet<string> SecretOptionKeys =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ApiKey" };
+
+    /// <summary>
+    /// Serialize the document. <paramref name="excludeSecrets"/> drops secret options for the
+    /// save-to-disk path; the in-memory undo stack keeps them (it never persists).
+    /// </summary>
+    public string ToJson(bool excludeSecrets = false) =>
+        JsonSerializer.Serialize(excludeSecrets ? WithoutSecrets() : this, JsonOptions);
+
+    /// <summary>A copy with every secret option removed — used by the disk serializer.</summary>
+    private BuilderGraph WithoutSecrets()
+    {
+        var copy = new BuilderGraph { Profile = Profile };
+        copy.Edges.AddRange(Edges);
+        foreach (var node in Nodes)
+        {
+            var clean = new BuilderNode { Id = node.Id, Kind = node.Kind, Provider = node.Provider, X = node.X, Y = node.Y };
+            foreach (var (key, value) in node.Options)
+                if (!SecretOptionKeys.Contains(key))
+                    clean.Options[key] = value;
+            copy.Nodes.Add(clean);
+        }
+        return copy;
+    }
 
     public static BuilderGraph FromJson(string json) =>
         JsonSerializer.Deserialize<BuilderGraph>(json, JsonOptions)

@@ -359,8 +359,19 @@ public sealed partial class BuilderViewModel : ObservableObject
     partial void OnSelectedProfileChanged(string value)
     {
         _graph.Profile = value;
+        // VAD cards and sliders show profile-resolved defaults — refresh them when the profile moves.
+        foreach (var node in Nodes) RefreshNodeBadges(node);
+        if (SelectedNode?.Kind == BuilderNodeKind.Vad) RebuildInspector();
         Revalidate();
     }
+
+    /// <summary>
+    /// The selected profile's resolved tuning (no explicit overrides) — the same public path
+    /// the composer takes. Used so untouched VAD knobs display what actually runs.
+    /// </summary>
+    private VoxaEffectiveTuning ProfileTuning() =>
+        _services.Provider.GetRequiredService<VoxaTuningResolver>()
+            .Resolve(new VoxaOptions { Profile = SelectedProfile });
 
     /// <summary>Snap a dragged node to the grid (view calls this when the drag ends).</summary>
     public void SnapNode(BuilderNodeVm vm)
@@ -395,10 +406,10 @@ public sealed partial class BuilderViewModel : ObservableObject
         };
         switch (entry.Kind)
         {
-            case BuilderNodeKind.Vad:
-                node.Options["ConfidenceThreshold"] = "0.5";
-                node.Options["StopDurationMs"] = "800";
-                break;
+            // VAD tuning is intentionally NOT seeded: an empty Options means "follow the profile"
+            // (the resolver merges explicit config OVER the profile, so a seeded 0.5/800 would
+            // silently beat a Quality selection). The inspector sliders display the profile's
+            // resolved values; only a user edit writes an explicit override.
             case BuilderNodeKind.Stt when Is(entry.Provider, "WhisperCpp"):
                 node.Options["Model"] = "tiny.en";
                 break;
@@ -494,11 +505,14 @@ public sealed partial class BuilderViewModel : ObservableObject
                     node.Options.GetValueOrDefault("Device", ""), v => Touch("Device", v)));
                 break;
             case BuilderNodeKind.Vad:
+                // Sliders default to the SELECTED PROFILE's resolved values, so an untouched VAD
+                // node honestly shows what runs; dragging writes an explicit override.
+                var tuning = ProfileTuning();
                 InspectorOptions.Add(new RangeOptionVm("ConfidenceThreshold", 0, 1, 0.05,
-                    ParseDouble(node.Options.GetValueOrDefault("ConfidenceThreshold"), 0.5),
+                    ParseDouble(node.Options.GetValueOrDefault("ConfidenceThreshold"), tuning.VadConfidenceThreshold),
                     "0.00", "", v => Touch("ConfidenceThreshold", v)));
                 InspectorOptions.Add(new RangeOptionVm("StopDuration", 200, 1500, 50,
-                    ParseDouble(node.Options.GetValueOrDefault("StopDurationMs"), 800),
+                    ParseDouble(node.Options.GetValueOrDefault("StopDurationMs"), tuning.VadStopDuration.TotalMilliseconds),
                     "0", " ms", v => Touch("StopDurationMs", v)));
                 break;
             case BuilderNodeKind.Stt when Is(node.Provider, "WhisperCpp"):
@@ -539,8 +553,14 @@ public sealed partial class BuilderViewModel : ObservableObject
                     ? device : "default device";
                 break;
             case BuilderNodeKind.Vad:
-                vm.Meta = $"stop {node.Options.GetValueOrDefault("StopDurationMs", "800")} ms · " +
-                          $"thr {node.Options.GetValueOrDefault("ConfidenceThreshold", "0.5")}";
+                // Show the profile's resolved values when no explicit override — the card never
+                // claims a number the run won't use.
+                var vad = ProfileTuning();
+                var stop = node.Options.GetValueOrDefault("StopDurationMs",
+                    ((int)vad.VadStopDuration.TotalMilliseconds).ToString(CultureInfo.InvariantCulture));
+                var thr = node.Options.GetValueOrDefault("ConfidenceThreshold",
+                    vad.VadConfidenceThreshold.ToString("0.##", CultureInfo.InvariantCulture));
+                vm.Meta = $"stop {stop} ms · thr {thr}";
                 break;
             case BuilderNodeKind.Stt when Is(node.Provider, "WhisperCpp"):
                 var model = node.Options.GetValueOrDefault("Model", "tiny.en");
@@ -660,8 +680,12 @@ public sealed partial class BuilderViewModel : ObservableObject
         if (!string.Equals(engine, "None", StringComparison.OrdinalIgnoreCase))
         {
             var vad = Add(BuilderNodeKind.Vad, engine);
-            vad.Options["ConfidenceThreshold"] = Get("Voxa:Vad:ConfidenceThreshold", "0.5");
-            vad.Options["StopDurationMs"] = Get("Voxa:Vad:StopDurationMs", "800");
+            // Only carry VAD knobs the source ACTUALLY set — an absent key means "follow the
+            // profile", so seeding a default here would quietly override the profile selector.
+            if (pairs.TryGetValue("Voxa:Vad:ConfidenceThreshold", out var threshold) && !string.IsNullOrEmpty(threshold))
+                vad.Options["ConfidenceThreshold"] = threshold;
+            if (pairs.TryGetValue("Voxa:Vad:StopDurationMs", out var stopMs) && !string.IsNullOrEmpty(stopMs))
+                vad.Options["StopDurationMs"] = stopMs;
         }
         var stt = Add(BuilderNodeKind.Stt, Get("Voxa:Stt", "WhisperCpp"));
         if (Is(stt.Provider, "WhisperCpp")) stt.Options["Model"] = Get("Voxa:WhisperCpp:Model", "tiny.en");
@@ -730,7 +754,9 @@ public sealed partial class BuilderViewModel : ObservableObject
     {
         try
         {
-            await File.WriteAllTextAsync(GraphPath, _graph.ToJson());
+            // excludeSecrets: an API key typed into the inspector runs the live graph but never
+            // reaches disk — the Config view's rule, enforced at the serializer.
+            await File.WriteAllTextAsync(GraphPath, _graph.ToJson(excludeSecrets: true));
             StatusText = $"Saved {GraphPath}";
         }
         catch (Exception ex) { ErrorText = ex.Message; }

@@ -4,6 +4,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Voxa.Studio.Theme;
 using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Views;
@@ -55,12 +56,14 @@ public partial class BuilderView : UserControl
         if (sender is not Border { DataContext: BuilderNodeVm node }) return;
         Vm?.Select(node);
         Focus();
+        // Mark handled even for a non-left press so it never bubbles to OnCanvasPressed, which
+        // would clear the selection we just made (a right/middle click would deselect the node).
+        e.Handled = true;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         _dragNode = node;
         _dragMoved = false;
         var pos = e.GetPosition(GraphPanel);
         _dragOffset = new Point(pos.X - node.X, pos.Y - node.Y);
-        e.Handled = true;
     }
 
     private void OnNodeMoved(object? sender, PointerEventArgs e)
@@ -125,6 +128,9 @@ public partial class BuilderView : UserControl
 
     private static void ShakeNode(BuilderNodeVm node)
     {
+        // Reduced motion: skip the shake (the one-line reason in the status strip still carries
+        // the feedback) — VST-002 §10, "every animation behind this check".
+        if (MotionSettings.ReduceMotion) return;
         node.IsRefused = true;
         DispatcherTimer.RunOnce(() => node.IsRefused = false, TimeSpan.FromMilliseconds(280));
     }

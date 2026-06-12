@@ -179,9 +179,53 @@ public class BuilderViewModelTests
         Assert.True(vm.IsExportOpen);
         Assert.Contains("\"Stt\": \"WhisperCpp\"", vm.ExportText);
         Assert.Contains("\"Voice\": \"en_US-amy-low\"", vm.ExportText);
-        // The seeded VAD node carries its knobs explicitly — they ship in the block.
         Assert.Contains("\"Engine\": \"Silero\"", vm.ExportText);
         Assert.DoesNotContain("ApiKey", vm.ExportText); // never in an export, ever
+    }
+
+    [Fact]
+    public void An_Untouched_Vad_Node_Defers_To_The_Profile_Not_Hardcoded_Knobs()
+    {
+        // Regression for the deep-review finding: seeding 0.5/800 silently beat the profile.
+        // A fresh VAD node must export NO explicit VAD tuning, leaving the profile in charge.
+        var vm = Vm();
+        vm.SelectedProfile = "Quality";
+        vm.ExportAppSettingsCommand.Execute(null);
+
+        Assert.Contains("\"Profile\": \"Quality\"", vm.ExportText);
+        Assert.DoesNotContain("ConfidenceThreshold", vm.ExportText);
+        Assert.DoesNotContain("StopDurationMs", vm.ExportText);
+
+        // The inspector shows the profile's resolved values (Quality → 0.6 / 1000 ms), not 0.5/800.
+        vm.Select(NodeOf(vm, BuilderNodeKind.Vad));
+        var threshold = vm.InspectorOptions.OfType<RangeOptionVm>().First(o => o.Label == "ConfidenceThreshold");
+        var stop = vm.InspectorOptions.OfType<RangeOptionVm>().First(o => o.Label == "StopDuration");
+        Assert.Equal(0.6, threshold.Value, 3);
+        Assert.Equal(1000, stop.Value, 3);
+
+        // But once the user moves a slider, the explicit override IS exported.
+        threshold.Value = 0.42;
+        vm.ExportAppSettingsCommand.Execute(null);
+        Assert.Contains("\"ConfidenceThreshold\": \"0.42\"", vm.ExportText);
+    }
+
+    [Fact]
+    public async Task A_Saved_Graph_Never_Carries_The_Api_Key_To_Disk()
+    {
+        // Regression for the Critical finding: the inspector field promises "never exported",
+        // but ToJson() serialized node.Options including the key. Save must strip it.
+        var path = Path.Combine(TestSupport.TempDir(), "secret-graph.json");
+        var vm = Vm();
+        vm.GraphPathOverride = path;
+        NodeOf(vm, BuilderNodeKind.Agent).Model.Options["ApiKey"] = "sk-super-secret";
+        NodeOf(vm, BuilderNodeKind.Stt).Model.Options["Model"] = "base.en"; // a NON-secret option
+
+        await vm.SaveGraphCommand.ExecuteAsync(null);
+        var onDisk = await File.ReadAllTextAsync(path);
+
+        Assert.DoesNotContain("sk-super-secret", onDisk);
+        Assert.DoesNotContain("ApiKey", onDisk);
+        Assert.Contains("base.en", onDisk); // non-secret options still persist
     }
 
     [Fact]
@@ -204,6 +248,26 @@ public class BuilderViewModelTests
         Assert.Contains("TryGetTts(\"Piper\"", vm.ExportText);
         Assert.DoesNotContain("TranscriptionFilter", vm.ExportText);
         Assert.Contains("SentenceAggregator", vm.ExportText);
+    }
+
+    [Fact]
+    public void Generated_CSharp_Composes_The_Same_Pipeline_The_Canvas_Runs()
+    {
+        // Regression for the deep-review finding: the codegen froze the VAD sample rate at 16000
+        // and dropped conversation memory — both divergences from what Run actually composes.
+        var vm = Vm();
+        vm.ExportCSharpCommand.Execute(null);
+        var code = vm.ExportText;
+
+        // VAD takes the STT's effective input rate at runtime, not a frozen literal.
+        Assert.Contains("var inputSampleRate = stt.GetEffectiveInputSampleRate(root);", code);
+        Assert.Contains("SampleRate:          inputSampleRate", code);
+        Assert.DoesNotContain("SampleRate:          16000", code);
+
+        // Conversation memory is wired exactly as the composer does (on by default).
+        Assert.Contains("options.Agent.ConversationMemory", code);
+        Assert.Contains("new InMemoryChatHistory(options.Agent.MaxHistoryMessages)", code);
+        Assert.Contains("opts.OnTurnCompleted", code);
     }
 
     // ── the chain compiler (real container, factories never invoked) ────────
