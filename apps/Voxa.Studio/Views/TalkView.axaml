@@ -39,6 +39,10 @@
       <!-- transcript -->
       <Border Grid.Column="0" Classes="vx-card-flush">
         <Grid RowDefinitions="*,Auto">
+          <!-- empty state teaches instead of leaving a void (P4) -->
+          <TextBlock Grid.Row="0" Classes="vx-sub" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     IsVisible="{Binding !Transcript.Count}"
+                     Text="Start a session and say something — the conversation lands here." />
           <ScrollViewer Grid.Row="0" x:Name="TranscriptScroll" Padding="16">
             <ItemsControl ItemsSource="{Binding Transcript}">
               <ItemsControl.ItemTemplate>
@@ -83,7 +87,9 @@
                                     Threshold="{Binding VadThreshold}" />
         </Border>
 
-        <TextBlock Grid.Row="3" Classes="vx-label vx-accent" Text="TURN WATERFALL" Margin="2,12,0,6" />
+        <!-- the heading appears with the first measured turn — no header over nothing -->
+        <TextBlock Grid.Row="3" Classes="vx-label vx-accent" Text="TURN WATERFALL" Margin="2,12,0,6"
+                   IsVisible="{Binding !!Waterfalls.Count}" />
         <Grid Grid.Row="4" RowDefinitions="Auto,*">
           <ItemsControl Grid.Row="0" ItemsSource="{Binding Waterfalls}" MaxHeight="220">
             <ItemsControl.ItemTemplate>

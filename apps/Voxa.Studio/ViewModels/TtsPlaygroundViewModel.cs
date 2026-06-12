@@ -45,6 +45,9 @@ public sealed record TtsTake(
     public string MetaText => $"{Seconds:F1}s · {TtfbMs:F0} ms · {Rtf:F2}×";
 }
 
+/// <summary>One phrase-deck entry: a short chip label, the full sentence in the tooltip.</summary>
+public sealed record StressPhrase(string Label, string Text);
+
 /// <summary>One row of the batch-bench table: TTFB percentiles + mean RTF over the phrase deck.</summary>
 public sealed record BenchRow(string Voice, string Engine, double P50Ms, double P95Ms, double RtfMean)
 {
@@ -62,13 +65,13 @@ public sealed record BenchRow(string Voice, string Engine, double P50Ms, double 
 public sealed partial class TtsPlaygroundViewModel : ObservableObject
 {
     /// <summary>The §7 phrase deck — the sentences that actually break TTS, not pangrams.</summary>
-    public static readonly IReadOnlyList<string> StressPhrases =
+    public static readonly IReadOnlyList<StressPhrase> StressPhrases =
     [
-        "That comes to $1,204.50, due 03/14/2026.",
-        "Read HTTP/2 and SQL aloud, then call kubectl get pods.",
-        "The bandage was wound around the wound.",
-        "A naïve café résumé, San José, Zürich.",
-        "Although the order shipped on Thursday, which the tracking page confirmed twice, it still arrived a full week later than the estimate we quoted.",
+        new("currency & dates", "That comes to $1,204.50, due 03/14/2026."),
+        new("code aloud", "Read HTTP/2 and SQL aloud, then call kubectl get pods."),
+        new("homographs", "The bandage was wound around the wound."),
+        new("diacritics", "A naïve café résumé, San José, Zürich."),
+        new("long clause", "Although the order shipped on Thursday, which the tracking page confirmed twice, it still arrived a full week later than the estimate we quoted."),
     ];
 
     private readonly StudioServices _services;
@@ -138,6 +141,10 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
     [ObservableProperty] private string _abxStatusText = "Pin two voices, then start a round.";
     [ObservableProperty] private bool _abxRoundActive;
     [ObservableProperty] private bool _abxCanReveal;
+
+    /// <summary>Disclosure state: the experiments stay folded until invited (P2, calm by default).</summary>
+    [ObservableProperty] private bool _isAbxOpen;
+    [ObservableProperty] private bool _isBenchOpen;
 
     /// <summary>Set true while a Talk session owns the output device — playback and bench disable.</summary>
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(SynthesizeCommand), nameof(RunBenchCommand))]
@@ -295,10 +302,6 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private Task SeekAsync(double position) =>
-        CurrentTake is { } take ? PlayFromAsync(take, position) : Task.CompletedTask;
-
     /// <summary>
     /// Called by the view's render timer (and tests): playback position is wall-clock over the
     /// render queue — the device renders gap-free, so elapsed time IS the position.
@@ -438,7 +441,7 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
                     StatusText = $"Bench {row.Name} ({v + 1}/{selected.Count}) · phrase {p + 1}/{StressPhrases.Count}…";
                     // Always fresh: reusing a cached take would report numbers from an earlier
                     // run (and the history cap could mix cached and fresh within one run).
-                    var take = await SynthesizeTakeAsync(row, StressPhrases[p], reuseExisting: false);
+                    var take = await SynthesizeTakeAsync(row, StressPhrases[p].Text, reuseExisting: false);
                     ttfbs.Add(take.TtfbMs);
                     rtfs.Add(take.Rtf);
                 }

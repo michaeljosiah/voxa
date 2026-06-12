@@ -26,11 +26,15 @@
             </StackPanel>
           </Border>
 
+          <!-- cached state lives IN the selector (green dot) — no shouting chips -->
           <ComboBox Width="170" VerticalAlignment="Center"
                     ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SttModelRow">
                 <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                           Fill="{StaticResource VxGoodBrush}" IsVisible="{Binding IsCached}"
+                           ToolTip.Tip="cached" />
                   <TextBlock Text="{Binding Name}" />
                   <TextBlock Classes="vx-mono vx-muted" FontSize="10" VerticalAlignment="Center"
                              Text="{Binding SizeText}" />
@@ -39,18 +43,8 @@
             </ComboBox.ItemTemplate>
           </ComboBox>
 
-          <Border Classes="vx-chip" VerticalAlignment="Center"
-                  IsVisible="{Binding SelectedModel.IsCached, FallbackValue=False}">
-            <TextBlock Text="cached" FontSize="10" Foreground="{StaticResource VxGoodBrush}" />
-          </Border>
-          <Border Classes="vx-chip" VerticalAlignment="Center"
-                  IsVisible="{Binding !SelectedModel.IsCached, FallbackValue=False}">
-            <TextBlock Text="downloads on first run" FontSize="10"
-                       Foreground="{StaticResource VxMutedBrush}" />
-          </Border>
-
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="vx-label" Text="SIDE-BY-SIDE" VerticalAlignment="Center" />
+            <TextBlock Classes="vx-sub" Text="Compare" VerticalAlignment="Center" />
             <ToggleSwitch IsChecked="{Binding SideBySide}" OnContent="" OffContent=""
                           MinWidth="0" VerticalAlignment="Center" />
             <ComboBox Width="150" VerticalAlignment="Center"

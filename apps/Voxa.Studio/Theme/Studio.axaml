@@ -272,6 +272,53 @@
     <Setter Property="Foreground" Value="{StaticResource VxOnAccentBrush}" />
   </Style>
 
+  <!-- Disclosure section header: chevron + caps label; content elsewhere binds IsChecked.
+       Progressive disclosure is the calm-by-default rule (P2) applied to power features. -->
+  <Style Selector="ToggleButton.vx-section">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent" Padding="2,4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Name="chev" Data="M0,0 L5,5 L0,10"
+                  Stroke="{StaticResource VxMutedBrush}" StrokeThickness="1.5"
+                  VerticalAlignment="Center"
+                  RenderTransform="rotate(0deg)">
+              <Path.Transitions>
+                <Transitions>
+                  <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+                </Transitions>
+              </Path.Transitions>
+            </Path>
+            <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToggleButton.vx-section:checked /template/ Path#chev">
+    <Setter Property="RenderTransform" Value="rotate(90deg)" />
+  </Style>
+  <Style Selector="ToggleButton.vx-section:pointerover /template/ Path#chev">
+    <Setter Property="Stroke" Value="{StaticResource VxTextBrush}" />
+  </Style>
+
+  <!-- Quiet row affordances: nearly silent until the row is hovered (or the state is active). -->
+  <Style Selector="ListBoxItem Button.vx-quiet">
+    <Setter Property="Opacity" Value="0.35" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="ListBoxItem:pointerover Button.vx-quiet">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="ListBoxItem Button.vx-quiet.pinned">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
   <!-- Stress-phrase chips: mono pills that load the deck into the text box. -->
   <Style Selector="Button.vx-phrase">
     <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />

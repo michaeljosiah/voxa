@@ -123,9 +123,6 @@ public sealed partial class SttPlaygroundViewModel : ObservableObject
             row.IsCached = WhisperCppModelCatalog.TryGet(row.Name, out var a) && _services.ModelCache.IsCached(a);
     }
 
-    [RelayCommand]
-    private void SelectSource(string source) => Source = Enum.Parse<SttSource>(source);
-
     // ── transcription ────────────────────────────────────────────────────────
 
     private bool CanTranscribe() => !IsBusy;

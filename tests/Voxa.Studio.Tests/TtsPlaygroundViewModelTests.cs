@@ -188,7 +188,7 @@ public class TtsPlaygroundViewModelTests
         Assert.Equal(2 * TtsPlaygroundViewModel.StressPhrases.Count, syntheses); // run 2 measured again
 
         // Interactive synthesis still reuses: same voice + same text = replay, not a new take.
-        await vm.SynthesizeTakeAsync(vm.Voices[0], TtsPlaygroundViewModel.StressPhrases[0]);
+        await vm.SynthesizeTakeAsync(vm.Voices[0], TtsPlaygroundViewModel.StressPhrases[0].Text);
         Assert.Equal(2 * TtsPlaygroundViewModel.StressPhrases.Count, syntheses);
     }
 
