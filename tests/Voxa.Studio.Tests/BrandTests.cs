@@ -64,6 +64,58 @@ public class BrandTests
     }
 
     [AvaloniaFact]
+    public void Mark_Glow_Toggling_Live_Drives_The_Pulse_After_Attach()
+    {
+        // Regression (PR #5 review): the titlebar mark binds Glow to IsLive, which is false at
+        // attach. Toggling it true when a Talk session goes live must start the data-backed
+        // pulse — the original control decided the ticker only at attach and never registered
+        // AffectsRender, so the glow silently never appeared. Force animation on so the test is
+        // deterministic regardless of the host's reduced-motion setting.
+        MotionSettings.SetOverride(false);
+        try
+        {
+            var mark = new VoxaMarkControl { Width = 18, Height = 18 }; // titlebar size; Animated defaults false
+            var window = new Window { Width = 40, Height = 40, Content = mark };
+            window.Show();
+
+            Assert.False(mark.IsTickerRunning); // idle: no intro, session not live
+
+            mark.Glow = true;               // a Talk session goes live
+            Assert.True(mark.IsTickerRunning);  // the pulse must now run (the bug: it stayed idle)
+
+            mark.Glow = false;              // session ends
+            Assert.False(mark.IsTickerRunning); // and the pulse stops — no idle loop left running
+
+            window.Close();
+        }
+        finally
+        {
+            MotionSettings.SetOverride(null);
+        }
+    }
+
+    [AvaloniaFact]
+    public void Mark_Glow_Toggle_Is_Static_Under_Reduced_Motion()
+    {
+        MotionSettings.SetOverride(true);
+        try
+        {
+            var mark = new VoxaMarkControl { Width = 18, Height = 18 };
+            var window = new Window { Width = 40, Height = 40, Content = mark };
+            window.Show();
+
+            mark.Glow = true;               // live — but reduced motion means a constant glow, no ticker
+            Assert.False(mark.IsTickerRunning);
+
+            window.Close();
+        }
+        finally
+        {
+            MotionSettings.SetOverride(null);
+        }
+    }
+
+    [AvaloniaFact]
     public void Splash_Ticks_Real_Stages_And_Honest_Progress()
     {
         MotionSettings.SetOverride(true);

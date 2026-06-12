@@ -28,6 +28,13 @@ public sealed class VoxaMarkControl : Control
     public static readonly StyledProperty<bool> GlowProperty =
         AvaloniaProperty.Register<VoxaMarkControl, bool>(nameof(Glow));
 
+    static VoxaMarkControl()
+    {
+        // Both properties drive the painted output, so a change must invalidate the visual —
+        // without this, toggling Glow at runtime (a session going live) changes nothing on screen.
+        AffectsRender<VoxaMarkControl>(AnimatedProperty, GlowProperty);
+    }
+
     /// <summary>Play the draw-on intro when the control attaches.</summary>
     public bool Animated
     {
@@ -55,39 +62,98 @@ public sealed class VoxaMarkControl : Control
     private readonly Stopwatch _clock = new();
     private DispatcherTimer? _ticker;
     private bool _introDone;
+    private bool _attached;
+
+    // Clock time at which the glow pulse begins. 1.5 s when an intro plays first (the pulse
+    // hands off after the draw-on); 0 when glow toggles on without an intro (titlebar going
+    // live) so the pulse eases up from this moment rather than snapping mid-cycle.
+    private double _glowOriginSeconds = 1.5;
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
-
+        _attached = true;
         _introDone = !Animated || MotionSettings.ReduceMotion;
-        var needsTicker = (!_introDone || Glow) && !MotionSettings.ReduceMotion;
-        if (needsTicker)
+
+        if (MotionSettings.ReduceMotion) return; // static end-state; AffectsRender repaints Glow changes
+
+        if (!_introDone)
         {
+            _glowOriginSeconds = 1.5;   // intro plays from attach; glow follows it
             _clock.Restart();
-            _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            _ticker.Tick += (_, _) =>
-            {
-                if (_clock.Elapsed.TotalSeconds > 1.7) _introDone = true;
-                // Once the intro is done, only a data-backed glow justifies further frames.
-                if (_introDone && !Glow) StopTicker();
-                InvalidateVisual();
-            };
-            _ticker.Start();
+            EnsureTicker();
+        }
+        else if (Glow)
+        {
+            _glowOriginSeconds = 0;     // no intro, but glow is already on — pulse from now
+            _clock.Restart();
+            EnsureTicker();
         }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        _attached = false;
         StopTicker();
         base.OnDetachedFromVisualTree(e);
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // Glow is data-backed and toggles at runtime (a Talk session going live/idle). The
+        // attach-time ticker decision is stale by then, so re-evaluate the animation here.
+        if (change.Property == GlowProperty && _attached)
+        {
+            SyncGlowTicker();
+        }
+    }
+
+    private void SyncGlowTicker()
+    {
+        if (MotionSettings.ReduceMotion) return; // static glow; AffectsRender already repaints
+        if (Glow)
+        {
+            if (_introDone)
+            {
+                _glowOriginSeconds = 0;   // pulse begins now — there is no intro to hand off from
+                _clock.Restart();
+            }
+            EnsureTicker();
+        }
+        else if (_introDone)
+        {
+            StopTicker();   // glow off and no intro running → nothing left to animate
+        }
+        // glow off mid-intro: leave the ticker running so the draw-on can finish
+    }
+
+    private void EnsureTicker()
+    {
+        if (_ticker is not null) return;
+        _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _ticker.Tick += OnTick;
+        _ticker.Start();
+    }
+
+    private void OnTick(object? sender, EventArgs e)
+    {
+        if (_clock.Elapsed.TotalSeconds > 1.7) _introDone = true;
+        // Once the intro is done, only a data-backed glow justifies further frames.
+        if (_introDone && !Glow) StopTicker();
+        InvalidateVisual();
+    }
+
     private void StopTicker()
     {
-        _ticker?.Stop();
+        if (_ticker is null) return;
+        _ticker.Stop();
+        _ticker.Tick -= OnTick;
         _ticker = null;
     }
+
+    /// <summary>True while the per-frame ticker is running. Test seam for the glow-on-live path.</summary>
+    internal bool IsTickerRunning => _ticker is not null;
 
     /// <summary>Jump the intro to its end state — the splash's click-to-skip.</summary>
     public void CompleteIntro()
@@ -109,11 +175,11 @@ public sealed class VoxaMarkControl : Control
         var t = _clock.Elapsed.TotalSeconds;
 
         // ── glow under everything: pulsing when animated, constant-soft when static ──
-        if (Glow || (!_introDone && t >= 1.5))
+        if (Glow || (!_introDone && t >= _glowOriginSeconds))
         {
             double strength = MotionSettings.ReduceMotion
                 ? 0.5
-                : 0.5 - 0.5 * Math.Cos(2 * Math.PI * ((t - 1.5) / Motion.Pulse.TotalSeconds));
+                : 0.5 - 0.5 * Math.Cos(2 * Math.PI * ((t - _glowOriginSeconds) / Motion.Pulse.TotalSeconds));
             if (!Glow && _introDone) strength = 0;
             // No primitive blur in DrawingContext — layered wide translucent strokes read as glow.
             DrawV(context, thickness: 20, opacity: 0.05 * strength, dashProgress: 1);
