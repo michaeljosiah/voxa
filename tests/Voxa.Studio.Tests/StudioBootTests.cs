@@ -6,7 +6,7 @@ namespace Voxa.Studio.Tests;
 
 /// <summary>
 /// VST-001 WS1-A1/A2: the shell boots keyless on the headless platform — XAML resources resolve,
-/// the four sections construct, the registry has the local tier, and nothing touches the network
+/// the five sections construct, the registry has the local tier, and nothing touches the network
 /// (the isolated temp cache stays empty).
 /// </summary>
 public class StudioBootTests
@@ -63,7 +63,7 @@ public class StudioBootTests
         window.Show();
 
         // Switching sections must not throw (each view's bindings resolve against its VM).
-        foreach (var section in new[] { 1, 2, 3, 0 })
+        foreach (var section in new[] { 1, 2, 3, 4, 0 })
             vm.SelectedSection = section;
 
         window.Close();

@@ -1,0 +1,360 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:views="using:Voxa.Studio.Views"
+             xmlns:controls="using:Voxa.Studio.Controls"
+             x:Class="Voxa.Studio.Views.BuilderView"
+             x:DataType="vm:BuilderViewModel"
+             Focusable="True" KeyDown="OnKeyDown">
+
+  <UserControl.Styles>
+    <!-- node card (builder-only; the ring/glow colors come from converters, per stage) -->
+    <Style Selector="Border.vx-bnode">
+      <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <!-- refused wire: a short, single shake — feedback motion with a job, then stillness -->
+    <Style Selector="Border.vx-bnode.refuse">
+      <Style.Animations>
+        <Animation Duration="0:0:0.12" IterationCount="2">
+          <KeyFrame Cue="0%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+          <KeyFrame Cue="25%"><Setter Property="TranslateTransform.X" Value="-3" /></KeyFrame>
+          <KeyFrame Cue="75%"><Setter Property="TranslateTransform.X" Value="3" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="TranslateTransform.X" Value="0" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <Style Selector="Button.vx-palette">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="9,7" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource VxLine1Brush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    </Style>
+    <Style Selector="Button.vx-palette:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    </Style>
+
+    <!-- the '+' port affordance -->
+    <Style Selector="Button.vx-plus">
+      <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- ── view bar: profile, canvas furniture, exporters, run ── -->
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Classes="vx-h1" Text="Builder" />
+          <TextBlock Classes="vx-label" Text="WIRE THE CHAIN · PORTS ONLY ACCEPT MATCHING FRAME TYPES" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <ComboBox Width="116" ItemsSource="{Binding Profiles}"
+                    SelectedItem="{Binding SelectedProfile}"
+                    ToolTip.Tip="Latency profile — tunes VAD and aggregation" />
+          <Button Classes="vx-ghost" Content="Tidy" Command="{Binding TidyCommand}" />
+          <Button Classes="vx-ghost" Content="Save" Command="{Binding SaveGraphCommand}"
+                  ToolTip.Tip="Save the graph as JSON in your user profile" />
+          <Button Classes="vx-ghost" Content="Load" Command="{Binding LoadGraphCommand}" />
+          <Button Classes="vx-ghost" Content="appsettings" Command="{Binding ExportAppSettingsCommand}"
+                  ToolTip.Tip="Export as config — enabled when the chain matches UseDefaults()" />
+          <Button Classes="vx-ghost" Content="C# compose" Command="{Binding ExportCSharpCommand}"
+                  ToolTip.Tip="Export as composition code — works for any valid chain" />
+          <Button Classes="vx-primary" Content="Run graph" Command="{Binding RunCommand}"
+                  IsVisible="{Binding !IsRunning}" />
+          <Button Classes="vx-danger" Content="Stop" Command="{Binding StopCommand}"
+                  IsVisible="{Binding IsRunning}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="192,*,272">
+
+      <!-- ── node palette (generated from the live registry + built-ins) ── -->
+      <Border Grid.Column="0" Background="{StaticResource VxPanelBrush}"
+              BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,0,1,0">
+        <ScrollViewer>
+          <StackPanel Margin="14" Spacing="10">
+            <TextBlock Classes="vx-label" Text="NODE PALETTE" />
+            <ItemsControl ItemsSource="{Binding Palette}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:BuilderPaletteGroup">
+                  <StackPanel Spacing="5" Margin="0,0,0,10">
+                    <TextBlock Classes="vx-sub" FontSize="10" Text="{Binding Header}" />
+                    <ItemsControl ItemsSource="{Binding Entries}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="5" /></ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:BuilderPaletteEntry">
+                          <Button Classes="vx-palette"
+                                  Command="{Binding $parent[UserControl].((vm:BuilderViewModel)DataContext).AddNodeCommand}"
+                                  CommandParameter="{Binding}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                              <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                       Fill="{Binding DotType, Converter={x:Static views:Converters.PortBrush}}" />
+                              <TextBlock Text="{Binding Label}" FontSize="12" />
+                            </StackPanel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
+                       Text="Click to place a node. A dangling port's + offers only type-compatible follow-ups." />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <!-- ── canvas ── -->
+      <Grid Grid.Column="1" RowDefinitions="*,Auto">
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Background="{StaticResource VxBgBrush}" PointerWheelChanged="OnCanvasWheel">
+          <LayoutTransformControl x:Name="ZoomHost">
+            <Panel x:Name="GraphPanel" Width="1680" Height="640" Background="Transparent"
+                   PointerPressed="OnCanvasPressed" PointerMoved="OnCanvasMoved"
+                   PointerReleased="OnCanvasReleased">
+
+              <controls:BuilderEdgesControl x:Name="EdgesLayer"
+                                            Nodes="{Binding Nodes}" Edges="{Binding Edges}"
+                                            IsLive="{Binding IsRunning}" />
+
+              <ItemsControl x:Name="NodesHost" ItemsSource="{Binding Nodes}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.Styles>
+                  <Style Selector="ItemsControl#NodesHost > ContentPresenter" x:DataType="vm:BuilderNodeVm">
+                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                  </Style>
+                </ItemsControl.Styles>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BuilderNodeVm">
+                    <Panel Width="132" Height="60">
+                      <Border Classes="vx-bnode" Classes.refuse="{Binding IsRefused}"
+                              PointerPressed="OnNodePressed" PointerMoved="OnNodeMoved"
+                              PointerReleased="OnNodeReleased">
+                        <Border.RenderTransform><TranslateTransform /></Border.RenderTransform>
+                        <Border.BorderBrush>
+                          <MultiBinding Converter="{x:Static views:Converters.NodeRing}">
+                            <Binding Path="IsSelected" />
+                            <Binding Path="StageKey" />
+                          </MultiBinding>
+                        </Border.BorderBrush>
+                        <Border.BoxShadow>
+                          <MultiBinding Converter="{x:Static views:Converters.NodeGlow}">
+                            <Binding Path="IsActive" />
+                            <Binding Path="StageKey" />
+                          </MultiBinding>
+                        </Border.BoxShadow>
+                        <Grid ColumnDefinitions="3,*">
+                          <Rectangle Grid.Column="0" Margin="0,7" RadiusX="1.5" RadiusY="1.5"
+                                     Fill="{Binding StageKey, Converter={x:Static views:Converters.StageBrush}}" />
+                          <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center" Spacing="1">
+                            <TextBlock Classes="vx-mono" FontSize="9" LetterSpacing="1.2"
+                                       Text="{Binding KindLabel}"
+                                       Foreground="{Binding StageKey, Converter={x:Static views:Converters.StageBrush}}" />
+                            <TextBlock FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                       Foreground="{StaticResource VxTextBrush}" Text="{Binding Name}" />
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                              <TextBlock Classes="vx-mono" FontSize="9.5" TextTrimming="CharacterEllipsis"
+                                         Foreground="{StaticResource VxMutedBrush}" Text="{Binding Meta}" />
+                              <Ellipse Width="5" Height="5" VerticalAlignment="Center"
+                                       Fill="{StaticResource VxGoodBrush}" IsVisible="{Binding IsCached}"
+                                       ToolTip.Tip="model cached" />
+                              <TextBlock Classes="vx-mono" FontSize="9.5"
+                                         Foreground="{StaticResource VxAccent2Brush}"
+                                         Text="{Binding LatencyText}"
+                                         IsVisible="{Binding LatencyText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                              <TextBlock Classes="vx-mono" FontSize="9.5"
+                                         Foreground="{StaticResource VxWarnBrush}"
+                                         Text="{Binding QueueText}"
+                                         IsVisible="{Binding QueueText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                            </StackPanel>
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+
+                      <!-- typed ports (colors = frame type = stage palette) -->
+                      <Ellipse Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Center"
+                               Margin="-5,0,0,0" IsVisible="{Binding HasIn}" Tag="in"
+                               Fill="{Binding InType, Converter={x:Static views:Converters.PortBrush}}"
+                               Stroke="{StaticResource VxBgBrush}" StrokeThickness="2"
+                               ToolTip.Tip="{Binding InType, Converter={x:Static views:Converters.PortLabel}}" />
+                      <Ellipse Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               Margin="0,0,-5,0" IsVisible="{Binding HasOut}" Tag="out" Cursor="Hand"
+                               Fill="{Binding OutType, Converter={x:Static views:Converters.PortBrush}}"
+                               Stroke="{StaticResource VxBgBrush}" StrokeThickness="2"
+                               PointerPressed="OnPortPressed"
+                               ToolTip.Tip="{Binding OutType, Converter={x:Static views:Converters.PortLabel}}" />
+
+                      <!-- the always-valid '+' affordance on a dangling out port -->
+                      <Button Classes="vx-plus" Width="18" Height="18" Content="+"
+                              HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-30,0"
+                              IsVisible="{Binding ShowPlus}" Click="OnPlusClicked"
+                              ToolTip.Tip="Append a compatible node" />
+                    </Panel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Panel>
+          </LayoutTransformControl>
+        </ScrollViewer>
+
+        <!-- live turn ticker (real waterfalls only — hidden until a turn completes) -->
+        <Border Grid.Row="0" VerticalAlignment="Bottom" Margin="16,0,16,12" Height="40"
+                CornerRadius="8" Background="#E6161C26"
+                BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1"
+                IsVisible="{Binding LastTurn, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="14,0" VerticalAlignment="Center">
+            <TextBlock Grid.Column="0" Classes="vx-label" Text="LAST TURN" Margin="0,0,12,0"
+                       VerticalAlignment="Center" />
+            <controls:TurnTickerControl Grid.Column="1" Height="12" VerticalAlignment="Center"
+                                        Turn="{Binding LastTurn}" />
+            <TextBlock Grid.Column="2" Classes="vx-mono" FontSize="12" Margin="12,0,0,0"
+                       VerticalAlignment="Center" Foreground="{StaticResource VxTextBrush}"
+                       Text="{Binding LastTurn.TotalText, FallbackValue=''}" />
+          </Grid>
+        </Border>
+
+        <!-- export pane (progressive disclosure: only after an export button) -->
+        <Border Grid.Row="0" Classes="vx-card" Width="460" Margin="0,12,12,12"
+                HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                IsVisible="{Binding IsExportOpen}">
+          <Grid RowDefinitions="Auto,*,Auto">
+            <TextBlock Grid.Row="0" Classes="vx-sub" TextWrapping="Wrap" Text="{Binding ExportTitle}" />
+            <TextBox Grid.Row="1" Margin="0,10" IsReadOnly="True" AcceptsReturn="True"
+                     FontFamily="{StaticResource VxMono}" FontSize="11"
+                     Text="{Binding ExportText, Mode=OneWay}" TextWrapping="NoWrap" />
+            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+              <Button Classes="vx-ghost" Content="Copy" Click="OnCopyExport" />
+              <Button Classes="vx-ghost" Content="Close" Command="{Binding CloseExportCommand}" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- status strip -->
+        <Border Grid.Row="1" Background="{StaticResource VxPanelBrush}" Padding="14,8"
+                BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,1,0,0">
+          <StackPanel Spacing="2">
+            <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+            <TextBlock Classes="vx-mono" FontSize="10.5" Foreground="{StaticResource VxMutedBrush}"
+                       Text="{Binding ChainText}"
+                       IsVisible="{Binding ChainText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock FontSize="11" Foreground="{StaticResource VxBadBrush}" TextWrapping="Wrap"
+                       Text="{Binding ErrorText}"
+                       IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- ── inspector ── -->
+      <Border Grid.Column="2" Background="{StaticResource VxPanelBrush}"
+              BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1,0,0,0">
+        <ScrollViewer>
+          <StackPanel Margin="16" Spacing="14">
+            <TextBlock Classes="vx-label vx-accent" Text="INSPECTOR" />
+
+            <TextBlock FontSize="12" Foreground="{StaticResource VxMutedBrush}" TextWrapping="Wrap"
+                       Text="Select a node to edit its options."
+                       IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}" />
+
+            <StackPanel Spacing="14"
+                        IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                         Fill="{Binding SelectedNode.StageKey, FallbackValue={x:Null}, Converter={x:Static views:Converters.StageBrush}}" />
+                <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource VxTextBrush}"
+                           Text="{Binding SelectedNode.Name, FallbackValue=''}" />
+                <Border CornerRadius="4" Background="#1F66BB6A" Padding="6,2" VerticalAlignment="Center"
+                        IsVisible="{Binding SelectedNode.IsCached, FallbackValue=False}">
+                  <TextBlock FontSize="10" Foreground="{StaticResource VxGoodBrush}" Text="cached" />
+                </Border>
+              </StackPanel>
+
+              <ItemsControl ItemsSource="{Binding InspectorOptions}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Spacing="12" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.DataTemplates>
+                  <DataTemplate DataType="vm:ChoiceOptionVm">
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="vx-sub" FontSize="11" Text="{Binding Label}" />
+                      <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Choices}"
+                                SelectedItem="{Binding Value}" />
+                    </StackPanel>
+                  </DataTemplate>
+                  <DataTemplate DataType="vm:TextOptionVm">
+                    <StackPanel Spacing="5">
+                      <TextBlock Classes="vx-sub" FontSize="11" TextWrapping="Wrap" Text="{Binding Label}" />
+                      <TextBox Text="{Binding Value}" IsVisible="{Binding !IsSecret}" />
+                      <TextBox Text="{Binding Value}" PasswordChar="●" IsVisible="{Binding IsSecret}" />
+                    </StackPanel>
+                  </DataTemplate>
+                  <DataTemplate DataType="vm:RangeOptionVm">
+                    <StackPanel Spacing="5">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Classes="vx-sub" FontSize="11" Text="{Binding Label}" />
+                        <TextBlock Grid.Column="1" Classes="vx-mono" FontSize="11"
+                                   Foreground="{StaticResource VxAccent2Brush}" Text="{Binding ValueText}" />
+                      </Grid>
+                      <Slider Minimum="{Binding Min}" Maximum="{Binding Max}"
+                              TickFrequency="{Binding Step}" IsSnapToTickEnabled="True"
+                              Value="{Binding Value}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.DataTemplates>
+              </ItemsControl>
+
+              <!-- frame types: what this node consumes/emits -->
+              <Border BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="vx-label" Text="FRAME TYPES" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="vx-mono" FontSize="11" Foreground="{StaticResource VxMutedBrush}" Text="in" />
+                    <TextBlock Classes="vx-mono" FontSize="11" Foreground="{StaticResource VxText2Brush}"
+                               Text="{Binding SelectedNode.InType, FallbackValue={x:Null}, Converter={x:Static views:Converters.PortLabel}}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="vx-mono" FontSize="11" Foreground="{StaticResource VxMutedBrush}" Text="out" />
+                    <TextBlock Classes="vx-mono" FontSize="11" Foreground="{StaticResource VxText2Brush}"
+                               Text="{Binding SelectedNode.OutType, FallbackValue={x:Null}, Converter={x:Static views:Converters.PortLabel}}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <StackPanel Spacing="6">
+                <Button Classes="vx-ghost" HorizontalAlignment="Stretch" Content="Disconnect input"
+                        Command="{Binding DisconnectInputCommand}" />
+                <Button Classes="vx-ghost" HorizontalAlignment="Stretch" Content="Disconnect output"
+                        Command="{Binding DisconnectOutputCommand}" />
+                <Button Classes="vx-danger" HorizontalAlignment="Stretch" Content="Remove node"
+                        Command="{Binding RemoveSelectedCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

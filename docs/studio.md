@@ -2,9 +2,10 @@
 
 A desktop app that runs the real Voxa pipeline against your microphone and speakers and lets
 you **watch it think**: a live VAD probability trace, a per-turn latency waterfall, standalone
-STT and TTS playgrounds, a model-cache manager, and a config composer. Specced as
-[VST-001](specifications/voxa-studio-spec.html); the v2 brand, splash, and playgrounds follow
-the [VST-002 design brief](specifications/voxa-studio-design-brief.html).
+STT and TTS playgrounds, a node-canvas pipeline builder, a model-cache manager, and a config
+composer. Specced as [VST-001](specifications/voxa-studio-spec.html); the v2 brand, splash,
+playgrounds, and builder follow the
+[VST-002 design brief](specifications/voxa-studio-design-brief.html).
 
 Studio is keyless out of the box — its default pipeline is the local tier from
 [VLS-001](local-speech.md) (WhisperCpp STT + Echo agent + Piper TTS). Cloud providers light up
@@ -26,7 +27,7 @@ Nothing downloads at launch. The first **Talk** session (or the first voice you 
 downloads the pinned models with visible progress — `tiny.en` (~75 MB) plus the Piper voice and
 binary (~80 MB) for the default config.
 
-## The four views
+## The five views
 
 ### Talk
 
@@ -81,6 +82,36 @@ pins, `⤓ wav` export — plus:
   numbers don't fight for cores) → TTFB p50/p95 + mean RTF per voice, exportable as CSV.
 
 Playback, recording, and the bench pause while a Talk session owns the audio device.
+
+### Builder
+
+A node canvas over the live provider registry (VST-002 §8): palette → canvas → inspector.
+Voxa pipelines are a linear chain — there is no fan-out in the runtime — so the canvas enforces
+single-in/single-out wiring and makes that feel intentional rather than limited.
+
+- **Typed ports.** Every port carries a frame type (grey audio, cyan transcription, violet
+  agent-text, amber synth-audio — the stage palette). An incompatible wire snaps back with the
+  reason in words ("Echo emits agent-text frames; WhisperCpp consumes audio"). A dangling port's
+  **+** offers only type-compatible follow-ups, so beginners never see an invalid wire.
+- **Inspector.** Selecting a node edits its options — Whisper model, TTS voice, VAD threshold
+  and stop duration (sliders), agent model/key, capture/render device — with cached state shown
+  on the node itself.
+- **Run graph.** The canvas compiles to the same `Pipeline.Build().Source().Then(…).Sink()`
+  chain Talk uses, in an ephemeral container layered over the live config (the app's own
+  configuration is untouched), and starts a live session in place. While live, the canvas is
+  the instrument: edges pulse on real frame events (gate-open shimmer, one pulse per final
+  transcript / agent delta / TTS chunk), the active stage node glows with its measured latency,
+  per-node queue depths surface backpressure, and the latest turn renders as a slim waterfall
+  strip along the canvas bottom. Every signal is a real `VoxaDiagnosticsHub` event.
+- **Export.** When the chain matches what `UseDefaults()` composes, export the
+  `appsettings.json` block; any other valid shape (say, no `TranscriptionFilter`) exports as
+  generated C# composition code instead — both honest artifacts a server can run. API keys are
+  never exported.
+- **Furniture.** Drag to arrange (snap-to-grid), **Tidy** auto-layout, Ctrl+wheel zoom, undo/redo
+  (Ctrl+Z/Y), save/load the graph as JSON in your user profile. The canvas opens with the active
+  config as a graph, and the Config view's **Open in Builder** does the same for any draft.
+
+Run is disabled while a Talk session owns the audio device, and vice versa.
 
 ### Models
 

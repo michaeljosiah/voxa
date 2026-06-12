@@ -230,6 +230,12 @@ public sealed partial class ConfigViewModel : ObservableObject
 
     partial void OnIsValidChanged(bool value) => ApplyCommand.NotifyCanExecuteChanged();
 
+    /// <summary>§5 cross-navigation: the shell turns the current draft into a Builder graph.</summary>
+    public event Action? OpenInBuilderRequested;
+
+    [RelayCommand]
+    private void OpenInBuilder() => OpenInBuilderRequested?.Invoke();
+
     /// <summary>Flat "A:B:C" pairs → pretty-printed nested JSON with a "Voxa" root.</summary>
     internal static string ToNestedJson(IReadOnlyDictionary<string, string?> pairs)
     {

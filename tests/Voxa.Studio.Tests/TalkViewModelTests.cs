@@ -126,4 +126,15 @@ public class TalkViewModelTests
         Assert.Equal("engine exploded", vm.ErrorText);
         Assert.Contains(vm.EventLog, line => line.Contains("engine exploded"));
     }
+
+    [Fact]
+    public void A_Live_Builder_Run_Blocks_Start()
+    {
+        // The mirror of the Builder's RunBlocked: one audio device, so a Builder run must keep
+        // Talk from starting (MainWindowViewModel.SyncLiveState sets StartBlocked).
+        var vm = Vm();
+        Assert.True(vm.StartCommand.CanExecute(null));
+        vm.StartBlocked = true;
+        Assert.False(vm.StartCommand.CanExecute(null));
+    }
 }
