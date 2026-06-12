@@ -35,8 +35,20 @@ public class App : Application
                 BootWithSplash(desktop);
             }
 
-            desktop.ShutdownRequested += (_, _) =>
-                _services?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            // Dispose asynchronously without blocking the UI thread. A sync `.GetResult()` here
+            // would deadlock if any disposal path ever marshals back to the dispatcher (WASAPI
+            // teardown, a future processor's cleanup): defer the exit instead — cancel the first
+            // shutdown request, run DisposeAsync, then re-request shutdown once it completes.
+            var disposing = false;
+            desktop.ShutdownRequested += (_, e) =>
+            {
+                var services = _services;
+                if (disposing || services is null) return; // second pass (or nothing to dispose): let it through
+                disposing = true;
+                e.Cancel = true;
+                _ = services.DisposeAsync().AsTask().ContinueWith(
+                    _ => Dispatcher.UIThread.Post(() => desktop.Shutdown()));
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
