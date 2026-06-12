@@ -7,13 +7,19 @@ description: Deep, evidence-based review of a GitHub pull request in the Voxa re
 
 ## The contract
 
-The subject is a **GitHub pull request** and the deliverable is a **GitHub review posted on
-it**: one inline comment per finding, anchored to the diff, plus a summary comment carrying
-the verdict and everything that can't be anchored. No local report files, no output waiting
-for a human to collect — when this skill finishes, the PR conversation contains the review.
+The subject is an **OPEN GitHub pull request** and the deliverable is a **GitHub review
+posted on it**: one inline comment per finding, anchored to the diff, plus a summary comment
+carrying the verdict and everything that can't be anchored. No local report files, no output
+waiting for a human to collect — when this skill finishes, the PR conversation contains the
+review.
 
 Post with `event: COMMENT` only. Never `APPROVE` or `REQUEST_CHANGES` — gate decisions
 belong to humans; the agent's job is evidence.
+
+**Only open PRs receive comments.** A merged or closed PR's conversation is a historical
+record — commenting on it pings participants without a decision to inform. If the PR is not
+open, do not post anything to GitHub: say so, and return any requested post-merge audit
+findings in the conversation instead.
 
 ## Why this process exists
 
@@ -45,10 +51,11 @@ gh pr view <number-or-current-branch> --json number,title,body,state,baseRefName
 ```
 
 - Given a number, use it. Given nothing, resolve the current branch's PR.
+- **Check `state` FIRST.** Only `OPEN` PRs are commented on. Merged or closed: say so and
+  post nothing — if the user explicitly wants a post-merge audit, run the same process but
+  deliver the findings in the conversation, never to the PR.
 - **No PR exists?** Stop and say so — this skill reviews pull requests, not loose branches.
   Suggest opening a PR first (`gh pr create`); do not improvise a local review instead.
-- **PR already merged?** Proceed as a post-merge audit with the same rigor; findings are
-  follow-up work, and the summary comment says so explicitly.
 
 Record `headRefOid` — inline comments and permalinks anchor against it.
 
@@ -199,8 +206,9 @@ Summary body template:
 ```markdown
 ## Deep review — <verdict>
 
-One of: **Ready to merge** / **Ready with nits** / **Needs changes** / **Blocked**
-(for a merged PR: **Post-merge audit — N follow-ups**), plus one sentence of justification.
+One of: **Ready to merge** / **Ready with nits** / **Needs changes** / **Blocked**, plus one
+sentence of justification. (An in-conversation post-merge audit uses the same structure with
+the verdict **Post-merge audit — N follow-ups**.)
 
 ### Spec conformance
 Per acceptance criterion: ✅ met / ⚠️ partial / ❌ not met, with evidence. Omit (and say
