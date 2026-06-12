@@ -60,6 +60,16 @@ public abstract class FrameProcessor : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(frame);
         var channel = frame is SystemFrame ? _systemChannel : _dataChannel;
+
+        // Synchronous fast path first: Channel.WriteAsync checks the token BEFORE writing even
+        // when there is capacity, so handing it the per-frame preemption token lets a concurrent
+        // InterruptionFrame abort the handoff of an already-processed frame — silently dropping
+        // it between processors (observed: a final transcript lost when an interruption raced
+        // it; the sink-side twin of this bug was fixed in VPS-001). TryWrite succeeds whenever
+        // the channel has room, making the handoff atomic w.r.t. preemption. The cancellable
+        // slow path remains for genuine backpressure (a full data channel), where aborting a
+        // long-blocked write is exactly what preemption is for.
+        if (channel.Writer.TryWrite(frame)) return ValueTask.CompletedTask;
         return channel.Writer.WriteAsync(frame, ct);
     }
 

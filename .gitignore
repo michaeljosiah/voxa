@@ -32,3 +32,6 @@ BenchmarkDotNet.Artifacts/
 # OS
 .DS_Store
 Thumbs.db
+
+# Skill eval workspaces (test-run artifacts, not source)
+.claude/skills/*-workspace/

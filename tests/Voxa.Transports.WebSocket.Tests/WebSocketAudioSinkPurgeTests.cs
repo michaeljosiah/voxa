@@ -11,7 +11,10 @@ namespace Voxa.Transports.WebSocket.Tests;
 /// </summary>
 public class WebSocketAudioSinkPurgeTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(3);
+    // 3s intermittently expired on slow CI runners under parallel suite load (documented
+    // known-flaky: NonAudio_IsNeverPurged). The repo's deflake convention is a 5-10s cap —
+    // polling returns the instant the condition holds, so the cap only bounds the failure case.
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     private static (PipelineRunner Runner, FakeWebSocket Ws, Pipeline Pipeline) Build()
     {
