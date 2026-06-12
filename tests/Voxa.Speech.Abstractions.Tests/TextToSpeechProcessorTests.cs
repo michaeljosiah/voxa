@@ -8,6 +8,29 @@ namespace Voxa.Speech.Abstractions.Tests;
 
 public class TextToSpeechProcessorTests
 {
+    // Deflaked (the documented "ingest → fixed Task.Delay → assert" anti-pattern): positive
+    // tests poll for the frames they assert on instead of sleeping a fixed 150 ms that slow CI
+    // runners blow through.
+    //
+    // Ordering caveat that made the original test flaky beyond timing: speaking events
+    // (BotStarted/StoppedSpeakingFrame) are SYSTEM frames — they travel each processor's
+    // priority channel, concurrent with the data channel. Arrival order BETWEEN the two
+    // channels is architecturally unguaranteed (system frames are supposed to jump ahead).
+    // The orderings these tests may assert are within the DATA channel only (FIFO):
+    // TextFrame/LlmTextChunkFrame before the first AudioRawFrame — the wire contract that the
+    // chat-bubble text envelope precedes audio bytes. Waits therefore target the data frames
+    // themselves, never a system-frame bookend that could overtake them.
+    private static readonly TimeSpan WaitCap = TimeSpan.FromSeconds(10);
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + WaitCap;
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(5);
+        }
+    }
+
     private static (PipelineRunner Runner, ScriptedTextToSpeechEngine Engine, CapturingProcessor Captured, Pipeline Pipeline) Build(
         Func<string, byte[][]>? generate = null,
         int outputSampleRate = 24000)
@@ -33,7 +56,9 @@ public class TextToSpeechProcessorTests
             await Task.Delay(40);
 
             await pipeline.Source.IngestAsync(new TextFrame("hello"));
-            await Task.Delay(150);
+            await WaitUntilAsync(() =>
+                captured.Captured.OfType<AudioRawFrame>().Any() &&
+                captured.Captured.OfType<BotStoppedSpeakingFrame>().Any());
 
             Assert.Single(engine.SynthesizeCalls);
             Assert.Equal("hello", engine.SynthesizeCalls[0]);
@@ -53,7 +78,7 @@ public class TextToSpeechProcessorTests
             await Task.Delay(40);
 
             await pipeline.Source.IngestAsync(new LlmTextChunkFrame("from llm"));
-            await Task.Delay(150);
+            await WaitUntilAsync(() => captured.Captured.OfType<AudioRawFrame>().Any());
 
             Assert.Equal(new[] { "from llm" }, engine.SynthesizeCalls);
             Assert.Contains(captured.Captured, f => f is AudioRawFrame);
@@ -71,7 +96,7 @@ public class TextToSpeechProcessorTests
             await runner.StartAsync();
             await Task.Delay(40);
             await pipeline.Source.IngestAsync(new TextFrame("x"));
-            await Task.Delay(150);
+            await WaitUntilAsync(() => captured.Captured.OfType<AudioRawFrame>().Any());
 
             var audio = captured.Captured.OfType<AudioRawFrame>().FirstOrDefault();
             Assert.NotNull(audio);
@@ -95,7 +120,7 @@ public class TextToSpeechProcessorTests
             await runner.StartAsync();
             await Task.Delay(40);
             await pipeline.Source.IngestAsync(new TextFrame("triple"));
-            await Task.Delay(200);
+            await WaitUntilAsync(() => captured.Captured.OfType<AudioRawFrame>().Count() >= 3);
 
             var audioFrames = captured.Captured.OfType<AudioRawFrame>().ToList();
             Assert.Equal(3, audioFrames.Count);
@@ -105,6 +130,8 @@ public class TextToSpeechProcessorTests
     [Fact]
     public async Task Empty_TextFrame_Is_Ignored()
     {
+        // Negative assertion ("nothing happened") — polling can't prove absence, so this one
+        // keeps a fixed observation window by design.
         var (runner, engine, _, pipeline) = Build();
         await using (runner)
         {
@@ -119,9 +146,11 @@ public class TextToSpeechProcessorTests
     [Fact]
     public async Task TextFrame_Is_Forwarded_Downstream_Before_Audio()
     {
-        // Critical for transports/UI: the TextFrame must reach the sink so
-        // it can be serialized as a `text` envelope (e.g. to render in a chat
-        // bubble) BEFORE the audio chunks arrive.
+        // Critical for transports/UI: the TextFrame must reach the sink so it can be serialized
+        // as a `text` envelope (e.g. to render in a chat bubble) BEFORE the audio chunks arrive.
+        // Both are data frames, so this order is a real FIFO guarantee. No ordering is asserted
+        // against BotStartedSpeakingFrame: it is a system frame on the priority channel and may
+        // legitimately overtake the text (the historical flake in this test was exactly that).
         var (runner, _, captured, pipeline) = Build();
         await using (runner)
         {
@@ -129,16 +158,16 @@ public class TextToSpeechProcessorTests
             await Task.Delay(40);
 
             await pipeline.Source.IngestAsync(new TextFrame("hi there"));
-            await Task.Delay(150);
+            await WaitUntilAsync(() =>
+                captured.Captured.OfType<AudioRawFrame>().Any() &&
+                captured.Captured.OfType<BotStartedSpeakingFrame>().Any());
 
             var indexOfText = IndexOf(captured.Captured, f => f is TextFrame t && t.Text == "hi there");
-            var indexOfStarted = IndexOf(captured.Captured, f => f is BotStartedSpeakingFrame);
             var indexOfAudio = IndexOf(captured.Captured, f => f is AudioRawFrame);
 
             Assert.True(indexOfText >= 0, "TextFrame must be forwarded downstream so the sink/UI can render it.");
-            Assert.True(indexOfStarted >= 0);
+            Assert.Contains(captured.Captured, f => f is BotStartedSpeakingFrame);
             Assert.True(indexOfAudio >= 0);
-            Assert.True(indexOfText < indexOfStarted, "TextFrame must arrive BEFORE BotStartedSpeakingFrame.");
             Assert.True(indexOfText < indexOfAudio, "TextFrame must arrive BEFORE the first AudioRawFrame.");
         }
     }
@@ -153,7 +182,7 @@ public class TextToSpeechProcessorTests
             await Task.Delay(40);
 
             await pipeline.Source.IngestAsync(new LlmTextChunkFrame("chunk one"));
-            await Task.Delay(150);
+            await WaitUntilAsync(() => captured.Captured.OfType<AudioRawFrame>().Any());
 
             var indexOfChunk = IndexOf(captured.Captured, f => f is LlmTextChunkFrame c && c.Text == "chunk one");
             var indexOfAudio = IndexOf(captured.Captured, f => f is AudioRawFrame);
