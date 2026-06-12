@@ -39,6 +39,22 @@ public class StudioBootTests
         window.Close();
     }
 
+    [Fact]
+    public async Task TalkSession_Composes_The_Keyless_Pipeline_Without_AspNet()
+    {
+        // Regression: Studio is a plain ServiceCollection — ASP.NET's implicit IConfiguration
+        // registration is absent. The meta-package's DefaultAgentFactory must therefore capture
+        // the configuration passed to AddVoxa instead of resolving it from DI, or composing the
+        // shipped Echo config throws at the very first Talk start. Composing here exercises the
+        // full part chain (VAD, STT, taps, agent via factory, aggregator, TTS) with no network.
+        var services = TestSupport.Services();
+        await using var session = services.CreateTalkSession();
+
+        Assert.Equal(16000, session.InputSampleRate);   // WhisperCpp
+        Assert.Equal(16000, session.OutputSampleRate);  // en_US-amy-low
+        Assert.NotNull(session.Hub);
+    }
+
     [AvaloniaFact]
     public void Section_Views_All_Construct()
     {

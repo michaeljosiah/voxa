@@ -54,8 +54,11 @@ public static class VoxaDefaultsExtensions
 
         // TryAdd: a host-registered IVoiceAgentFactory always wins, whether it was added
         // before this call (TryAdd skips ours) or after (later registration wins at resolve).
-        services.TryAddSingleton<IVoiceAgentFactory>(sp =>
-            new DefaultAgentFactory(sp.GetRequiredService<IConfiguration>()));
+        // The factory captures the configuration passed to AddVoxa rather than resolving
+        // IConfiguration from DI — the same rule the validator and composer follow, because
+        // ASP.NET registers IConfiguration implicitly but plain-ServiceCollection hosts
+        // (Voxa Studio, tests) do not, and resolving it there throws at first session start.
+        services.TryAddSingleton<IVoiceAgentFactory>(_ => new DefaultAgentFactory(configuration));
 
         return services;
     }

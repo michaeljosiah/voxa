@@ -61,7 +61,9 @@ public sealed class WasapiAudioDevice : IStudioAudioDevice
             SingleReader = true,
         });
 
-        var converter = new CaptureConverter(capture.WaveFormat, sampleRate, frames.Writer);
+        // Throws NotSupportedException for a genuinely unconvertible mix format — a loud Talk
+        // start error beats a microphone that silently never produces a frame.
+        var converter = new CaptureFormatConverter(capture.WaveFormat, sampleRate, frames.Writer);
         capture.DataAvailable += converter.OnDataAvailable;
         capture.RecordingStopped += (_, e) => frames.Writer.TryComplete(e.Exception);
 
@@ -74,89 +76,6 @@ public sealed class WasapiAudioDevice : IStudioAudioDevice
         finally
         {
             capture.StopRecording();
-        }
-    }
-
-    /// <summary>Mix-format → PCM16-mono-at-pipeline-rate, framed to 20 ms. Runs on NAudio's capture thread.</summary>
-    private sealed class CaptureConverter
-    {
-        private readonly WaveFormat _format;
-        private readonly LinearResampler _resampler;
-        private readonly ChannelWriter<byte[]> _writer;
-        private readonly int _frameSamples;          // 20 ms at the pipeline rate
-        private readonly List<short> _pending = new();
-        private short[] _monoScratch = new short[4800];
-        private short[] _outScratch = new short[4800];
-
-        public CaptureConverter(WaveFormat format, int targetRate, ChannelWriter<byte[]> writer)
-        {
-            _format = format;
-            _resampler = new LinearResampler(format.SampleRate, targetRate);
-            _writer = writer;
-            _frameSamples = targetRate / 50;
-        }
-
-        public void OnDataAvailable(object? sender, WaveInEventArgs e)
-        {
-            int monoCount = ToMono(e.Buffer.AsSpan(0, e.BytesRecorded));
-            if (monoCount == 0) return;
-
-            int max = _resampler.MaxOutputSamples(monoCount);
-            if (_outScratch.Length < max) _outScratch = new short[max];
-            int written = _resampler.Process(_monoScratch.AsSpan(0, monoCount), _outScratch);
-
-            for (int i = 0; i < written; i++) _pending.Add(_outScratch[i]);
-            while (_pending.Count >= _frameSamples)
-            {
-                var frame = new byte[_frameSamples * 2];
-                for (int i = 0; i < _frameSamples; i++)
-                {
-                    frame[i * 2] = (byte)_pending[i];
-                    frame[i * 2 + 1] = (byte)(_pending[i] >> 8);
-                }
-                _pending.RemoveRange(0, _frameSamples);
-                _writer.TryWrite(frame); // bounded DropOldest — never blocks the audio thread
-            }
-        }
-
-        /// <summary>Average channels to mono shorts. Handles IEEE float and PCM16 mix formats.</summary>
-        private int ToMono(ReadOnlySpan<byte> raw)
-        {
-            int channels = _format.Channels;
-            if (_format.Encoding == WaveFormatEncoding.IeeeFloat && _format.BitsPerSample == 32)
-            {
-                int sampleSets = raw.Length / 4 / channels;
-                EnsureMono(sampleSets);
-                for (int s = 0; s < sampleSets; s++)
-                {
-                    float sum = 0;
-                    for (int c = 0; c < channels; c++)
-                        sum += BitConverter.ToSingle(raw.Slice((s * channels + c) * 4, 4));
-                    _monoScratch[s] = (short)Math.Clamp(sum / channels * 32768f, short.MinValue, short.MaxValue);
-                }
-                return sampleSets;
-            }
-
-            if (_format.Encoding == WaveFormatEncoding.Pcm && _format.BitsPerSample == 16)
-            {
-                int sampleSets = raw.Length / 2 / channels;
-                EnsureMono(sampleSets);
-                for (int s = 0; s < sampleSets; s++)
-                {
-                    int sum = 0;
-                    for (int c = 0; c < channels; c++)
-                        sum += BitConverter.ToInt16(raw.Slice((s * channels + c) * 2, 2));
-                    _monoScratch[s] = (short)(sum / channels);
-                }
-                return sampleSets;
-            }
-
-            return 0; // unsupported mix format — silence rather than noise
-        }
-
-        private void EnsureMono(int count)
-        {
-            if (_monoScratch.Length < count) _monoScratch = new short[count];
         }
     }
 
