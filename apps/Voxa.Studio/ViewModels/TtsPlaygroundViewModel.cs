@@ -193,10 +193,14 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
         PlaybackBlocked ? Task.CompletedTask : PlayFromAsync(take, 0);
 
     /// <summary>Synthesize one take with the REAL engine and land it in the history.</summary>
-    internal async Task<TtsTake> SynthesizeTakeAsync(VoiceRow row, string text)
+    internal Task<TtsTake> SynthesizeTakeAsync(VoiceRow row, string text)
+        => SynthesizeTakeAsync(row, text, reuseExisting: true);
+
+    private async Task<TtsTake> SynthesizeTakeAsync(VoiceRow row, string text, bool reuseExisting)
     {
         // An identical take is a replay, not a new synthesis — the history stays meaningful.
-        if (Takes.FirstOrDefault(t => t.Voice == row.Name && t.Text == text) is { } existing)
+        // The bench passes false: a measurement run must measure, never replay old numbers (P4).
+        if (reuseExisting && Takes.FirstOrDefault(t => t.Voice == row.Name && t.Text == text) is { } existing)
             return existing;
 
         row.IsBusy = true;
@@ -432,7 +436,9 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
                 for (int p = 0; p < StressPhrases.Count; p++)
                 {
                     StatusText = $"Bench {row.Name} ({v + 1}/{selected.Count}) · phrase {p + 1}/{StressPhrases.Count}…";
-                    var take = await SynthesizeTakeAsync(row, StressPhrases[p]);
+                    // Always fresh: reusing a cached take would report numbers from an earlier
+                    // run (and the history cap could mix cached and fresh within one run).
+                    var take = await SynthesizeTakeAsync(row, StressPhrases[p], reuseExisting: false);
                     ttfbs.Add(take.TtfbMs);
                     rtfs.Add(take.Rtf);
                 }

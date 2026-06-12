@@ -84,10 +84,10 @@
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
             <Button Classes="vx-danger" Content="■ Stop recording"
                     IsVisible="{Binding IsRecording}"
-                    Command="{Binding ToggleRecordCommand}" />
+                    Command="{Binding StopRecordingCommand}" />
             <Button Classes="vx-primary" Content="● Record"
                     IsVisible="{Binding ShowRecordButton}"
-                    Command="{Binding ToggleRecordCommand}" />
+                    Command="{Binding RecordCommand}" />
             <Button Classes="vx-primary" Content="▶ Transcribe"
                     IsVisible="{Binding !IsMicSource}"
                     Command="{Binding TranscribeCommand}" />
@@ -144,8 +144,11 @@
               <TextBlock Classes="vx-mono vx-muted" FontSize="15" Text="%" Margin="2,0,0,4"
                          VerticalAlignment="Bottom" />
             </StackPanel>
-            <TextBlock Classes="vx-sub" VerticalAlignment="Bottom" Margin="0,0,0,6"
-                       Text="{Binding Wer.CountsText, FallbackValue=''}" />
+            <StackPanel VerticalAlignment="Bottom" Margin="0,0,0,6" Spacing="2">
+              <TextBlock Classes="vx-mono" FontSize="11" Foreground="{StaticResource VxAccent2Brush}"
+                         Text="{Binding WerModel, FallbackValue=''}" />
+              <TextBlock Classes="vx-sub" Text="{Binding Wer.CountsText, FallbackValue=''}" />
+            </StackPanel>
           </StackPanel>
 
           <ItemsControl ItemsSource="{Binding Wer.Tokens, FallbackValue={x:Null}}">

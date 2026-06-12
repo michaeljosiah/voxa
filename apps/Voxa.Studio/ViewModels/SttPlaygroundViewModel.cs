@@ -79,7 +79,7 @@ public sealed partial class SttPlaygroundViewModel : ObservableObject
     [ObservableProperty] private SttModelRow? _compareModel;
     [ObservableProperty] private bool _sideBySide;
     [ObservableProperty] private string? _filePath;
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(TranscribeCommand), nameof(ToggleRecordCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(TranscribeCommand), nameof(RecordCommand))]
     private bool _isBusy;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowRecordButton))]
     private bool _isRecording;
@@ -89,6 +89,12 @@ public sealed partial class SttPlaygroundViewModel : ObservableObject
     /// <summary>Reference text for the accuracy harness; WER recomputes live (§6.1).</summary>
     [ObservableProperty] private string _referenceText = string.Empty;
     [ObservableProperty] private WerResult? _wer;
+
+    /// <summary>
+    /// Which model's transcript the harness is scoring — in side-by-side the newest card is the
+    /// COMPARE model, so an unlabeled number would read as the selected model's WER.
+    /// </summary>
+    [ObservableProperty] private string? _werModel;
 
     /// <summary>True while a Talk session owns the capture device — the mic source disables.</summary>
     [ObservableProperty] private bool _captureBlocked;
@@ -149,15 +155,19 @@ public sealed partial class SttPlaygroundViewModel : ObservableObject
         await TranscribePcmAsync(pcm);
     }
 
-    /// <summary>Record from the default mic until toggled off (or the 30 s cap), then transcribe.</summary>
+    /// <summary>
+    /// Stop must be its OWN synchronous command: an async RelayCommand disables itself while it
+    /// executes, so a stop bound to the running record command could never fire — recordings
+    /// would always run to the 30 s cap.
+    /// </summary>
+    [RelayCommand]
+    private void StopRecording() => _recording?.Cancel();
+
+    /// <summary>Record from the default mic until stopped (or the 30 s cap), then transcribe.</summary>
     [RelayCommand(CanExecute = nameof(CanTranscribe))]
-    private async Task ToggleRecordAsync()
+    private async Task RecordAsync()
     {
-        if (IsRecording)
-        {
-            _recording?.Cancel();
-            return;
-        }
+        if (IsRecording) return; // the stop button routes through StopRecordingCommand
 
         var mic = _services.AudioDevice.CaptureEndpoints().FirstOrDefault(m => m.IsDefault)
                   ?? _services.AudioDevice.CaptureEndpoints().FirstOrDefault();
@@ -318,9 +328,9 @@ public sealed partial class SttPlaygroundViewModel : ObservableObject
     /// <summary>WER of the newest transcript against the reference text, alignment included.</summary>
     private void RecomputeWer()
     {
-        var hypothesis = Cards.FirstOrDefault()?.Text;
-        Wer = ReferenceText.Trim().Length > 0 && !string.IsNullOrEmpty(hypothesis)
-            ? WordErrorRate.Compute(ReferenceText, hypothesis)
-            : null;
+        var card = Cards.FirstOrDefault();
+        var scored = ReferenceText.Trim().Length > 0 && !string.IsNullOrEmpty(card?.Text);
+        Wer = scored ? WordErrorRate.Compute(ReferenceText, card!.Text) : null;
+        WerModel = scored ? card!.Model : null;
     }
 }

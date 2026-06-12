@@ -103,6 +103,27 @@ public class SttPlaygroundViewModelTests
     }
 
     [Fact]
+    public async Task Wer_Harness_Names_The_Model_It_Scores()
+    {
+        // Regression (code review): in side-by-side the newest card belongs to the COMPARE
+        // model — an unlabeled WER number reads as the selected model's score. The harness
+        // must say whose transcript it aligned.
+        var vm = Vm(model => model == "tiny.en" ? "the quick brown facts" : "the quick brown fox");
+        vm.SideBySide = true;
+        vm.CompareModel = vm.Models.Single(m => m.Name == "base.en");
+        vm.ReferenceText = "the quick brown fox";
+
+        await vm.TranscribePcmAsync(OneSecondPcm());
+
+        Assert.Equal("base.en", vm.Cards[0].Model); // newest card = compare model
+        Assert.Equal("base.en", vm.WerModel);       // and the harness says so
+        Assert.Equal(0, vm.Wer!.Wer);               // base.en matched the reference exactly
+
+        vm.ReferenceText = "";
+        Assert.Null(vm.WerModel); // label clears with the harness
+    }
+
+    [Fact]
     public async Task Side_By_Side_Runs_Both_Models_Sequentially_And_Summarizes()
     {
         var vm = Vm(model => model == "tiny.en" ? "the quick brown facts" : "the quick brown fox");
@@ -134,9 +155,62 @@ public class SttPlaygroundViewModelTests
     {
         // NullAudioDevice (headless/test) exposes no endpoints — the lab says so instead of hanging.
         var vm = new SttPlaygroundViewModel(TestSupport.Services()) { Source = SttSource.Mic };
-        await vm.ToggleRecordCommand.ExecuteAsync(null);
+        await vm.RecordCommand.ExecuteAsync(null);
         Assert.False(vm.IsRecording);
         Assert.Contains("microphone", vm.ErrorText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Streams 1 s of mic frames quickly, then blocks until the recording is cancelled.</summary>
+    private sealed class FakeMicDevice : Voxa.Studio.Audio.IStudioAudioDevice
+    {
+        private static readonly Voxa.Studio.Audio.AudioEndpoint Mic = new("mic", "Fake mic", true);
+        public IReadOnlyList<Voxa.Studio.Audio.AudioEndpoint> CaptureEndpoints() => [Mic];
+        public IReadOnlyList<Voxa.Studio.Audio.AudioEndpoint> RenderEndpoints() => [];
+
+        public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(
+            Voxa.Studio.Audio.AudioEndpoint microphone, int sampleRate,
+            [EnumeratorCancellation] CancellationToken ct)
+        {
+            var frame = new byte[2 * sampleRate / 50]; // 20 ms
+            for (int i = 0; i < 50; i++) // 1 s of audio, fast
+                yield return frame;
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct); // then "keep recording" until stopped
+        }
+
+        public ValueTask StartRenderAsync(Voxa.Studio.Audio.AudioEndpoint speaker, int sampleRate, CancellationToken ct)
+            => ValueTask.CompletedTask;
+        public ValueTask RenderAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct) => ValueTask.CompletedTask;
+        public ValueTask FlushRenderAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task Stop_Recording_Works_While_The_Record_Command_Is_Still_Executing()
+    {
+        // Regression (code review): the stop button originally bound the SAME async toggle
+        // command that was mid-execution — async RelayCommands disable themselves while running,
+        // so the user could never stop a recording before the 30 s cap. Stop must be a separate
+        // synchronous command that stays executable during the recording.
+        var services = new StudioServices(TestSupport.LocalConfig(), new FakeMicDevice());
+        var vm = new SttPlaygroundViewModel(services) { Source = SttSource.Mic };
+        vm.EngineFactoryOverride = _ => new FakeSttEngine("stopped mid stream");
+
+        var recording = vm.RecordCommand.ExecuteAsync(null);
+
+        // Wait until the capture loop is live and parked on the never-ending stream.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!vm.IsRecording && DateTime.UtcNow < deadline) await Task.Delay(10);
+        Assert.True(vm.IsRecording, "recording never started");
+
+        Assert.False(vm.RecordCommand.CanExecute(null));      // the original bug: this is the running command
+        Assert.True(vm.StopRecordingCommand.CanExecute(null)); // the fix: stop stays available
+
+        vm.StopRecordingCommand.Execute(null);
+        await recording; // must complete promptly instead of running to the 30 s cap
+
+        Assert.False(vm.IsRecording);
+        var card = Assert.Single(vm.Cards); // the captured second of audio was transcribed
+        Assert.Equal("stopped mid stream", card.Text);
     }
 
     [Fact]

@@ -171,6 +171,28 @@ public class TtsPlaygroundViewModelTests
     }
 
     [Fact]
+    public async Task Bench_Always_Re_Measures_Instead_Of_Replaying_Cached_Takes()
+    {
+        // Regression (code review): the take-dedup meant a second bench run returned the FIRST
+        // run's takes — stale numbers presented as a fresh measurement, violating P4. The bench
+        // must synthesize every (voice, phrase) pair every run; dedup is for interactive replay.
+        var syntheses = 0;
+        var vm = new TtsPlaygroundViewModel(TestSupport.Services());
+        vm.EngineFactoryOverride = row => { syntheses++; return new FakeTtsEngine(row.SampleRate); };
+        vm.Voices[0].IsBenchSelected = true;
+
+        await vm.RunBenchCommand.ExecuteAsync(null);
+        Assert.Equal(TtsPlaygroundViewModel.StressPhrases.Count, syntheses);
+
+        await vm.RunBenchCommand.ExecuteAsync(null);
+        Assert.Equal(2 * TtsPlaygroundViewModel.StressPhrases.Count, syntheses); // run 2 measured again
+
+        // Interactive synthesis still reuses: same voice + same text = replay, not a new take.
+        await vm.SynthesizeTakeAsync(vm.Voices[0], TtsPlaygroundViewModel.StressPhrases[0]);
+        Assert.Equal(2 * TtsPlaygroundViewModel.StressPhrases.Count, syntheses);
+    }
+
+    [Fact]
     public void Bench_Is_Blocked_While_A_Talk_Session_Is_Live()
     {
         var vm = Vm();
