@@ -1,8 +1,15 @@
-# Voxa
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/voxa-logo-animated.svg">
+    <img src="assets/voxa-logo-animated-light.svg" alt="VOXA" width="300">
+  </picture>
+</p>
 
-[![CI](https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+<p align="center">
+  <a href="https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml"><img src="https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-512BD4" alt=".NET 10"></a>
+</p>
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 

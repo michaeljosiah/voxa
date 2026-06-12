@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Brand reach (VST-002 open question #4, resolved: yes).** The animated mark extends beyond the app: the README and the new docs index ([docs/README.md](docs/README.md)) carry a CSS-animated SVG of the mark (the splash's draw-on choreography, plays once, honors `prefers-reduced-motion`, dark/light variants via GitHub's theme switcher), and every NuGet package under `src/` now ships a `PackageIcon` — a 128 px raster of the app icon generated from code (`VOXA_BRAND_EXPORT=1` regenerates it) and wired through a shared `src/Directory.Build.props`.
 - **Voxa Studio: STT and TTS playgrounds (VST-002 D2).** The nav's *Voices* section grew into
   *Playgrounds* — two standalone labs behind a segmented switch. The **STT lab** drives
   `WhisperCppSttEngine` directly against the bundled `jfk.wav` fixture, a dropped/browsed WAV
