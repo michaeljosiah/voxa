@@ -22,7 +22,7 @@ public class StudioBootTests
         window.Show(); // resolves every StaticResource + compiled binding in the shell
 
         Assert.NotNull(vm.Talk);
-        Assert.NotNull(vm.Voices);
+        Assert.NotNull(vm.Playgrounds);
         Assert.NotNull(vm.Models);
         Assert.NotNull(vm.Config);
 

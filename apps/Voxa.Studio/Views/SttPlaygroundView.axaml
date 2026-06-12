@@ -1,0 +1,200 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:views="using:Voxa.Studio.Views"
+             xmlns:controls="using:Voxa.Studio.Controls"
+             xmlns:services="using:Voxa.Studio.Services"
+             x:Class="Voxa.Studio.Views.SttPlaygroundView"
+             x:DataType="vm:SttPlaygroundViewModel"
+             DragDrop.AllowDrop="True">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20,16,20,0">
+
+    <!-- ── input strip: source · model · side-by-side · run (§6.1) ── -->
+    <Border Grid.Row="0" Classes="vx-card" Padding="14">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+
+          <Border Classes="vx-seg-track" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="SrcFixture" Classes="vx-seg" GroupName="stt-src" Content="Fixture"
+                           IsChecked="{Binding IsFixtureSource, Mode=OneWay}" IsCheckedChanged="OnSourceChanged" />
+              <RadioButton x:Name="SrcFile" Classes="vx-seg" GroupName="stt-src" Content="WAV file"
+                           IsChecked="{Binding IsFileSource, Mode=OneWay}" IsCheckedChanged="OnSourceChanged" />
+              <RadioButton x:Name="SrcMic" Classes="vx-seg" GroupName="stt-src" Content="Live mic"
+                           IsChecked="{Binding IsMicSource, Mode=OneWay}" IsCheckedChanged="OnSourceChanged" />
+            </StackPanel>
+          </Border>
+
+          <ComboBox Width="170" VerticalAlignment="Center"
+                    ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SttModelRow">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Classes="vx-mono vx-muted" FontSize="10" VerticalAlignment="Center"
+                             Text="{Binding SizeText}" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <Border Classes="vx-chip" VerticalAlignment="Center"
+                  IsVisible="{Binding SelectedModel.IsCached, FallbackValue=False}">
+            <TextBlock Text="cached" FontSize="10" Foreground="{StaticResource VxGoodBrush}" />
+          </Border>
+          <Border Classes="vx-chip" VerticalAlignment="Center"
+                  IsVisible="{Binding !SelectedModel.IsCached, FallbackValue=False}">
+            <TextBlock Text="downloads on first run" FontSize="10"
+                       Foreground="{StaticResource VxMutedBrush}" />
+          </Border>
+
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Classes="vx-label" Text="SIDE-BY-SIDE" VerticalAlignment="Center" />
+            <ToggleSwitch IsChecked="{Binding SideBySide}" OnContent="" OffContent=""
+                          MinWidth="0" VerticalAlignment="Center" />
+            <ComboBox Width="150" VerticalAlignment="Center"
+                      IsVisible="{Binding SideBySide}"
+                      ItemsSource="{Binding Models}" SelectedItem="{Binding CompareModel}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SttModelRow">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- per-source second line: file path / record toggle / fixture hint -->
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="vx-mono vx-muted" FontSize="11" VerticalAlignment="Center"
+                       IsVisible="{Binding IsFixtureSource}"
+                       Text="fixtures/jfk.wav · 11s · ships in-repo" />
+            <TextBox Width="380" Watermark="Drop a WAV anywhere, or paste a path…"
+                     IsVisible="{Binding IsFileSource}"
+                     Text="{Binding FilePath}" />
+            <Button Classes="vx-ghost" Content="Browse…" Click="OnBrowseClicked"
+                    IsVisible="{Binding IsFileSource}" />
+            <TextBlock Classes="vx-sub" VerticalAlignment="Center"
+                       IsVisible="{Binding IsMicSource}"
+                       Text="Records the default microphone at 16 kHz; transcribes when you stop." />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+            <Button Classes="vx-danger" Content="■ Stop recording"
+                    IsVisible="{Binding IsRecording}"
+                    Command="{Binding ToggleRecordCommand}" />
+            <Button Classes="vx-primary" Content="● Record"
+                    IsVisible="{Binding ShowRecordButton}"
+                    Command="{Binding ToggleRecordCommand}" />
+            <Button Classes="vx-primary" Content="▶ Transcribe"
+                    IsVisible="{Binding !IsMicSource}"
+                    Command="{Binding TranscribeCommand}" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <!-- ── transcript cards | accuracy harness ── -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,340" Margin="0,14,0,0">
+
+      <ScrollViewer Grid.Column="0" Margin="0,0,14,0">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="vx-label" Text="TRANSCRIPT · FINAL CARDS" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     IsVisible="{Binding !Cards.Count}"
+                     Text="No transcripts yet. Run the fixture to see this machine's speech-to-text latency — no account, no key." />
+          <ItemsControl ItemsSource="{Binding Cards}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TranscriptCard">
+                <Border Classes="vx-card" Margin="0,0,0,10" Padding="14">
+                  <StackPanel Spacing="8">
+                    <controls:WaveformStripControl Height="26" Levels="{Binding Levels}" />
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="14"
+                               Foreground="{StaticResource VxTextBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                      <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding Model}" />
+                      <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding MetaText}" />
+                      <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding LatencyText}"
+                                 Foreground="{StaticResource VxAccent2Brush}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- accuracy harness: reference text → live WER with diff coloring -->
+      <Border Grid.Column="1" Classes="vx-card" VerticalAlignment="Top" Padding="16">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="vx-label vx-accent" Text="ACCURACY HARNESS · WER" />
+          <TextBox Text="{Binding ReferenceText}" AcceptsReturn="True" TextWrapping="Wrap"
+                   MinHeight="64" MaxHeight="120"
+                   Watermark="Paste what was actually said — WER computes live against the newest transcript." />
+
+          <StackPanel Orientation="Horizontal" Spacing="10"
+                      IsVisible="{Binding Wer, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+              <TextBlock Classes="vx-mono" FontSize="34" FontWeight="Medium"
+                         Foreground="{StaticResource VxTextBrush}"
+                         Text="{Binding Wer.WerText, FallbackValue=''}" />
+              <TextBlock Classes="vx-mono vx-muted" FontSize="15" Text="%" Margin="2,0,0,4"
+                         VerticalAlignment="Bottom" />
+            </StackPanel>
+            <TextBlock Classes="vx-sub" VerticalAlignment="Bottom" Margin="0,0,0,6"
+                       Text="{Binding Wer.CountsText, FallbackValue=''}" />
+          </StackPanel>
+
+          <ItemsControl ItemsSource="{Binding Wer.Tokens, FallbackValue={x:Null}}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="services:WerToken">
+                <Border CornerRadius="3" Padding="3,1" Margin="0,0,4,6"
+                        Background="{Binding Op, Converter={x:Static views:Converters.WerBackground}}"
+                        ToolTip.Tip="{Binding Detail}">
+                  <TextBlock Text="{Binding Word}" FontSize="13"
+                             Foreground="{Binding Op, Converter={x:Static views:Converters.WerForeground}}" />
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <StackPanel Orientation="Horizontal" Spacing="14"
+                      IsVisible="{Binding Wer, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource VxWarnBrush}"
+                      VerticalAlignment="Center" />
+              <TextBlock Classes="vx-sub" FontSize="11" Text="substitution" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource VxAccentBrush}"
+                      VerticalAlignment="Center" />
+              <TextBlock Classes="vx-sub" FontSize="11" Text="insertion" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <Border Width="8" Height="8" CornerRadius="2" Background="{StaticResource VxBadBrush}"
+                      VerticalAlignment="Center" />
+              <TextBlock Classes="vx-sub" FontSize="11" Text="deletion" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- ── status ── -->
+    <StackPanel Grid.Row="2" Spacing="4" Margin="0,10,0,14">
+      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                 Text="{Binding ErrorText}"
+                 IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+  </Grid>
+</UserControl>

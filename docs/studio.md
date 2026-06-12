@@ -1,9 +1,10 @@
 # Voxa Studio
 
 A desktop app that runs the real Voxa pipeline against your microphone and speakers and lets
-you **watch it think**: a live VAD probability trace, a per-turn latency waterfall, a voice
-audition lab, a model-cache manager, and a config composer. Specced as
-[VST-001](specifications/voxa-studio-spec.html).
+you **watch it think**: a live VAD probability trace, a per-turn latency waterfall, standalone
+STT and TTS playgrounds, a model-cache manager, and a config composer. Specced as
+[VST-001](specifications/voxa-studio-spec.html); the v2 brand, splash, and playgrounds follow
+the [VST-002 design brief](specifications/voxa-studio-design-brief.html).
 
 Studio is keyless out of the box — its default pipeline is the local tier from
 [VLS-001](local-speech.md) (WhisperCpp STT + Echo agent + Piper TTS). Cloud providers light up
@@ -18,7 +19,8 @@ dotnet run --project apps/Voxa.Studio
 
 Windows is the supported platform in v1 (the audio backend is WASAPI). The app builds and the
 UI runs on macOS/Linux, but live Talk capture/playback needs an audio backend that doesn't
-exist yet — Voice Lab synthesis, the Models view, and the Config composer still work there.
+exist yet — the playgrounds' synthesis/transcription, the Models view, and the Config composer
+still work there (minus mic recording and speaker playback).
 
 Nothing downloads at launch. The first **Talk** session (or the first voice you audition)
 downloads the pinned models with visible progress — `tiny.en` (~75 MB) plus the Piper voice and
@@ -44,14 +46,41 @@ Pick a microphone and speaker, press **Start session**, speak.
 - **Event log** — the raw diagnostics stream (sequence numbers, timestamps), for when you need
   exactly what fired and in what order.
 
-### Voices
+### Playgrounds
 
-Every pinned Piper and Kokoro voice. Type a sentence, press ▶ — synthesis goes through the
-real engines (Piper's warm process pool, Kokoro's ONNX session), so **TTFB** and **RTF**
-are real numbers for *your* hardware, not someone's benchmark. Pin two voices to **A**/**B**
-slots for instant comparison; `⤓ wav` exports the take to your Music folder.
+Two standalone labs behind one segmented switch (VST-002 §6–7) — measure each end of the
+pipeline without composing the whole thing.
 
-Playback pauses while a Talk session owns the output device.
+**STT lab.** Answer "how well and how fast does speech become text on this machine?" for any
+pinned Whisper model:
+
+- **Three sources** — the bundled `jfk.wav` fixture (replayable, known content, ships in-repo),
+  any WAV you drop on the view or browse to (stereo and odd sample rates are converted), or the
+  live mic (toggle record, max 30 s; transcribes when you stop).
+- **Final cards** — each utterance lands as a card with its waveform, the model that ran, the
+  utterance duration, and the **final-transcript latency** (utterance end → final) measured
+  standalone on your hardware.
+- **Accuracy harness** — paste what was actually said and get a live **WER** with the
+  alignment colored on the transcript: substitutions amber, insertions cyan, deletions red.
+  This turns "tiny.en sounds fine" into "tiny.en is 8.1% WER on my accent".
+- **Side-by-side** — run the same audio through two models (sequentially; one whisper context
+  at a time) and get the trade-off in one sentence: WER vs WER, and who was slower by how much.
+
+**TTS lab.** The v1 Voice Lab matured into a lab. Everything from v1 carries over — the full
+Piper + Kokoro catalog through the real engines, **TTFB**/**RTF** on your hardware, **A**/**B**
+pins, `⤓ wav` export — plus:
+
+- **Take history** — every synthesis lands as a replayable take with its waveform; the newest
+  take's waveform is the **playback scrubber** (click or drag to seek).
+- **A/B/X blind test** — X is randomly A or B; vote, then reveal. Settles "Kokoro is obviously
+  better" with data instead of expectation bias.
+- **Stress phrases** — a one-click deck of the sentences that actually break TTS: currency and
+  dates, code identifiers, homographs ("the bandage was wound around the wound"), diacritics,
+  long clauses.
+- **Batch bench** — synthesize the whole deck on every checked voice (sequentially, so the
+  numbers don't fight for cores) → TTFB p50/p95 + mean RTF per voice, exportable as CSV.
+
+Playback, recording, and the bench pause while a Talk session owns the audio device.
 
 ### Models
 
@@ -111,4 +140,5 @@ on but unobserved, the cost is one boolean check per frame. Stage latencies also
 | First session is slow to start | First-run model download (~155 MB for the defaults) — progress shows in the status line. Subsequent sessions are offline. |
 | VAD trace flat at zero while speaking | Mic muted / wrong device, or genuinely a VAD regression — check the trace against the threshold rule. |
 | `verify` shows ✗ | The cached file is corrupt. Purge it; the next session re-downloads through the SHA-256-verified resolver. |
-| Voice Lab play button disabled | A Talk session owns the output device — stop it first. |
+| Playground play/record/bench disabled | A Talk session owns the audio device — stop it first. |
+| STT lab rejects my audio file | Only 16-bit PCM WAV is read (stereo/other rates are converted). Re-export compressed formats as PCM WAV first. |

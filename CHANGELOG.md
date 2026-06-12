@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Voxa Studio: STT and TTS playgrounds (VST-002 D2).** The nav's *Voices* section grew into
+  *Playgrounds* — two standalone labs behind a segmented switch. The **STT lab** drives
+  `WhisperCppSttEngine` directly against the bundled `jfk.wav` fixture, a dropped/browsed WAV
+  (stereo + arbitrary-rate PCM16 converted), or a live mic recording; each utterance lands as a
+  card stamped with its waveform and final-transcript latency, a reference text yields a live
+  **WER** with insert/substitute/delete diff coloring, and side-by-side mode runs two models
+  sequentially over the same audio. The **TTS lab** (the v1 Voice Lab, matured) adds a
+  replayable take history whose waveform is the playback scrubber, an A/B/X blind test, a
+  curated stress-phrase deck, and a batch bench producing TTFB p50/p95 + mean RTF per checked
+  voice with CSV export. New shared `WaveformStripControl` (bottom-aligned envelope bars,
+  optional interactive playhead) and an exact Levenshtein word-alignment `WordErrorRate`.
+
 ### Fixed
 
 - **Frames could be silently dropped at the processor handoff when an interruption raced them.** `FrameProcessor.QueueFrameAsync` passed the per-frame preemption token to `Channel.WriteAsync`, which checks the token *before* writing even when the channel has capacity — so a concurrent `InterruptionFrame` could abort the forwarding of an already-processed frame between processors (observed as a final transcript lost ~50% of the time when an interruption arrived immediately after it; the sink-side twin of this bug was fixed in VPS-001). The handoff now uses a synchronous `TryWrite` fast path, making it atomic with respect to preemption; the cancellable awaited write remains only for genuine backpressure on a full channel. `WebSocketAudioSinkPurgeTests.NonAudio_IsNeverPurged` — previously misfiled as a flaky test — pinned this bug all along and now passes deterministically.

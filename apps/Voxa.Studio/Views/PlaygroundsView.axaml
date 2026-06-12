@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:views="using:Voxa.Studio.Views"
+             x:Class="Voxa.Studio.Views.PlaygroundsView"
+             x:DataType="vm:PlaygroundsViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- ── view bar: title + the STT|TTS segmented switch (§5 IA) ── -->
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Classes="vx-h1" Text="Playgrounds" />
+          <TextBlock Classes="vx-label"
+                     Text="REAL ENGINES · STANDALONE · NUMBERS MEASURED ON THIS MACHINE" />
+        </StackPanel>
+        <Border Grid.Column="1" Classes="vx-seg-track" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="LabStt" Classes="vx-seg" GroupName="lab" Content="STT lab"
+                         IsChecked="True" IsCheckedChanged="OnLabChanged" />
+            <RadioButton x:Name="LabTts" Classes="vx-seg" GroupName="lab" Content="TTS lab"
+                         IsCheckedChanged="OnLabChanged" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- ── lab host ── -->
+    <Panel Grid.Row="1">
+      <views:SttPlaygroundView x:Name="SttHost" DataContext="{Binding Stt}" />
+      <views:TtsPlaygroundView x:Name="TtsHost" DataContext="{Binding Tts}" IsVisible="False" />
+    </Panel>
+
+  </Grid>
+</UserControl>

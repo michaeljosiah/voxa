@@ -226,6 +226,62 @@
     <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
   </Style>
 
+  <!-- ── segmented switch (the Playgrounds STT|TTS selector, source strips) ── -->
+
+  <Style Selector="Border.vx-seg-track">
+    <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <Style Selector="RadioButton.vx-seg">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="segBorder" CornerRadius="8" Background="Transparent" Padding="12,6">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="RadioButton.vx-seg /template/ Border#segBorder">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.vx-seg:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+  </Style>
+  <!-- Active segment: cyan fill, ink text — never white on cyan. -->
+  <Style Selector="RadioButton.vx-seg:checked /template/ Border#segBorder">
+    <Setter Property="Background" Value="{StaticResource VxAccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.vx-seg:checked">
+    <Setter Property="Foreground" Value="{StaticResource VxOnAccentBrush}" />
+  </Style>
+
+  <!-- Stress-phrase chips: mono pills that load the deck into the text box. -->
+  <Style Selector="Button.vx-phrase">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="FontFamily" Value="{StaticResource VxMono}" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Button.vx-phrase:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxLine3Brush}" />
+  </Style>
+
   <!-- ── inputs: surface-2, line-2 border, radius 10, cyan on focus ── -->
 
   <Style Selector="ComboBox">

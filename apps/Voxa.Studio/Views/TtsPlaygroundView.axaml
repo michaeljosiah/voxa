@@ -1,0 +1,224 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:controls="using:Voxa.Studio.Controls"
+             x:Class="Voxa.Studio.Views.TtsPlaygroundView"
+             x:DataType="vm:TtsPlaygroundViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20,16,20,0">
+
+    <!-- ── text + synthesize ── -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <TextBox Grid.Column="0" Text="{Binding Text}" Watermark="Text to speak…" AcceptsReturn="False" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+        <Button Classes="vx-ghost" Command="{Binding PlayPinnedACommand}"
+                IsEnabled="{Binding PinnedA, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="▶ A" FontWeight="Bold" Foreground="{StaticResource VxAccentBrush}" />
+            <TextBlock Text="{Binding PinnedA.Name, FallbackValue=—}" Classes="vx-muted" FontSize="11"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="vx-ghost" Command="{Binding PlayPinnedBCommand}"
+                IsEnabled="{Binding PinnedB, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="▶ B" FontWeight="Bold" Foreground="{StaticResource VxWarnBrush}" />
+            <TextBlock Text="{Binding PinnedB.Name, FallbackValue=—}" Classes="vx-muted" FontSize="11"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="vx-primary" Content="Synthesize" Command="{Binding SynthesizeCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- ── stress-phrase deck (§7): the sentences that actually break TTS ── -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,10,0,0">
+      <TextBlock Grid.Column="0" Classes="vx-label" Text="STRESS PHRASES" VerticalAlignment="Top"
+                 Margin="0,8,8,0" />
+      <ItemsControl Grid.Column="1" ItemsSource="{x:Static vm:TtsPlaygroundViewModel.StressPhrases}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="x:String">
+            <Button Classes="vx-phrase" Margin="0,0,6,6"
+                    Content="{Binding}"
+                    Command="{Binding $parent[UserControl].((vm:TtsPlaygroundViewModel)DataContext).UseStressPhraseCommand}"
+                    CommandParameter="{Binding}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Grid>
+
+    <!-- ── catalog | synthesis + experiments ── -->
+    <Grid Grid.Row="2" ColumnDefinitions="320,*" Margin="0,12,0,0">
+
+      <!-- voice catalog -->
+      <Border Grid.Column="0" Classes="vx-card-flush" Margin="0,0,14,0">
+        <Grid RowDefinitions="Auto,*">
+          <TextBlock Grid.Row="0" Classes="vx-label" Text="VOICE CATALOG · REAL ENGINES" Margin="14,12,14,6" />
+          <ScrollViewer Grid.Row="1">
+            <ListBox ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" Margin="6,0,6,8">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:VoiceRow">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                    <CheckBox Grid.Column="0" IsChecked="{Binding IsBenchSelected}" Padding="0"
+                              MinWidth="0" ToolTip.Tip="Include in batch bench" />
+                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" FontSize="13" />
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Classes="vx-mono vx-muted" FontSize="10" Text="{Binding Engine}" />
+                        <TextBlock Classes="vx-mono vx-muted" FontSize="10" Text="{Binding SizeText}" />
+                        <TextBlock Classes="vx-mono vx-muted" FontSize="10" Text="not cached"
+                                   IsVisible="{Binding !IsCached}" />
+                      </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                      <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding TtfbText}"
+                                 Foreground="{StaticResource VxAccent2Brush}" HorizontalAlignment="Right" />
+                      <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding RtfText}"
+                                 HorizontalAlignment="Right" />
+                    </StackPanel>
+                    <Button Grid.Column="3" Classes="vx-ghost" Padding="8,4" FontSize="11"
+                            Content="{Binding Pin, FallbackValue=pin, TargetNullValue=pin}"
+                            ToolTip.Tip="Pin as A/B for compare and the blind test"
+                            Command="{Binding $parent[UserControl].((vm:TtsPlaygroundViewModel)DataContext).PinCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+
+      <!-- right column -->
+      <ScrollViewer Grid.Column="1">
+        <StackPanel Spacing="14">
+
+          <!-- synthesis: scrubber + take history -->
+          <Border Classes="vx-card" Padding="16">
+            <StackPanel Spacing="10">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="vx-label vx-accent" Text="SYNTHESIS · SCRUB TO PLAY" />
+                <TextBlock Grid.Column="1" Classes="vx-mono vx-muted" FontSize="11"
+                           Text="{Binding CurrentTake.Voice, FallbackValue=''}" />
+              </Grid>
+              <controls:WaveformStripControl x:Name="Scrubber" Height="56" IsInteractive="True"
+                                             Levels="{Binding CurrentTake.Levels, FallbackValue={x:Null}}"
+                                             Position="{Binding PlaybackPosition}" />
+              <TextBlock Classes="vx-sub"
+                         IsVisible="{Binding CurrentTake, Converter={x:Static ObjectConverters.IsNull}}"
+                         Text="Synthesize something — the waveform lands here and becomes the playback scrubber." />
+
+              <Border Height="1" Background="{StaticResource VxLine1Brush}" />
+              <TextBlock Classes="vx-label" Text="TAKE HISTORY" />
+              <ItemsControl ItemsSource="{Binding Takes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TtsTake">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10" Margin="0,2">
+                      <Button Grid.Column="0" Classes="vx-ghost" Padding="8,3" Content="▶"
+                              Command="{Binding $parent[UserControl].((vm:TtsPlaygroundViewModel)DataContext).ReplayTakeCommand}"
+                              CommandParameter="{Binding}" />
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Voice}" FontSize="13" />
+                        <TextBlock Classes="vx-muted" FontSize="12" Text="{Binding Text}"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Classes="vx-mono vx-muted" FontSize="11"
+                                 Text="{Binding MetaText}" VerticalAlignment="Center" />
+                      <Button Grid.Column="3" Classes="vx-ghost" Padding="8,3" Content="⤓ wav" FontSize="11"
+                              Command="{Binding $parent[UserControl].((vm:TtsPlaygroundViewModel)DataContext).ExportWavCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="vx-sub" Text="No takes yet."
+                         IsVisible="{Binding !Takes.Count}" />
+            </StackPanel>
+          </Border>
+
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+
+            <!-- A/B/X blind test -->
+            <Border Grid.Column="0" Classes="vx-card" Padding="16" VerticalAlignment="Top">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="vx-label vx-accent" Text="A / B / X BLIND TEST" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="vx-secondary" Content="Play A" Command="{Binding PlayPinnedACommand}"
+                          IsEnabled="{Binding AbxRoundActive}" />
+                  <Button Classes="vx-secondary" Content="Play B" Command="{Binding PlayPinnedBCommand}"
+                          IsEnabled="{Binding AbxRoundActive}" />
+                  <Button Classes="vx-secondary" Content="Play X" Command="{Binding PlayXCommand}"
+                          IsEnabled="{Binding AbxRoundActive}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="vx-ghost" Content="X is A" Command="{Binding VoteXCommand}"
+                          CommandParameter="A" IsEnabled="{Binding AbxRoundActive}" />
+                  <Button Classes="vx-ghost" Content="X is B" Command="{Binding VoteXCommand}"
+                          CommandParameter="B" IsEnabled="{Binding AbxRoundActive}" />
+                  <Button Classes="vx-ghost" Content="Reveal" Command="{Binding RevealAbxCommand}"
+                          IsEnabled="{Binding AbxCanReveal}" />
+                  <Button Classes="vx-ghost" Content="New round" Command="{Binding StartAbxRoundCommand}" />
+                </StackPanel>
+                <TextBlock Classes="vx-sub" TextWrapping="Wrap" Text="{Binding AbxStatusText}" />
+              </StackPanel>
+            </Border>
+
+            <!-- batch bench -->
+            <Border Grid.Column="1" Classes="vx-card" Padding="16" VerticalAlignment="Top">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="vx-label vx-accent" Text="BATCH BENCH · PHRASE DECK" />
+                <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                           Text="Synthesizes the whole deck on every checked voice, sequentially. TTFB percentiles measured on this machine." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="vx-primary" Content="Run bench" Command="{Binding RunBenchCommand}" />
+                  <Button Classes="vx-ghost" Content="⤓ CSV" Command="{Binding ExportBenchCsvCommand}"
+                          IsEnabled="{Binding !!BenchRows.Count}" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,60,60,54" IsVisible="{Binding !!BenchRows.Count}">
+                  <TextBlock Grid.Column="0" Classes="vx-label" Text="VOICE" />
+                  <TextBlock Grid.Column="1" Classes="vx-label" Text="P50" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Column="2" Classes="vx-label" Text="P95" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Column="3" Classes="vx-label" Text="RTF" HorizontalAlignment="Right" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding BenchRows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:BenchRow">
+                      <Grid ColumnDefinitions="*,60,60,54" Margin="0,3">
+                        <TextBlock Grid.Column="0" FontSize="12.5" Text="{Binding Voice}" />
+                        <TextBlock Grid.Column="1" Classes="vx-mono" FontSize="11" Text="{Binding P50Text}"
+                                   Foreground="{StaticResource VxAccent2Brush}" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Column="2" Classes="vx-mono vx-muted" FontSize="11"
+                                   Text="{Binding P95Text}" HorizontalAlignment="Right" />
+                        <TextBlock Grid.Column="3" Classes="vx-mono vx-muted" FontSize="11"
+                                   Text="{Binding RtfText}" HorizontalAlignment="Right" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </Grid>
+
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <!-- ── status ── -->
+    <StackPanel Grid.Row="3" Spacing="4" Margin="0,10,0,14">
+      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                 Text="{Binding ErrorText}"
+                 IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}"
+                 Text="Playback paused while a Talk session owns the output device."
+                 IsVisible="{Binding PlaybackBlocked}" />
+    </StackPanel>
+
+  </Grid>
+</UserControl>

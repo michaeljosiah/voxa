@@ -53,7 +53,7 @@
           <PathIcon Data="M12,14 A3,3 0 0 0 15,11 L15,5 A3,3 0 0 0 9,5 L9,11 A3,3 0 0 0 12,14 Z M17,11 A5,5 0 0 1 7,11 L5,11 A7,7 0 0 0 11,17.92 L11,21 L13,21 L13,17.92 A7,7 0 0 0 19,11 Z" />
         </RadioButton>
 
-        <RadioButton x:Name="NavVoices" Classes="vx-nav" GroupName="nav" Tag="Voices"
+        <RadioButton x:Name="NavPlaygrounds" Classes="vx-nav" GroupName="nav" Tag="Playgrounds"
                      IsCheckedChanged="OnNavChanged">
           <PathIcon Data="M3,10 L3,14 L5,14 L5,10 Z M7,6 L7,18 L9,18 L9,6 Z M11,3 L11,21 L13,21 L13,3 Z M15,8 L15,16 L17,16 L17,8 Z M19,10 L19,14 L21,14 L21,10 Z" />
         </RadioButton>
@@ -74,7 +74,7 @@
     <!-- ── content host: code-behind swaps the active view ── -->
     <Panel Grid.Row="1" Grid.Column="1">
       <views:TalkView x:Name="TalkHost" DataContext="{Binding Talk}" />
-      <views:VoicesView x:Name="VoicesHost" DataContext="{Binding Voices}" IsVisible="False" />
+      <views:PlaygroundsView x:Name="PlaygroundsHost" DataContext="{Binding Playgrounds}" IsVisible="False" />
       <views:ModelsView x:Name="ModelsHost" DataContext="{Binding Models}" IsVisible="False" />
       <views:ConfigView x:Name="ConfigHost" DataContext="{Binding Config}" IsVisible="False" />
     </Panel>
