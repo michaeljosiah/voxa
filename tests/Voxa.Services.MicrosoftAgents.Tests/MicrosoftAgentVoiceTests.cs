@@ -62,8 +62,11 @@ public class MicrosoftAgentVoiceTests
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("greet me", IsFinal: true));
 
-            // Wait for the two text chunks plus turn-boundary frames.
-            await captured.WaitForAsync(4, TimeSpan.FromSeconds(2));
+            // Wait for the LAST text chunk specifically, not a frame COUNT: turn-boundary frames
+            // ride the priority channel and may overtake the second data-channel chunk, so the
+            // first four captured frames can hold only one chunk (racy CI failure).
+            await captured.WaitForAsync(
+                f => f is LlmTextChunkFrame { Text: "world!" }, TimeSpan.FromSeconds(10));
 
             var chunks = captured.Captured.OfType<LlmTextChunkFrame>().ToList();
             Assert.Equal(2, chunks.Count);
@@ -114,7 +117,7 @@ public class MicrosoftAgentVoiceTests
             // TranscriptionFrame, LlmTurnStartedFrame, LlmTextChunkFrame, LlmTurnEndedFrame — a
             // count of 3 is satisfied by the text chunk before LlmTurnEndedFrame lands, which
             // made this assert racily fail on loaded CI runners.
-            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(10));
 
             var ordered = captured.Captured.ToList();
             var startIdx = ordered.FindIndex(f => f is LlmTurnStartedFrame);
@@ -161,7 +164,9 @@ public class MicrosoftAgentVoiceTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("current turn", IsFinal: true));
-            await captured.WaitForAsync(2, TimeSpan.FromSeconds(2));
+            // The assertions read `observed`, which is set when the agent is invoked — wait for
+            // evidence of the invocation (its text chunk), not an unrelated frame count.
+            await captured.WaitForAsync(f => f is LlmTextChunkFrame, TimeSpan.FromSeconds(10));
 
             Assert.NotNull(observed);
             var list = observed!.ToList();
@@ -203,7 +208,7 @@ public class MicrosoftAgentVoiceTests
             // Wait until we see the ToolCallRequestFrame downstream.
             await captured.WaitForAsync(
                 f => f is ToolCallRequestFrame,
-                TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(10));
 
             // Simulate the client returning a result. Voxa's data loop should pick it up,
             // complete the TCS, and the driver should re-invoke the agent.
@@ -212,7 +217,7 @@ public class MicrosoftAgentVoiceTests
             // Now we expect the second invocation's text chunk to appear.
             await captured.WaitForAsync(
                 f => f is LlmTextChunkFrame chunk && chunk.Text == "Done.",
-                TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(10));
 
             // The agent has been invoked at least twice: once to emit the tool call, then again
             // (after the tool result resolved) to emit the final text. MAF's ChatClientAgent may
@@ -242,7 +247,7 @@ public class MicrosoftAgentVoiceTests
 
             await captured.WaitForAsync(
                 f => f is LlmTextChunkFrame chunk && chunk.Text == "done",
-                TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(10));
 
             // No ToolCallRequestFrame should appear — backend tools don't round-trip.
             Assert.DoesNotContain(captured.Captured, f => f is ToolCallRequestFrame);
@@ -280,7 +285,7 @@ public class MicrosoftAgentVoiceTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("top expenses", IsFinal: true));
-            await captured.WaitForAsync(f => f is StatusFrame, TimeSpan.FromSeconds(2));
+            await captured.WaitForAsync(f => f is StatusFrame, TimeSpan.FromSeconds(10));
 
             var statuses = captured.Captured.OfType<StatusFrame>().ToList();
             Assert.NotEmpty(statuses);
@@ -317,7 +322,7 @@ public class MicrosoftAgentVoiceTests
             await pipeline.Source.IngestAsync(new TranscriptionFrame("ping", IsFinal: true));
             await captured.WaitForAsync(
                 f => f is LlmTextChunkFrame chunk && chunk.Text == "ack",
-                TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(10));
 
             Assert.DoesNotContain(captured.Captured, f => f is StatusFrame);
         }
@@ -343,7 +348,7 @@ public class MicrosoftAgentVoiceTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("top expenses", IsFinal: true));
-            await captured.WaitForAsync(f => f is StatusFrame, TimeSpan.FromSeconds(2));
+            await captured.WaitForAsync(f => f is StatusFrame, TimeSpan.FromSeconds(10));
 
             var ordered = captured.Captured.ToList();
             var ackIdx = ordered.FindIndex(f => f is LlmTextChunkFrame chunk && chunk.Text == "Yep, give me a moment.");
@@ -382,7 +387,7 @@ public class MicrosoftAgentVoiceTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("hi", IsFinal: true));
-            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(10));
 
             Assert.NotNull(startedTurnId);
             Assert.NotNull(completedTurnId);
@@ -428,7 +433,7 @@ public class MicrosoftAgentVoiceTests
             await pipeline.Source.IngestAsync(new TranscriptionFrame("second", IsFinal: true));
             await captured.WaitForAsync(
                 f => f is LlmTextChunkFrame chunk && chunk.Text == "recovered",
-                TimeSpan.FromSeconds(2));
+                TimeSpan.FromSeconds(10));
         }
 
 #pragma warning disable CS1998, CS0162
@@ -453,7 +458,7 @@ public class MicrosoftAgentVoiceTests
         {
             await runner.StartAsync();
             await pipeline.Source.IngestAsync(new TranscriptionFrame("what's up?", IsFinal: true));
-            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(10));
 
             var ordered = captured.Captured.ToList();
 

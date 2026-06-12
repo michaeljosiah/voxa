@@ -165,17 +165,23 @@
   <!-- ── nav rail: icon + 10px label, active = card bg + hairline + cyan + edge bar ── -->
 
   <Style Selector="RadioButton.vx-nav">
+    <!-- Fluent's RadioButton defaults to HorizontalAlignment=Left — without Stretch the
+         active card hugs the icon instead of spanning the rail (the kit's card is full-width
+         minus the 6px gutters, icon AND label inside). -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Panel Margin="6,2">
+        <Panel>
           <Border Name="navBorder"
+                  Margin="6,2"
                   CornerRadius="10"
                   Background="Transparent"
                   BorderThickness="1"
                   BorderBrush="Transparent"
-                  Padding="4,10">
+                  Padding="4,11">
             <StackPanel Spacing="5" HorizontalAlignment="Center">
-              <ContentPresenter Content="{TemplateBinding Content}"
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
                                 HorizontalAlignment="Center" />
               <TextBlock Name="navLabel"
                          Text="{TemplateBinding Tag}"
@@ -184,10 +190,11 @@
                          Foreground="{StaticResource VxMutedBrush}" />
             </StackPanel>
           </Border>
+          <!-- Active edge bar sits at the rail's absolute left edge, inset 14px top/bottom. -->
           <Rectangle Name="navAccent"
                      Width="2" RadiusX="1" RadiusY="1"
                      HorizontalAlignment="Left"
-                     Margin="-6,12,0,12"
+                     Margin="0,14"
                      Fill="{StaticResource VxAccentBrush}"
                      IsVisible="False" />
         </Panel>
