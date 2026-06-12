@@ -1,0 +1,33 @@
+{
+  "skill_name": "deep-pr-review",
+  "evals": [
+    {
+      "id": 0,
+      "name": "open-pr-inline-review",
+      "prompt": "do a deep review of PR #6 in this repo",
+      "expected_output": "A GitHub review POSTED on PR #6 via one reviews API call (event: COMMENT): inline comments anchored to diff lines for specific findings (each prefixed with bold severity), plus a summary comment with verdict, claims audit, verification log, and not-reviewed scope. The chat reply is just the review URL and a one-line verdict. No local report files. Never APPROVE/REQUEST_CHANGES.",
+      "files": [],
+      "expectations": [
+        "A review is actually posted on the PR (verifiable via gh api repos/{owner}/{repo}/pulls/6/reviews) with event COMMENT, not APPROVE or REQUEST_CHANGES",
+        "Findings are inline comments anchored to lines present in the PR diff, each starting with a bold severity (Critical/High/Medium/Low)",
+        "The summary comment contains a verdict, a claims-audit treatment (verified vs unverified), local verification results, and an explicit not-reviewed scope section",
+        "The review does not duplicate points already made by existing comments on the same lines",
+        "No local report file is produced; the final chat message is essentially the review URL plus a one-line verdict",
+        "Spot-check accuracy: sampled inline comments match the actual code at the anchored locations (no fabricated findings)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "no-pr-stops-cleanly",
+      "prompt": "review the current branch's PR",
+      "expected_output": "When the current branch has no open PR, the skill determines that, says so, suggests opening a PR first, and stops — it does not improvise a local branch review, does not hallucinate a PR number, and posts nothing.",
+      "files": [],
+      "expectations": [
+        "Correctly determines that no PR exists for the current branch and says so explicitly",
+        "Suggests gh pr create (or equivalent) rather than improvising a local review",
+        "Posts no comments or reviews to any PR",
+        "Does not fabricate a PR number, PR comments, or CI results"
+      ]
+    }
+  ]
+}

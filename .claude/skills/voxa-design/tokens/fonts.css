@@ -1,0 +1,15 @@
+/* VOXA STUDIO webfonts (VST-002).
+   UI: Inter (Google Fonts; in-app shipped via Avalonia.Fonts.Inter).
+   Data / numbers / ids / timestamps: Cascadia Code — self-hosted via the
+   Fontsource CDN (OFL-1.1, the same family Microsoft ships). Variable
+   weight 200–700, latin subset. On the Windows-first target the locally
+   installed Cascadia Code is used first; this @font-face covers the web. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@font-face {
+  font-family: 'Cascadia Code';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 700;
+  src: url('https://cdn.jsdelivr.net/fontsource/fonts/cascadia-code:vf@latest/latin-wght-normal.woff2') format('woff2-variations');
+}

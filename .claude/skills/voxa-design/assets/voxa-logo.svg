@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 332 72" fill="none" aria-label="VOXA STUDIO">
+  
+  <g transform="translate(4,4) scale(0.64)">
+    <path d="M14,18 L50,86 L86,18" fill="none" stroke="#4FC3F7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+    <rect x="38" y="34" width="7" height="22" rx="3.5" fill="#4FC3F7"></rect>
+    <rect x="50" y="26" width="7" height="30" rx="3.5" fill="#4FC3F7"></rect>
+    <rect x="62" y="38" width="7" height="18" rx="3.5" fill="#4FC3F7"></rect>
+  </g>
+  <text x="84" y="46" font-family="Inter, &#39;Segoe UI&#39;, system-ui, sans-serif" font-size="27" font-weight="700" letter-spacing="5" fill="#EAF1F8">VOXA<tspan font-weight="400" fill="#76849B" letter-spacing="6" dx="10">STUDIO</tspan></text>
+</svg>

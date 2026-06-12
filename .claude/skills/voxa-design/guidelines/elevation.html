@@ -1,0 +1,22 @@
+<!-- @dsCard group="Spacing" viewport="700x190" name="Elevation & glow" subtitle="Black ambient shadows for depth; cyan glow for live emphasis" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 24px; background: var(--bg-panel); }
+  .row { display: flex; gap: 20px; }
+  .b { flex: 1; height: 96px; background: var(--surface-card); border: 1px solid var(--line-1); border-radius: var(--r-lg); display: flex; align-items: flex-end; padding: 10px 12px; }
+  .b span { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="b" style="box-shadow: var(--shadow-1), var(--edge-light)"><span>shadow-1 · resting card</span></div>
+    <div class="b" style="box-shadow: var(--shadow-2), var(--edge-light)"><span>shadow-2 · hover, popover</span></div>
+    <div class="b" style="box-shadow: var(--shadow-3), var(--edge-light)"><span>shadow-3 · modal</span></div>
+    <div class="b" style="box-shadow: var(--glow-pulse); border-color: rgba(63,232,203,.3)"><span style="color: var(--pulse-300)">glow-pulse · live / primary</span></div>
+  </div>
+</body>
+</html>

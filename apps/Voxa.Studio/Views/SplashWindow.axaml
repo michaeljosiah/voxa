@@ -1,0 +1,69 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Voxa.Studio.Controls"
+        x:Class="Voxa.Studio.Views.SplashWindow"
+        Width="480" Height="320"
+        CanResize="False"
+        SystemDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        ShowInTaskbar="True"
+        Topmost="False">
+
+  <!-- The borderless launch splash (VST-002 §4). It appears before any Voxa service work and
+       does real work while it plays; a click skips; it dismisses the moment init completes. -->
+  <Border CornerRadius="14"
+          BorderThickness="1"
+          BorderBrush="{StaticResource VxLine2Brush}"
+          BoxShadow="0 30 90 0 #99000000"
+          ClipToBounds="True">
+    <Border.Background>
+      <RadialGradientBrush Center="50%,42%" GradientOrigin="50%,42%" RadiusX="90%" RadiusY="70%">
+        <GradientStop Offset="0" Color="#11161D" />
+        <GradientStop Offset="0.72" Color="#0B0F14" />
+      </RadialGradientBrush>
+    </Border.Background>
+
+    <Grid>
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="22">
+
+        <controls:VoxaMarkControl x:Name="Mark"
+                                  Width="88" Height="88"
+                                  Animated="True" Glow="True"
+                                  HorizontalAlignment="Center" />
+
+        <StackPanel x:Name="Wordmark" Orientation="Horizontal" HorizontalAlignment="Center"
+                    Opacity="0" Margin="9.7,0,0,0">
+          <TextBlock x:Name="WordV" Text="VOXA" FontSize="23" FontWeight="Bold" LetterSpacing="9.7"
+                     Foreground="{StaticResource VxTextBrush}" />
+          <TextBlock x:Name="WordS" Text="STUDIO" FontSize="23" FontWeight="Light" LetterSpacing="9.7"
+                     Foreground="{StaticResource VxMutedBrush}" />
+        </StackPanel>
+
+        <StackPanel x:Name="Meta" Orientation="Horizontal" HorizontalAlignment="Center"
+                    Spacing="8" Opacity="0">
+          <Ellipse x:Name="MetaDot" Width="5" Height="5" VerticalAlignment="Center"
+                   Fill="{StaticResource VxAccentBrush}" />
+          <TextBlock x:Name="StageText"
+                     FontFamily="{StaticResource VxMono}" FontSize="11" LetterSpacing="0.7"
+                     Foreground="{StaticResource VxMutedBrush}"
+                     Text="configuration…" />
+        </StackPanel>
+
+      </StackPanel>
+
+      <!-- Honest progress: width tracks the REAL stage index, not a timer. -->
+      <Border x:Name="ProgressBar"
+              Height="3" VerticalAlignment="Bottom" HorizontalAlignment="Left"
+              Background="{StaticResource VxAccentBrush}" Opacity="0.85" Width="0">
+        <Border.Transitions>
+          <Transitions>
+            <!-- standard 240 / ease-out -->
+            <DoubleTransition Property="Width" Duration="0:0:0.24" Easing="0.2,0.8,0.2,1" />
+          </Transitions>
+        </Border.Transitions>
+      </Border>
+    </Grid>
+  </Border>
+</Window>

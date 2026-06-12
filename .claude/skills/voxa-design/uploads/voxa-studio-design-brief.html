@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VST-002 — Voxa Studio 2.0 Design Brief</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --violet: #ce93d8;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.d1 { background: #143a4a; color: #81d4fa; }
+  .badge.d2 { background: #143a20; color: #a5d6a7; }
+  .badge.d3 { background: #3a1448; color: #ce93d8; }
+  .badge.d4 { background: #4a3214; color: #ffcc80; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+  .swatch { width: 132px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 0.72rem; }
+  .swatch .chip { height: 44px; }
+  .swatch .label { padding: 5px 9px; background: var(--panel); }
+  .swatch .label b { display:block; color:#fff; font-family: var(--mono); font-weight: 500; }
+  .mock { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin: 18px 0; }
+  .mock figcaption { font-size: 0.78rem; color: var(--muted); padding: 8px 6px 2px; font-style: italic; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+
+  /* ── live logo prototype ─────────────────────────────────────────────── */
+  .logo-stage { display:flex; align-items:center; justify-content:center; gap:40px; flex-wrap:wrap;
+    background: radial-gradient(ellipse at center, #11161d 0%, #0b0f14 70%); border:1px solid var(--border);
+    border-radius: 12px; padding: 44px 20px; margin: 18px 0; }
+  .vx-mark { width: 96px; height: 96px; }
+  .vx-mark .stroke { fill:none; stroke:#4fc3f7; stroke-width:7; stroke-linecap:round; stroke-linejoin:round;
+    stroke-dasharray: 260; stroke-dashoffset: 260; animation: vx-draw 1.1s cubic-bezier(.6,0,.2,1) forwards; }
+  .vx-mark .bar { fill:#4fc3f7; opacity:0; transform-origin: center; animation: vx-bar .5s cubic-bezier(.2,.8,.2,1.4) forwards; }
+  .vx-mark .bar:nth-of-type(2) { animation-delay: .9s; }
+  .vx-mark .bar:nth-of-type(3) { animation-delay: 1.0s; }
+  .vx-mark .bar:nth-of-type(4) { animation-delay: 1.1s; }
+  .vx-mark .glow { fill:none; stroke:#4fc3f7; stroke-width:14; stroke-linecap:round; stroke-linejoin:round;
+    opacity:0; filter: blur(9px); animation: vx-glow 2.6s ease-in-out 1.5s infinite; }
+  .vx-word { font-family:"Segoe UI", system-ui, sans-serif; font-size: 1.7rem; letter-spacing: .55em; color:#fff;
+    opacity:0; animation: vx-word .7s ease-out 1.25s forwards; }
+  .vx-word span { font-weight: 200; color: var(--muted); }
+  @keyframes vx-draw { to { stroke-dashoffset: 0; } }
+  @keyframes vx-bar { from { opacity:0; transform: scaleY(.2); } to { opacity:1; transform: scaleY(1); } }
+  @keyframes vx-glow { 0%,100% { opacity: 0; } 50% { opacity: .35; } }
+  @keyframes vx-word { from { opacity:0; letter-spacing:.9em; } to { opacity:1; letter-spacing:.55em; } }
+  @media (prefers-reduced-motion: reduce) {
+    .vx-mark .stroke { animation:none; stroke-dashoffset:0; }
+    .vx-mark .bar { animation:none; opacity:1; }
+    .vx-mark .glow { animation:none; }
+    .vx-word { animation:none; opacity:1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VST-002 — Voxa Studio 2.0 Design Brief</h1>
+  <div class="sub">The design direction for Voxa Studio's next major iteration: a branded launch experience with an animated mark, a refined visual and motion system, dedicated <b>STT and TTS playgrounds</b>, a <b>node-style pipeline builder</b> on an interactive canvas, and a <b>run &amp; metrics workbench</b> that turns the diagnostics hub's event stream into decision-grade performance data. This is a design document — it defines look, feel, flows, and feasibility; the engineering spec for each phase follows separately.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VST-002 v1.0 (design brief)</div>
+    <div><b>Date</b> 2026-06-12</div>
+    <div><b>Status</b> Proposal — for review</div>
+    <div><b>Builds on</b> VST-001 (Studio v1, <code>VoxaDiagnosticsHub</code>)</div>
+    <div><b>Surface</b> <code>apps/Voxa.Studio</code> (Avalonia 11, Windows-first)</div>
+    <div><b>Audience</b> Design + implementing engineer</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">Purpose, audience &amp; scope</a></li>
+    <li><a href="#s2">Design principles</a></li>
+    <li><a href="#s3">Brand identity — the mark, motion, color, type</a></li>
+    <li><a href="#s4">Launch experience — the animated splash</a></li>
+    <li><a href="#s5">Shell &amp; information architecture</a></li>
+    <li><a href="#s6">STT Playground</a></li>
+    <li><a href="#s7">TTS Playground</a></li>
+    <li><a href="#s8">Pipeline Builder — the node canvas</a></li>
+    <li><a href="#s9">Run &amp; Metrics workbench</a></li>
+    <li><a href="#s10">Accessibility &amp; quality bars</a></li>
+    <li><a href="#s11">Engineering feasibility — what exists, what's new</a></li>
+    <li><a href="#s12">Phasing, estimates &amp; risks</a></li>
+    <li><a href="#s13">Open questions</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>Purpose, audience &amp; scope</h2>
+
+<p>Studio v1 (VST-001) proved the core idea: run the real pipeline locally and <em>watch it think</em>. v2 turns a developer instrument into a product. The audience widens from "the Voxa maintainer debugging VAD" to three personas:</p>
+
+<table>
+  <tr><th>Persona</th><th>They come to…</th><th>The view that serves them</th></tr>
+  <tr><td><b>The evaluator</b> — deciding whether to adopt Voxa</td><td>hear the voices, feel the latency, see it work in 2 minutes without an account</td><td>Splash → Talk; TTS Playground</td></tr>
+  <tr><td><b>The builder</b> — composing a bot for their product</td><td>prototype a pipeline, pick providers, tune the trade-offs, export config</td><td>Pipeline Builder; STT/TTS Playgrounds</td></tr>
+  <tr><td><b>The tuner</b> — owning latency/quality in production</td><td>measure stage timings, compare configurations, find the regression</td><td>Run &amp; Metrics workbench</td></tr>
+</table>
+
+<p><b>In scope:</b> visual identity + motion system, splash, restructured shell, two focused playgrounds, the node canvas, the metrics workbench. <b>Out of scope:</b> non-Windows audio backends, cloud accounts/licensing, telemetry leaving the machine, and any pipeline topology the framework cannot actually run (see §8.3 — the canvas must never let users draw a lie).</p>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Design principles</h2>
+
+<ul>
+  <li><b>P1 — The signal is the brand.</b> Voxa's subject matter is live audio and time. Every signature visual — the logo's pulse, edge flow on the canvas, the VAD trace, waterfall bars — is a representation of signal moving through time. No decorative graphics that aren't data.</li>
+  <li><b>P2 — Dark, calm, one accent.</b> Near-black blue-grey surfaces, hairline borders, generous whitespace, a single cyan accent doing all the talking. Color beyond cyan is <em>semantic only</em> (stage colors, good/warn/bad). If a screen looks exciting while idle, it's wrong.</li>
+  <li><b>P3 — Motion has a job.</b> Animation either (a) explains causality (a frame travelled from STT to the agent), (b) confirms state change (gate opened), or (c) brands a threshold moment (launch). Nothing loops while idle except the live data itself. Every animation respects reduced-motion.</li>
+  <li><b>P4 — Truthful instrumentation.</b> Numbers shown are measured on this machine, from the real engines, via the same diagnostics surface servers use. No synthetic demo data, ever — an empty state explains how to produce data instead of faking it.</li>
+  <li><b>P5 — Two minutes to wow, keyless.</b> The first-run path (splash → Talk → speak → see the waterfall) must work with zero accounts and show something a screenshot can't: the app hearing you in real time.</li>
+  <li><b>P6 — The UI is a registry client.</b> Every list of providers, voices, models, and node types comes from the live registry and pinned catalogs. The design must assume these lists grow; nothing is hardcoded to today's seven Piper voices.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Brand identity — the mark, motion, color, type</h2>
+
+<h3>3.1 The mark</h3>
+<p>The Voxa mark is a <b>V cut by a waveform</b>: two clean strokes forming the V, with three signal bars rising inside the cut — the moment a voice enters the pipeline. It reads at 16 px (titlebar), 96 px (splash), and as a single-color glyph for monochrome contexts. Below is a <b>live prototype</b> of the draw-on animation this brief specifies (refresh the page to replay; it honours <code>prefers-reduced-motion</code>):</p>
+
+<div class="logo-stage">
+  <svg class="vx-mark" viewBox="0 0 100 100" aria-label="Voxa mark, animated">
+    <path class="glow"   d="M14,18 L50,86 L86,18" />
+    <path class="stroke" d="M14,18 L50,86 L86,18" />
+    <rect class="bar" x="38" y="34" width="7" height="22" rx="3.5" />
+    <rect class="bar" x="50" y="26" width="7" height="30" rx="3.5" />
+    <rect class="bar" x="62" y="38" width="7" height="18" rx="3.5" />
+  </svg>
+  <div class="vx-word">VOXA&nbsp;<span>STUDIO</span></div>
+</div>
+
+<p>Construction rules: stroke weight 7% of cap height; bar heights follow a 22/30/18 rhythm (a stylised "vox" energy contour, not random); minimum clear space = one bar width on all sides. The mark never rotates, skews, or fills with gradients.</p>
+
+<h3>3.2 Motion system</h3>
+<table>
+  <tr><th>Token</th><th>Value</th><th>Used for</th></tr>
+  <tr><td><code>motion.fast</code></td><td>120 ms, <code>cubic-bezier(.2,.8,.2,1)</code></td><td>hover states, nav rail highlight, toggles</td></tr>
+  <tr><td><code>motion.standard</code></td><td>240 ms, same curve</td><td>view transitions, card entrance, panel slide</td></tr>
+  <tr><td><code>motion.draw</code></td><td>1100 ms, <code>cubic-bezier(.6,0,.2,1)</code></td><td>logo draw-on, first chart paint</td></tr>
+  <tr><td><code>motion.pulse</code></td><td>2600 ms ease-in-out, infinite</td><td>live-session dot, logo glow — the ONLY idle loops, both data-backed (a session is genuinely live)</td></tr>
+</table>
+<p>Implementation: Avalonia <code>Animation</code>/<code>Transitions</code> with these as XAML resources (<code>VxMotionFast</code> …). Custom-drawn controls (canvas, charts) read the same durations so chart and chrome move in one voice.</p>
+
+<h3>3.3 Color</h3>
+<p>The existing token set carries over and gains the <b>stage palette</b> as a first-class system: the same five colors mean the same five stages <em>everywhere</em> — waterfall bars, node port dots, edge flows, metric series. A user who learns "violet = agent" in the waterfall reads the canvas for free.</p>
+
+<div class="swatches">
+  <div class="swatch"><div class="chip" style="background:#0B0F14"></div><div class="label"><b>#0B0F14</b>bg</div></div>
+  <div class="swatch"><div class="chip" style="background:#11161D"></div><div class="label"><b>#11161D</b>panel</div></div>
+  <div class="swatch"><div class="chip" style="background:#222B36"></div><div class="label"><b>#222B36</b>hairline</div></div>
+  <div class="swatch"><div class="chip" style="background:#4FC3F7"></div><div class="label"><b>#4FC3F7</b>accent / STT stage</div></div>
+  <div class="swatch"><div class="chip" style="background:#76849B"></div><div class="label"><b>#76849B</b>muted / VAD stage</div></div>
+  <div class="swatch"><div class="chip" style="background:#CE93D8"></div><div class="label"><b>#CE93D8</b>agent stage</div></div>
+  <div class="swatch"><div class="chip" style="background:#FFB74D"></div><div class="label"><b>#FFB74D</b>TTS stage / warn</div></div>
+  <div class="swatch"><div class="chip" style="background:#66BB6A"></div><div class="label"><b>#66BB6A</b>out stage / good</div></div>
+  <div class="swatch"><div class="chip" style="background:#EF5350"></div><div class="label"><b>#EF5350</b>error</div></div>
+</div>
+
+<h3>3.4 Type</h3>
+<p><b>Inter</b> (shipped via <code>Avalonia.Fonts.Inter</code>) for UI; <b>Cascadia Code</b> for every number, id, and timestamp — if it's data, it's mono. Scale: 11/12 (dense data), 13 (body), 15 (section), 20 (view title), with the wordmark's letter-spaced caps reserved for brand moments (titlebar, splash, empty states).</p>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Launch experience — the animated splash</h2>
+
+<p>The splash is a <b>borderless 480×320 window</b>, not a page inside the shell — it appears in &lt;300 ms (before any Voxa service work) and does real work while it plays:</p>
+
+<table>
+  <tr><th>t</th><th>On screen</th><th>Behind it</th></tr>
+  <tr><td>0–1.1 s</td><td>Mark draws on (<code>motion.draw</code>): the V strokes sweep in</td><td>configuration load, <code>AddVoxa</code> container build</td></tr>
+  <tr><td>0.9–1.3 s</td><td>The three signal bars spring up in sequence</td><td>audio device enumeration (WASAPI)</td></tr>
+  <tr><td>1.25–1.95 s</td><td>Wordmark fades in, letter-spacing settling from wide; beneath it, microcopy ticks through real init stages: <code>providers · devices · cache</code></td><td>model-cache inventory scan (no network)</td></tr>
+  <tr><td>≈2.0 s</td><td>Splash cross-fades out; the main window appears with the mark already seated in the titlebar — the logo "lands" rather than disappears</td><td>shell composition</td></tr>
+</table>
+
+<div class="callout"><b>Hard rules.</b> (1) The splash never <em>adds</em> time: it dismisses the moment init completes, even mid-animation — on a warm machine the full sequence may be cut at ~1.2 s. (2) A click skips it. (3) <code>prefers-reduced-motion</code> (Avalonia: platform a11y settings) swaps animation for a static mark + progress microcopy. (4) No network on the splash path, ever (P5/WS1-A2 invariant).</div>
+
+<p>The same draw-on animation becomes the brand's loading primitive: the Talk view's "downloading models" state replays the bars at small scale as a determinate progress indicator (bar heights = download progress of the three largest artifacts).</p>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Shell &amp; information architecture</h2>
+
+<pre style="line-height:1.7">
+┌──────┬───────────────────────────────────────────────────────────────┐
+│  ◢   │  ⌂ titlebar: mark · VOXA STUDIO · live dot · session timer    │
+│ rail ├───────────────────────────────────────────────────────────────┤
+│      │                                                               │
+│  🎙  │   Talk            — the v1 conversation view (unchanged role) │
+│  ⎚   │   Playgrounds     — STT lab │ TTS lab   (segmented, §6–7)     │
+│  ⬡   │   Builder         — node canvas (§8)                          │
+│  📊  │   Metrics         — run workbench + history (§9)              │
+│  ◫   │   Models          — v1 cache manager (unchanged)              │
+│  ⚙   │   Config          — v1 composer; gains "open in Builder"      │
+└──────┴───────────────────────────────────────────────────────────────┘
+</pre>
+
+<p>Changes from v1: <b>Voices</b> grows into the TTS Playground and moves under <b>Playgrounds</b> next to the new STT lab; <b>Builder</b> and <b>Metrics</b> are new top-level sections. Cross-navigation is a design feature: a waterfall bar in Talk deep-links to that stage's series in Metrics; a node on the canvas deep-links to its provider's options in Config; the Config view's selection can be "opened as graph" in the Builder.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>STT Playground</h2>
+
+<p><b>Job:</b> answer "how well and how fast does speech become text on this machine?" for any Whisper model — without composing a whole pipeline.</p>
+
+<h3>6.1 Layout &amp; flow</h3>
+<ul>
+  <li><b>Input strip:</b> three sources, one active at a time — 🎙 live mic (push-to-talk or VAD-gated), 📄 drop a WAV/recording, 🔁 replay the bundled fixtures (jfk.wav ships in-repo). Model selector (catalog: tiny→small, quantized variants) with size/cached badges.</li>
+  <li><b>Transcript pane:</b> finals appear as cards stamped with utterance duration and <b>final-transcript latency</b> (utterance end → final, the <code>stt_final</code> stage measured standalone). A waveform strip of the captured utterance renders above each card.</li>
+  <li><b>Accuracy harness:</b> paste a reference text → live <b>WER</b> (word error rate) with insert/delete/substitute coloring on the diff. This is the feature that turns "tiny.en sounds fine" into "tiny.en is 8.1% WER on my accent; base.en is 4.9% and 240 ms slower" — exactly the trade-off the model selector exists for.</li>
+  <li><b>Side-by-side mode:</b> run the same audio through two models (sequentially; one whisper context at a time) and diff the transcripts + timings.</li>
+</ul>
+
+<div class="callout good"><b>Feasibility.</b> Everything here drives <code>WhisperCppSttEngine</code> directly (the WS3 Voice-Lab pattern, STT edition). WER is a ~80-line Levenshtein on word tokens. The mic path reuses <code>IStudioAudioDevice.CaptureAsync</code> + the existing VAD processor for gating. No framework changes.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>TTS Playground</h2>
+
+<p><b>Job:</b> the v1 Voice Lab, matured from a list into a lab. Carries over: full catalog, real engines, TTFB/RTF, A/B pins, WAV export, talk-session device arbitration. New:</p>
+
+<ul>
+  <li><b>Waveform + take history.</b> Each synthesis renders its waveform inline (amplitude envelope, custom-drawn) and lands in a per-voice take history — change the text, compare takes, replay any. The waveform is also the playback scrubber.</li>
+  <li><b>A/B/X blind test.</b> The honest upgrade to A/B: X is randomly A or B; after the user votes, reveal. Settles "Kokoro is obviously better" with data, in keeping with P4.</li>
+  <li><b>Stress phrases.</b> A curated phrase deck (numbers, dates, code identifiers, long clauses, homographs) one click away — the sentences that actually break TTS, replacing the pangram default.</li>
+  <li><b>Batch bench.</b> "Synthesize this phrase deck on N voices" → table of TTFB/RTF percentiles per voice, exportable; feeds the same run format Metrics consumes (§9).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Pipeline Builder — the node canvas</h2>
+
+<h3>8.1 The picture</h3>
+<figure class="mock">
+<svg viewBox="0 0 1040 360" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4FC3F7"/>
+    </marker>
+  </defs>
+  <rect width="1040" height="360" fill="#0B0F14"/>
+  <g stroke="#161D26" stroke-width="1">
+    <path d="M0,60 H1040 M0,120 H1040 M0,180 H1040 M0,240 H1040 M0,300 H1040"/>
+    <path d="M80,0 V360 M200,0 V360 M320,0 V360 M440,0 V360 M560,0 V360 M680,0 V360 M800,0 V360 M920,0 V360"/>
+  </g>
+  <!-- edges -->
+  <g stroke="#4FC3F7" stroke-width="2" fill="none" marker-end="url(#arr)" opacity="0.85">
+    <path d="M148,160 C 180,160 180,160 208,160"/>
+    <path d="M328,160 C 360,160 360,160 388,160"/>
+    <path d="M508,160 C 540,160 540,160 568,160"/>
+    <path d="M688,160 C 720,160 720,160 748,160"/>
+    <path d="M868,160 C 900,160 900,160 928,160"/>
+  </g>
+  <!-- nodes -->
+  <g font-size="13">
+    <g><rect x="48" y="132" width="100" height="56" rx="10" fill="#11161D" stroke="#222B36"/>
+       <circle cx="148" cy="160" r="4" fill="#76849B"/>
+       <text x="98" y="156" fill="#fff" text-anchor="middle">Mic</text>
+       <text x="98" y="174" fill="#76849B" text-anchor="middle" font-size="10">16 kHz</text></g>
+    <g><rect x="208" y="132" width="120" height="56" rx="10" fill="#11161D" stroke="#4FC3F7" stroke-width="1.5"/>
+       <circle cx="208" cy="160" r="4" fill="#76849B"/><circle cx="328" cy="160" r="4" fill="#76849B"/>
+       <text x="268" y="156" fill="#fff" text-anchor="middle">Silero VAD</text>
+       <text x="268" y="174" fill="#76849B" text-anchor="middle" font-size="10">stop 800 ms</text></g>
+    <g><rect x="388" y="132" width="120" height="56" rx="10" fill="#11161D" stroke="#222B36"/>
+       <circle cx="388" cy="160" r="4" fill="#76849B"/><circle cx="508" cy="160" r="4" fill="#4FC3F7"/>
+       <text x="448" y="156" fill="#fff" text-anchor="middle">WhisperCpp</text>
+       <text x="448" y="174" fill="#76849B" text-anchor="middle" font-size="10">tiny.en · cached ✓</text></g>
+    <g><rect x="568" y="132" width="120" height="56" rx="10" fill="#11161D" stroke="#222B36"/>
+       <circle cx="568" cy="160" r="4" fill="#4FC3F7"/><circle cx="688" cy="160" r="4" fill="#CE93D8"/>
+       <text x="628" y="156" fill="#fff" text-anchor="middle">Agent</text>
+       <text x="628" y="174" fill="#76849B" text-anchor="middle" font-size="10">OpenAI · gpt-4o-mini</text></g>
+    <g><rect x="748" y="132" width="120" height="56" rx="10" fill="#11161D" stroke="#222B36"/>
+       <circle cx="748" cy="160" r="4" fill="#CE93D8"/><circle cx="868" cy="160" r="4" fill="#FFB74D"/>
+       <text x="808" y="156" fill="#fff" text-anchor="middle">Piper TTS</text>
+       <text x="808" y="174" fill="#76849B" text-anchor="middle" font-size="10">amy-low · 16 kHz</text></g>
+    <g><rect x="928" y="132" width="92" height="56" rx="10" fill="#11161D" stroke="#222B36"/>
+       <circle cx="928" cy="160" r="4" fill="#FFB74D"/>
+       <text x="974" y="156" fill="#fff" text-anchor="middle">Speaker</text>
+       <text x="974" y="174" fill="#66BB6A" text-anchor="middle" font-size="10">● live</text></g>
+  </g>
+  <!-- inspector hint -->
+  <g font-size="11" fill="#76849B">
+    <rect x="48" y="252" width="280" height="72" rx="10" fill="#11161D" stroke="#222B36"/>
+    <text x="64" y="276" fill="#81D4FA" font-size="10" letter-spacing="2">INSPECTOR — SILERO VAD</text>
+    <text x="64" y="296">ConfidenceThreshold   0.50 ───●───</text>
+    <text x="64" y="312">StopDuration          800 ms ──●─</text>
+    <text x="876" y="276" fill="#4FC3F7">▶ Run graph</text>
+    <text x="876" y="296">⇪ Export appsettings</text>
+    <text x="876" y="312">⌗ Export C# compose</text>
+  </g>
+  <text x="48" y="40" fill="#76849B" font-size="11" letter-spacing="2">BUILDER — wire the chain; ports only accept matching frame types</text>
+</svg>
+<figcaption>Canvas wireframe: registry-driven node palette, typed ports (grey = audio, cyan = transcription, violet = agent text, amber = synthesized audio), inspector for the selected node, run/export actions. Port colors are the stage palette of §3.3.</figcaption>
+</figure>
+
+<h3>8.2 Interaction design</h3>
+<ul>
+  <li><b>Palette → canvas:</b> the node list is generated from the live registry + built-ins (Source, VAD engines, STT providers, TranscriptionFilter, Agent, SentenceAggregator, TTS providers, Sink, DiagnosticsTap). Drag onto the canvas, or use the always-valid <b>"+" affordance on a dangling port</b> which offers only type-compatible nodes — beginners never see an invalid wire.</li>
+  <li><b>Typed ports:</b> a port carries a frame type (audio, transcription, agent-text, synth-audio). Incompatible drags snap back with a 120 ms shake and a one-line reason ("Whisper consumes audio frames; the Agent emits text"). Compatibility comes from a static frame-flow table per node type — the same truth the default composer encodes.</li>
+  <li><b>Inspector:</b> selecting a node shows its options panel (the descriptor's config section rendered as form controls — the Config view's machinery, per node). Cached/uncached and validation states render on the node itself (badge + red outline with the validator's message).</li>
+  <li><b>Run:</b> the canvas compiles to the same <code>Pipeline.Build().Source().Then(…).Sink()</code> chain Talk uses and starts a live session in place (§8.4). Export produces (a) the <code>appsettings.json</code> when the graph matches the default shape, or (b) generated C# composition code when it doesn't — both honest artifacts a server can run.</li>
+  <li><b>Canvas furniture:</b> pan/zoom (pinch + wheel), snap-to-grid, auto-layout ("tidy"), minimap beyond ~12 nodes, undo/redo, save/load graph as JSON in the user profile.</li>
+</ul>
+
+<h3>8.3 The honesty constraint <span class="sev-high">important</span></h3>
+<div class="callout warn"><b>Voxa pipelines are a linear chain today.</b> <code>Pipeline</code> links processors in sequence — there is no fan-out/fan-in in the runtime. The canvas therefore enforces <b>single-in/single-out</b> wiring in v2 (each port holds at most one edge), and the design language makes that feel intentional: the grid, the left-to-right flow, the "+" port affordance all communicate <em>chain</em>, not <em>graph</em>. Branching (e.g. parallel TTS for comparison, a tee into a recorder) is a <b>framework feature first</b> — if we want it, it gets its own spec (frame routing, backpressure semantics) and the canvas inherits it later. Designing the canvas as if branching existed would violate P4 with geometry instead of numbers.</div>
+
+<h3>8.4 Live mode — the canvas as instrument</h3>
+<p>When a graph runs, the canvas becomes the most literal "watch it think" surface in the app, driven entirely by real <code>VoxaDiagnosticsHub</code> events:</p>
+<ul>
+  <li><b>Edge flow:</b> frame activity renders as particles flowing along the edge, colored by frame type and rate-limited to ~30 fps. Audio edges shimmer continuously while the gate is open; a transcript edge fires one bright pulse per final.</li>
+  <li><b>Node state:</b> the active stage glows (the §3.3 stage color at 20% halo); per-node badges show live queue depth (<code>FrameProcessor.QueuedFrameCount</code>) and last-stage latency.</li>
+  <li><b>Inline turn ticker:</b> the most recent waterfall renders as a slim strip along the canvas bottom; clicking a bar highlights the corresponding node.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Run &amp; Metrics workbench</h2>
+
+<p><b>Job:</b> turn sessions into evidence. A <b>run</b> is the unit of record: one configuration (a Builder graph or the active config) exercised by one input source for some duration, producing a metrics bundle.</p>
+
+<h3>9.1 Running</h3>
+<ul>
+  <li><b>Sources:</b> live mic; a WAV fixture; or a <b>scripted session</b> — a list of utterance WAVs (or text injected post-STT) replayed with configurable gaps, giving repeatable measurements. Scripted runs are the workbench's killer feature: same input, two configs, honest comparison.</li>
+  <li><b>During a run:</b> a compact live header (turn count, last TTFB, error count) — the heavy charts populate on completion to keep the run itself unperturbed (the hub's drop-oldest contract still applies).</li>
+</ul>
+
+<h3>9.2 Reading</h3>
+<figure class="mock">
+<svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+  <rect width="1040" height="300" fill="#0B0F14"/>
+  <text x="40" y="36" fill="#76849B" font-size="11" letter-spacing="2">RUN #14 — whispercpp·echo·piper · scripted-8-utterances · 2026-06-12</text>
+  <!-- ttfb percentiles -->
+  <g>
+    <rect x="40" y="56" width="300" height="200" rx="10" fill="#11161D" stroke="#222B36"/>
+    <text x="60" y="84" fill="#81D4FA" font-size="10" letter-spacing="2">VOICE-TO-VOICE TTFB</text>
+    <text x="60" y="130" fill="#fff" font-size="30" font-family="Cascadia Code, monospace">612 <tspan font-size="13" fill="#76849B">ms p50</tspan></text>
+    <text x="60" y="160" fill="#d7dde6" font-size="14" font-family="Cascadia Code, monospace">p95 884 ms</text>
+    <text x="60" y="182" fill="#d7dde6" font-size="14" font-family="Cascadia Code, monospace">max 1041 ms</text>
+    <text x="60" y="226" fill="#66BB6A" font-size="12">▼ 31% vs run #13 (kokoro)</text>
+  </g>
+  <!-- stacked stage bars -->
+  <g>
+    <rect x="370" y="56" width="420" height="200" rx="10" fill="#11161D" stroke="#222B36"/>
+    <text x="390" y="84" fill="#81D4FA" font-size="10" letter-spacing="2">STAGE BREAKDOWN PER TURN (ms)</text>
+    <g>
+      <rect x="390" y="104" width="118" height="14" fill="#76849B" rx="3"/><rect x="510" y="104" width="58" height="14" fill="#4FC3F7" rx="3"/><rect x="570" y="104" width="22" height="14" fill="#CE93D8" rx="3"/><rect x="594" y="104" width="34" height="14" fill="#FFB74D" rx="3"/><rect x="630" y="104" width="6" height="14" fill="#66BB6A" rx="3"/>
+      <rect x="390" y="128" width="118" height="14" fill="#76849B" rx="3"/><rect x="510" y="128" width="71" height="14" fill="#4FC3F7" rx="3"/><rect x="583" y="128" width="19" height="14" fill="#CE93D8" rx="3"/><rect x="604" y="128" width="36" height="14" fill="#FFB74D" rx="3"/><rect x="642" y="128" width="5" height="14" fill="#66BB6A" rx="3"/>
+      <rect x="390" y="152" width="118" height="14" fill="#76849B" rx="3"/><rect x="510" y="152" width="49" height="14" fill="#4FC3F7" rx="3"/><rect x="561" y="152" width="25" height="14" fill="#CE93D8" rx="3"/><rect x="588" y="152" width="33" height="14" fill="#FFB74D" rx="3"/><rect x="623" y="152" width="6" height="14" fill="#66BB6A" rx="3"/>
+    </g>
+    <text x="390" y="196" fill="#76849B" font-size="11">VAD hangover dominates every turn → tune StopDuration / smart-turn.</text>
+    <g font-size="10" fill="#76849B">
+      <circle cx="396" cy="226" r="4" fill="#76849B"/><text x="406" y="230">vad</text>
+      <circle cx="446" cy="226" r="4" fill="#4FC3F7"/><text x="456" y="230">stt</text>
+      <circle cx="496" cy="226" r="4" fill="#CE93D8"/><text x="506" y="230">agent</text>
+      <circle cx="556" cy="226" r="4" fill="#FFB74D"/><text x="566" y="230">tts</text>
+      <circle cx="606" cy="226" r="4" fill="#66BB6A"/><text x="616" y="230">out</text>
+    </g>
+  </g>
+  <!-- compare -->
+  <g>
+    <rect x="820" y="56" width="180" height="200" rx="10" fill="#11161D" stroke="#222B36"/>
+    <text x="840" y="84" fill="#81D4FA" font-size="10" letter-spacing="2">RUNS</text>
+    <text x="840" y="112" fill="#fff" font-size="12">▣ #14 piper 612ms</text>
+    <text x="840" y="136" fill="#d7dde6" font-size="12">▣ #13 kokoro 884ms</text>
+    <text x="840" y="160" fill="#76849B" font-size="12">□ #12 base.en 698ms</text>
+    <text x="840" y="200" fill="#4FC3F7" font-size="12">⇄ compare selected</text>
+    <text x="840" y="224" fill="#76849B" font-size="12">⤓ export CSV / JSON</text>
+  </g>
+</svg>
+<figcaption>Workbench wireframe: percentile card, per-turn stage stacks with a plain-language takeaway line, run list with compare + export. Stage colors are §3.3, identical to the canvas and Talk.</figcaption>
+</figure>
+
+<ul>
+  <li><b>Charts:</b> TTFB percentile card (p50/p95/max, delta vs a baseline run), per-turn stage stacks, per-stage trend over the run, RTF for the TTS leg, error/interruption counts. All custom-drawn, all exportable.</li>
+  <li><b>The takeaway line:</b> each run renders one generated sentence naming the dominant stage and the obvious lever ("VAD hangover is 54% of p50 — lower StopDuration or enable smart-turn"). Rule-based, not an LLM; it's the tuner persona's "so what".</li>
+  <li><b>Persistence:</b> runs serialize (config snapshot + event stream + computed stats) as JSON bundles under the user profile; the run list is a folder scan. Nothing leaves the machine (P4).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Accessibility &amp; quality bars</h2>
+
+<table>
+  <tr><th>Bar</th><th>Requirement</th></tr>
+  <tr><td>Contrast</td><td>WCAG AA against the dark surfaces for all text including muted (<code>#76849B</code> on <code>#0B0F14</code> ≈ 4.6:1 — keep; never go lighter than the bg tokens allow)</td></tr>
+  <tr><td>Motion</td><td>every animation behind the reduced-motion check; splash has a fully static variant; particle flow degrades to edge-color intensity</td></tr>
+  <tr><td>Keyboard</td><td>full traversal: rail (Ctrl+1…6), canvas (arrow-key node nudge, Tab port cycling, Enter to connect), all actions reachable without pointer</td></tr>
+  <tr><td>Hit targets</td><td>≥ 28 px logical; canvas ports get a 12 px visual / 24 px hit ring</td></tr>
+  <tr><td>Performance</td><td>canvas + charts hold 60 fps at 20 nodes / live session on a 4-core laptop; render-side coalescing (the v1 ≤30 fps drain) remains the law for data-driven repaints; splash visible &lt; 300 ms from process start</td></tr>
+  <tr><td>Truthfulness</td><td>no synthetic data anywhere (P4); empty states teach ("Run the fixture script to populate this chart")</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Engineering feasibility — what exists, what's new</h2>
+
+<table>
+  <tr><th>Brief element</th><th>Standing on</th><th>Genuinely new</th></tr>
+  <tr><td>Splash + motion system</td><td>Avalonia animations; init work already factored in <code>StudioServices</code></td><td>splash window, motion tokens, reduced-motion plumbing</td></tr>
+  <tr><td>STT Playground</td><td><code>WhisperCppSttEngine</code>, device capture, fixtures</td><td>WER differ, waveform strip control, side-by-side harness</td></tr>
+  <tr><td>TTS Playground</td><td>v1 Voice Lab (engines, A/B, export)</td><td>take history, waveform/scrubber, blind X, phrase deck, batch bench</td></tr>
+  <tr><td>Node canvas</td><td>registry + descriptors (palette, validation, options forms), <code>Pipeline.Build()</code> chain, <code>TalkSession</code> hosting, hub events for live mode</td><td>graph model + JSON persistence, canvas control (pan/zoom/hit-testing — the largest single build), C# compose-code exporter, frame-type compatibility table</td></tr>
+  <tr><td>Metrics workbench</td><td><code>VoxaDiagnosticsHub</code> stream incl. <code>StageLatencyEvent</code>s, <code>voxa.*</code> meters, scripted-conversation precedent in <code>Voxa.Testing</code></td><td>run recorder/bundle format, percentile + trend charts, compare view, takeaway rules</td></tr>
+</table>
+
+<div class="callout"><b>Third-party policy.</b> The canvas and charts stay hand-rolled on Avalonia primitives (the v1 precedent: two chart controls, zero chart dependencies). If canvas effort balloons, the fallback is evaluating a graph-layout helper for <em>layout math only</em> — rendering and interaction stay ours, and any dependency passes the GPL gate.</div>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Phasing, estimates &amp; risks</h2>
+
+<table>
+  <tr><th>Phase</th><th>Contents</th><th>Estimate</th></tr>
+  <tr><td><b>D1 — Brand &amp; launch</b> <span class="badge d1">first</span></td><td>mark finalization, motion tokens, splash window, titlebar landing, loading primitive reuse</td><td>~4 days</td></tr>
+  <tr><td><b>D2 — Playgrounds</b> <span class="badge d2">parallel-ok</span></td><td>STT lab (incl. WER), TTS lab upgrade (takes, waveform, blind X, deck), shell IA change</td><td>~6 days</td></tr>
+  <tr><td><b>D3 — Builder</b> <span class="badge d3">largest</span></td><td>graph model + persistence, canvas control, palette/inspector, run-from-canvas, exporters, live mode</td><td>~10 days</td></tr>
+  <tr><td><b>D4 — Metrics</b> <span class="badge d4">after D3 or standalone</span></td><td>run recorder + bundle format, workbench charts, compare, scripted sources, takeaway rules</td><td>~6 days</td></tr>
+</table>
+
+<table>
+  <tr><th>#</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Canvas scope balloons (every node editor ever has)</td><td class="sev-crit">Crit</td><td>§8.3 linearity constraint is also a scope fence; D3 ships chain-only with save/run/export — no groups, no comments, no subgraphs in v2</td></tr>
+  <tr><td>R2</td><td>Splash becomes a vanity delay</td><td class="sev-med">Med</td><td>hard rule: dismiss-on-ready + click-to-skip; measure cold start in CI smoke</td></tr>
+  <tr><td>R3</td><td>Live canvas perturbs the session it visualises</td><td class="sev-high">High</td><td>same architecture that already works: hub drop-oldest + ≤30 fps coalesced drain; particles are render-side only</td></tr>
+  <tr><td>R4</td><td>Metrics implies trends it can't support (cold cache, contended CPU)</td><td class="sev-med">Med</td><td>runs record machine context (core count, first-run flags); compare view warns when contexts differ; scripted runs encouraged for comparisons</td></tr>
+  <tr><td>R5</td><td>Two playgrounds + Talk fight over one output device</td><td class="sev-med">Med</td><td>v1's arbitration generalizes to an app-wide audio-focus owner; the UI shows who holds it</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Open questions</h2>
+
+<ol>
+  <li><b>Branching pipelines</b> — is fan-out/fan-in (tee-to-recorder, parallel TTS) wanted enough to spec as a framework feature? It changes the runtime, not just the canvas (§8.3).</li>
+  <li><b>Run sharing</b> — run bundles are local JSON; is "export → attach to a GitHub issue" enough, or is a viewer for foreign bundles worth building (support workflows)?</li>
+  <li><b>Cloud STT/TTS in playgrounds</b> — keys permitting, should cloud providers appear in the labs for cross-vendor comparison, or do we keep the labs local-only and leave cloud to Talk?</li>
+  <li><b>Brand reach</b> — does the animated mark extend to the README (animated SVG renders on GitHub), docs site, and NuGet icon in this phase, or stay app-only?</li>
+</ol>
+
+</div>
+</body>
+</html>

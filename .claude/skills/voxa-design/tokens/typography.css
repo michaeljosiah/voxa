@@ -1,0 +1,43 @@
+/* ============================================================
+   VOXA STUDIO · Typography tokens  (VST-002)
+   Inter (UI) · Cascadia Code (every number, id, timestamp).
+   If it's data, it's mono.
+   ============================================================ */
+:root {
+  --font-ui:      'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-display: var(--font-ui);   /* no separate display face — letter-spaced Inter caps for brand moments */
+  --font-body:    var(--font-ui);
+  --font-mono:    'Cascadia Code', ui-monospace, 'Consolas', monospace;
+
+  /* ---- Size scale (px) ----
+     Brief data scale: 11/12 dense · 13 body · 15 section · 20 view title. */
+  --fs-2xs: 11px;   /* dense data, micro-labels */
+  --fs-xs:  12px;   /* dense data              */
+  --fs-sm:  13px;   /* body                    */
+  --fs-md:  14px;   /* UI base                 */
+  --fs-lg:  15px;   /* section                 */
+  --fs-xl:  20px;   /* view title              */
+  --fs-2xl: 26px;
+  --fs-3xl: 34px;
+  --fs-4xl: 44px;
+  --fs-5xl: 60px;
+
+  /* ---- Line heights ---- */
+  --lh-tight: 1.15;  /* @kind other */
+  --lh-snug:  1.35;  /* @kind other */
+  --lh-body:  1.55;  /* @kind other */
+
+  /* ---- Tracking ---- */
+  --ls-display:    -0.02em;  /* @kind other */
+  --ls-body:        0;       /* @kind other */
+  --ls-label:       0.08em;  /* @kind other */
+  --ls-mono-label:  0.06em;  /* @kind other */
+  --ls-wordmark:    0.42em;  /* @kind other */
+
+  /* ---- Weights ---- */
+  --fw-regular:  400;   /* @kind font */
+  --fw-medium:   500;   /* @kind font */
+  --fw-semibold: 600;   /* @kind font */
+  --fw-bold:     700;   /* @kind font */
+  --fw-display:  700;   /* @kind font */
+}

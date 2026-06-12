@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none" aria-label="VOXA app icon">
+  
+  <rect width="96" height="96" rx="22" fill="#11161D"></rect>
+  <rect x="0.5" y="0.5" width="95" height="95" rx="21.5" stroke="rgba(166,178,194,0.16)" fill="none"></rect>
+  <g transform="translate(17,18) scale(0.62)">
+    <path d="M14,18 L50,86 L86,18" fill="none" stroke="#4FC3F7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+    <rect x="38" y="34" width="7" height="22" rx="3.5" fill="#4FC3F7"></rect>
+    <rect x="50" y="26" width="7" height="30" rx="3.5" fill="#4FC3F7"></rect>
+    <rect x="62" y="38" width="7" height="18" rx="3.5" fill="#4FC3F7"></rect>
+  </g>
+</svg>

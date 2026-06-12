@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" aria-label="VOXA mark">
+  
+  <path d="M14,18 L50,86 L86,18" fill="none" stroke="#4FC3F7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"></path>
+  <rect x="38" y="34" width="7" height="22" rx="3.5" fill="#4FC3F7"></rect>
+  <rect x="50" y="26" width="7" height="30" rx="3.5" fill="#4FC3F7"></rect>
+  <rect x="62" y="38" width="7" height="18" rx="3.5" fill="#4FC3F7"></rect>
+</svg>
