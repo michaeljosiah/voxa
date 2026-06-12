@@ -5,7 +5,7 @@ namespace Voxa.Studio.ViewModels;
 
 /// <summary>
 /// Shell view model: the nav rail's four sections and the shared session coordination
-/// (one output device — Voice Lab playback disables while a Talk session is live).
+/// (one audio device — playground playback/capture disables while a Talk session is live).
 /// </summary>
 public sealed partial class MainWindowViewModel : ObservableObject
 {
@@ -13,7 +13,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         Services = services;
         Talk = new TalkViewModel(services);
-        Voices = new VoicesViewModel(services);
+        Playgrounds = new PlaygroundsViewModel(services);
         Models = new ModelsViewModel(services);
         Config = new ConfigViewModel(services);
 
@@ -21,7 +21,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             if (e.PropertyName == nameof(TalkViewModel.IsRunning))
             {
-                Voices.PlaybackBlocked = Talk.IsRunning;
+                Playgrounds.Tts.PlaybackBlocked = Talk.IsRunning;
+                Playgrounds.Stt.CaptureBlocked = Talk.IsRunning;
                 Config.ApplyBlocked = Talk.IsRunning; // a live session's scope belongs to the old container
                 OnPropertyChanged(nameof(IsLive));
             }
@@ -31,26 +32,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
         services.Reconfigured += () =>
         {
             Talk.RefreshFromConfig();
-            Voices.RefreshCacheState();
+            Playgrounds.RefreshCacheState();
             Models.Refresh();
         };
     }
 
     public StudioServices Services { get; }
     public TalkViewModel Talk { get; }
-    public VoicesViewModel Voices { get; }
+    public PlaygroundsViewModel Playgrounds { get; }
     public ModelsViewModel Models { get; }
     public ConfigViewModel Config { get; }
 
-    /// <summary>0 Talk, 1 Voices, 2 Models, 3 Config — bound to the nav rail.</summary>
+    /// <summary>0 Talk, 1 Playgrounds, 2 Models, 3 Config — bound to the nav rail.</summary>
     [ObservableProperty] private int _selectedSection;
 
     public bool IsLive => Talk.IsRunning;
 
     partial void OnSelectedSectionChanged(int value)
     {
-        // Entering Voices/Models refreshes cache-dependent state (downloads may have happened).
-        if (value == 1) Voices.RefreshCacheState();
+        // Entering Playgrounds/Models refreshes cache-dependent state (downloads may have happened).
+        if (value == 1) Playgrounds.RefreshCacheState();
         if (value == 2) Models.Refresh();
     }
 }

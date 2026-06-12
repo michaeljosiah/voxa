@@ -47,7 +47,7 @@ public partial class MainWindow : Window
 
         var section = radio.Tag switch
         {
-            "Voices" => 1,
+            "Playgrounds" => 1,
             "Models" => 2,
             "Config" => 3,
             _ => 0,
@@ -57,7 +57,7 @@ public partial class MainWindow : Window
             vm.SelectedSection = section;
 
         TalkHost.IsVisible = section == 0;
-        VoicesHost.IsVisible = section == 1;
+        PlaygroundsHost.IsVisible = section == 1;
         ModelsHost.IsVisible = section == 2;
         ConfigHost.IsVisible = section == 3;
     }

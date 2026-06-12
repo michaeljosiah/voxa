@@ -1,8 +1,15 @@
-# Voxa
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/voxa-logo-animated.svg">
+    <img src="assets/voxa-logo-animated-light.svg" alt="VOXA" width="300">
+  </picture>
+</p>
 
-[![CI](https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml/badge.svg)](https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+<p align="center">
+  <a href="https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml"><img src="https://github.com/michaeljosiah/voxa/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-512BD4" alt=".NET 10"></a>
+</p>
 
 A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
@@ -86,9 +93,14 @@ dotnet run --project apps/Voxa.Studio
    offline. You get a streaming transcript, a **live VAD probability trace** (watch the gate
    open as you speak), and a **per-turn latency waterfall** showing exactly where the response
    time went: `VAD → STT → AGENT → TTS → OUT`. Talk over the bot to test barge-in.
-2. **Voices** — type a sentence and press ▶ on any Piper or Kokoro voice to hear it through
-   the real engine, with TTFB and RTF measured on your hardware. Pin two voices to **A**/**B**
-   for instant comparison; `⤓ wav` exports the audio.
+2. **Playgrounds** — two standalone labs behind one switch. The **STT lab** transcribes the
+   bundled `jfk.wav` fixture, any WAV you drop on it, or a live mic recording with any pinned
+   Whisper model, stamps each result with its final-transcript latency, and computes a live
+   **WER** diff against a reference text (run two models side-by-side for the accuracy/speed
+   trade-off). The **TTS lab** synthesizes through the real Piper/Kokoro engines with TTFB and
+   RTF measured on your hardware — replayable take history with a waveform scrubber, **A**/**B**
+   pins plus an **A/B/X blind test**, a stress-phrase deck, and a batch bench that tables TTFB
+   p50/p95 per voice (CSV export).
 3. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
    **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
 4. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and

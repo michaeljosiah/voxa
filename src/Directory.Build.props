@@ -1,0 +1,15 @@
+<Project>
+
+  <!-- Shared NuGet branding for every package under src/ (VST-002 brand reach: the mark
+       extends to the NuGet icon). assets/voxa-icon.png is generated from code — see
+       BrandAssetExportTests (VOXA_BRAND_EXPORT=1) — never hand-edited. -->
+  <PropertyGroup>
+    <PackageIcon>voxa-icon.png</PackageIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\assets\voxa-icon.png"
+          Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

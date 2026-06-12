@@ -6,8 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Brand reach (VST-002 open question #4, resolved: yes).** The animated mark extends beyond the app: the README and the new docs index ([docs/README.md](docs/README.md)) carry a CSS-animated SVG of the mark (the splash's draw-on choreography, plays once, honors `prefers-reduced-motion`, dark/light variants via GitHub's theme switcher), and every NuGet package under `src/` now ships a `PackageIcon` — a 128 px raster of the app icon generated from code (`VOXA_BRAND_EXPORT=1` regenerates it) and wired through a shared `src/Directory.Build.props`.
+- **Voxa Studio: STT and TTS playgrounds (VST-002 D2).** The nav's *Voices* section grew into
+  *Playgrounds* — two standalone labs behind a segmented switch. The **STT lab** drives
+  `WhisperCppSttEngine` directly against the bundled `jfk.wav` fixture, a dropped/browsed WAV
+  (stereo + arbitrary-rate PCM16 converted), or a live mic recording; each utterance lands as a
+  card stamped with its waveform and final-transcript latency, a reference text yields a live
+  **WER** with insert/substitute/delete diff coloring, and side-by-side mode runs two models
+  sequentially over the same audio. The **TTS lab** (the v1 Voice Lab, matured) adds a
+  replayable take history whose waveform is the playback scrubber, an A/B/X blind test, a
+  curated stress-phrase deck, and a batch bench producing TTFB p50/p95 + mean RTF per checked
+  voice with CSV export. New shared `WaveformStripControl` (bottom-aligned envelope bars,
+  optional interactive playhead) and an exact Levenshtein word-alignment `WordErrorRate`.
+
 ### Fixed
 
+- **Kokoro: `bf_emma` and `bm_george` failed SHA-256 verification on download.** The two British-voice pins in `KokoroCatalog` never matched what `onnx-community/Kokoro-82M-v1.0-ONNX` serves (only download-time verification could catch it: the LocalModels CI lane runs against a pre-seeded cache, and the suite exercises the American voices). Re-pinned from the repo's authoritative LFS metadata and verified against fresh downloads.
+- **Studio: one bad artifact no longer aborts "Prefetch full catalog".** Bulk provisioning now fetches each artifact independently and reports the casualties at the end ("Prefetched 21/23 — failed: …") instead of cancelling the remaining downloads on the first failure. Talk-session prefetch is unchanged — a session genuinely needs all of its artifacts.
 - **Frames could be silently dropped at the processor handoff when an interruption raced them.** `FrameProcessor.QueueFrameAsync` passed the per-frame preemption token to `Channel.WriteAsync`, which checks the token *before* writing even when the channel has capacity — so a concurrent `InterruptionFrame` could abort the forwarding of an already-processed frame between processors (observed as a final transcript lost ~50% of the time when an interruption arrived immediately after it; the sink-side twin of this bug was fixed in VPS-001). The handoff now uses a synchronous `TryWrite` fast path, making it atomic with respect to preemption; the cancellable awaited write remains only for genuine backpressure on a full channel. `WebSocketAudioSinkPurgeTests.NonAudio_IsNeverPurged` — previously misfiled as a flaky test — pinned this bug all along and now passes deterministically.
 - Deflaked `TextToSpeechProcessorTests`: replaced fixed `Task.Delay` waits with condition polling, and removed an ordering assertion between `TextFrame` (data channel) and `BotStartedSpeakingFrame` (system/priority channel) that the dual-channel architecture never guaranteed — system frames may legitimately overtake data frames. The meaningful FIFO contract (text envelope before the first audio chunk) is still asserted. Raised the WebSocket purge tests' wait cap from 3 s to the repo-standard 10 s.
 

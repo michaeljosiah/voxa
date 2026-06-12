@@ -165,17 +165,23 @@
   <!-- ── nav rail: icon + 10px label, active = card bg + hairline + cyan + edge bar ── -->
 
   <Style Selector="RadioButton.vx-nav">
+    <!-- Fluent's RadioButton defaults to HorizontalAlignment=Left — without Stretch the
+         active card hugs the icon instead of spanning the rail (the kit's card is full-width
+         minus the 6px gutters, icon AND label inside). -->
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Panel Margin="6,2">
+        <Panel>
           <Border Name="navBorder"
+                  Margin="6,2"
                   CornerRadius="10"
                   Background="Transparent"
                   BorderThickness="1"
                   BorderBrush="Transparent"
-                  Padding="4,10">
+                  Padding="4,11">
             <StackPanel Spacing="5" HorizontalAlignment="Center">
-              <ContentPresenter Content="{TemplateBinding Content}"
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Content="{TemplateBinding Content}"
                                 HorizontalAlignment="Center" />
               <TextBlock Name="navLabel"
                          Text="{TemplateBinding Tag}"
@@ -184,10 +190,11 @@
                          Foreground="{StaticResource VxMutedBrush}" />
             </StackPanel>
           </Border>
+          <!-- Active edge bar sits at the rail's absolute left edge, inset 14px top/bottom. -->
           <Rectangle Name="navAccent"
                      Width="2" RadiusX="1" RadiusY="1"
                      HorizontalAlignment="Left"
-                     Margin="-6,12,0,12"
+                     Margin="0,14"
                      Fill="{StaticResource VxAccentBrush}"
                      IsVisible="False" />
         </Panel>
@@ -224,6 +231,109 @@
   </Style>
   <Style Selector="RadioButton.vx-nav:checked PathIcon">
     <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
+  </Style>
+
+  <!-- ── segmented switch (the Playgrounds STT|TTS selector, source strips) ── -->
+
+  <Style Selector="Border.vx-seg-track">
+    <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <Style Selector="RadioButton.vx-seg">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="segBorder" CornerRadius="8" Background="Transparent" Padding="12,6">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="RadioButton.vx-seg /template/ Border#segBorder">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="RadioButton.vx-seg:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+  </Style>
+  <!-- Active segment: cyan fill, ink text — never white on cyan. -->
+  <Style Selector="RadioButton.vx-seg:checked /template/ Border#segBorder">
+    <Setter Property="Background" Value="{StaticResource VxAccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.vx-seg:checked">
+    <Setter Property="Foreground" Value="{StaticResource VxOnAccentBrush}" />
+  </Style>
+
+  <!-- Disclosure section header: chevron + caps label; content elsewhere binds IsChecked.
+       Progressive disclosure is the calm-by-default rule (P2) applied to power features. -->
+  <Style Selector="ToggleButton.vx-section">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent" Padding="2,4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Name="chev" Data="M0,0 L5,5 L0,10"
+                  Stroke="{StaticResource VxMutedBrush}" StrokeThickness="1.5"
+                  VerticalAlignment="Center"
+                  RenderTransform="rotate(0deg)">
+              <Path.Transitions>
+                <Transitions>
+                  <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12" />
+                </Transitions>
+              </Path.Transitions>
+            </Path>
+            <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ToggleButton.vx-section:checked /template/ Path#chev">
+    <Setter Property="RenderTransform" Value="rotate(90deg)" />
+  </Style>
+  <Style Selector="ToggleButton.vx-section:pointerover /template/ Path#chev">
+    <Setter Property="Stroke" Value="{StaticResource VxTextBrush}" />
+  </Style>
+
+  <!-- Quiet row affordances: nearly silent until the row is hovered (or the state is active). -->
+  <Style Selector="ListBoxItem Button.vx-quiet">
+    <Setter Property="Opacity" Value="0.35" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="ListBoxItem:pointerover Button.vx-quiet">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="ListBoxItem Button.vx-quiet.pinned">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Stress-phrase chips: mono pills that load the deck into the text box. -->
+  <Style Selector="Button.vx-phrase">
+    <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="FontFamily" Value="{StaticResource VxMono}" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Button.vx-phrase:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource VxLine3Brush}" />
   </Style>
 
   <!-- ── inputs: surface-2, line-2 border, radius 10, cyan on focus ── -->

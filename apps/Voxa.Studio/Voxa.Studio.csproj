@@ -36,6 +36,8 @@
 
   <ItemGroup>
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The bundled STT fixture (§6.1): replayable, known content, ships in-repo. -->
+    <Content Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

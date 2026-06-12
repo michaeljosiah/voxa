@@ -184,6 +184,38 @@ public class BrandTests
             shell.Show();
             shell.CaptureRenderedFrame()!.Save(Path.Combine(dir, "shell-talk.png"));
             shell.Close();
+
+            // D2: the two playground labs, with enough fake state to show every panel.
+            var stt = new SttPlaygroundViewModel(TestSupport.Services());
+            stt.Cards.Insert(0, new TranscriptCard(
+                "tiny.en", "Ask not what your country can do for you.", 2.1, 142,
+                [.3f, .6f, .8f, .5f, .9f, .7f, .4f, .6f, .3f, .7f, .5f, .2f, .6f, .8f, .4f]));
+            stt.ReferenceText = "Ask not what your country can do for you, today.";
+            var sttWindow = new Window
+            {
+                Width = 1180, Height = 700, Background = Avalonia.Media.Brush.Parse("#0B0F14"),
+                Content = new SttPlaygroundView { DataContext = stt },
+            };
+            sttWindow.Show();
+            sttWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "playground-stt.png"));
+            sttWindow.Close();
+
+            var tts = new TtsPlaygroundViewModel(TestSupport.Services());
+            var pcm = new byte[32000];
+            for (int i = 0; i < pcm.Length; i += 2) pcm[i + 1] = (byte)(0x10 + 0x30 * Math.Abs(Math.Sin(i * 0.001)));
+            var take = new TtsTake("en_US-amy-low", "Piper", "Your order shipped this morning.", pcm, 16000,
+                96, 0.21, Services.PcmEnvelope.Compute(pcm, 56));
+            tts.Takes.Add(take);
+            tts.CurrentTake = take;
+            tts.PlaybackPosition = 0.42;
+            var ttsWindow = new Window
+            {
+                Width = 1180, Height = 760, Background = Avalonia.Media.Brush.Parse("#0B0F14"),
+                Content = new TtsPlaygroundView { DataContext = tts },
+            };
+            ttsWindow.Show();
+            ttsWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "playground-tts.png"));
+            ttsWindow.Close();
         }
         finally
         {
