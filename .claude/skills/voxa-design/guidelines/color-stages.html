@@ -1,0 +1,34 @@
+<!-- @dsCard group="Colors" viewport="700x190" name="Stage colors — the five fixed stages" subtitle="Same five colors mean the same five stages everywhere" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 18px 22px; }
+  .stages { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .st { border: 1px solid var(--line-2); border-left-width: 3px; border-radius: var(--r-md); padding: 10px 12px; background: var(--surface-2); }
+  .st .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-label); text-transform: uppercase; }
+  .st .h { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); margin-top: 5px; }
+  .st .v { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+  .ports { display: flex; gap: 16px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+  .port { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+  .port i { width: 9px; height: 9px; border-radius: 50%; }
+</style>
+</head>
+<body>
+  <div class="stages">
+    <div class="st" style="border-left-color: var(--stage-vad)"><span class="k" style="color: var(--stage-vad)">vad</span><div class="v">gate · audio</div><div class="h">#76849B</div></div>
+    <div class="st" style="border-left-color: var(--stage-stt)"><span class="k" style="color: var(--stage-stt)">stt</span><div class="v">speech→text</div><div class="h">#4FC3F7</div></div>
+    <div class="st" style="border-left-color: var(--stage-agent)"><span class="k" style="color: var(--stage-agent)">agent</span><div class="v">llm · reasoning</div><div class="h">#CE93D8</div></div>
+    <div class="st" style="border-left-color: var(--stage-tts)"><span class="k" style="color: var(--stage-tts)">tts</span><div class="v">text→speech</div><div class="h">#FFB74D</div></div>
+    <div class="st" style="border-left-color: var(--stage-out)"><span class="k" style="color: var(--stage-out)">out</span><div class="v">speaker · live</div><div class="h">#66BB6A</div></div>
+  </div>
+  <div class="ports">
+    <span class="port"><i style="background: var(--stage-vad)"></i>audio port</span>
+    <span class="port"><i style="background: var(--stage-stt)"></i>transcription port</span>
+    <span class="port"><i style="background: var(--stage-agent)"></i>agent-text port</span>
+    <span class="port"><i style="background: var(--stage-tts)"></i>synth-audio port</span>
+  </div>
+</body>
+</html>

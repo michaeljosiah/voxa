@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Signal — semantic" subtitle="ok / warn / danger / info with soft fills" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 18px 22px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .cell { border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-2); }
+  .dot { width: 14px; height: 14px; border-radius: 50%; }
+  .name { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+  .chip { align-self: flex-start; font-family: var(--font-mono); font-size: 10px; padding: 3px 8px; border-radius: var(--r-full); border: 1px solid; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><span class="dot" style="background: var(--ok)"></span><span class="name">--ok · #66BB6A</span><span class="chip" style="color: var(--ok); background: var(--ok-soft); border-color: rgba(61,220,151,.3)">healthy</span></div>
+    <div class="cell"><span class="dot" style="background: var(--warn)"></span><span class="name">--warn · #FFB74D</span><span class="chip" style="color: var(--warn); background: var(--warn-soft); border-color: rgba(255,194,75,.3)">degraded</span></div>
+    <div class="cell"><span class="dot" style="background: var(--danger)"></span><span class="name">--danger · #EF5350</span><span class="chip" style="color: var(--danger); background: var(--danger-soft); border-color: rgba(255,93,115,.3)">failed</span></div>
+    <div class="cell"><span class="dot" style="background: var(--info)"></span><span class="name">--info · #4FC3F7</span><span class="chip" style="color: var(--info); background: var(--info-soft); border-color: rgba(77,166,255,.3)">preview</span></div>
+  </div>
+</body>
+</html>

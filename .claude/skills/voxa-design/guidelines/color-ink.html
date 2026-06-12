@@ -1,0 +1,45 @@
+<!-- @dsCard group="Colors" viewport="700x190" name="Ink — neutral scale" subtitle="Cool blue-cast neutrals, dark-first" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 18px 22px; }
+  .ramp { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; }
+  .sw { height: 56px; border-radius: var(--r-sm); border: 1px solid var(--line-1); }
+  .lbl { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; margin-top: 6px; }
+  .lbl span { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); text-align: center; }
+  .roles { display: flex; gap: 18px; margin-top: 12px; font-size: 12px; color: var(--text-3); flex-wrap: wrap; }
+  .roles code { color: var(--text-2); font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="ramp">
+    <div class="sw" style="background: var(--ink-950)"></div>
+    <div class="sw" style="background: var(--ink-900)"></div>
+    <div class="sw" style="background: var(--ink-850)"></div>
+    <div class="sw" style="background: var(--ink-800)"></div>
+    <div class="sw" style="background: var(--ink-700)"></div>
+    <div class="sw" style="background: var(--ink-600)"></div>
+    <div class="sw" style="background: var(--ink-500)"></div>
+    <div class="sw" style="background: var(--ink-400)"></div>
+    <div class="sw" style="background: var(--ink-300)"></div>
+    <div class="sw" style="background: var(--ink-200)"></div>
+    <div class="sw" style="background: var(--ink-100)"></div>
+    <div class="sw" style="background: var(--ink-50)"></div>
+  </div>
+  <div class="lbl">
+    <span>950</span><span>900</span><span>850</span><span>800</span><span>700</span><span>600</span><span>500</span><span>400</span><span>300</span><span>200</span><span>100</span><span>50</span>
+  </div>
+  <div class="roles">
+    <span>page <code>950 · #0B0F14</code></span>
+    <span>panel <code>900 · #11161D</code></span>
+    <span>card <code>850</code></span>
+    <span>hairline <code>700 · #222B36</code></span>
+    <span>muted <code>300 · #76849B</code></span>
+    <span>text-2 <code>200</code></span>
+    <span>text-1 <code>#EAF1F8</code></span>
+  </div>
+</body>
+</html>

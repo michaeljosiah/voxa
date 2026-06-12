@@ -1,0 +1,33 @@
+<!-- @dsCard group="Brand" viewport="700x170" name="Iconography" subtitle="Lucide via CDN — 16px, stroke 1.75, currentColor" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 22px 24px; }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .ic { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 64px; }
+  .ic i { width: 20px; height: 20px; color: var(--text-2); }
+  .ic span { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+  .note { margin-top: 14px; font-size: 12px; color: var(--text-3); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="ic"><i data-lucide="mic"></i><span>mic</span></div>
+    <div class="ic"><i data-lucide="audio-lines"></i><span>audio-lines</span></div>
+    <div class="ic"><i data-lucide="phone"></i><span>phone</span></div>
+    <div class="ic"><i data-lucide="bot"></i><span>bot</span></div>
+    <div class="ic"><i data-lucide="workflow"></i><span>workflow</span></div>
+    <div class="ic"><i data-lucide="activity"></i><span>activity</span></div>
+    <div class="ic"><i data-lucide="terminal"></i><span>terminal</span></div>
+    <div class="ic"><i data-lucide="key-round"></i><span>key-round</span></div>
+    <div class="ic"><i data-lucide="settings-2"></i><span>settings-2</span></div>
+    <div class="ic"><i data-lucide="cloud"></i><span>cloud</span></div>
+  </div>
+  <p class="note">Stroke icons only — no fills, no emoji. Size 16px in controls, 20px standalone.</p>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>lucide.createIcons({ attrs: { 'stroke-width': 1.75 } });</script>
+</body>
+</html>

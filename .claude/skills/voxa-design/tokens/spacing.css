@@ -1,0 +1,31 @@
+/* ============================================================
+   VOXA · Spacing, radii, layout tokens — 4px base grid
+   ============================================================ */
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+  --sp-24: 96px;
+
+  /* ---- Radii ---- */
+  --r-sm: 6px;     /* badges, inline chips */
+  --r-md: 10px;    /* buttons, inputs */
+  --r-lg: 14px;    /* cards, panels */
+  --r-xl: 20px;    /* hero containers, modals */
+  --r-full: 999px; /* pills, orbs */
+
+  /* ---- Layout ---- */
+  --container-max: 1120px;
+  --sidebar-w: 232px;
+  --control-h-sm: 30px;
+  --control-h-md: 38px;
+  --control-h-lg: 46px;
+}

@@ -16,6 +16,6 @@ public static class Converters
         new FuncValueConverter<bool, IBrush?>(isUser =>
             isUser ? UserBrush : BotBrush);
 
-    private static readonly IBrush UserBrush = new SolidColorBrush(Color.Parse("#1B3B4D"));
-    private static readonly IBrush BotBrush = new SolidColorBrush(Color.Parse("#161D26"));
+    private static readonly IBrush UserBrush = new SolidColorBrush(Color.Parse("#1F4FC3F7")); // accent-soft
+    private static readonly IBrush BotBrush = new SolidColorBrush(Color.Parse("#1C2330"));    // ink-800 raised
 }

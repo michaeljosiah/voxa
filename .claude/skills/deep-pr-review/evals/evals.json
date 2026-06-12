@@ -1,0 +1,35 @@
+{
+  "skill_name": "deep-pr-review",
+  "evals": [
+    {
+      "id": 0,
+      "name": "merged-pr-spec-audit",
+      "prompt": "do a deep review of PR #4 in this repo (the voxa studio PR, branch feat/vst-001-voxa-studio, already merged) — I want to know if anything was missed or left unverified before we build the VST-002 brand work on top of it",
+      "expected_output": "A review report that pulls the PR record from GitHub (body, comments incl. the LLM-config addition comment, CI lanes), cross-references the VST-001 spec acceptance criteria in docs/specifications/voxa-studio-spec.html, audits the diff with file:line evidence, distinguishes verified from unverified claims, and frames findings as post-merge follow-ups with an explicit verdict.",
+      "files": [],
+      "expectations": [
+        "The report identifies the governing VST-001 spec (docs/specifications/voxa-studio-spec.html) and assesses at least 5 of its acceptance criteria with met/partial/not-met status",
+        "The report incorporates the PR #4 conversation: it references content that only appears in PR comments (e.g. the post-spec LLM agent-config addition or the IConfiguration/WaveFormatExtensible review fixes)",
+        "The report states CI status for all three lanes: Build & test (ubuntu), Local speech (zero network), and Voxa Studio (Windows)",
+        "At least three findings or claims cite a specific file path (optionally with line number) as evidence",
+        "The report explicitly separates verified claims from unverified ones (a claims-audit treatment, not just a findings list)",
+        "The verdict is framed for an already-merged PR (post-merge follow-ups), not as a merge gate decision",
+        "Spot-check accuracy: two sampled findings from the report match the actual code at the cited locations (no fabricated findings)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "branch-no-pr",
+      "prompt": "review the current branch before I open a PR — is it ready?",
+      "expected_output": "Recognizes that feat/vst-002-studio-brand has no PR yet, reviews the diff against the main merge-base (the studio-err.txt deletion) plus uncommitted changes (CLAUDE.md, .claude/ skill files), does not hallucinate a PR or PR comments, and gives a clear readiness verdict.",
+      "files": [],
+      "expectations": [
+        "The report correctly determines that no PR exists for feat/vst-002-studio-brand and reviews the branch diff against main instead, saying so explicitly",
+        "The report correctly identifies the branch's committed change (the studio-err.txt deletion) and notes the uncommitted/untracked work (CLAUDE.md, .claude/ skill files, .gitignore edit)",
+        "The report does not fabricate a PR number, PR comments, or CI check results for a nonexistent PR",
+        "The report gives an explicit readiness verdict with a justification",
+        "The report includes results of an actual local verification step (build and/or test run), or explicitly states why verification was skipped"
+      ]
+    }
+  ]
+}

@@ -9,12 +9,13 @@ using Voxa.Studio.Services;
 
 namespace Voxa.Studio.Tests;
 
-/// <summary>Headless Avalonia bootstrap for [AvaloniaFact] tests.</summary>
+/// <summary>Headless Avalonia bootstrap for [AvaloniaFact] tests — Skia-backed so frames render.</summary>
 public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
 }
 
 /// <summary>Shared fixtures: the keyless local config Studio ships, rooted in a temp cache.</summary>

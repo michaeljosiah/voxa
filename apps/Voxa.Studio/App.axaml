@@ -7,33 +7,99 @@
        at parse time, and XAML processes the file top-to-bottom. -->
   <Application.Resources>
     <ResourceDictionary>
-      <!-- The Voxa Studio palette: near-black blue-greys, hairline borders, a single cyan
-           accent with restrained glow. Matches the spec documents' visual language. -->
-      <Color x:Key="VxBg">#0B0F14</Color>
-      <Color x:Key="VxPanel">#11161D</Color>
-      <Color x:Key="VxPanel2">#161D26</Color>
-      <Color x:Key="VxBorder">#222B36</Color>
-      <Color x:Key="VxText">#D7DDE6</Color>
-      <Color x:Key="VxMuted">#76849B</Color>
-      <Color x:Key="VxAccent">#4FC3F7</Color>
-      <Color x:Key="VxAccentDim">#1B3B4D</Color>
+
+      <!-- ════════ VOXA design tokens (VST-002 brief · voxa-design skill) ════════
+           Dark-only. Ink = neutral blue-grey scale, Pulse = THE single cyan accent,
+           Halo = agent/LLM violet (semantic only). Color beyond cyan is semantic:
+           the five stage colors and ok/warn/danger. No gradients, ever. -->
+
+      <!-- ── Ink · neutral scale ── -->
+      <Color x:Key="VxBg">#0B0F14</Color>          <!-- ink-950 · page -->
+      <Color x:Key="VxPanel">#11161D</Color>       <!-- ink-900 · panel -->
+      <Color x:Key="VxPanel2">#161C26</Color>      <!-- ink-850 · card -->
+      <Color x:Key="VxRaised">#1C2330</Color>      <!-- ink-800 · raised -->
+      <Color x:Key="VxInk700">#222B36</Color>
+      <Color x:Key="VxInk600">#2C3645</Color>
+      <Color x:Key="VxInk500">#3A4656</Color>
+      <Color x:Key="VxInk400">#4E5C70</Color>
+
+      <!-- ── Text ── -->
+      <Color x:Key="VxText">#EAF1F8</Color>        <!-- text-1 · titles -->
+      <Color x:Key="VxText2">#A6B2C2</Color>       <!-- text-2 · body -->
+      <Color x:Key="VxMuted">#76849B</Color>       <!-- text-3 · muted (AA on page) -->
+      <Color x:Key="VxOnAccent">#0B0F14</Color>    <!-- text on cyan is ink, never white -->
+
+      <!-- ── Hairlines (white-alpha) ── -->
+      <Color x:Key="VxLine1">#1AA6B2C2</Color>     <!-- 10% · resting -->
+      <Color x:Key="VxLine2">#29A6B2C2</Color>     <!-- 16% · controls -->
+      <Color x:Key="VxLine3">#47A6B2C2</Color>     <!-- 28% · hover -->
+      <Color x:Key="VxBorder">#1AA6B2C2</Color>    <!-- legacy alias = line-1 -->
+
+      <!-- ── Pulse · the accent ── -->
+      <Color x:Key="VxAccent">#4FC3F7</Color>      <!-- pulse-400 -->
+      <Color x:Key="VxAccent2">#81D4FA</Color>     <!-- pulse-300 · micro-labels/section heads -->
+      <Color x:Key="VxAccentPressed">#29A8E0</Color> <!-- pulse-500 -->
+      <Color x:Key="VxAccentDim">#1F4FC3F7</Color> <!-- accent-soft (12%) · selection bg -->
+
+      <!-- ── Halo · agent violet (semantic only) ── -->
+      <Color x:Key="VxHalo">#CE93D8</Color>
+      <Color x:Key="VxHaloSoft">#1FCE93D8</Color>
+
+      <!-- ── Semantic ── -->
       <Color x:Key="VxGood">#66BB6A</Color>
       <Color x:Key="VxWarn">#FFB74D</Color>
       <Color x:Key="VxBad">#EF5350</Color>
+      <Color x:Key="VxGoodSoft">#2166BB6A</Color>
+      <Color x:Key="VxWarnSoft">#21FFB74D</Color>
+      <Color x:Key="VxBadSoft">#21EF5350</Color>
 
+      <!-- ── Stage palette · the five fixed pipeline stages.
+           The same five colors mean the same five stages EVERYWHERE:
+           waterfall bars, trace, port dots, metric series. ── -->
+      <Color x:Key="VxStageVad">#76849B</Color>
+      <Color x:Key="VxStageStt">#4FC3F7</Color>
+      <Color x:Key="VxStageAgent">#CE93D8</Color>
+      <Color x:Key="VxStageTts">#FFB74D</Color>
+      <Color x:Key="VxStageOut">#66BB6A</Color>
+
+      <!-- ── Brushes ── -->
       <SolidColorBrush x:Key="VxBgBrush" Color="{StaticResource VxBg}" />
       <SolidColorBrush x:Key="VxPanelBrush" Color="{StaticResource VxPanel}" />
       <SolidColorBrush x:Key="VxPanel2Brush" Color="{StaticResource VxPanel2}" />
-      <SolidColorBrush x:Key="VxBorderBrush" Color="{StaticResource VxBorder}" />
+      <SolidColorBrush x:Key="VxRaisedBrush" Color="{StaticResource VxRaised}" />
+      <SolidColorBrush x:Key="VxInk700Brush" Color="{StaticResource VxInk700}" />
+      <SolidColorBrush x:Key="VxInk500Brush" Color="{StaticResource VxInk500}" />
+      <SolidColorBrush x:Key="VxInk400Brush" Color="{StaticResource VxInk400}" />
       <SolidColorBrush x:Key="VxTextBrush" Color="{StaticResource VxText}" />
+      <SolidColorBrush x:Key="VxText2Brush" Color="{StaticResource VxText2}" />
       <SolidColorBrush x:Key="VxMutedBrush" Color="{StaticResource VxMuted}" />
+      <SolidColorBrush x:Key="VxOnAccentBrush" Color="{StaticResource VxOnAccent}" />
+      <SolidColorBrush x:Key="VxLine1Brush" Color="{StaticResource VxLine1}" />
+      <SolidColorBrush x:Key="VxLine2Brush" Color="{StaticResource VxLine2}" />
+      <SolidColorBrush x:Key="VxLine3Brush" Color="{StaticResource VxLine3}" />
+      <SolidColorBrush x:Key="VxBorderBrush" Color="{StaticResource VxBorder}" />
       <SolidColorBrush x:Key="VxAccentBrush" Color="{StaticResource VxAccent}" />
+      <SolidColorBrush x:Key="VxAccent2Brush" Color="{StaticResource VxAccent2}" />
+      <SolidColorBrush x:Key="VxAccentPressedBrush" Color="{StaticResource VxAccentPressed}" />
       <SolidColorBrush x:Key="VxAccentDimBrush" Color="{StaticResource VxAccentDim}" />
+      <SolidColorBrush x:Key="VxHaloBrush" Color="{StaticResource VxHalo}" />
+      <SolidColorBrush x:Key="VxHaloSoftBrush" Color="{StaticResource VxHaloSoft}" />
       <SolidColorBrush x:Key="VxGoodBrush" Color="{StaticResource VxGood}" />
       <SolidColorBrush x:Key="VxWarnBrush" Color="{StaticResource VxWarn}" />
       <SolidColorBrush x:Key="VxBadBrush" Color="{StaticResource VxBad}" />
+      <SolidColorBrush x:Key="VxGoodSoftBrush" Color="{StaticResource VxGoodSoft}" />
+      <SolidColorBrush x:Key="VxWarnSoftBrush" Color="{StaticResource VxWarnSoft}" />
+      <SolidColorBrush x:Key="VxBadSoftBrush" Color="{StaticResource VxBadSoft}" />
+      <SolidColorBrush x:Key="VxStageVadBrush" Color="{StaticResource VxStageVad}" />
+      <SolidColorBrush x:Key="VxStageSttBrush" Color="{StaticResource VxStageStt}" />
+      <SolidColorBrush x:Key="VxStageAgentBrush" Color="{StaticResource VxStageAgent}" />
+      <SolidColorBrush x:Key="VxStageTtsBrush" Color="{StaticResource VxStageTts}" />
+      <SolidColorBrush x:Key="VxStageOutBrush" Color="{StaticResource VxStageOut}" />
 
+      <!-- ── Type ── -->
       <FontFamily x:Key="VxMono">Cascadia Code, Consolas, Menlo, monospace</FontFamily>
+      <FontFamily x:Key="VxUi">Inter, Segoe UI Variable, Segoe UI, sans-serif</FontFamily>
+
     </ResourceDictionary>
   </Application.Resources>
 

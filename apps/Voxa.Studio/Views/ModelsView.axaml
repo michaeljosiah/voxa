@@ -4,40 +4,42 @@
              x:Class="Voxa.Studio.Views.ModelsView"
              x:DataType="vm:ModelsViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,12,24,20">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
-      <StackPanel Grid.Column="0" Spacing="8">
-        <TextBlock Classes="vx-h1" Text="Models" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBlock Classes="vx-sub" Text="Cache:" />
-          <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding CacheRoot}"
-                     Foreground="{StaticResource VxTextBrush}" VerticalAlignment="Center" />
-          <Border Classes="vx-chip">
-            <TextBlock FontSize="10" Text="{Binding CacheRootSource}" />
-          </Border>
-          <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding TotalSizeText}"
-                     VerticalAlignment="Center" />
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+          <TextBlock Classes="vx-h1" Text="Models" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding CacheRoot}"
+                       Foreground="{StaticResource VxMutedBrush}" VerticalAlignment="Center" />
+            <Border Classes="vx-chip">
+              <TextBlock FontSize="10" FontFamily="{StaticResource VxMono}"
+                         Text="{Binding CacheRootSource}" />
+            </Border>
+            <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding TotalSizeText}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
         </StackPanel>
-      </StackPanel>
 
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-        <Button Classes="vx-ghost" Content="⟳ Refresh" Command="{Binding RefreshCommand}" />
-        <Button Classes="vx-ghost" Content="✓ Verify all" Command="{Binding VerifyAllCommand}" />
-        <Button Classes="vx-ghost" Content="📂 Open folder" Command="{Binding OpenFolderCommand}" />
-        <Button Classes="vx-primary" Content="⤓ Prefetch full catalog"
-                Command="{Binding PrefetchAllCommand}"
-                IsEnabled="{Binding !IsPrefetching}"
-                ToolTip.Tip="Download every pinned model for this machine — then copy the cache folder to provision an air-gapped box." />
-      </StackPanel>
-    </Grid>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Classes="vx-ghost" Content="Refresh" Command="{Binding RefreshCommand}" />
+          <Button Classes="vx-ghost" Content="Verify all" Command="{Binding VerifyAllCommand}" />
+          <Button Classes="vx-ghost" Content="Open folder" Command="{Binding OpenFolderCommand}" />
+          <Button Classes="vx-primary" Content="Prefetch full catalog"
+                  Command="{Binding PrefetchAllCommand}"
+                  IsEnabled="{Binding !IsPrefetching}"
+                  ToolTip.Tip="Download every pinned model for this machine — then copy the cache folder to provision an air-gapped box." />
+        </StackPanel>
+      </Grid>
+    </Border>
 
-    <ProgressBar Grid.Row="1" Height="3" Margin="0,0,0,10"
+    <ProgressBar Grid.Row="1" Height="3" Margin="20,10,20,0"
                  Minimum="0" Maximum="1" Value="{Binding PrefetchProgress}"
                  Foreground="{StaticResource VxAccentBrush}"
                  IsVisible="{Binding IsPrefetching}" />
 
-    <Border Grid.Row="2" Classes="vx-card-flush">
+    <Border Grid.Row="2" Classes="vx-card-flush" Margin="20,12,20,0">
       <ScrollViewer>
         <ItemsControl ItemsSource="{Binding Rows}" Margin="8">
           <ItemsControl.ItemTemplate>
@@ -73,7 +75,7 @@
       </ScrollViewer>
     </Border>
 
-    <StackPanel Grid.Row="3" Spacing="4" Margin="0,12,0,0">
+    <StackPanel Grid.Row="3" Spacing="4" Margin="20,10,20,14">
       <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
       <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
                  Text="{Binding ErrorText}"

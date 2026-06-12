@@ -6,38 +6,35 @@
              x:Class="Voxa.Studio.Views.TalkView"
              x:DataType="vm:TalkViewModel">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="24,12,24,20">
+  <Grid RowDefinitions="Auto,*,Auto">
 
-    <!-- ── header: devices + start/stop + provider chain ── -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
-      <StackPanel Grid.Column="0" Spacing="8">
-        <TextBlock Classes="vx-h1" Text="Talk" />
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <ComboBox Width="260" ItemsSource="{Binding Microphones}"
+    <!-- ── view bar: title + provider chain (data → mono) · devices · session control ── -->
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+          <TextBlock Classes="vx-h1" Text="Talk" />
+          <TextBlock Classes="vx-label" Text="{Binding ProviderChain}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <ComboBox Width="210" ItemsSource="{Binding Microphones}"
                     SelectedItem="{Binding SelectedMicrophone}"
                     PlaceholderText="Microphone" />
-          <ComboBox Width="260" ItemsSource="{Binding Speakers}"
+          <ComboBox Width="210" ItemsSource="{Binding Speakers}"
                     SelectedItem="{Binding SelectedSpeaker}"
                     PlaceholderText="Speaker" />
-          <Border Classes="vx-chip" VerticalAlignment="Center">
-            <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding ProviderChain}"
-                       Foreground="{StaticResource VxMutedBrush}" />
-          </Border>
+          <Button Classes="vx-primary" Content="● Start session"
+                  Command="{Binding StartCommand}"
+                  IsVisible="{Binding !IsRunning}" />
+          <Button Classes="vx-danger" Content="■ Stop"
+                  Command="{Binding StopCommand}"
+                  IsVisible="{Binding IsRunning}" />
         </StackPanel>
-      </StackPanel>
-
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Bottom">
-        <Button Classes="vx-primary" Content="● Start session"
-                Command="{Binding StartCommand}"
-                IsVisible="{Binding !IsRunning}" />
-        <Button Classes="vx-danger" Content="■ Stop"
-                Command="{Binding StopCommand}"
-                IsVisible="{Binding IsRunning}" />
-      </StackPanel>
-    </Grid>
+      </Grid>
+    </Border>
 
     <!-- ── body: transcript | trace + waterfall ── -->
-    <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*">
+    <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*" Margin="20,16,20,0">
 
       <!-- transcript -->
       <Border Grid.Column="0" Classes="vx-card-flush">
@@ -51,8 +48,10 @@
                           HorizontalAlignment="{Binding IsUser, Converter={x:Static conv:Converters.BubbleAlign}}"
                           Background="{Binding IsUser, Converter={x:Static conv:Converters.BubbleBrush}}">
                     <StackPanel Spacing="2">
-                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                 Foreground="{StaticResource VxText2Brush}" />
                       <TextBlock Text="⊘ interrupted" FontSize="10"
+                                 FontFamily="{StaticResource VxMono}"
                                  Foreground="{StaticResource VxWarnBrush}"
                                  IsVisible="{Binding IsInterrupted}" />
                     </StackPanel>
@@ -66,11 +65,11 @@
           <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="14" Margin="16,8,16,12">
             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsUserSpeaking}">
               <Ellipse Classes="vx-dot" Fill="{StaticResource VxAccentBrush}" />
-              <TextBlock Classes="vx-sub" Text="listening" />
+              <TextBlock Classes="vx-label" Text="LISTENING" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBotSpeaking}">
-              <Ellipse Classes="vx-dot" Fill="{StaticResource VxGoodBrush}" />
-              <TextBlock Classes="vx-sub" Text="speaking" />
+              <Ellipse Classes="vx-dot" Fill="{StaticResource VxStageOutBrush}" />
+              <TextBlock Classes="vx-label" Text="SPEAKING" />
             </StackPanel>
           </StackPanel>
         </Grid>
@@ -78,13 +77,13 @@
 
       <!-- trace + waterfalls + event log -->
       <Grid Grid.Column="2" RowDefinitions="Auto,170,12,Auto,*">
-        <TextBlock Grid.Row="0" Classes="vx-label" Text="VAD PROBABILITY" Margin="2,0,0,6" />
+        <TextBlock Grid.Row="0" Classes="vx-label vx-accent" Text="VAD PROBABILITY" Margin="2,0,0,6" />
         <Border Grid.Row="1" Classes="vx-card-flush" Padding="8">
           <controls:VadTraceControl Samples="{Binding TraceSnapshot}"
                                     Threshold="{Binding VadThreshold}" />
         </Border>
 
-        <TextBlock Grid.Row="3" Classes="vx-label" Text="TURN WATERFALL" Margin="2,12,0,6" />
+        <TextBlock Grid.Row="3" Classes="vx-label vx-accent" Text="TURN WATERFALL" Margin="2,12,0,6" />
         <Grid Grid.Row="4" RowDefinitions="Auto,*">
           <ItemsControl Grid.Row="0" ItemsSource="{Binding Waterfalls}" MaxHeight="220">
             <ItemsControl.ItemTemplate>
@@ -101,6 +100,7 @@
 
           <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,10,0,0">
             <CheckBox Grid.Row="0" Content="Event log" FontSize="11"
+                      Foreground="{StaticResource VxMutedBrush}"
                       IsChecked="{Binding ShowEventLog}" />
             <Border Grid.Row="1" Classes="vx-card-flush" IsVisible="{Binding ShowEventLog}">
               <ListBox ItemsSource="{Binding EventLog}" FontSize="10"
@@ -112,7 +112,7 @@
     </Grid>
 
     <!-- ── status strip ── -->
-    <StackPanel Grid.Row="2" Spacing="4" Margin="0,12,0,0">
+    <StackPanel Grid.Row="2" Spacing="4" Margin="20,10,20,14">
       <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
       <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
                  Text="{Binding ErrorText}" IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />

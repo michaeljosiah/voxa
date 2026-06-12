@@ -1,0 +1,49 @@
+/* ============================================================
+   VOXA · Base element defaults (dark-only system)
+   ============================================================ */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-display);
+  letter-spacing: var(--ls-display);
+  line-height: var(--lh-tight);
+  margin: 0;
+  text-wrap: balance;
+}
+
+p { margin: 0; text-wrap: pretty; }
+
+a { color: var(--pulse-400); text-decoration: none; }
+a:hover { color: var(--pulse-300); }
+
+code, pre, kbd { font-family: var(--font-mono); }
+
+::selection { background: rgba(79, 195, 247, 0.28); color: var(--text-1); }
+
+:focus-visible { outline: none; box-shadow: var(--ring-focus); border-radius: var(--r-sm); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--ink-600); border-radius: 999px; border: 3px solid var(--bg-page); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Uppercase micro-label — a core VOXA pattern */
+.vx-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+}

@@ -1,0 +1,91 @@
+/* ============================================================
+   VOXA STUDIO · Color tokens  (VST-002 design brief)
+   Dark-only. "Ink" = neutral blue-grey scale, "Pulse" = the
+   single cyan accent, "Halo" = the agent/LLM violet.
+   Color beyond cyan is SEMANTIC ONLY (stage colors, good/warn/bad).
+   ============================================================ */
+:root {
+  /* ---- Ink · neutral blue-grey scale ---- */
+  --ink-950: #0B0F14;   /* page bg            */
+  --ink-900: #11161D;   /* panel             */
+  --ink-850: #161C26;   /* card              */
+  --ink-800: #1C2330;   /* raised            */
+  --ink-700: #222B36;   /* hairline base     */
+  --ink-600: #2C3645;
+  --ink-500: #3A4656;
+  --ink-400: #4E5C70;
+  --ink-300: #76849B;   /* muted text · VAD/audio stage */
+  --ink-200: #A6B2C2;
+  --ink-100: #CDD5E0;
+  --ink-50:  #EAEEF4;
+
+  /* ---- Pulse · the single cyan accent ---- */
+  --pulse-200: #BBE6FB;
+  --pulse-300: #81D4FA;  /* lighter cyan — micro-labels, section heads */
+  --pulse-400: #4FC3F7;  /* THE accent — CTAs, live, STT stage, edges  */
+  --pulse-500: #29A8E0;  /* pressed / focus ring                       */
+  --pulse-600: #1E86B8;
+  --pulse-700: #155F82;
+
+  /* ---- Halo · agent / LLM violet (semantic, sparing) ---- */
+  --halo-300: #E2B8E9;
+  --halo-400: #CE93D8;
+  --halo-500: #B670C4;
+  --halo-600: #9450A6;
+
+  /* ---- Signal · semantic ---- */
+  --ok:     #66BB6A;
+  --warn:   #FFB74D;
+  --danger: #EF5350;
+  --info:   #4FC3F7;     /* info == the cyan accent */
+
+  /* ---- Stage colors · the five fixed pipeline stages ----
+     The same five colors mean the same five stages EVERYWHERE:
+     waterfall bars, node ports, edge flows, metric series.    */
+  --stage-vad:   #76849B;          /* VAD / gate / audio frames (grey)  */
+  --stage-audio: var(--stage-vad); /* alias — audio-frame ports are grey */
+  --stage-stt:   #4FC3F7;          /* speech-to-text · transcription     */
+  --stage-agent: #CE93D8;          /* agent · LLM · agent-text frames    */
+  --stage-llm:   var(--stage-agent); /* legacy alias                     */
+  --stage-tts:   #FFB74D;          /* text-to-speech · synth-audio       */
+  --stage-out:   #66BB6A;          /* output · speaker · live            */
+
+  /* ---- Semantic aliases · surfaces ---- */
+  --bg-page:    var(--ink-950);
+  --bg-panel:   var(--ink-900);
+  --surface-1:  var(--ink-900);
+  --surface-2:  var(--ink-850);
+  --surface-3:  var(--ink-800);
+  --surface-4:  var(--ink-700);
+  --surface-card: var(--ink-850);
+
+  /* ---- Semantic aliases · text ---- */
+  --text-1:     #EAF1F8;
+  --text-2:     var(--ink-200);
+  --text-3:     var(--ink-300);
+  --text-muted: var(--ink-300);   /* #76849B — AA on page bg (~4.6:1) */
+  --text-on-pulse: var(--ink-950);
+
+  /* ---- Lines / borders (white-alpha hairlines) ---- */
+  --line-1: rgba(166, 178, 194, 0.10);  /* resting   */
+  --line-2: rgba(166, 178, 194, 0.16);  /* controls  */
+  --line-3: rgba(166, 178, 194, 0.28);  /* hover     */
+
+  /* ---- Accent aliases ---- */
+  --accent:        var(--pulse-400);
+  --accent-strong: var(--pulse-500);
+  --accent-2:      var(--pulse-300);
+  --accent-soft:   rgba(79, 195, 247, 0.12);
+  --halo-soft:     rgba(206, 147, 216, 0.12);
+  --ok-soft:       rgba(102, 187, 106, 0.13);
+  --warn-soft:     rgba(255, 183, 77, 0.13);
+  --danger-soft:   rgba(239, 83, 80, 0.13);
+  --info-soft:     rgba(79, 195, 247, 0.12);
+
+  /* ---- Deprecated gradient tokens ----
+     The brief sanctions NO brand gradient ("a single cyan accent
+     doing all the talking; the mark never fills with gradients").
+     Kept as solid-cyan fallbacks so any stray reference stays on-brand. */
+  --grad-signal:   var(--pulse-400);
+  --grad-signal-h: var(--pulse-400);
+}

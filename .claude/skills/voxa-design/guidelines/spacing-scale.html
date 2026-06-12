@@ -1,0 +1,30 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Spacing scale" subtitle="4px base grid, --sp-1 through --sp-24" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 20px 24px; }
+  .row { display: flex; align-items: flex-end; gap: 14px; }
+  .u { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .bar { width: 22px; background: var(--accent-soft); border: 1px solid rgba(63,232,203,.4); border-radius: 3px; }
+  .u span { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="u"><div class="bar" style="height: 4px"></div><span>1·4</span></div>
+    <div class="u"><div class="bar" style="height: 8px"></div><span>2·8</span></div>
+    <div class="u"><div class="bar" style="height: 12px"></div><span>3·12</span></div>
+    <div class="u"><div class="bar" style="height: 16px"></div><span>4·16</span></div>
+    <div class="u"><div class="bar" style="height: 20px"></div><span>5·20</span></div>
+    <div class="u"><div class="bar" style="height: 24px"></div><span>6·24</span></div>
+    <div class="u"><div class="bar" style="height: 32px"></div><span>8·32</span></div>
+    <div class="u"><div class="bar" style="height: 40px"></div><span>10·40</span></div>
+    <div class="u"><div class="bar" style="height: 48px"></div><span>12·48</span></div>
+    <div class="u"><div class="bar" style="height: 64px"></div><span>16·64</span></div>
+    <div class="u"><div class="bar" style="height: 80px"></div><span>20·80</span></div>
+  </div>
+</body>
+</html>

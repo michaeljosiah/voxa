@@ -4,13 +4,20 @@
              x:Class="Voxa.Studio.Views.ConfigView"
              x:DataType="vm:ConfigViewModel">
 
-  <Grid ColumnDefinitions="5*,12,4*" Margin="24,12,24,20">
+  <Grid RowDefinitions="Auto,*">
+
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="vx-h1" Text="Config" />
+        <TextBlock Classes="vx-label"
+                   Text="LIVE PROVIDER REGISTRY · SAME VALIDATOR A SERVER BOOTS WITH · EXPORT NEVER CARRIES SECRETS" />
+      </StackPanel>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*" Margin="20,16,20,16">
 
     <!-- ── selections ── -->
     <StackPanel Grid.Column="0" Spacing="14">
-      <TextBlock Classes="vx-h1" Text="Config" />
-      <TextBlock Classes="vx-sub"
-                 Text="Compose a pipeline from the live provider registry, then export the exact appsettings.json block. Valid here means a server boots with it — same validator, same code path." />
 
       <Border Classes="vx-card">
         <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
@@ -108,7 +115,7 @@
         </ItemsControl>
 
         <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
-          <Button Classes="vx-primary" Content="⚡ Apply to Studio"
+          <Button Classes="vx-primary" Content="Apply to Studio"
                   Command="{Binding ApplyCommand}"
                   ToolTip.Tip="Rebuild the running app with this draft — the next Talk session uses it." />
           <TextBlock Classes="vx-sub" VerticalAlignment="Center" TextWrapping="Wrap"
@@ -122,7 +129,7 @@
 
     <!-- ── export ── -->
     <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto">
-      <TextBlock Classes="vx-label" Text="APPSETTINGS.JSON" Margin="2,8,0,6" />
+      <TextBlock Classes="vx-label vx-accent" Text="APPSETTINGS.JSON" Margin="2,8,0,6" />
       <Border Grid.Row="1" Classes="vx-card-flush" Padding="4">
         <TextBox Text="{Binding ExportJson, Mode=OneWay}" IsReadOnly="True"
                  FontFamily="{StaticResource VxMono}" FontSize="12"
@@ -130,9 +137,11 @@
                  BorderThickness="0" Background="Transparent" />
       </Border>
       <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
-        <Button Classes="vx-primary" Content="⧉ Copy" Click="OnCopyClicked" />
+        <Button Classes="vx-primary" Content="Copy" Click="OnCopyClicked" />
         <Button Classes="vx-ghost" Content="Save to file" Command="{Binding SaveCommand}" />
       </StackPanel>
+    </Grid>
+
     </Grid>
 
   </Grid>

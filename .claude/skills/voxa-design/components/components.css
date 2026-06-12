@@ -1,0 +1,214 @@
+/* ============================================================
+   VOXA · Component classes
+   Consumed by the React primitives in components/. All values
+   come from tokens — never hard-code colors here.
+   ============================================================ */
+
+/* ---------------- Buttons ---------------- */
+.vx-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-body); font-weight: var(--fw-semibold);
+  border: 1px solid transparent; border-radius: var(--r-md);
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out), color var(--dur-1) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
+}
+.vx-btn--sm { height: var(--control-h-sm); padding: 0 12px; font-size: var(--fs-xs); border-radius: var(--r-sm); }
+.vx-btn--md { height: var(--control-h-md); padding: 0 16px; font-size: var(--fs-sm); }
+.vx-btn--lg { height: var(--control-h-lg); padding: 0 22px; font-size: var(--fs-md); }
+
+.vx-btn--primary { background: var(--pulse-400); color: var(--text-on-pulse); }
+.vx-btn--primary:hover { background: var(--pulse-300); box-shadow: var(--glow-pulse); }
+.vx-btn--secondary { background: var(--surface-3); color: var(--text-1); border-color: var(--line-2); box-shadow: var(--edge-light); }
+.vx-btn--secondary:hover { background: var(--surface-4); border-color: var(--line-3); }
+.vx-btn--ghost { background: transparent; color: var(--text-2); }
+.vx-btn--ghost:hover { background: var(--surface-3); color: var(--text-1); }
+.vx-btn--danger { background: transparent; color: var(--danger); border-color: rgba(239, 83, 80, 0.35); }
+.vx-btn--danger:hover { background: var(--danger-soft); box-shadow: var(--glow-danger); }
+.vx-btn:active { transform: translateY(1px); }
+.vx-btn[disabled] { opacity: 0.45; pointer-events: none; }
+
+/* ---------------- Icon button ---------------- */
+.vx-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--control-h-md); height: var(--control-h-md);
+  border-radius: var(--r-md); border: 1px solid transparent;
+  background: transparent; color: var(--text-2); cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.vx-iconbtn:hover { background: var(--surface-3); color: var(--text-1); }
+.vx-iconbtn--sm { width: var(--control-h-sm); height: var(--control-h-sm); border-radius: var(--r-sm); }
+.vx-iconbtn--outline { border-color: var(--line-2); background: var(--surface-2); }
+.vx-iconbtn:active { transform: translateY(1px); }
+.vx-iconbtn[disabled] { opacity: 0.45; pointer-events: none; }
+
+/* ---------------- Badge ---------------- */
+.vx-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 9px; border-radius: var(--r-full);
+  font-family: var(--font-mono); font-size: var(--fs-2xs); font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-mono-label); text-transform: uppercase;
+  border: 1px solid;
+}
+.vx-badge--neutral { color: var(--text-2); background: var(--surface-3); border-color: var(--line-2); }
+.vx-badge--pulse   { color: var(--pulse-300); background: var(--accent-soft); border-color: rgba(79,195,247,.3); }
+.vx-badge--halo    { color: var(--halo-300); background: var(--halo-soft); border-color: rgba(206,147,216,.3); }
+.vx-badge--ok      { color: var(--ok); background: var(--ok-soft); border-color: rgba(102,187,106,.3); }
+.vx-badge--warn    { color: var(--warn); background: var(--warn-soft); border-color: rgba(255,183,77,.3); }
+.vx-badge--danger  { color: var(--danger); background: var(--danger-soft); border-color: rgba(239,83,80,.3); }
+.vx-badge--info    { color: var(--info); background: var(--info-soft); border-color: rgba(79,195,247,.3); }
+
+/* ---------------- Card ---------------- */
+.vx-card {
+  background: var(--surface-card);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1), var(--edge-light);
+}
+.vx-card--pad { padding: var(--sp-5); }
+.vx-card--interactive { transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out); cursor: pointer; }
+.vx-card--interactive:hover { border-color: var(--line-3); background: var(--surface-3); box-shadow: var(--shadow-2), var(--edge-light); }
+.vx-card--glow { border-color: rgba(79, 195, 247, 0.25); box-shadow: var(--glow-pulse-soft), var(--edge-light); }
+
+/* ---------------- Tabs ---------------- */
+.vx-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line-1); }
+.vx-tab {
+  appearance: none; background: none; border: none; cursor: pointer;
+  padding: 10px 14px; margin-bottom: -1px;
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: var(--fw-medium);
+  color: var(--text-3); border-bottom: 2px solid transparent;
+  transition: color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.vx-tab:hover { color: var(--text-1); }
+.vx-tab[aria-selected="true"] { color: var(--text-1); border-bottom-color: var(--pulse-400); }
+
+/* ---------------- Inputs ---------------- */
+.vx-field { display: flex; flex-direction: column; gap: 7px; }
+.vx-field > label { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-2); }
+.vx-input, .vx-select {
+  height: var(--control-h-md); padding: 0 12px;
+  background: var(--ink-900); color: var(--text-1);
+  border: 1px solid var(--line-2); border-radius: var(--r-md);
+  font-family: var(--font-body); font-size: var(--fs-sm);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.vx-input::placeholder { color: var(--text-muted); }
+.vx-input:hover, .vx-select:hover { border-color: var(--line-3); }
+.vx-input:focus, .vx-select:focus { outline: none; border-color: var(--pulse-500); box-shadow: 0 0 0 3px rgba(41, 168, 224, 0.20); }
+.vx-input--mono { font-family: var(--font-mono); }
+.vx-input[disabled], .vx-select[disabled] { opacity: 0.45; pointer-events: none; }
+.vx-field--error .vx-input { border-color: var(--danger); }
+.vx-field__hint { font-size: var(--fs-2xs); color: var(--text-3); }
+.vx-field--error .vx-field__hint { color: var(--danger); }
+.vx-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%), linear-gradient(135deg, var(--text-3) 50%, transparent 50%); background-position: calc(100% - 17px) 16px, calc(100% - 12px) 16px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+
+/* ---------------- Switch ---------------- */
+.vx-switch {
+  position: relative; width: 38px; height: 22px; flex: none;
+  border-radius: var(--r-full); border: 1px solid var(--line-2);
+  background: var(--surface-4); cursor: pointer; padding: 0;
+  transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+.vx-switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--ink-200);
+  transition: transform var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
+}
+.vx-switch[aria-checked="true"] { background: var(--pulse-500); border-color: var(--pulse-500); }
+.vx-switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--ink-950); }
+.vx-switch[disabled] { opacity: 0.45; pointer-events: none; }
+.vx-switch-row { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); color: var(--text-2); }
+
+/* ---------------- Status pill ---------------- */
+.vx-status { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: var(--ls-mono-label); text-transform: uppercase; color: var(--text-2); }
+.vx-status__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.vx-status--live .vx-status__dot { background: var(--pulse-400); box-shadow: 0 0 8px rgba(79,195,247,.8); animation: vx-blink 1.6s var(--ease-in-out) infinite; }
+.vx-status--live { color: var(--pulse-300); }
+.vx-status--connecting .vx-status__dot { background: var(--warn); animation: vx-blink 0.8s var(--ease-in-out) infinite; }
+.vx-status--connecting { color: var(--warn); }
+.vx-status--idle .vx-status__dot { background: var(--ink-400); }
+.vx-status--ended .vx-status__dot { background: var(--ink-500); }
+.vx-status--error .vx-status__dot { background: var(--danger); }
+.vx-status--error { color: var(--danger); }
+@keyframes vx-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ---------------- Waveform ---------------- */
+.vx-wave { display: inline-flex; align-items: center; gap: 3px; }
+.vx-wave__bar { width: 3px; border-radius: var(--r-full); background: var(--pulse-400); min-height: 3px; }
+.vx-wave--grad .vx-wave__bar { background: var(--grad-signal); }
+.vx-wave--live .vx-wave__bar { animation: vx-wave-bounce 0.9s var(--ease-in-out) infinite; }
+.vx-wave--muted .vx-wave__bar { background: var(--ink-500); }
+@keyframes vx-wave-bounce {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+/* ---------------- Voice orb ---------------- */
+.vx-orb { position: relative; border-radius: 50%; flex: none;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(234,241,248,0.22), transparent 42%),
+    radial-gradient(circle at 64% 70%, rgba(41,168,224,0.55), transparent 60%),
+    radial-gradient(circle at 40% 55%, rgba(79,195,247,0.92), rgba(21,95,130,0.72) 70%);
+  box-shadow: 0 0 40px rgba(79, 195, 247, 0.35), inset 0 0 24px rgba(11, 15, 20, 0.40);
+}
+.vx-orb::before, .vx-orb::after {
+  content: ""; position: absolute; inset: -14%; border-radius: 50%;
+  border: 1px solid rgba(79, 195, 247, 0.35); opacity: 0;
+}
+.vx-orb--live::before { animation: vx-ripple 2.4s var(--ease-out) infinite; }
+.vx-orb--live::after { animation: vx-ripple 2.4s var(--ease-out) 1.2s infinite; }
+@keyframes vx-ripple {
+  0% { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+/* ---------------- Pipeline node + flow ---------------- */
+.vx-node {
+  --node-c: var(--pulse-400);
+  display: inline-flex; flex-direction: column; gap: 6px; min-width: 132px;
+  padding: 12px 14px; background: var(--surface-2);
+  border: 1px solid var(--line-2); border-left: 2px solid var(--node-c);
+  border-radius: var(--r-md); box-shadow: var(--shadow-1), var(--edge-light);
+}
+.vx-node__kind { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--node-c); }
+.vx-node__name { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-1); }
+.vx-node__meta { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3); }
+.vx-node--active { border-color: var(--node-c); box-shadow: 0 0 0 1px var(--node-c), var(--glow-pulse-soft); }
+.vx-flow { display: flex; align-items: center; gap: 0; }
+.vx-flow__link { width: 36px; height: 1px; flex: none; background: repeating-linear-gradient(90deg, var(--ink-500) 0 5px, transparent 5px 10px); position: relative; }
+.vx-flow__link--active { background: repeating-linear-gradient(90deg, var(--pulse-500) 0 5px, transparent 5px 10px); }
+.vx-flow__link--active::after { content: ""; position: absolute; top: -2px; left: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--pulse-300); animation: vx-frame-travel 1.1s linear infinite; }
+@keyframes vx-frame-travel { from { left: 0; opacity: 1; } to { left: calc(100% - 5px); opacity: 0.4; } }
+
+/* ---------------- Transcript ---------------- */
+.vx-transcript-line { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line-1); }
+.vx-transcript-line__role { font-family: var(--font-mono); font-size: var(--fs-2xs); letter-spacing: var(--ls-label); text-transform: uppercase; }
+.vx-transcript-line--user .vx-transcript-line__role { color: var(--info); }
+.vx-transcript-line--agent .vx-transcript-line__role { color: var(--pulse-400); }
+.vx-transcript-line--system .vx-transcript-line__role { color: var(--text-muted); }
+.vx-transcript-line__text { font-size: var(--fs-sm); color: var(--text-1); }
+.vx-transcript-line--system .vx-transcript-line__text { color: var(--text-3); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.vx-transcript-line__time { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-muted); }
+.vx-transcript-line--partial .vx-transcript-line__text { color: var(--text-3); }
+.vx-transcript-line--partial .vx-transcript-line__text::after { content: "▌"; color: var(--pulse-400); animation: vx-blink 1s steps(1) infinite; }
+
+/* ---------------- Metric stat ---------------- */
+.vx-metric { display: flex; flex-direction: column; gap: 4px; }
+.vx-metric__value { font-family: var(--font-mono); font-size: var(--fs-2xl); font-weight: var(--fw-medium); color: var(--text-1); line-height: var(--lh-tight); }
+.vx-metric__value small { font-size: var(--fs-sm); color: var(--text-3); font-weight: var(--fw-regular); margin-left: 2px; }
+.vx-metric__delta { font-family: var(--font-mono); font-size: var(--fs-2xs); }
+.vx-metric__delta--good { color: var(--ok); }
+.vx-metric__delta--bad { color: var(--danger); }
+.vx-metric__delta--flat { color: var(--text-3); }
+
+/* ---------------- Code block ---------------- */
+.vx-code { background: var(--ink-900); border: 1px solid var(--line-1); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-2), var(--edge-light); text-align: left; }
+.vx-code__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--line-1); background: var(--ink-850); }
+.vx-code__file { font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text-3); letter-spacing: var(--ls-mono-label); }
+.vx-code pre { margin: 0; padding: 16px 18px; font-size: var(--fs-sm); line-height: 1.7; color: var(--ink-100); overflow-x: auto; }
+.vx-code .tk-kw { color: var(--halo-300); }
+.vx-code .tk-ty { color: var(--pulse-300); }
+.vx-code .tk-str { color: var(--warn); }
+.vx-code .tk-cm { color: var(--ink-400); font-style: italic; }
+.vx-code .tk-num { color: var(--info); }

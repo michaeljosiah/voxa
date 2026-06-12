@@ -1,0 +1,28 @@
+<!-- @dsCard group="Colors" viewport="700x170" name="Pulse — the cyan accent" subtitle="The single accent — CTAs, live states, STT stage, edge flow" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 18px 22px; }
+  .ramp { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .sw { height: 72px; border-radius: var(--r-md); border: 1px solid var(--line-1); display: flex; flex-direction: column; justify-content: flex-end; padding: 8px 10px; }
+  .sw b { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+  .sw span { font-family: var(--font-mono); font-size: 10px; opacity: 0.75; }
+  .dk { color: var(--ink-950); } .lt { color: var(--ink-50); }
+  .note { margin-top: 10px; font-size: 12px; color: var(--text-3); }
+</style>
+</head>
+<body>
+  <div class="ramp">
+    <div class="sw dk" style="background: var(--pulse-200)"><b>200</b><span>#BBE6FB</span></div>
+    <div class="sw dk" style="background: var(--pulse-300)"><b>300</b><span>#81D4FA</span></div>
+    <div class="sw dk" style="background: var(--pulse-400)"><b>400 · accent</b><span>#4FC3F7</span></div>
+    <div class="sw dk" style="background: var(--pulse-500)"><b>500</b><span>#29A8E0</span></div>
+    <div class="sw lt" style="background: var(--pulse-600)"><b>600</b><span>#1E86B8</span></div>
+    <div class="sw lt" style="background: var(--pulse-700)"><b>700</b><span>#155F82</span></div>
+  </div>
+  <p class="note">One accent does all the talking. Buttons + live states use <code>--pulse-400</code>; text on cyan is always ink, never white. <code>300</code> (#81D4FA) is the lighter cyan for micro-labels.</p>
+</body>
+</html>

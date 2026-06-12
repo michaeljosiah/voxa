@@ -1,0 +1,24 @@
+<!-- @dsCard group="Spacing" viewport="700x160" name="Corner radii" subtitle="6 / 10 / 14 / 20 / pill" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 20px 24px; }
+  .row { display: flex; align-items: center; gap: 16px; }
+  .b { width: 104px; height: 72px; background: var(--surface-3); border: 1px solid var(--line-2); display: flex; align-items: flex-end; padding: 8px 10px; }
+  .b span { font-family: var(--font-mono); font-size: 10px; color: var(--text-3); }
+  .pill { width: 104px; height: 36px; align-items: center; justify-content: center; padding: 0; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="b" style="border-radius: var(--r-sm)"><span>sm 6 · chips</span></div>
+    <div class="b" style="border-radius: var(--r-md)"><span>md 10 · controls</span></div>
+    <div class="b" style="border-radius: var(--r-lg)"><span>lg 14 · cards</span></div>
+    <div class="b" style="border-radius: var(--r-xl)"><span>xl 20 · modals</span></div>
+    <div class="b pill" style="border-radius: var(--r-full)"><span>full · pills</span></div>
+  </div>
+</body>
+</html>
