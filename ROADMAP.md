@@ -134,6 +134,8 @@ Foundation: **WS0 `VoxaDiagnosticsHub`** — a per-session typed pipeline event 
 
 Estimated effort: ~2.5 weeks (WS0 diagnostics ~4d, shell + audio ~4d, Talk ~3d, Voices/Models/Config ~4d, CI + docs ~2d).
 
+**Next iteration — VST-002 ([design brief](docs/specifications/voxa-studio-design-brief.html)):** animated-mark launch experience + motion system, dedicated STT/TTS playgrounds (WER harness, take history, blind A/B/X), a node-style pipeline Builder on an interactive canvas (registry-driven palette, typed ports, run-from-canvas, live frame-flow visualization — chain-only until the runtime supports branching), and a Run & Metrics workbench (scripted repeatable runs, TTFB percentiles, per-stage trends, run comparison). Design-approved phases D1–D4, ~26 days total.
+
 ## Not planned (deferred from original Pipecat scope)
 
 - WebRTC transports (Daily, LiveKit) — WebSocket is enough for mobile-first
