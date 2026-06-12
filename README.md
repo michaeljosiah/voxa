@@ -70,6 +70,36 @@ Set `"Tts": "Kokoro"` for markedly more natural speech (heavier on CPU), and swa
 real agent when you have keys. Details — model catalogs, latency expectations, air-gapped
 deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
 
+### Voxa Studio — talk to the pipeline and watch it think
+
+A desktop app (Windows) that runs the real pipeline against your mic and speakers and shows
+you what's happening inside it. Keyless out of the box — no cloud account needed.
+
+```bash
+dotnet run --project apps/Voxa.Studio
+```
+
+**How to use it:**
+
+1. **Talk** — pick a microphone and speaker, press **● Start session**, and speak. The first
+   session downloads the default models (~155 MB, progress shown); after that it's fully
+   offline. You get a streaming transcript, a **live VAD probability trace** (watch the gate
+   open as you speak), and a **per-turn latency waterfall** showing exactly where the response
+   time went: `VAD → STT → AGENT → TTS → OUT`. Talk over the bot to test barge-in.
+2. **Voices** — type a sentence and press ▶ on any Piper or Kokoro voice to hear it through
+   the real engine, with TTFB and RTF measured on your hardware. Pin two voices to **A**/**B**
+   for instant comparison; `⤓ wav` exports the audio.
+3. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
+   **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
+4. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
+   export the `appsettings.json` block for your server. **To talk to a real LLM instead of the
+   echo agent:** set *Agent* to `OpenAI`, enter a chat model (e.g. `gpt-4o-mini`) and your API
+   key (or leave it blank to use `Voxa__OpenAI__ApiKey` from the environment), then press
+   **⚡ Apply to Studio** — the next Talk session answers with the model. The key is applied to
+   the running app only; it is never written to disk or into the exported JSON.
+
+Full guide — every view, server-side diagnostics, troubleshooting: [`docs/studio.md`](docs/studio.md).
+
 ## À-la-carte configuration
 
 For hosts that install only specific provider packages or need custom pipeline composition:
@@ -407,6 +437,7 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | 5.6 | ✅ VPS-001 performance pass — zero-allocation hot path, source-generated wire protocol, streaming Azure TTS, server-side barge-in purge, `voxa.turn.ttfb` metric, benchmark suite |
 | P5 | ✅ VDX-001 developer experience — `AddVoxa()` + `UseDefaults()`, typed config, named latency profiles, provider descriptors, `Voxa` meta-package, fail-fast startup validation, conversation memory, `session` wire envelope |
 | P6 (partial) | ✅ VLS-001 local/offline speech tier — `WhisperCpp` STT, `Piper` + `Kokoro` TTS, SHA-256-pinned model cache with offline mode, keyless `Echo` agent, startup warm-up, zero-network CI conversation lane ([docs](docs/local-speech.md)) |
+| P8 | ✅ VST-001 Voxa Studio — desktop app with live VAD trace + latency waterfall over the new `VoxaDiagnosticsHub` pipeline event stream (also closes the P7 stage-latency item: `voxa.stage.latency`), voice lab, model-cache manager, config composer ([docs](docs/studio.md)) |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 

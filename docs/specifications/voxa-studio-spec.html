@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VST-001 — Voxa Studio Specification</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; } /* comment */
+  pre .kw { color: #79b8ff; } /* keyword-ish hint (manual) */
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p0 { background: #4a1416; color: #ff8a80; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .progress-note { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VST-001 — Voxa Studio Specification</h1>
+  <div class="sub">A desktop application — <code>Voxa.Studio</code> — that runs the real Voxa pipeline in-process against the developer's microphone and speakers, and gives them what a sample web page never can: a live VAD probability trace, a per-turn latency waterfall, a voice audition lab for the local TTS catalogs, a visual model-cache manager, and an <code>appsettings.json</code> composer driven by the provider registry. Built on a new <b>pipeline diagnostics surface</b> (<code>VoxaDiagnosticsHub</code>) that is independently useful to every Voxa host.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VST-001 v1.1</div>
+    <div><b>Date</b> 2026-06-11 (impl. notes 2026-06-12)</div>
+    <div><b>Status</b> Implemented — see §9 checklist</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code> after VLS-001 merges)</div>
+    <div><b>Roadmap item</b> P8 — Voxa Studio (also delivers the P7 latency-waterfall item)</div>
+    <div><b>Depends on</b> VDX-001 (registry/descriptors), VLS-001 (local engines, model cache)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture — Studio hosts the pipeline in-process</a></li>
+    <li><a href="#s5">Workstreams (WS0–WS6) with code</a>
+      <ol>
+        <li><a href="#ws0">WS0 — <code>VoxaDiagnosticsHub</code>: the pipeline event stream (core seams)</a></li>
+        <li><a href="#ws1">WS1 — Studio shell: Avalonia app, audio device layer, in-proc transport</a></li>
+        <li><a href="#ws2">WS2 — Talk view: live conversation + VAD trace + latency waterfall</a></li>
+        <li><a href="#ws3">WS3 — Voice Lab: audition, A/B compare, RTF on your hardware</a></li>
+        <li><a href="#ws4">WS4 — Models view: cache inventory, verify, prefetch, purge</a></li>
+        <li><a href="#ws5">WS5 — Config Composer: registry-driven <code>appsettings.json</code> export</a></li>
+        <li><a href="#ws6">WS6 — Packaging, CI lane, docs</a></li>
+      </ol>
+    </li>
+    <li><a href="#s6">Configuration reference</a></li>
+    <li><a href="#s7">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s8">Progress checklist</a></li>
+    <li><a href="#s9">Verification protocol</a></li>
+    <li><a href="#s10">Risk register</a></li>
+    <li><a href="#s11">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What is the feature, in one sentence?</b>
+    <p>A desktop app you launch on your development machine that lets you <em>talk to a Voxa pipeline and watch it think</em> — see exactly when the voice-activity detector decided you stopped speaking, what the transcriber heard, how long every stage took, and how each local voice sounds — without writing a line of code or touching a config file.</p>
+  </div>
+  <div class="qa">
+    <b>Why does Voxa need it?</b>
+    <p>Today, developing with Voxa means editing <code>appsettings.json</code>, restarting a server, opening a browser page, and inferring what happened inside the pipeline from log lines. When something is off — the bot cuts you off mid-sentence, a transcript is garbled, the reply feels slow — the pipeline is a black box. A real example from this project: the Silero VAD silently never detected speech for an entire release cycle (the v5 context-window bug). The fix took a bisection session with hand-written probe scripts; a live probability chart would have made the flat-zero line obvious in <em>seconds</em>.</p>
+  </div>
+  <div class="qa">
+    <b>What does it look like?</b>
+    <p>Four tabs:</p>
+    <ul>
+      <li><b>Talk</b> — pick a microphone and speaker, press Start, and have a conversation with the configured pipeline. Below the transcript: a scrolling VAD probability chart with the open/close threshold drawn in, markers where turns started and ended, and a per-turn waterfall bar showing how the response time split across VAD hangover → transcription → agent first token → first synthesized audio.</li>
+      <li><b>Voices</b> — every Piper and Kokoro voice in the pinned catalogs, with a play button. Type a sentence, audition it across voices, A/B two engines side by side, and see real numbers (time-to-first-byte, real-time factor) measured on <em>your</em> hardware, not someone's benchmark blog.</li>
+      <li><b>Models</b> — what the model cache actually contains: name, size, hash-verified status. Buttons to verify, prefetch everything for an air-gapped deployment, or purge. Today this directory is invisible unless you go digging in <code>~/.cache/voxa/models</code>.</li>
+      <li><b>Config</b> — build a pipeline by picking providers from dropdowns (the lists come from the live provider registry, so they can never drift from the code), then export the exact <code>appsettings.json</code> block to paste into your server.</li>
+    </ul>
+  </div>
+  <div class="qa">
+    <b>Why would a user care?</b>
+    <ul>
+      <li><b>Debugging becomes visual.</b> "Why did it cut me off?" is answered by looking at the VAD trace, not by adding log statements and re-running.</li>
+      <li><b>Latency becomes diagnosable.</b> <code>voxa.turn.ttfb</code> tells you the response took 1.4 s; the waterfall tells you <em>which stage</em> to fix.</li>
+      <li><b>Voice selection takes minutes, not restarts.</b> Auditioning seven Piper voices today means seven config edits and seven server restarts.</li>
+      <li><b>Air-gap provisioning gets a button.</b> "Prefetch all" + copy the cache directory = a provisioned offline box.</li>
+      <li><b>Zero accounts, zero keys.</b> Thanks to VLS-001, the entire app works out of the box with WhisperCpp + Piper/Kokoro + the Echo agent. Cloud providers light up automatically if keys are present, but nothing requires them.</li>
+    </ul>
+  </div>
+  <div class="qa">
+    <b>Is it Windows-only?</b>
+    <p>The UI is built with <a href="https://avaloniaui.net/">Avalonia</a>, so the codebase is cross-platform from day one — the same choice keeps faith with the rest of Voxa, which runs everywhere .NET runs (and whose local-speech catalogs already serve Linux and macOS users). v1 <em>ships and is tested on Windows</em>: the audio capture/playback layer is implemented for WASAPI first, behind an <code>IStudioAudioDevice</code> seam sized so a macOS/Linux backend is an additive package, not a rewrite.</p>
+  </div>
+  <div class="qa">
+    <b>Why is half of WS0 not about the app at all?</b>
+    <p>The killer features (VAD trace, waterfall) need the pipeline to <em>narrate what it is doing</em> — structured events for VAD probabilities, turn boundaries, transcripts, and stage timings. That eventing surface (<code>VoxaDiagnosticsHub</code>) is deliberately specified as a framework feature, not a Studio internal: a server host can subscribe to the same stream for a <code>/voxa/debug</code> page or production observability (it is the roadmap's P7 "per-stage latency waterfall" item). Studio is simply its first — and best — renderer. This also keeps Studio honest: it consumes only public Voxa surface, making it a permanent dogfooding instrument for the framework's API.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<table>
+  <tr><th>Deliverable</th><th>What it is</th><th>Ships as</th></tr>
+  <tr><td><code>VoxaDiagnosticsHub</code> + events</td><td>Per-session typed event stream (VAD windows, turn boundaries, transcripts, agent deltas, TTS chunks, stage latencies) with a zero-cost-when-unobserved publish path; <code>DiagnosticsTapProcessor</code>; <code>SileroVadOptions.ProbabilityObserver</code> hook; transport-agnostic <code>Compose()</code> overload; <code>voxa.stage.latency</code> histograms</td><td><code>Voxa.Core</code> / <code>Voxa.Audio.SileroVad</code> / <code>Voxa.AspNetCore</code> <span class="badge additive">additive</span></td></tr>
+  <tr><td><code>VoxaModelCache</code> inventory API</td><td><code>Enumerate()</code>, <code>VerifyAsync()</code>, <code>PrefetchAsync()</code>, <code>Purge()</code> over the existing cache layout</td><td><code>Voxa.Speech.Abstractions</code> <span class="badge additive">additive</span></td></tr>
+  <tr><td><code>Voxa.Studio</code></td><td>Avalonia desktop app (Talk / Voices / Models / Config) hosting the real composed pipeline in-process via an audio-device transport</td><td>new <code>apps/Voxa.Studio</code> project (not a NuGet package)</td></tr>
+  <tr><td>Audio device layer</td><td><code>IStudioAudioDevice</code> abstraction; WASAPI implementation (NAudio, MIT) for v1</td><td><code>apps/Voxa.Studio</code></td></tr>
+  <tr><td>CI lane + docs</td><td>Windows build/test job (Avalonia.Headless view-model tests run in the default suite), <code>docs/studio.md</code>, README section</td><td>repo</td></tr>
+</table>
+
+<div class="callout good"><b>Prime directive.</b> Studio consumes only public Voxa surface — <code>AddVoxa()</code>, the provider registry, the composer, the model cache, and the new diagnostics hub. If a Studio feature needs a private hook into an engine, the correct fix is to promote that hook to a public framework seam (as WS0 does for VAD probability), never to fork pipeline logic into the app.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3 id="s3-1">3.1 Goals</h3>
+<ul>
+  <li><b>G1.</b> A developer with no Voxa config and no API keys launches Studio, presses Start, and is in a spoken conversation (WhisperCpp + Echo + Piper) after the first-run model download.</li>
+  <li><b>G2.</b> Every turn renders a VAD probability trace and a stage-latency waterfall accurate to the frame timestamps (<code>Frame.PtsMicros</code>).</li>
+  <li><b>G3.</b> Every catalog voice (Piper + Kokoro) can be auditioned and A/B-compared without restarting anything.</li>
+  <li><b>G4.</b> The model cache is fully manageable from the UI: inventory, verify, prefetch-all, purge.</li>
+  <li><b>G5.</b> The Config tab exports an <code>appsettings.json</code> block that <code>VoxaDefaultsGuard</code> accepts verbatim on a server.</li>
+  <li><b>G6.</b> The diagnostics surface is a framework feature any host can subscribe to — Studio holds no privileged access.</li>
+</ul>
+
+<h3 id="s3-2">3.2 Non-goals</h3>
+<ul>
+  <li>Not a production monitoring dashboard — OpenTelemetry (<code>VoxaActivities</code>/<code>VoxaMetrics</code>) remains the production story; the hub is a development/debug stream.</li>
+  <li>Not an end-user softphone; no call recording, contact lists, or telephony.</li>
+  <li>Not a cloud-key vault: cloud providers work if keys are already in user-secrets/env, but Studio does not store secrets itself.</li>
+  <li>No installer/MSIX in v1 — <code>dotnet run --project apps/Voxa.Studio</code> is the supported launch path.</li>
+  <li>No remote attach in v1 (subscribing to a <em>server's</em> hub over WebSocket is deferred; the hub API is shaped so this is additive).</li>
+</ul>
+
+<h3 id="s3-3">3.3 Budgets &amp; hard rules</h3>
+<table>
+  <tr><th>Budget / rule</th><th>Value</th><th>Enforced by</th></tr>
+  <tr><td>Diagnostics overhead with no subscriber</td><td>One <code>bool</code> check per publish site; zero allocation</td><td><code>HasListeners</code> fast path + unit test asserting no channel write</td></tr>
+  <tr><td>Diagnostics overhead with a subscriber</td><td>Bounded channel, <b>drop-oldest</b>; pipeline never blocks on a slow UI</td><td>Channel options + unit test</td></tr>
+  <tr><td>UI thread</td><td>Never blocked by pipeline, audio, or downloads; charts update ≤ 30 fps coalesced</td><td>view-model design; headless UI tests</td></tr>
+  <tr><td>GPL isolation (carried from VLS-001)</td><td>espeak-ng stays out-of-process; <code>KokoroSharp</code> remains banned; Studio adds no GPL/LGPL-static native deps (NAudio is MIT)</td><td>existing dependency-graph gate test extended to <code>Voxa.Studio</code></td></tr>
+  <tr><td>Build hygiene</td><td><code>dotnet build Voxa.slnx -warnaserror</code> stays green; Studio view-model tests run in the default (non-<code>LocalModels</code>) suite</td><td>CI</td></tr>
+  <tr><td>No timing gates in tests</td><td>Wall-clock latency is displayed, never asserted (VLS-001 §3.1 precedent)</td><td>review</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture — Studio hosts the pipeline in-process</h2>
+
+<p>Studio is a fourth <em>host</em> for the same pipeline the servers run — not a client of one. Where <code>MapVoxaVoice("/voice")</code> bridges the composed pipeline to a WebSocket, Studio bridges it to the local audio devices. The composed middle (VAD → STT → filter → agent → aggregator → TTS) is byte-identical because it comes from the same <code>DefaultVoicePipelineComposer</code>.</p>
+
+<div class="arrowflow">                                ┌────────────────────────── Voxa.Studio (Avalonia) ──────────────────────────┐
+ mic (WASAPI capture, 20 ms) ──►│ StudioMicSource ─► [ composed parts: VAD → STT → … → TTS ] ─► StudioSpeakerSink │──► speakers
+                                │        │                       │ DiagnosticsTapProcessor(s)                      │
+                                │        │                       ▼                                                 │
+                                │        └──────────── VoxaDiagnosticsHub ─► Talk view (trace, waterfall, log)     │
+                                └─────────────────────────────────────────────────────────────────────────────────┘
+ same composed parts, hosted by a server:   WebSocketSource ─► [ … ] ─► WebSocketAudioSink   (unchanged)</div>
+
+<h3>4.1 The compose seam</h3>
+<p><code>DefaultVoicePipelineComposer.Compose(HttpContext)</code> is the only entry point today, and it uses the context solely for <code>RequestServices</code>. WS0 adds a transport-agnostic overload; the HTTP one becomes a forwarder. This is the entire change Studio needs to reuse composition <span class="badge additive">additive</span>:</p>
+<pre><code>public ComposedVoice Compose(IServiceProvider services)        <span class="cm">// new — any host</span>
+public ComposedVoice Compose(HttpContext ctx) =&gt; Compose(ctx.RequestServices);  <span class="cm">// existing callers unchanged</span></code></pre>
+
+<h3>4.2 Why events, not frames or OTel</h3>
+<ul>
+  <li><b>Not frames:</b> a <code>VadWindowEvent</code> fires every 32 ms per session. Injecting those as pipeline frames would pollute the data stream every processor sees and contend with real audio for channel capacity. Diagnostics ride a side channel.</li>
+  <li><b>Not OTel:</b> <code>ActivitySource</code>/<code>Meter</code> are aggregation-shaped (spans, histograms) and reach the consumer through exporters with seconds of latency. The Talk view needs an ordered, low-latency, lossy-by-design in-proc stream. The two coexist: <code>StageLatencyProcessor</code> publishes each measurement to <em>both</em> the hub (for Studio) and a new <code>voxa.stage.latency</code> histogram (for production, completing roadmap P7).</li>
+</ul>
+
+<h3>4.3 Session model</h3>
+<p>Studio runs at most one live Talk session plus N Voice-Lab synthesis jobs. Engines come from the same DI container <code>AddVoxa()</code> builds; the Piper process pool and Kokoro ONNX session are shared exactly as in a server, so Voice Lab audition exercises the same warm-pool code paths users run in production.</p>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Workstreams (WS0–WS6) with code</h2>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws0">WS0 — <code>VoxaDiagnosticsHub</code>: the pipeline event stream <span class="badge p0">P0</span></h3>
+<div class="ws-head">
+  <span><b>Projects</b> <code>Voxa.Core</code>, <code>Voxa.Audio.SileroVad</code>, <code>Voxa.AspNetCore</code></span>
+  <span><b>Depends on</b> nothing</span>
+  <span><b>Unblocks</b> WS2 (and roadmap P7's <code>/voxa/debug</code> for any host)</span>
+</div>
+
+<p>A per-session hub with typed events. Publishing is free when nobody listens; when someone listens, the channel is bounded and drops oldest — the pipeline must never backpressure on a renderer.</p>
+
+<span class="filelabel">src/Voxa.Core/Diagnostics/DiagnosticEvents.cs</span>
+<pre><code>namespace Voxa.Diagnostics;
+
+<span class="cm">/// Base for all diagnostics events. SeqNo is hub-assigned and gap-free per session,</span>
+<span class="cm">/// so a renderer can detect drops. PtsMicros aligns events with Frame.PtsMicros.</span>
+public abstract record DiagnosticEvent
+{
+    public long SeqNo { get; init; }
+    public long PtsMicros { get; init; }
+}
+
+public sealed record VadWindowEvent(float Probability, double Rms, bool Voiced, bool GateOpen) : DiagnosticEvent;  <span class="cm">// Voiced = prob AND energy passed — anchors vad_close</span>
+public enum TurnEdge { UserStarted, UserStopped, BotStarted, BotStopped, Interrupted }
+public sealed record TurnEvent(TurnEdge Edge) : DiagnosticEvent;
+public sealed record TranscriptEvent(string Text, bool IsFinal) : DiagnosticEvent;
+public sealed record AgentDeltaEvent(string TextDelta) : DiagnosticEvent;
+public sealed record TtsChunkEvent(int Bytes, int SampleRate) : DiagnosticEvent;
+public sealed record StageLatencyEvent(string Stage, double Ms) : DiagnosticEvent;   <span class="cm">// "vad_close", "stt_final", "agent_first_token", "tts_first_byte", "audio_out"</span>
+public sealed record PipelineErrorEvent(string Source, string Message) : DiagnosticEvent;</code></pre>
+
+<span class="filelabel">src/Voxa.Core/Diagnostics/VoxaDiagnosticsHub.cs</span>
+<pre><code><span class="cm">/// Per-session diagnostics stream. Register as scoped (server: per connection;</span>
+<span class="cm">/// Studio: per Talk session). Publish is allocation-free until the first subscriber.</span>
+public sealed class VoxaDiagnosticsHub
+{
+    <span class="cm">// Volatile flag — every publish site guards on this before building an event object.</span>
+    public bool HasListeners { get; }
+
+    <span class="cm">// Non-blocking. Stamps SeqNo. Bounded channel per subscriber, BoundedChannelFullMode.DropOldest.</span>
+    public void Publish(DiagnosticEvent e);
+
+    <span class="cm">// Multiple concurrent subscribers each get an independent bounded stream (default capacity 4096).</span>
+    public IAsyncEnumerable&lt;DiagnosticEvent&gt; SubscribeAsync(CancellationToken ct);
+}</code></pre>
+
+<h4>WS0 publish sites</h4>
+<table>
+  <tr><th>Event</th><th>Emitted from</th><th>Mechanism</th></tr>
+  <tr><td><code>VadWindowEvent</code></td><td><code>SileroVadProcessor</code></td><td>New <code>SileroVadOptions.ProbabilityObserver</code> (<code>Action&lt;float prob, double rms, bool voiced, bool gateOpen&gt;?</code>, carried on <code>VoxaVadSettings</code> so any VAD provider can honour it) invoked synchronously on the VAD thread after each window — the engine itself stays observer-free (it is not thread-safe and should not grow responsibilities). The composer wires the observer to the hub when one is resolvable.</td></tr>
+  <tr><td><code>TurnEvent</code>, <code>TranscriptEvent</code>, <code>AgentDeltaEvent</code>, <code>TtsChunkEvent</code>, <code>PipelineErrorEvent</code></td><td><code>DiagnosticsTapProcessor</code></td><td>Pass-through <code>FrameProcessor</code> (the <code>TracingProcessor</code> pattern) mapping <code>UserStarted/StoppedSpeakingFrame</code>, <code>TranscriptionFrame</code>, text deltas, <code>AudioRawFrame</code> (downstream), <code>InterruptionFrame</code>, <code>ErrorFrame</code> to events. The composer inserts taps after VAD/STT/agent/TTS when the hub has listeners.</td></tr>
+  <tr><td><code>StageLatencyEvent</code></td><td><code>StageLatencyTracker</code> (inside the hub)</td><td><b>Implementation refinement:</b> rather than a pipeline processor reading <code>PtsMicros</code> (zero on frames created mid-pipeline), a tracker inside the hub's publish path derives stages from the hub-stamped timestamps of the anchor events (last voiced window → gate close → final transcript → first agent delta → first TTS chunk). Derived events ride the same ordered stream after their anchors, and every stage — tracker-derived or sink-published (<code>audio_out</code>) — is recorded on <code>voxa.stage.latency</code> (tag: <code>stage</code>), completing the roadmap P7 waterfall item for all hosts.</td></tr>
+</table>
+
+<div class="callout"><b>Wiring rule.</b> All taps are inserted by <code>DefaultVoicePipelineComposer</code> only when <code>Voxa:Diagnostics:Enabled</code> is true (default: <code>false</code> for servers, forced <code>true</code> by Studio). A production pipeline with diagnostics off composes byte-identically to today's.</div>
+
+<h4>WS0 also: model-cache inventory <span class="badge additive">additive</span></h4>
+<span class="filelabel">src/Voxa.Speech.Abstractions/Models/VoxaModelCache.cs (additions)</span>
+<pre><code>public sealed record CachedModelInfo(
+    string FileName, string FullPath, long SizeBytes, DateTimeOffset LastWriteUtc);
+
+public IReadOnlyList&lt;CachedModelInfo&gt; Enumerate();                 <span class="cm">// directory scan; ignores .partial/.lock</span>
+public Task&lt;bool&gt; VerifyAsync(VoxaModelArtifact a, CancellationToken ct);   <span class="cm">// streamed SHA-256 vs pin</span>
+public Task PrefetchAsync(IEnumerable&lt;VoxaModelArtifact&gt; artifacts,
+    IProgress&lt;(string Name, long Done, long Total)&gt;? progress, CancellationToken ct);
+public void Purge(CachedModelInfo entry);                          <span class="cm">// honours .lock; refuses if held</span></code></pre>
+<p><code>PrefetchAsync</code> is <code>ResolveAsync</code> in a loop with progress — it must reuse the existing verified-download path (atomic <code>.partial</code> rename, cross-process <code>.lock</code>), not duplicate it. The catalog union for "prefetch all" comes from the public catalogs: <code>WhisperCppModelCatalog</code>, <code>PiperVoiceCatalog</code>, <code>PiperExecutableCatalog</code> (current RID only), <code>KokoroCatalog</code>.</p>
+
+<h4>WS0 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS0-A1</span>Unit: <code>Publish</code> with no subscriber performs no channel write and allocates nothing observable (event construction is guarded by <code>HasListeners</code> at call sites).</li>
+  <li><span class="tid">WS0-A2</span>Unit: slow subscriber loses oldest events, never blocks the publisher; <code>SeqNo</code> gaps reveal the drop.</li>
+  <li><span class="tid">WS0-A3</span>Pipeline test (<code>Voxa.Testing</code> fakes): scripted turn produces ordered <code>TurnEvent</code>/<code>TranscriptEvent</code>/<code>StageLatencyEvent</code> sequence with all five stage anchors.</li>
+  <li><span class="tid">WS0-A4</span>Golden test: with <code>Voxa:Diagnostics</code> absent, composed processor list is unchanged from today.</li>
+  <li><span class="tid">WS0-A5</span>Unit: <code>Enumerate</code>/<code>VerifyAsync</code>/<code>Purge</code> against a temp cache dir incl. corrupted-file → <code>VerifyAsync == false</code>; <code>Purge</code> refuses a locked entry.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws1">WS1 — Studio shell: Avalonia app, audio device layer, in-proc transport <span class="badge p0">P0</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code> (+ <code>tests/Voxa.Studio.Tests</code>)</span>
+  <span><b>Depends on</b> WS0</span>
+  <span><b>Unblocks</b> WS2–WS5</span>
+</div>
+
+<p>New top-level <code>apps/</code> folder (it is a product surface, not a sample). <b>Implementation refinement:</b> a plain <code>ServiceCollection</code> + <code>AddVoxa(configuration)</code> instead of the Generic Host — hosted services (the startup guard's eager warm-up) must NOT run in Studio, which never touches the network before the user acts (WS1-A2).</p>
+
+<span class="filelabel">apps/Voxa.Studio/ (layout)</span>
+<pre><code>Voxa.Studio.csproj            <span class="cm">// net10.0, Avalonia 11.x, CommunityToolkit.Mvvm, NAudio (MIT)</span>
+Program.cs                    <span class="cm">// Generic Host + Avalonia bootstrap; AddVoxa(configuration)</span>
+appsettings.json              <span class="cm">// local-first defaults: WhisperCpp / Piper / Echo, Diagnostics:Enabled=true</span>
+Audio/IStudioAudioDevice.cs
+Audio/WasapiAudioDevice.cs    <span class="cm">// v1: Windows (NAudio WasapiCapture/WasapiOut)</span>
+Transport/StudioMicSource.cs  <span class="cm">// PipelineSource: 20 ms PCM16 mono frames at the composed input rate</span>
+Transport/StudioSpeakerSink.cs<span class="cm">// PipelineSink: epoch-stamped queue; purges pre-interruption audio (mirrors WebSocketAudioSink)</span>
+ViewModels/  Views/           <span class="cm">// MVVM; view-models hold zero Avalonia types (headless-testable)</span>
+</code></pre>
+
+<span class="filelabel">apps/Voxa.Studio/Audio/IStudioAudioDevice.cs</span>
+<pre><code><span class="cm">/// The only OS-specific surface in Studio. A macOS/Linux backend is a new implementation,</span>
+<span class="cm">/// nothing else changes.</span>
+public interface IStudioAudioDevice : IAsyncDisposable
+{
+    IReadOnlyList&lt;AudioEndpoint&gt; CaptureEndpoints();
+    IReadOnlyList&lt;AudioEndpoint&gt; RenderEndpoints();
+
+    <span class="cm">// 20 ms PCM16 mono frames, resampled by the device layer to sampleRate.</span>
+    IAsyncEnumerable&lt;ReadOnlyMemory&lt;byte&gt;&gt; CaptureAsync(AudioEndpoint mic, int sampleRate, CancellationToken ct);
+
+    ValueTask StartRenderAsync(AudioEndpoint speaker, int sampleRate, CancellationToken ct);
+    ValueTask RenderAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct);
+    ValueTask FlushRenderAsync();   <span class="cm">// barge-in: drop queued device audio immediately</span>
+}
+
+public sealed record AudioEndpoint(string Id, string DisplayName, bool IsDefault);</code></pre>
+
+<div class="callout warn"><b>Sample-rate ownership.</b> The composed pipeline announces its effective input/output rates (the same values the server's session envelope carries — e.g. 16000 in / 22050 out for WhisperCpp + Piper amy-low). The device layer owns resampling from/to hardware rates. Hardcoding 16 k/22.05 k anywhere in Studio is a bug — the rates change with provider config, exactly as the browser client learned in VLS-001.</div>
+
+<h4>WS1 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS1-A1</span><code>dotnet run --project apps/Voxa.Studio</code> opens the shell with four navigable tabs on Windows; solution still builds <code>-warnaserror</code> on Linux CI (Avalonia compiles everywhere; only the WASAPI device is OS-gated at runtime).</li>
+  <li><span class="tid">WS1-A2</span>Headless test: app boots with the default (keyless) config; registry resolves WhisperCpp/Piper/Echo; no network touched before the user acts (model warm-up is user-triggered in Studio, unlike the server guard).</li>
+  <li><span class="tid">WS1-A3</span>Unit: <code>StudioSpeakerSink</code> purges queued audio on <code>InterruptionFrame</code> (mirror of the WebSocket sink's epoch test).</li>
+  <li><span class="tid">WS1-A4</span>Unit: device-layer resampler round-trips 48 k hardware ↔ 16 k pipeline within tolerance (fixture WAV).</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws2">WS2 — Talk view: live conversation + VAD trace + latency waterfall <span class="badge p0">P0</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS0, WS1</span>
+</div>
+
+<ul>
+  <li><b>Controls:</b> mic/speaker pickers, Start/Stop, provider summary chip (e.g. <code>SileroVad · WhisperCpp · Echo · Piper/amy-low</code>), first-use model download progress (via <code>PrefetchAsync</code> progress callback).</li>
+  <li><b>Transcript timeline:</b> user/bot bubbles stamped from <code>TranscriptEvent</code>/<code>AgentDeltaEvent</code>; interruptions render as a cut marker (<code>TurnEdge.Interrupted</code>).</li>
+  <li><b>VAD strip chart:</b> scrolling probability line from <code>VadWindowEvent</code> (~31 events/s), the configured <code>ConfidenceThreshold</code> as a horizontal rule, gate open/close shading, turn-edge markers. Renders the Silero context-bug class of failure as an unmissable flat line.</li>
+  <li><b>Waterfall:</b> per completed turn, one stacked bar from <code>StageLatencyEvent</code>s: VAD hangover → STT → agent first token → TTS first byte → audio out; total equals <code>voxa.turn.ttfb</code> within measurement tolerance. Hover for ms numbers; copy-as-text for bug reports.</li>
+  <li><b>Event log pane:</b> raw scrolling event view with <code>SeqNo</code>, filterable by type — the "I need to see exactly what fired" escape hatch.</li>
+</ul>
+<p>Rendering rule: view-models coalesce hub events into ≤ 30 fps batches on a render timer; the subscriber loop itself never touches the UI thread. Chart drawing uses Avalonia's own drawing API (no charting NuGet dependency for a strip chart and stacked bars).</p>
+
+<h4>WS2 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS2-A1</span>Headless test: feeding a recorded hub event sequence (golden JSON fixture from a real jfk.wav turn) yields a view-model state with 1 user turn, 1 bot turn, ≥ 25 VAD points/s, and a 5-segment waterfall.</li>
+  <li><span class="tid">WS2-A2</span>Headless test: <code>TurnEdge.Interrupted</code> truncates the active bot bubble and the sink flush is requested (barge-in path).</li>
+  <li><span class="tid">WS2-A3</span>Manual protocol (§9): live conversation on Windows hardware with WhisperCpp+Echo+Piper; VAD trace visibly tracks speech; waterfall totals ≈ perceived latency.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws3">WS3 — Voice Lab: audition, A/B compare, RTF on your hardware <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS1</span>
+</div>
+
+<ul>
+  <li><b>Catalog browser:</b> rows from <code>PiperVoiceCatalog</code> + <code>KokoroCatalog</code> voices (name, engine, language, sample rate, size, cached?). Cloud TTS providers appear greyed-in if their keys resolve — audition works, but local is the headline.</li>
+  <li><b>Audition:</b> a text box (default pangram) + play per row. Synthesis goes through the real engines (<code>ITextToSpeechEngine</code> resolved per descriptor) so Piper's process pool and Kokoro's ONNX session warm exactly as in production.</li>
+  <li><b>Measured numbers:</b> per synthesis, display TTFB (start → first PCM chunk) and RTF (synthesis wall-clock ÷ audio duration). Displayed, never asserted.</li>
+  <li><b>A/B:</b> pin two voices, synthesize the same text, instant-switch playback of the two results; export either as WAV.</li>
+</ul>
+
+<h4>WS3 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS3-A1</span>Headless test: catalog view-model lists all pinned Piper voices and Kokoro voices with correct metadata; uncached rows show a download affordance.</li>
+  <li><span class="tid">WS3-A2</span>Integration (<code>Category=LocalModels</code>): audition view-model against real <code>en_US-amy-low</code> produces a playable PCM buffer and a finite RTF; WAV export round-trips through the existing <code>WavAudio</code> reader.</li>
+  <li><span class="tid">WS3-A3</span>Headless test: A/B holds two independent buffers; switching does not re-synthesize.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws4">WS4 — Models view: cache inventory, verify, prefetch, purge <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS0 (inventory API), WS1</span>
+</div>
+
+<ul>
+  <li><b>Inventory grid</b> from <code>VoxaModelCache.Enumerate()</code> joined against the catalogs: known artifacts get name/engine labels; unknown files are flagged (stale or foreign).</li>
+  <li><b>Actions:</b> Verify (streamed SHA-256 vs pin, ✓/✗ badge), Prefetch all (full catalog union for the current RID, with per-file progress; the air-gap provisioning story), Purge (confirmation; refuses locked entries), Open folder, Offline-mode indicator showing the effective cache root from <code>VoxaModelCacheOptions.ResolveCacheRoot()</code> (incl. whether <code>VOXA_MODEL_CACHE</code> set it).</li>
+</ul>
+
+<h4>WS4 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS4-A1</span>Headless test against a temp cache: inventory joins catalog metadata; a deliberately corrupted file verifies ✗; purge removes it; a <code>.lock</code>-held file refuses purge with a readable message.</li>
+  <li><span class="tid">WS4-A2</span>Headless test: prefetch view-model drives <code>PrefetchAsync</code> with a fake cache and renders per-file progress; cancel stops cleanly leaving only <code>.partial</code> files (which the next run resumes per WS0 semantics).</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws5">WS5 — Config Composer: registry-driven <code>appsettings.json</code> export <span class="badge p2">P2</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS1</span>
+</div>
+
+<ul>
+  <li>Dropdowns populated from the live <code>VoxaProviderRegistry</code> (<code>SttNames</code>/<code>TtsNames</code>/VAD names) plus <code>Profile</code> (LowLatency/Quality/Cheap) and the per-provider headline options (Whisper model, Piper voice, Kokoro voice/precision) sourced from the catalogs.</li>
+  <li>Validation reuses <code>VoxaOptionsValidator</code> — the same code path <code>VoxaDefaultsGuard</code> arms at server startup, so "Studio says valid" ⇒ "server boots".</li>
+  <li>Export: pretty-printed <code>"Voxa": { … }</code> block → clipboard or file. A "Try it" button applies the draft to a fresh Talk session before export.</li>
+</ul>
+
+<h4>WS5 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS5-A1</span>Headless test: every exportable combination of local providers round-trips through <code>VoxaOptionsValidator</code> without error.</li>
+  <li><span class="tid">WS5-A2</span>Golden test: the default local selection exports byte-stable JSON matching the <code>docs/local-speech.md</code> quickstart block.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws6">WS6 — Packaging, CI lane, docs <span class="badge p2">P2</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> repo</span>
+  <span><b>Depends on</b> WS1–WS5</span>
+</div>
+<ul>
+  <li><b>CI:</b> add a <code>windows-latest</code> job building <code>Voxa.slnx</code> and running <code>tests/Voxa.Studio.Tests</code> (Avalonia.Headless — no display server needed). Studio view-model tests carry no <code>LocalModels</code> trait except WS3-A2, which joins the existing cached zero-network lane semantics if that lane gains a Windows leg (else it remains local/manual — decide in implementation, record in the workflow comment).</li>
+  <li><b>Docs:</b> <code>docs/studio.md</code> (launch, first-run download, tour of the four tabs, troubleshooting incl. exclusive-mode WASAPI devices), README "Voxa Studio" section with a screenshot, ROADMAP P7/P8 updates.</li>
+  <li><b>Dependency gate:</b> extend the GPL dependency-graph test to <code>Voxa.Studio</code> (NAudio MIT ✓; assert <code>KokoroSharp</code> and espeak-ng natives stay absent).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Configuration reference</h2>
+
+<table>
+  <tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>Voxa:Diagnostics:Enabled</code></td><td><code>false</code> (Studio's appsettings: <code>true</code>)</td><td>Insert diagnostics taps + stage-latency processor at compose time and register the per-session hub.</td></tr>
+  <tr><td><code>Voxa:Diagnostics:ChannelCapacity</code></td><td><code>4096</code></td><td>Per-subscriber bounded channel size; overflow drops oldest.</td></tr>
+  <tr><td><code>Voxa:Studio:Microphone</code> / <code>:Speaker</code></td><td>system default</td><td>Endpoint ids persisted by the app between runs (written to the user's Studio settings file, not read from server config).</td></tr>
+</table>
+<p>Everything else is the standard <code>Voxa:*</code> section — Studio deliberately introduces no parallel configuration system. Its shipped <code>appsettings.json</code> is the VLS-001 keyless block (<code>WhisperCpp</code>/<code>Piper</code>/<code>Echo</code>) plus <code>Diagnostics:Enabled=true</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Plan of action — phases &amp; dependencies</h2>
+
+<div class="arrowflow">Phase A   WS0  diagnostics hub + taps + composer seam + cache inventory      (framework; independently shippable)
+Phase B   WS1  shell + audio device + in-proc transport                       (needs WS0 compose seam)
+Phase C   WS2  Talk view ──┐
+          WS3  Voice Lab ──┼── parallel once WS1 lands
+          WS4  Models    ──┘
+Phase D   WS5  Config Composer
+          WS6  CI lane + docs + GPL gate extension</div>
+
+<p>Phase A merges on its own PR — it is the roadmap P7 item and benefits server hosts even if Studio slipped. Branch naming: <code>feat/vst-001-diagnostics</code> (Phase A), <code>feat/vst-001-studio</code> (B–D).</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
+<p class="progress-note">Tick as workstreams land. Acceptance ids reference §5.</p>
+<ul class="cl">
+  <li><input type="checkbox" checked> <span class="tid">WS0</span><code>VoxaDiagnosticsHub</code>, events, taps, <code>ProbabilityObserver</code>, <code>Compose(IServiceProvider)</code>, <code>voxa.stage.latency</code>, cache inventory <span class="ac">WS0-A1…A5 green; golden composition test unchanged with diagnostics off</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span>Studio shell, <code>IStudioAudioDevice</code> + WASAPI, mic source / speaker sink <span class="ac">WS1-A1/A2/A4 green (headless boot + resampler); WS1-A3 covered at the VM level + manual barge-in check — TalkSession's pump is exercised live, not unit-mocked</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS2</span>Talk view: transcript, VAD trace, waterfall, event log <span class="ac">WS2-A1…A2 green (synthetic golden turn); WS2-A3 manual protocol — see §10.4</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS3</span>Voice Lab: catalog, audition, A/B, RTF/TTFB, WAV export <span class="ac">WS3-A1/A3 green; WS3-A2 (real synthesis) requires cached models — LocalModels-style, run locally</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span>Models view: inventory, verify, prefetch-all, purge <span class="ac">WS4-A1…A2 green (real temp cache, corruption + lock paths)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span>Config Composer + export <span class="ac">WS5-A1…A2 green (validation matrix + byte-stable golden export)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span>Windows CI lane, docs/studio.md, README, GPL gate extension <span class="ac">studio job on windows-latest; Studio tests also run in the ubuntu default suite</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Verification protocol</h2>
+<ol>
+  <li><b>Build:</b> <code>dotnet build Voxa.slnx -warnaserror</code> on Linux and Windows.</li>
+  <li><b>Default suite:</b> <code>dotnet test --filter "Category!=LocalModels"</code> — includes all hub, composer-golden, view-model (headless), device-resampler, and cache-inventory tests. No new network or hardware dependencies.</li>
+  <li><b>Local-models suite:</b> existing cached zero-network lane stays green (proves WS0's composer changes did not disturb VLS-001 paths); WS3-A2 runs where real models are present.</li>
+  <li><b>Manual (Windows hardware, recorded in the PR):</b> launch Studio keyless → first-run download visible → speak; confirm (a) VAD trace tracks speech and the threshold rule sits where config says, (b) a full turn's waterfall shows five segments whose sum ≈ felt latency, (c) barge-in cuts playback and marks the bubble, (d) audition amy-low vs a Kokoro voice A/B, (e) corrupt a cached file on disk → Verify shows ✗ → re-resolve repairs it, (f) Config tab exports a block that boots <code>Voxa.Samples.MinimalServer</code> unmodified.</li>
+  <li><b>Overhead spot-check:</b> with diagnostics enabled but no subscriber, the e2e conversation test's allocations/latency match the diagnostics-off baseline (no formal gate — comparison noted in the PR).</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Risk register</h2>
+<table>
+  <tr><th>#</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Audio device layer quality (glitchy capture, exclusive-mode devices, resampling artifacts) dominates perceived app quality</td><td class="sev-high">High</td><td>WASAPI shared-mode only in v1; device layer owns resampling with a tested DSP path (WS1-A4); known-issue list in docs; <code>IStudioAudioDevice</code> seam keeps a future miniaudio/PortAudio swap local</td></tr>
+  <tr><td>R2</td><td>Diagnostics taps perturb the pipeline they observe (heisenbug risk: extra processors, per-window callbacks)</td><td class="sev-high">High</td><td>Taps only composed when enabled; golden test pins the disabled composition; bounded drop-oldest channels; <code>ProbabilityObserver</code> is a bare delegate invocation on the VAD thread — observer body must not block (documented contract)</td></tr>
+  <tr><td>R3</td><td>Avalonia 11.x churn / styling effort balloons the UI work</td><td class="sev-med">Med</td><td>Pin Avalonia version; fluent default theme, no custom theming in v1; charts hand-drawn (2 primitives) — no third-party chart dependency</td></tr>
+  <tr><td>R4</td><td>Studio and a running server share the model cache concurrently</td><td class="sev-med">Med</td><td>Already designed for: cross-process <code>.lock</code> + atomic <code>.partial</code> rename from VLS-001; Purge refuses locked entries (WS4-A1)</td></tr>
+  <tr><td>R5</td><td>Headless UI tests flake under parallel suite load</td><td class="sev-med">Med</td><td>View-models hold zero Avalonia types; logic tests are plain xUnit; Avalonia.Headless used only for smoke-boot; no wall-clock assertions (per §3.3)</td></tr>
+  <tr><td>R6</td><td>GPL exposure via new dependencies</td><td class="sev-crit">Crit</td><td>NAudio is MIT; espeak-ng stays out-of-process; dependency-graph gate test extended to Studio (WS6) — same enforcement that bans <code>KokoroSharp</code></td></tr>
+  <tr><td>R7</td><td>App scope creep ("just add a recorder / a prompt editor / …")</td><td class="sev-low">Low</td><td>§3.2 non-goals; the prime directive (§2) — any feature needing private hooks is rejected or becomes a framework seam first</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>macOS/Linux audio backends</b> — the <code>IStudioAudioDevice</code> seam is the contract; CoreAudio/ALSA (or one miniaudio-based backend for both) is a follow-up.</li>
+  <li><b>Remote attach</b> — subscribing to a <em>server's</em> <code>VoxaDiagnosticsHub</code> over a <code>/voxa/diagnostics</code> WebSocket; the hub API and event records are shaped to serialize, so this is additive when wanted (and would power the P7 <code>/voxa/debug</code> browser page from the same stream).</li>
+  <li><b>Session recording / replay</b> — exporting a Talk session (audio + event stream) and replaying it deterministically; pairs naturally with the P7 conversation test harness.</li>
+  <li><b>Installer / MSIX / code signing</b> — revisit when Studio has external users beyond the repo.</li>
+  <li><b>Prompt/agent editing</b> — agent configuration beyond picking the provider is the server's domain.</li>
+  <li><b>Smart-turn classifier tuning UI</b> — wait for the P0 smart-turn feature to exist; the VAD trace already visualizes its input signal.</li>
+</ul>
+
+</div>
+</body>
+</html>

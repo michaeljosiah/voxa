@@ -1,0 +1,205 @@
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Voxa.Speech;
+using Voxa.Studio.Services;
+
+namespace Voxa.Studio.ViewModels;
+
+/// <summary>One cache entry row, joined against the catalogs when recognizable.</summary>
+public sealed partial class ModelRow : ObservableObject
+{
+    public required CachedModelInfo Entry { get; init; }
+    public required string EngineLabel { get; init; }   // "Whisper", "Piper", "Kokoro", or "—" for foreign files
+    public required bool IsKnown { get; init; }
+    public required VoxaModelArtifact? Artifact { get; init; }
+
+    [ObservableProperty] private string _verifyState = "·";   // "·" unverified, "✓", "✗", "…"
+    [ObservableProperty] private bool _isBusy;
+
+    public string Id => Entry.Id;
+    public string SizeText => Entry.SizeBytes >= 1024 * 1024
+        ? $"{Entry.SizeBytes / (1024.0 * 1024):F0} MB"
+        : $"{Entry.SizeBytes / 1024.0:F0} KB";
+    public string KindText => Entry.IsExtractedArchive ? "archive" : "file";
+}
+
+/// <summary>
+/// The Models view (VST-001 WS4): a visual front-end for <see cref="VoxaModelCache"/> —
+/// inventory, streamed SHA-256 re-verification, prefetch-the-full-catalog (air-gap
+/// provisioning), and purge. Shares the exact directory the engines resolve from, including
+/// its cross-process download locks.
+/// </summary>
+public sealed partial class ModelsViewModel : ObservableObject
+{
+    private readonly StudioServices _services;
+
+    public ModelsViewModel(StudioServices services)
+    {
+        _services = services;
+        CacheRoot = services.ModelCache.Options.CacheRoot;
+        CacheRootSource = Environment.GetEnvironmentVariable(VoxaModelCacheOptions.CacheRootEnvVar) is not null
+            ? $"from {VoxaModelCacheOptions.CacheRootEnvVar}"
+            : services.Configuration["Voxa:Models:CachePath"] is not null
+                ? "from Voxa:Models:CachePath"
+                : "OS default";
+        Refresh();
+    }
+
+    public ObservableCollection<ModelRow> Rows { get; } = new();
+
+    public string CacheRoot { get; }
+    public string CacheRootSource { get; }
+
+    [ObservableProperty] private string _statusText = "";
+    [ObservableProperty] private string? _errorText;
+    [ObservableProperty] private bool _isPrefetching;
+    [ObservableProperty] private double _prefetchProgress; // 0..1
+    [ObservableProperty] private string _totalSizeText = "";
+
+    [RelayCommand]
+    public void Refresh()
+    {
+        ErrorText = null;
+        Rows.Clear();
+
+        // Join inventory against every pinned artifact this machine can use.
+        var known = ActiveConfigArtifacts.FullCatalog()
+            .GroupBy(ArtifactCacheKey)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        long total = 0;
+        foreach (var entry in _services.ModelCache.Enumerate().OrderBy(e => e.Id, StringComparer.Ordinal))
+        {
+            total += entry.SizeBytes;
+            known.TryGetValue(entry.Id, out var artifact);
+            Rows.Add(new ModelRow
+            {
+                Entry = entry,
+                Artifact = artifact,
+                IsKnown = artifact is not null,
+                EngineLabel = EngineFor(entry.Id),
+            });
+        }
+        TotalSizeText = $"{total / (1024.0 * 1024):F0} MB on disk";
+        StatusText = Rows.Count == 0
+            ? "Cache is empty — models download on first use, or prefetch the full catalog below."
+            : $"{Rows.Count} entries.";
+    }
+
+    /// <summary>The inventory id an artifact appears under (extracted archives get the .extracted suffix).</summary>
+    private static string ArtifactCacheKey(VoxaModelArtifact a)
+        => a.ArchiveEntry is null ? a.Id : a.Id + ".extracted";
+
+    private static string EngineFor(string id) =>
+        id.StartsWith("whisper/", StringComparison.Ordinal) ? "Whisper" :
+        id.StartsWith("piper/", StringComparison.Ordinal) ? "Piper" :
+        id.StartsWith("kokoro/", StringComparison.Ordinal) ? "Kokoro" : "—";
+
+    // ── actions ──────────────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private async Task VerifyAsync(ModelRow row)
+    {
+        if (row.Artifact is null) { row.VerifyState = "?"; return; }
+        row.IsBusy = true;
+        row.VerifyState = "…";
+        try
+        {
+            var ok = await _services.ModelCache.VerifyAsync(row.Artifact, CancellationToken.None);
+            row.VerifyState = ok ? "✓" : "✗";
+            if (!ok)
+                StatusText = $"{row.Id} FAILED verification — purge it and re-download.";
+        }
+        catch (Exception ex)
+        {
+            ErrorText = ex.Message;
+            row.VerifyState = "✗";
+        }
+        finally
+        {
+            row.IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task VerifyAllAsync()
+    {
+        foreach (var row in Rows.Where(r => r.IsKnown).ToList())
+            await VerifyAsync(row);
+        StatusText = "Verification pass complete.";
+    }
+
+    [RelayCommand]
+    private void Purge(ModelRow row)
+    {
+        try
+        {
+            _services.ModelCache.Purge(row.Entry);
+            StatusText = $"Purged {row.Id}.";
+            Refresh();
+        }
+        catch (IOException ex)
+        {
+            // Locked by a concurrent download (possibly another Voxa process) — surface verbatim.
+            ErrorText = ex.Message;
+        }
+    }
+
+    [RelayCommand]
+    private async Task PrefetchAllAsync()
+    {
+        if (IsPrefetching) return;
+        IsPrefetching = true;
+        ErrorText = null;
+        try
+        {
+            var all = ActiveConfigArtifacts.FullCatalog();
+            var missing = all.Where(a => !_services.ModelCache.IsCached(a)).ToList();
+            if (missing.Count == 0)
+            {
+                StatusText = "Everything in the catalog is already cached — this machine is air-gap ready.";
+                return;
+            }
+
+            var totalMb = missing.Sum(a => a.SizeBytes) / (1024 * 1024);
+            StatusText = $"Prefetching {missing.Count} artifacts, ~{totalMb} MB…";
+            var progress = new Progress<VoxaPrefetchProgress>(p =>
+            {
+                PrefetchProgress = (double)p.CompletedCount / p.TotalCount;
+                StatusText = $"({p.CompletedCount}/{p.TotalCount}) {p.ArtifactId}";
+            });
+            await _services.ModelCache.PrefetchAsync(missing, progress);
+            StatusText = $"Prefetch complete — copy {CacheRoot} to provision an air-gapped machine.";
+            Refresh();
+        }
+        catch (Exception ex)
+        {
+            ErrorText = ex.Message;
+            StatusText = "Prefetch stopped.";
+        }
+        finally
+        {
+            IsPrefetching = false;
+            PrefetchProgress = 0;
+        }
+    }
+
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(CacheRoot);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = CacheRoot,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            ErrorText = ex.Message;
+        }
+    }
+}

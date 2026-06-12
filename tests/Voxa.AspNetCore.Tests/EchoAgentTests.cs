@@ -78,7 +78,7 @@ public class EchoAgentTests
         var (factory, sp) = MetaPackageFactory();
         using var _ = sp;
 
-        var agent = factory.Create(new DefaultHttpContext(), new VoxaAgentOptions { Provider = "Echo" });
+        var agent = factory.Create(sp, new VoxaAgentOptions { Provider = "Echo" });
 
         var chunks = new List<string>();
         await foreach (var update in agent.RunStreamingAsync(

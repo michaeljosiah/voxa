@@ -1,5 +1,4 @@
 using Microsoft.Agents.AI;
-using Microsoft.AspNetCore.Http;
 
 namespace Voxa.AspNetCore;
 
@@ -13,7 +12,13 @@ namespace Voxa.AspNetCore;
 /// </summary>
 public interface IVoiceAgentFactory
 {
-    AIAgent Create(HttpContext context, VoxaAgentOptions options);
+    /// <summary>
+    /// Create the agent for one session. <paramref name="services"/> is the session's scope —
+    /// an HTTP host passes the connection's <c>RequestServices</c>; non-HTTP hosts (Voxa Studio)
+    /// pass their own session scope. (VST-001 WS0 made this transport-agnostic; it previously
+    /// took an <c>HttpContext</c>.)
+    /// </summary>
+    AIAgent Create(IServiceProvider services, VoxaAgentOptions options);
 
     /// <summary>
     /// Startup validation called by <c>VoxaDefaultsGuard</c> when no <c>AIAgent</c> /

@@ -1,0 +1,139 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             x:Class="Voxa.Studio.Views.ConfigView"
+             x:DataType="vm:ConfigViewModel">
+
+  <Grid ColumnDefinitions="5*,12,4*" Margin="24,12,24,20">
+
+    <!-- ── selections ── -->
+    <StackPanel Grid.Column="0" Spacing="14">
+      <TextBlock Classes="vx-h1" Text="Config" />
+      <TextBlock Classes="vx-sub"
+                 Text="Compose a pipeline from the live provider registry, then export the exact appsettings.json block. Valid here means a server boots with it — same validator, same code path." />
+
+      <Border Classes="vx-card">
+        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+              x:Name="SelectionGrid">
+          <Grid.Styles>
+            <Style Selector="TextBlock.row">
+              <Setter Property="VerticalAlignment" Value="Center" />
+              <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+            </Style>
+            <Style Selector="ComboBox">
+              <Setter Property="HorizontalAlignment" Value="Stretch" />
+              <Setter Property="Margin" Value="0,5" />
+            </Style>
+          </Grid.Styles>
+
+          <TextBlock Grid.Row="0" Grid.Column="0" Classes="row" Text="Speech to text" />
+          <ComboBox Grid.Row="0" Grid.Column="1" ItemsSource="{Binding SttProviders}"
+                    SelectedItem="{Binding SelectedStt}" />
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Classes="row" Text="Text to speech" />
+          <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding TtsProviders}"
+                    SelectedItem="{Binding SelectedTts}" />
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Classes="row" Text="Voice activity" />
+          <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding VadEngines}"
+                    SelectedItem="{Binding SelectedVad}" />
+
+          <TextBlock Grid.Row="3" Grid.Column="0" Classes="row" Text="Agent" />
+          <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{Binding AgentProviders}"
+                    SelectedItem="{Binding SelectedAgent}" />
+
+          <TextBlock Grid.Row="4" Grid.Column="0" Classes="row" Text="Latency profile" />
+          <ComboBox Grid.Row="4" Grid.Column="1" ItemsSource="{Binding Profiles}"
+                    SelectedItem="{Binding SelectedProfile}" />
+        </Grid>
+      </Border>
+
+      <Border Classes="vx-card" IsVisible="{Binding ShowWhisperOptions}">
+        <Grid ColumnDefinitions="130,*">
+          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
+          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
+        </Grid>
+      </Border>
+
+      <Border Classes="vx-card" IsVisible="{Binding ShowPiperOptions}">
+        <Grid ColumnDefinitions="130,*">
+          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Piper voice" />
+          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding PiperVoices}" SelectedItem="{Binding SelectedPiperVoice}" />
+        </Grid>
+      </Border>
+
+      <Border Classes="vx-card" IsVisible="{Binding ShowKokoroOptions}">
+        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Kokoro voice" />
+          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                    ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding SelectedKokoroVoice}" />
+          <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Precision" />
+          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding KokoroPrecisions}" SelectedItem="{Binding SelectedKokoroPrecision}" />
+        </Grid>
+      </Border>
+
+      <!-- LLM agent: pick OpenAI above and the local pipeline answers with a real model. -->
+      <Border Classes="vx-card" IsVisible="{Binding ShowAgentOptions}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Chat model" />
+            <TextBox Grid.Column="1" Margin="0,0,0,8" Text="{Binding AgentModel}"
+                     Watermark="gpt-4o-mini" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="API key" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AgentApiKey}"
+                     PasswordChar="●" Watermark="sk-… (blank = use environment / user-secrets)" />
+          </Grid>
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     Text="The key is applied to the running app only — it is never written into the exported JSON or to disk. For servers, set Voxa__OpenAI__ApiKey or user-secrets." />
+        </StackPanel>
+      </Border>
+
+      <!-- validation + apply -->
+      <StackPanel Spacing="6">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Ellipse Classes="vx-dot" Fill="{StaticResource VxGoodBrush}" IsVisible="{Binding IsValid}" />
+          <Ellipse Classes="vx-dot" Fill="{StaticResource VxBadBrush}" IsVisible="{Binding !IsValid}" />
+          <TextBlock Classes="vx-sub" Text="{Binding ValidationText}" />
+        </StackPanel>
+        <ItemsControl ItemsSource="{Binding ValidationErrors}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12"
+                         TextWrapping="Wrap" Text="{Binding}" Margin="16,2,0,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+          <Button Classes="vx-primary" Content="⚡ Apply to Studio"
+                  Command="{Binding ApplyCommand}"
+                  ToolTip.Tip="Rebuild the running app with this draft — the next Talk session uses it." />
+          <TextBlock Classes="vx-sub" VerticalAlignment="Center" TextWrapping="Wrap"
+                     Text="{Binding ApplyStatus}" />
+        </StackPanel>
+        <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}"
+                   Text="Stop the live Talk session to apply a new configuration."
+                   IsVisible="{Binding ApplyBlocked}" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- ── export ── -->
+    <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto">
+      <TextBlock Classes="vx-label" Text="APPSETTINGS.JSON" Margin="2,8,0,6" />
+      <Border Grid.Row="1" Classes="vx-card-flush" Padding="4">
+        <TextBox Text="{Binding ExportJson, Mode=OneWay}" IsReadOnly="True"
+                 FontFamily="{StaticResource VxMono}" FontSize="12"
+                 AcceptsReturn="True" TextWrapping="NoWrap"
+                 BorderThickness="0" Background="Transparent" />
+      </Border>
+      <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+        <Button Classes="vx-primary" Content="⧉ Copy" Click="OnCopyClicked" />
+        <Button Classes="vx-ghost" Content="Save to file" Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </Grid>
+
+  </Grid>
+</UserControl>

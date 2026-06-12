@@ -1,0 +1,111 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             x:Class="Voxa.Studio.Views.VoicesView"
+             x:DataType="vm:VoicesViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,12,24,20">
+
+    <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,14">
+      <TextBlock Classes="vx-h1" Text="Voice Lab" />
+      <TextBlock Classes="vx-sub"
+                 Text="Every pinned local voice, auditioned through the real engines — same warm pool, same ONNX session as production. Numbers are measured on this machine." />
+    </StackPanel>
+
+    <!-- audition text + A/B deck -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <TextBox Grid.Column="0" Text="{Binding AuditionText}" Watermark="Text to speak…"
+               AcceptsReturn="False" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+        <Button Classes="vx-ghost" Command="{Binding PlayACommand}"
+                IsEnabled="{Binding PinnedA, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="▶ A" FontWeight="Bold" Foreground="{StaticResource VxAccentBrush}" />
+            <TextBlock Text="{Binding PinnedA.Name, FallbackValue=—}" Classes="vx-muted" FontSize="11"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button Classes="vx-ghost" Command="{Binding PlayBCommand}"
+                IsEnabled="{Binding PinnedB, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="▶ B" FontWeight="Bold" Foreground="{StaticResource VxWarnBrush}" />
+            <TextBlock Text="{Binding PinnedB.Name, FallbackValue=—}" Classes="vx-muted" FontSize="11"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <!-- catalog -->
+    <Border Grid.Row="2" Classes="vx-card-flush">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Voices}" Margin="8">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:VoiceRow">
+              <Border BorderBrush="{StaticResource VxBorderBrush}" BorderThickness="0,0,0,1"
+                      Padding="10,9">
+                <Grid ColumnDefinitions="Auto,200,90,70,70,80,80,*,Auto,Auto,Auto">
+
+                  <Button Grid.Column="0" Classes="vx-primary" Padding="10,5" Content="▶"
+                          Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).PlayCommand}"
+                          CommandParameter="{Binding}"
+                          IsEnabled="{Binding !IsBusy}" />
+
+                  <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                  </StackPanel>
+
+                  <Border Grid.Column="2" Classes="vx-chip" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding Engine}" FontSize="10" />
+                  </Border>
+
+                  <TextBlock Grid.Column="3" Classes="vx-mono vx-muted" FontSize="11"
+                             Text="{Binding RateText}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Classes="vx-mono vx-muted" FontSize="11"
+                             Text="{Binding SizeText}" VerticalAlignment="Center" />
+
+                  <StackPanel Grid.Column="5" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Classes="vx-label" Text="TTFB" />
+                    <TextBlock Classes="vx-mono" FontSize="12" Text="{Binding TtfbText}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="6" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock Classes="vx-label" Text="RTF" />
+                    <TextBlock Classes="vx-mono" FontSize="12" Text="{Binding RtfText}" />
+                  </StackPanel>
+
+                  <TextBlock Grid.Column="7" Classes="vx-sub" Text="not downloaded yet"
+                             VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,12,0"
+                             IsVisible="{Binding !IsCached}" />
+
+                  <Button Grid.Column="8" Classes="vx-ghost" Padding="10,5" Content="A│B"
+                          ToolTip.Tip="Pin for A/B compare"
+                          Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).PinCommand}"
+                          CommandParameter="{Binding}" />
+                  <TextBlock Grid.Column="9" Width="18" FontWeight="Bold" Margin="6,0"
+                             VerticalAlignment="Center"
+                             Foreground="{StaticResource VxAccentBrush}"
+                             Text="{Binding Pin}" />
+                  <Button Grid.Column="10" Classes="vx-ghost" Padding="10,5" Content="⤓ wav"
+                          ToolTip.Tip="Export WAV"
+                          Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).ExportWavCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="3" Spacing="4" Margin="0,12,0,0">
+      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                 Text="{Binding ErrorText}"
+                 IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}"
+                 Text="Playback paused while a Talk session owns the output device."
+                 IsVisible="{Binding PlaybackBlocked}" />
+    </StackPanel>
+
+  </Grid>
+</UserControl>

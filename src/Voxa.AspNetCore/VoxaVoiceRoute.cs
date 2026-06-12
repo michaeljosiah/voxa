@@ -47,7 +47,7 @@ public sealed class VoxaVoiceRoute : IEndpointConventionBuilder
                     var composer = ctx.RequestServices.GetRequiredService<DefaultVoicePipelineComposer>();
                     var composed = composer.Compose(ctx);
                     foreach (var factory in composed.Parts)
-                        pipelineBuilder.UseProcessor(factory);
+                        pipelineBuilder.UseProcessor(c => factory(c.RequestServices));
                     pipelineBuilder.SessionInputSampleRate = composed.InputSampleRate;
                     pipelineBuilder.SessionOutputSampleRate = composed.OutputSampleRate;
                 }

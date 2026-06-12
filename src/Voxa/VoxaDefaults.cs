@@ -1,7 +1,6 @@
 using System.ClientModel;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,8 +54,11 @@ public static class VoxaDefaultsExtensions
 
         // TryAdd: a host-registered IVoiceAgentFactory always wins, whether it was added
         // before this call (TryAdd skips ours) or after (later registration wins at resolve).
-        services.TryAddSingleton<IVoiceAgentFactory>(sp =>
-            new DefaultAgentFactory(sp.GetRequiredService<IConfiguration>()));
+        // The factory captures the configuration passed to AddVoxa rather than resolving
+        // IConfiguration from DI — the same rule the validator and composer follow, because
+        // ASP.NET registers IConfiguration implicitly but plain-ServiceCollection hosts
+        // (Voxa Studio, tests) do not, and resolving it there throws at first session start.
+        services.TryAddSingleton<IVoiceAgentFactory>(_ => new DefaultAgentFactory(configuration));
 
         return services;
     }
@@ -79,7 +81,7 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
-    public AIAgent Create(HttpContext context, VoxaAgentOptions options)
+    public AIAgent Create(IServiceProvider services, VoxaAgentOptions options)
     {
         // Same checks VoxaDefaultsGuard runs at startup via Validate() — repeated here so
         // hosts that never arm the guard still get config-key-level messages, not the opaque

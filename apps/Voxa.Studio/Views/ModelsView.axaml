@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             x:Class="Voxa.Studio.Views.ModelsView"
+             x:DataType="vm:ModelsViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="24,12,24,20">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+      <StackPanel Grid.Column="0" Spacing="8">
+        <TextBlock Classes="vx-h1" Text="Models" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Classes="vx-sub" Text="Cache:" />
+          <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding CacheRoot}"
+                     Foreground="{StaticResource VxTextBrush}" VerticalAlignment="Center" />
+          <Border Classes="vx-chip">
+            <TextBlock FontSize="10" Text="{Binding CacheRootSource}" />
+          </Border>
+          <TextBlock Classes="vx-mono vx-muted" FontSize="11" Text="{Binding TotalSizeText}"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+        <Button Classes="vx-ghost" Content="⟳ Refresh" Command="{Binding RefreshCommand}" />
+        <Button Classes="vx-ghost" Content="✓ Verify all" Command="{Binding VerifyAllCommand}" />
+        <Button Classes="vx-ghost" Content="📂 Open folder" Command="{Binding OpenFolderCommand}" />
+        <Button Classes="vx-primary" Content="⤓ Prefetch full catalog"
+                Command="{Binding PrefetchAllCommand}"
+                IsEnabled="{Binding !IsPrefetching}"
+                ToolTip.Tip="Download every pinned model for this machine — then copy the cache folder to provision an air-gapped box." />
+      </StackPanel>
+    </Grid>
+
+    <ProgressBar Grid.Row="1" Height="3" Margin="0,0,0,10"
+                 Minimum="0" Maximum="1" Value="{Binding PrefetchProgress}"
+                 Foreground="{StaticResource VxAccentBrush}"
+                 IsVisible="{Binding IsPrefetching}" />
+
+    <Border Grid.Row="2" Classes="vx-card-flush">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Rows}" Margin="8">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ModelRow">
+              <Border BorderBrush="{StaticResource VxBorderBrush}" BorderThickness="0,0,0,1"
+                      Padding="10,8">
+                <Grid ColumnDefinitions="26,*,90,80,80,Auto,Auto">
+                  <TextBlock Grid.Column="0" FontSize="14" HorizontalAlignment="Center"
+                             VerticalAlignment="Center" Text="{Binding VerifyState}"
+                             Foreground="{StaticResource VxGoodBrush}" />
+                  <TextBlock Grid.Column="1" Classes="vx-mono" FontSize="12"
+                             Text="{Binding Id}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                  <Border Grid.Column="2" Classes="vx-chip" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <TextBlock FontSize="10" Text="{Binding EngineLabel}" />
+                  </Border>
+                  <TextBlock Grid.Column="3" Classes="vx-mono vx-muted" FontSize="11"
+                             Text="{Binding SizeText}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Classes="vx-muted" FontSize="11"
+                             Text="{Binding KindText}" VerticalAlignment="Center" />
+                  <Button Grid.Column="5" Classes="vx-ghost" Padding="10,4" Content="verify" Margin="0,0,6,0"
+                          Command="{Binding $parent[ItemsControl].((vm:ModelsViewModel)DataContext).VerifyCommand}"
+                          CommandParameter="{Binding}"
+                          IsEnabled="{Binding !IsBusy}"
+                          IsVisible="{Binding IsKnown}" />
+                  <Button Grid.Column="6" Classes="vx-danger" Padding="10,4" Content="purge"
+                          Command="{Binding $parent[ItemsControl].((vm:ModelsViewModel)DataContext).PurgeCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="3" Spacing="4" Margin="0,12,0,0">
+      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                 Text="{Binding ErrorText}"
+                 IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+  </Grid>
+</UserControl>

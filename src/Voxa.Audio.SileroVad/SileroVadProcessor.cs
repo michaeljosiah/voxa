@@ -147,6 +147,10 @@ public sealed class SileroVadProcessor : FrameProcessor
                 }
             }
 
+            // Live per-window observer (diagnostics hub → Studio's VAD trace). Synchronous and
+            // hot-path: the composer-wired callback is a guarded TryWrite, never a block.
+            _options.ProbabilityObserver?.Invoke(prob, rms, voiced, _isSpeaking);
+
             // Per-second diagnostic so users can tune.
             _peakProbThisSecond = Math.Max(_peakProbThisSecond, prob);
             _peakRmsThisSecond = Math.Max(_peakRmsThisSecond, rms);

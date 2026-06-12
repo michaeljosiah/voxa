@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:controls="using:Voxa.Studio.Controls"
+             xmlns:conv="using:Voxa.Studio.Views"
+             x:Class="Voxa.Studio.Views.TalkView"
+             x:DataType="vm:TalkViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,12,24,20">
+
+    <!-- ── header: devices + start/stop + provider chain ── -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+      <StackPanel Grid.Column="0" Spacing="8">
+        <TextBlock Classes="vx-h1" Text="Talk" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ComboBox Width="260" ItemsSource="{Binding Microphones}"
+                    SelectedItem="{Binding SelectedMicrophone}"
+                    PlaceholderText="Microphone" />
+          <ComboBox Width="260" ItemsSource="{Binding Speakers}"
+                    SelectedItem="{Binding SelectedSpeaker}"
+                    PlaceholderText="Speaker" />
+          <Border Classes="vx-chip" VerticalAlignment="Center">
+            <TextBlock Classes="vx-mono" FontSize="11" Text="{Binding ProviderChain}"
+                       Foreground="{StaticResource VxMutedBrush}" />
+          </Border>
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Bottom">
+        <Button Classes="vx-primary" Content="● Start session"
+                Command="{Binding StartCommand}"
+                IsVisible="{Binding !IsRunning}" />
+        <Button Classes="vx-danger" Content="■ Stop"
+                Command="{Binding StopCommand}"
+                IsVisible="{Binding IsRunning}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- ── body: transcript | trace + waterfall ── -->
+    <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*">
+
+      <!-- transcript -->
+      <Border Grid.Column="0" Classes="vx-card-flush">
+        <Grid RowDefinitions="*,Auto">
+          <ScrollViewer Grid.Row="0" x:Name="TranscriptScroll" Padding="16">
+            <ItemsControl ItemsSource="{Binding Transcript}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChatBubble">
+                  <Border MaxWidth="520" Margin="0,4"
+                          Padding="12,8" CornerRadius="10"
+                          HorizontalAlignment="{Binding IsUser, Converter={x:Static conv:Converters.BubbleAlign}}"
+                          Background="{Binding IsUser, Converter={x:Static conv:Converters.BubbleBrush}}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                      <TextBlock Text="⊘ interrupted" FontSize="10"
+                                 Foreground="{StaticResource VxWarnBrush}"
+                                 IsVisible="{Binding IsInterrupted}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <!-- speaking indicators -->
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="14" Margin="16,8,16,12">
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsUserSpeaking}">
+              <Ellipse Classes="vx-dot" Fill="{StaticResource VxAccentBrush}" />
+              <TextBlock Classes="vx-sub" Text="listening" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBotSpeaking}">
+              <Ellipse Classes="vx-dot" Fill="{StaticResource VxGoodBrush}" />
+              <TextBlock Classes="vx-sub" Text="speaking" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- trace + waterfalls + event log -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,170,12,Auto,*">
+        <TextBlock Grid.Row="0" Classes="vx-label" Text="VAD PROBABILITY" Margin="2,0,0,6" />
+        <Border Grid.Row="1" Classes="vx-card-flush" Padding="8">
+          <controls:VadTraceControl Samples="{Binding TraceSnapshot}"
+                                    Threshold="{Binding VadThreshold}" />
+        </Border>
+
+        <TextBlock Grid.Row="3" Classes="vx-label" Text="TURN WATERFALL" Margin="2,12,0,6" />
+        <Grid Grid.Row="4" RowDefinitions="Auto,*">
+          <ItemsControl Grid.Row="0" ItemsSource="{Binding Waterfalls}" MaxHeight="220">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TurnWaterfall">
+                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                  <controls:WaterfallControl Grid.Column="0" Height="30" Waterfall="{Binding}" />
+                  <TextBlock Grid.Column="1" Classes="vx-mono" FontSize="11" Margin="10,0,0,0"
+                             VerticalAlignment="Top" Text="{Binding TotalText}"
+                             Foreground="{StaticResource VxTextBrush}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,10,0,0">
+            <CheckBox Grid.Row="0" Content="Event log" FontSize="11"
+                      IsChecked="{Binding ShowEventLog}" />
+            <Border Grid.Row="1" Classes="vx-card-flush" IsVisible="{Binding ShowEventLog}">
+              <ListBox ItemsSource="{Binding EventLog}" FontSize="10"
+                       FontFamily="{StaticResource VxMono}" />
+            </Border>
+          </Grid>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <!-- ── status strip ── -->
+    <StackPanel Grid.Row="2" Spacing="4" Margin="0,12,0,0">
+      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                 Text="{Binding ErrorText}" IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+  </Grid>
+</UserControl>

@@ -39,6 +39,32 @@ jobs:
           name: test-results
           path: '**/TestResults/*.trx'
 
+  studio:
+    name: Voxa Studio (Windows)
+    # Studio's shipping platform. Its tests also run headless inside the ubuntu "Build & test"
+    # job (the view models are Avalonia-free; Avalonia.Headless needs no display server) — this
+    # lane proves the Windows leg: WASAPI-referencing build, Windows font/resource resolution.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build & test Studio
+        run: |
+          dotnet build tests/Voxa.Studio.Tests --configuration Release
+          dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --logger "trx;LogFileName=studio-results.trx"
+
+      - name: Upload Studio test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-results
+          path: '**/TestResults/studio-results.trx'
+
   local-speech:
     name: Local speech (zero network)
     runs-on: ubuntu-latest

@@ -28,4 +28,14 @@ public static class VoxaMetrics
     public static readonly Histogram<int> SinkQueueDepth =
         Meter.CreateHistogram<int>("voxa.sink.queue_depth", unit: "{frames}",
             description: "Depth of the WebSocket sink's outbound queue at enqueue time");
+
+    /// <summary>
+    /// Per-turn stage breakdown (tagged <c>stage</c>: <c>vad_close</c>, <c>stt_final</c>,
+    /// <c>agent_first_token</c>, <c>tts_first_byte</c>, <c>audio_out</c>) — the waterfall that
+    /// makes <see cref="TurnTtfbMs"/> diagnosable. Recorded when pipeline diagnostics are
+    /// enabled (<c>Voxa:Diagnostics:Enabled</c>) and a subscriber is attached (VST-001 WS0).
+    /// </summary>
+    public static readonly Histogram<double> StageLatencyMs =
+        Meter.CreateHistogram<double>("voxa.stage.latency", unit: "ms",
+            description: "Per-turn stage latency breakdown (tag 'stage')");
 }

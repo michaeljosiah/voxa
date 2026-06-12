@@ -22,6 +22,26 @@ public sealed class VoxaOptions
     public VoxaVadOptions Vad { get; set; } = new();
     public VoxaAgentOptions Agent { get; set; } = new();
     public VoxaAggregatorOptions Aggregator { get; set; } = new();
+    public VoxaDiagnosticsOptions Diagnostics { get; set; } = new();
+}
+
+/// <summary>
+/// Pipeline diagnostics (VST-001 WS0). When enabled, the default composer inserts
+/// <c>DiagnosticsTapProcessor</c>s after each stage and wires the VAD's per-window observer,
+/// feeding the per-session <c>VoxaDiagnosticsHub</c> that Voxa Studio (or a host debug page)
+/// subscribes to. Disabled by default: the composed pipeline is then byte-identical to one
+/// without diagnostics support.
+/// </summary>
+public sealed class VoxaDiagnosticsOptions
+{
+    /// <summary>Insert diagnostics taps at compose time. Default false (production posture).</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Per-subscriber event channel capacity. Overflow drops the oldest events (visible to the
+    /// subscriber as <c>SeqNo</c> gaps) — a slow renderer never backpressures the pipeline.
+    /// </summary>
+    public int ChannelCapacity { get; set; } = 4096;
 }
 
 /// <summary>VAD selection and tuning. Null tunables fall through to the active profile.</summary>

@@ -18,5 +18,6 @@ public static class SileroVadDescriptors
             StartDuration        = settings.StartDuration,
             StopDuration         = settings.StopDuration,
             PrerollDuration      = settings.PrerollDuration,
+            ProbabilityObserver  = settings.ProbabilityObserver,
         }));
 }

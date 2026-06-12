@@ -68,4 +68,14 @@ public sealed record SileroVadOptions
     /// </para>
     /// </summary>
     public Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>>? ConfirmTurnEnd { get; init; }
+
+    /// <summary>
+    /// Optional per-window observer (VST-001 WS0): invoked synchronously on the VAD's
+    /// processing thread after each inference window with
+    /// <c>(probability, rms, voiced, gateOpen)</c>, where <c>voiced</c> is the combined
+    /// probability-AND-energy verdict and <c>gateOpen</c> the post-update gate state. Feeds the
+    /// pipeline diagnostics hub (live VAD trace in Voxa Studio). The callback is in the audio
+    /// hot path — it must not block. Default <c>null</c> (zero overhead).
+    /// </summary>
+    public Action<float, double, bool, bool>? ProbabilityObserver { get; init; }
 }

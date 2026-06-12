@@ -79,6 +79,12 @@ public static class VoxaServiceCollectionExtensions
             sp.GetRequiredService<VoxaTuningResolver>(),
             configuration,
             sp.GetRequiredService<ILogger<DefaultVoicePipelineComposer>>()));
+        // Per-session diagnostics hub (VST-001 WS0). Scoped: one per WebSocket connection on a
+        // server, one per Talk session in Voxa Studio. Registered unconditionally (it is inert
+        // until someone subscribes); taps are only composed in when Voxa:Diagnostics:Enabled.
+        services.AddScoped(sp => new Voxa.Diagnostics.VoxaDiagnosticsHub(
+            sp.GetRequiredService<IOptions<VoxaOptions>>().Value.Diagnostics.ChannelCapacity));
+
         services.AddSingleton<VoxaHttpResolver>();
         services.AddSingleton<IVoxaHttpClientProvider>(sp => sp.GetRequiredService<VoxaHttpResolver>());
         services.AddSingleton<VoxaDefaultsGuard>();
