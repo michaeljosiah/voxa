@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Run & Metrics workbench (VST-002 D4).** A new top-level *Metrics* section that
+  turns sessions into evidence. A **run** = one configuration × one input source → a JSON
+  bundle under `~/voxa-runs` (config snapshot without secrets, recorded event stream, computed
+  stats, machine context — cores/OS/model-cache state, the R4 mitigation). Three sources: live
+  mic, single WAV, or a **scripted deck** — utterance WAVs replayed turn-paced through the
+  exact session machinery Talk uses (a `ScriptedAudioDevice` implements the device contract, so
+  there is no parallel code path); scripted runs end themselves. During a run only a compact
+  header updates; on completion the workbench renders the TTFB percentile card (nearest-rank
+  p50/p95/max, TTS chunk-span RTF, delta vs the previous run), per-turn stage stacks, and a
+  per-stage trend — all in the §3.3 stage palette — plus one rule-based **takeaway** sentence
+  naming the dominant stage and a real knob. **Compare** any two runs (older = baseline) with
+  context warnings when machines or cache states differ; per-turn CSV export. Cross-nav:
+  clicking a stage block in Talk's waterfall deep-links to that stage's trend in Metrics. Talk,
+  Builder, and Metrics runs block each other (one audio device, one set of cores — concurrent
+  sessions would skew the numbers). Fenced out: text-injected (post-STT) scripted turns wait
+  for a framework-level injection seam; Builder-graph runs record through the Builder itself.
 - **Voxa Studio: Pipeline Builder (VST-002 D3).** A new top-level *Builder* section — a node
   canvas over the live provider registry. The palette generates from registered STT/TTS/VAD
   providers plus the built-ins (TranscriptionFilter, SentenceAggregator, Echo/OpenAI agent);

@@ -86,13 +86,14 @@ you what's happening inside it. Keyless out of the box — no cloud account need
 dotnet run --project apps/Voxa.Studio
 ```
 
-**How to use it:**
+**The six views:**
 
 1. **Talk** — pick a microphone and speaker, press **● Start session**, and speak. The first
    session downloads the default models (~155 MB, progress shown); after that it's fully
    offline. You get a streaming transcript, a **live VAD probability trace** (watch the gate
    open as you speak), and a **per-turn latency waterfall** showing exactly where the response
-   time went: `VAD → STT → AGENT → TTS → OUT`. Talk over the bot to test barge-in.
+   time went: `VAD → STT → AGENT → TTS → OUT`. Talk over the bot to test barge-in; click any
+   waterfall stage to jump to its trend in Metrics.
 2. **Playgrounds** — two standalone labs behind one switch. The **STT lab** transcribes the
    bundled `jfk.wav` fixture, any WAV you drop on it, or a live mic recording with any pinned
    Whisper model, stamps each result with its final-transcript latency, and computes a live
@@ -101,14 +102,26 @@ dotnet run --project apps/Voxa.Studio
    RTF measured on your hardware — replayable take history with a waveform scrubber, **A**/**B**
    pins plus an **A/B/X blind test**, a stress-phrase deck, and a batch bench that tables TTFB
    p50/p95 per voice (CSV export).
-3. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
+3. **Builder** — a node canvas over the live provider registry. Wire Source → VAD → STT →
+   agent → TTS → Sink with typed ports (incompatible wires refuse with the reason in words),
+   edit options in the inspector, then **Run graph** — the canvas compiles to the same chain a
+   server composes and runs it live, with edges pulsing on real frame events and per-stage
+   latency on the nodes. Export the result as an `appsettings.json` block, or as generated C#
+   composition code when the shape goes beyond what config can express.
+4. **Metrics** — turn sessions into evidence. Record a **run** from the mic, a WAV, or a
+   **scripted utterance deck** (same input, two configs, honest comparison); get TTFB
+   percentiles, per-turn stage stacks, per-stage trends, and a one-sentence takeaway naming
+   the dominant stage and the knob to turn. Compare any two runs — with a warning when the
+   machine context differs. Bundles are JSON under `~/voxa-runs`; nothing leaves the machine.
+5. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
    **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
-4. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
-   export the `appsettings.json` block for your server. **To talk to a real LLM instead of the
-   echo agent:** set *Agent* to `OpenAI`, enter a chat model (e.g. `gpt-4o-mini`) and your API
-   key (or leave it blank to use `Voxa__OpenAI__ApiKey` from the environment), then press
-   **⚡ Apply to Studio** — the next Talk session answers with the model. The key is applied to
-   the running app only; it is never written to disk or into the exported JSON.
+6. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
+   export the `appsettings.json` block for your server — or open the draft as a graph in the
+   Builder. **To talk to a real LLM instead of the echo agent:** set *Agent* to `OpenAI`,
+   enter a chat model (e.g. `gpt-4o-mini`) and your API key (or leave it blank to use
+   `Voxa__OpenAI__ApiKey` from the environment), then press **⚡ Apply to Studio** — the next
+   Talk session answers with the model. The key is applied to the running app only; it is
+   never written to disk or into the exported JSON.
 
 Full guide — every view, server-side diagnostics, troubleshooting: [`docs/studio.md`](docs/studio.md).
 
@@ -450,6 +463,7 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | P5 | ✅ VDX-001 developer experience — `AddVoxa()` + `UseDefaults()`, typed config, named latency profiles, provider descriptors, `Voxa` meta-package, fail-fast startup validation, conversation memory, `session` wire envelope |
 | P6 (partial) | ✅ VLS-001 local/offline speech tier — `WhisperCpp` STT, `Piper` + `Kokoro` TTS, SHA-256-pinned model cache with offline mode, keyless `Echo` agent, startup warm-up, zero-network CI conversation lane ([docs](docs/local-speech.md)) |
 | P8 | ✅ VST-001 Voxa Studio — desktop app with live VAD trace + latency waterfall over the new `VoxaDiagnosticsHub` pipeline event stream (also closes the P7 stage-latency item: `voxa.stage.latency`), voice lab, model-cache manager, config composer ([docs](docs/studio.md)) |
+| P8.5 | ✅ VST-002 Studio 2.0 — brand + animated mark + splash, STT/TTS playgrounds (WER harness, A/B/X, batch bench), node-canvas pipeline builder with run-from-canvas and honest exporters, run & metrics workbench with scripted decks and run compare |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 
