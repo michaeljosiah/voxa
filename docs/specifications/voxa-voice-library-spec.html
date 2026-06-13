@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VVL-001 — Voxa Voice Library &amp; Cloning Specification</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; } /* comment */
+  pre .kw { color: #79b8ff; } /* keyword-ish hint (manual) */
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-crit { color: var(--bad); font-weight: 700; }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p0 { background: #4a1416; color: #ff8a80; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .progress-note { font-size: 0.8rem; color: var(--muted); font-style: italic; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VVL-001 — Voxa Voice Library &amp; Cloning Specification</h1>
+  <div class="sub">A managed <b>voice library</b> in Voxa Studio: a first-class place to discover the voices a provider actually offers — fetched live, not hardcoded — to <em>clone</em> new voices from a few seconds of audio (cloud via ElevenLabs / Mistral, or fully local via an ONNX tone-color converter), and to feed those voices straight into the pipeline builder's voice picker. Built on two small, capability-based framework seams (<code>IVoiceCatalogProvider</code>, <code>IVoiceCloneProvider</code>) that any TTS provider may implement, plus a new keyless local clone engine and Voxtral speech-to-text.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VVL-001 v1.0</div>
+    <div><b>Date</b> 2026-06-13</div>
+    <div><b>Status</b> Proposal — grounded against <code>main</code> (2026-06-13); see §8 checklist</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch <code>feat/vvl-001-voice-library</code> from <code>main</code>)</div>
+    <div><b>Depends on</b> VDX-001 (registry/descriptors), VLS-001 (model cache, ONNX runtime), VST-001/002 (Studio shell, diagnostics)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture — capabilities, remote-vs-local state, the local clone pipeline</a></li>
+    <li><a href="#s5">Workstreams (WS0–WS6) with code</a>
+      <ol>
+        <li><a href="#ws0">WS0 — voice capability seams: <code>IVoiceCatalogProvider</code> / <code>IVoiceCloneProvider</code></a></li>
+        <li><a href="#ws1">WS1 — ElevenLabs: live catalog + instant voice cloning</a></li>
+        <li><a href="#ws2">WS2 — Mistral: voice catalog + cloning + Voxtral STT</a></li>
+        <li><a href="#ws3">WS3 — <code>Voxa.Speech.VoiceClone</code>: keyless local cloning (ONNX tone-color converter)</a></li>
+        <li><a href="#ws4">WS4 — the library: <code>VoiceProfile</code>, <code>VoiceStore</code>, reconciliation service</a></li>
+        <li><a href="#ws5">WS5 — Studio <b>Voices</b> section: library, clone wizard, consent gate, audition</a></li>
+        <li><a href="#ws6">WS6 — picker wiring, tests, docs, license gate</a></li>
+      </ol>
+    </li>
+    <li><a href="#s6">Configuration reference</a></li>
+    <li><a href="#s7">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s8">Progress checklist</a></li>
+    <li><a href="#s9">Verification protocol</a></li>
+    <li><a href="#s10">Risk register</a></li>
+    <li><a href="#s11">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What is the feature, in one sentence?</b>
+    <p>A <em>Voices</em> section in Studio where you can see every voice a provider offers (pulled live from the provider, so the list never goes stale), make a brand-new voice by handing over a short audio sample — to ElevenLabs, to Mistral, or to a model running entirely on your own machine — and then pick that voice for your pipeline like any built-in one.</p>
+  </div>
+  <div class="qa">
+    <b>Why does Voxa need it?</b>
+    <p>Today a voice is a string you type into <code>appsettings.json</code> — <code>Voxa:ElevenLabs:VoiceId</code> or <code>Voxa:Piper:Voice</code> — and you are on your own to know which strings are valid. Studio's Config dropdowns only list the <em>local</em> Piper/Kokoro catalogs (compiled-in constants); the cloud providers (<code>Voxa.Speech.ElevenLabs</code>, <code>Voxa.Speech.Mistral</code> — both already shipped) expose <em>nothing</em> in the UI, even though each account has its own library of standard and custom voices sitting behind an API call. And there is no way at all to <em>make</em> a voice. Voice cloning is the single most requested capability of a modern voice stack and Voxa has no story for it.</p>
+  </div>
+  <div class="qa">
+    <b>What does it look like?</b>
+    <p>A new nav section, <b>Voices</b>, distinct from the audition <em>Playgrounds</em> (VST-002 D2). It has:</p>
+    <ul>
+      <li><b>The library</b> — a grid of every voice you can use right now: local catalog voices, the live voices from each provider whose API key resolves, and the voices you have cloned. Each row shows where it lives (local / ElevenLabs / Mistral), whether it is a standard or cloned voice, and a play button to audition it on the spot.</li>
+      <li><b>The clone wizard</b> — name the voice, drop in (or record) a few seconds of clean audio, tick the consent box, choose a target (a cloud provider, or "Local — no account needed"), and press Create. The new voice appears in the library when it is ready.</li>
+      <li><b>The picker hand-off</b> — in Config and in the Builder, the voice dropdown stops being a hardcoded list and becomes the live library for whichever TTS provider is selected. Choose ElevenLabs and you see <em>your</em> ElevenLabs voices, clones included.</li>
+    </ul>
+  </div>
+  <div class="qa">
+    <b>Can I clone a voice without any account or API key?</b>
+    <p>Yes — that is a headline goal. A new keyless engine, <code>Voxa.Speech.VoiceClone</code>, runs an open-source <em>tone-color converter</em> (OpenVoice v2, MIT-licensed) as ONNX on your machine. It captures the timbre of a reference clip into a small speaker embedding, then re-colors the output of a base local TTS (Kokoro) to sound like that speaker. No bytes leave the box; the models are SHA-256-pinned and cached exactly like Whisper/Piper/Kokoro. This keeps faith with VLS-001's promise that the whole stack works offline with no keys.</p>
+  </div>
+  <div class="qa">
+    <b>Where does Voxtral fit in?</b>
+    <p>Voxtral is Mistral's speech family. Voxa already ships its synthesis side (<code>Voxa.Speech.Mistral</code>, default model <code>voxtral-tts</code>) but not transcription. This spec adds Voxtral STT as a new <code>VoxaSttDescriptor</code> in that same package — so a user configuring a Mistral voice can also transcribe with Mistral, completing the provider. (Mistral as an LLM/agent provider is explicitly out of scope here — see §11.)</p>
+  </div>
+  <div class="qa">
+    <b>Is cloning someone's voice not dangerous?</b>
+    <p>It can be, and the spec treats consent as a first-class gate, not a footnote. The clone command is disabled until the user attests they have the right to clone the voice; the attestation timestamp is recorded on the voice profile; and the cloud providers enforce their own consent terms on top. Studio will never clone a voice silently or in the background, and §3.2 makes impersonation/deepfake assistance an explicit non-goal.</p>
+  </div>
+  <div class="qa">
+    <b>Does any of this leak my API keys?</b>
+    <p>No. Keys live where they live today — the <code>Voxa:*</code> section of <code>appsettings.json</code> / environment / user-secrets — and are sent only to their own provider over TLS. The voice library on disk (<code>~/voxa-voices/</code>) stores voice metadata and your <em>own</em> audio samples, never a key. This carries the VST-002 D3/D4 precedent (secrets never written to any export or bundle) forward verbatim.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<table>
+  <tr><th>Deliverable</th><th>What it is</th><th>Ships as</th></tr>
+  <tr><td>Voice capability seams</td><td><code>IVoiceCatalogProvider</code> (list a provider's voices) and <code>IVoiceCloneProvider</code> (create/delete a voice), plus <code>ProviderVoice</code>/<code>VoiceCloneRequest</code> records and optional resolver hooks on <code>VoxaTtsDescriptor</code>; registry lookups <code>TryGetVoiceCatalog</code>/<code>TryGetVoiceCloner</code></td><td><code>Voxa.Speech.Abstractions</code> / <code>Voxa.AspNetCore</code> <span class="badge additive">additive</span></td></tr>
+  <tr><td>ElevenLabs catalog + cloning</td><td><code>GET /v1/voices</code>, instant clone via <code>POST /v1/voices/add</code>, <code>DELETE /v1/voices/{id}</code></td><td><code>Voxa.Speech.ElevenLabs</code> (existing pkg) <span class="badge additive">additive</span></td></tr>
+  <tr><td>Mistral catalog + cloning + Voxtral STT</td><td>Voice CRUD via <code>/v1/audio/voices</code>; new <code>MistralSpeechToTextEngine</code> + STT descriptor (<code>voxtral-mini-latest</code>), registered in <code>VoxaDefaults</code> beside the existing TTS line</td><td><code>Voxa.Speech.Mistral</code> (existing pkg) <span class="badge additive">additive</span></td></tr>
+  <tr><td><code>Voxa.Speech.VoiceClone</code></td><td>Keyless local clone engine: OpenVoice v2 tone-color converter (ONNX) over a base local TTS; enrollment → speaker embedding; implements all three of TTS / catalog / clone</td><td>new <code>src/Voxa.Speech.VoiceClone</code> package</td></tr>
+  <tr><td>Voice library</td><td><code>VoiceProfile</code> model + <code>VoiceStore</code> (<code>~/voxa-voices/</code>, filesystem JSON + samples, corrupt-skip) + <code>VoiceCatalogService</code> that reconciles local catalogs, live provider voices, and cloned profiles</td><td><code>apps/Voxa.Studio</code></td></tr>
+  <tr><td>Studio <b>Voices</b> section</td><td>Library grid, provider-account status, clone wizard with consent gate, audition, delete; voice picker hand-off into Config &amp; Builder</td><td><code>apps/Voxa.Studio</code></td></tr>
+  <tr><td>Docs + license gate</td><td><code>docs/voice-library.md</code>, README section, ROADMAP update; dependency-graph gate extended to the new package (OpenVoice MIT; espeak stays out-of-process)</td><td>repo</td></tr>
+</table>
+
+<div class="callout good"><b>Prime directive.</b> A provider's voices are <em>its</em> source of truth, fetched live; the local library is a curated, annotated <em>view</em> over them plus the clones you made. Studio never invents a voice id or caches a provider list so long it can lie. Cloning capabilities are <b>opt-in per provider</b> — a TTS provider that cannot clone (Piper, Kokoro) simply leaves the resolver null, and nothing in the registry or UI pretends otherwise.</div>
+
+<div class="callout danger"><b>Consent is load-bearing, not decorative.</b> Every clone path — cloud or local — passes through an explicit, recorded consent attestation. Impersonation, fraud, and deepfake assistance are non-goals (§3.2); the feature is for cloning your own voice or voices you are licensed to use.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3 id="s3-1">3.1 Goals</h3>
+<ul>
+  <li><b>G1.</b> When a provider's key resolves, its real voice list appears in Studio (and the pipeline picker) within one async fetch — no hardcoded ids, no manual copy-paste of voice strings.</li>
+  <li><b>G2.</b> A user can clone a voice from a few seconds of audio to ElevenLabs or Mistral and immediately select it for a Talk session, all without leaving Studio.</li>
+  <li><b>G3.</b> A user with <em>no account and no keys</em> can clone a voice fully locally (ONNX) and use it — preserving VLS-001's offline, keyless promise.</li>
+  <li><b>G4.</b> Cloned and discovered voices persist across runs in a portable, diffable, key-free store (<code>~/voxa-voices/</code>), and reconcile against live provider state (a server-side deletion is shown as stale, never as a working voice).</li>
+  <li><b>G5.</b> Voxtral STT is selectable wherever WhisperCpp/OpenAI/Azure STT are, validated by the same fail-fast options path.</li>
+  <li><b>G6.</b> The capability seams are framework features any host can use — a server can list/clone voices through the registry without Studio.</li>
+  <li><b>G7.</b> Cloning requires recorded consent; secrets never reach disk or any export.</li>
+</ul>
+
+<h3 id="s3-2">3.2 Non-goals</h3>
+<ul>
+  <li><b>Not</b> an impersonation or deepfake tool: cloning is gated on consent and intended for your own or licensed voices. Studio adds no capability to disguise, anonymize, or defeat a provider's safety checks.</li>
+  <li><b>Not</b> a secrets vault: keys remain in the standard <code>Voxa:*</code> config surface; Studio neither encrypts nor stores them itself (carried from VST-001 §3.2).</li>
+  <li><b>Not</b> a Mistral LLM/agent integration: this spec adds Mistral <em>voice</em> + Voxtral <em>STT</em> only. A Mistral agent provider is a separate spec.</li>
+  <li><b>Not</b> a training studio: local cloning is few-shot timbre transfer (an embedding), not fine-tuning or training a new TTS model.</li>
+  <li><b>No</b> voice marketplace, sharing, or cloud sync of the library between machines — the store is local.</li>
+  <li><b>No</b> real-time voice conversion of a live mic stream — cloning targets synthesis (TTS), not streaming morph.</li>
+</ul>
+
+<h3 id="s3-3">3.3 Budgets &amp; hard rules</h3>
+<table>
+  <tr><th>Budget / rule</th><th>Value</th><th>Enforced by</th></tr>
+  <tr><td>API key exposure</td><td>Keys sent only to their own provider over TLS; never written to <code>~/voxa-voices/</code>, never in any export/bundle</td><td><code>VoiceProfile</code> has no key field; store round-trip test asserts no secret; review</td></tr>
+  <tr><td>Consent</td><td>No clone request issues without a recorded <code>ConsentAttestedAt</code></td><td>Clone command <code>CanExecute</code> gate + unit test</td></tr>
+  <tr><td>Provider list freshness</td><td>Live fetch on demand, short in-memory cache (default 60 s) with explicit Refresh; never persisted as authoritative</td><td><code>VoiceCatalogService</code> design + test</td></tr>
+  <tr><td>UI thread</td><td>Never blocked by a network fetch or a clone job; all provider I/O is async with cancellation</td><td>view-model design; headless tests</td></tr>
+  <tr><td>Local keyless path</td><td>Local cloning touches no network at synthesis time; models SHA-256-pinned, resolved via <code>VoxaModelCache</code></td><td>offline-mode test; cache discipline</td></tr>
+  <tr><td>License isolation (from VLS-001)</td><td>OpenVoice v2 is MIT; base TTS is Kokoro (Apache-2.0); espeak-ng stays out-of-process; no GPL/LGPL-static native deps</td><td>dependency-graph gate extended to <code>Voxa.Speech.VoiceClone</code></td></tr>
+  <tr><td>Config capture</td><td>Catalog/clone resolvers read the <code>IConfiguration</code> passed to <code>AddVoxa</code>, never <code>GetRequiredService&lt;IConfiguration&gt;()</code></td><td>plain-<code>ServiceCollection</code> resolution test (Studio/tests have no implicit <code>IConfiguration</code>)</td></tr>
+  <tr><td>Build hygiene</td><td><code>dotnet build Voxa.slnx -warnaserror</code> green; new view-model tests in the default (non-<code>LocalModels</code>) suite</td><td>CI</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture — capabilities, remote-vs-local state, the local clone pipeline</h2>
+
+<h3 id="s4-1">4.1 Capabilities, not a new provider axis</h3>
+<p>Voxa already has one registration axis per stage (<code>VoxaSttDescriptor</code>, <code>VoxaTtsDescriptor</code>, <code>VoxaVadDescriptor</code>). Voice catalog and cloning are not a new stage — they are <em>optional capabilities of an existing TTS provider</em>. So rather than a parallel registry, a TTS descriptor gains two optional resolvers; a provider that can do more, exposes more. Piper and Kokoro leave them null and are unaffected.</p>
+
+<div class="arrowflow">VoxaTtsDescriptor "ElevenLabs"
+   ├─ CreateProcessor   ─► ElevenLabsTextToSpeechEngine          (exists)
+   ├─ ResolveCatalog    ─► IVoiceCatalogProvider  ── GET /v1/voices            (new, WS1)
+   └─ ResolveCloner     ─► IVoiceCloneProvider    ── POST /v1/voices/add        (new, WS1)
+
+VoxaTtsDescriptor "Piper"
+   ├─ CreateProcessor   ─► PiperTtsEngine                         (exists)
+   ├─ ResolveCatalog    ─► null   (its catalog is the compiled-in PiperVoiceCatalog)
+   └─ ResolveCloner     ─► null   (cannot clone)</div>
+
+<h3 id="s4-2">4.2 Remote state vs the local library</h3>
+<p>A cloned ElevenLabs voice <em>lives on ElevenLabs</em>, addressed by a voice id. The local <code>VoiceProfile</code> is a <b>pointer plus provenance</b>: the provider name, the remote id, the friendly name, the original samples, the consent timestamp, and creation date. The authority on whether that voice is usable <em>right now</em> is the live <code>ListVoicesAsync()</code>, not the file on disk. The library view reconciles the two:</p>
+<ul>
+  <li><b>Live &amp; in library</b> → normal, playable.</li>
+  <li><b>In library but not live</b> (deleted server-side, or key changed) → shown <em>stale</em>; offer to forget or re-clone. Never silently selectable in a pipeline.</li>
+  <li><b>Live but not in library</b> (made elsewhere, or a standard voice) → shown as discovered; one click adds an annotated profile.</li>
+</ul>
+<p>Local clones are different: the engine <em>is</em> the authority, and its "remote id" is simply the embedding file path under the cache — so a local profile cannot drift.</p>
+
+<h3 id="s4-3">4.3 The local clone pipeline (ONNX, keyless)</h3>
+<p>OpenVoice v2 separates <em>what is said</em> from <em>who says it</em>: a base TTS produces speech in a base voice, and a <b>tone-color converter</b> re-colors that audio to a target speaker captured as an embedding. Voxa already owns a strong base TTS (Kokoro, ONNX). So local cloning is two ONNX graphs layered on the existing engine — no PyTorch, no Python sidecar.</p>
+
+<div class="arrowflow">ENROLL (once per voice):
+   reference clip (wav) ─► [ speaker-encoder.onnx ] ─► 256-d embedding ─► cache:  voices/local/&lt;id&gt;.spk
+
+SYNTHESIZE (per turn):
+   text ─► [ KokoroTtsEngine ] ─► base PCM ─┐
+                                            ├─► [ tone-color-converter.onnx ] ─► cloned PCM ─► pipeline
+            cache: voices/local/&lt;id&gt;.spk ──►─┘</div>
+
+<div class="callout warn"><b>Honest uncertainty.</b> OpenVoice's reference base is MeloTTS; Voxa substitutes Kokoro as the base speaker. The converter is base-agnostic in principle, but recolor quality and the availability of a clean ONNX export of the converter + speaker-encoder are the real unknowns in this spec. <b>WS3 therefore opens with a validation spike</b> (WS3-A0): confirm an MIT-licensed ONNX export exists (or export it) and that Kokoro-base → converter produces an intelligible, on-timbre result before the rest of WS3 is built. If the spike fails, the fallback is documented in §10 (R2).</div>
+
+<h3 id="s4-4">4.4 Where each piece lives</h3>
+<table>
+  <tr><th>Piece</th><th>Project</th><th>Why there</th></tr>
+  <tr><td>Capability interfaces + records</td><td><code>Voxa.Speech.Abstractions</code></td><td>Same home as <code>ISpeechToTextEngine</code>/<code>ITextToSpeechEngine</code> and the descriptors; keeps <code>Voxa.Core</code> zero-dep.</td></tr>
+  <tr><td>Registry lookups</td><td><code>Voxa.AspNetCore</code></td><td>Beside <code>VoxaProviderRegistry</code>; capability resolution is a host concern.</td></tr>
+  <tr><td>Cloud implementations</td><td>existing <code>Voxa.Speech.ElevenLabs</code> / <code>Voxa.Speech.Mistral</code></td><td>Same config section + HTTP client as the TTS they extend.</td></tr>
+  <tr><td>Local clone engine</td><td>new <code>Voxa.Speech.VoiceClone</code></td><td>New ONNX models + a dependency on <code>Voxa.Speech.Kokoro</code> as the base TTS; isolated so the cloud packages stay lean.</td></tr>
+  <tr><td>Library, store, reconciliation, UI</td><td><code>apps/Voxa.Studio</code></td><td>Library curation is an app concern (mirrors <code>RunStore</code> from VST-002 D4); the framework stays headless.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Workstreams (WS0–WS6) with code</h2>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws0">WS0 — voice capability seams <span class="badge p0">P0</span></h3>
+<div class="ws-head">
+  <span><b>Projects</b> <code>Voxa.Speech.Abstractions</code>, <code>Voxa.AspNetCore</code></span>
+  <span><b>Depends on</b> nothing</span>
+  <span><b>Unblocks</b> WS1–WS6</span>
+</div>
+
+<p>Two capability interfaces and their value types. They are deliberately tiny and transport-free, so a cloud HTTP provider and a local ONNX engine implement the same shape.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/Voices/IVoiceCatalogProvider.cs</span>
+<pre><code>namespace Voxa.Speech.Voices;
+
+<span class="cm">/// What a single voice looks like to Voxa, regardless of where it lives.</span>
+public sealed record ProviderVoice(
+    string Id,                 <span class="cm">// provider-native id (ElevenLabs voice_id, Mistral voice name, local embedding id)</span>
+    string DisplayName,
+    string ProviderName,       <span class="cm">// the registry TTS name ("ElevenLabs", "Mistral", "VoiceClone") so the picker maps a voice back to its provider</span>
+    VoiceKind Kind,            <span class="cm">// Standard | Cloned</span>
+    string? Language = null,
+    string? PreviewUrl = null, <span class="cm">// provider sample, if any (never auto-downloaded)</span>
+    string? Description = null);
+
+public enum VoiceKind { Standard, Cloned }
+
+<span class="cm">/// Optional capability: a TTS provider that can enumerate its voices live.</span>
+public interface IVoiceCatalogProvider
+{
+    Task&lt;IReadOnlyList&lt;ProviderVoice&gt;&gt; ListVoicesAsync(CancellationToken ct);
+}</code></pre>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/Voices/IVoiceCloneProvider.cs</span>
+<pre><code>namespace Voxa.Speech.Voices;
+
+<span class="cm">/// A reference sample for cloning. Bytes, not a path — the caller owns IO and</span>
+<span class="cm">/// the provider may be remote. Format is PCM16 WAV mono unless Mime says otherwise.</span>
+public sealed record VoiceSample(string FileName, ReadOnlyMemory&lt;byte&gt; Data, string Mime = "audio/wav");
+
+public sealed record VoiceCloneRequest(
+    string Name,
+    IReadOnlyList&lt;VoiceSample&gt; Samples,
+    string? Description = null,
+    string? Language = null);
+
+<span class="cm">/// Optional capability: a provider that can create a voice from samples.</span>
+<span class="cm">/// Implementations MUST NOT issue the request without caller-confirmed consent;</span>
+<span class="cm">/// the consent gate lives in the host (Studio), this is the transport.</span>
+public interface IVoiceCloneProvider
+{
+    Task&lt;ProviderVoice&gt; CreateVoiceAsync(VoiceCloneRequest request, CancellationToken ct);
+    Task DeleteVoiceAsync(string voiceId, CancellationToken ct);
+}</code></pre>
+
+<h4>Descriptor &amp; registry hooks <span class="badge additive">additive</span></h4>
+<span class="filelabel">src/Voxa.Speech.Abstractions/VoxaProviderDescriptor.cs (additions to VoxaTtsDescriptor)</span>
+<pre><code>public sealed record VoxaTtsDescriptor(/* …existing… */)
+{
+    <span class="cm">// existing: ResolveOutputSampleRate, WarmUpAsync …</span>
+
+    <span class="cm">// Optional capability resolvers. Null ⇒ the provider does not offer it.</span>
+    public Func&lt;IServiceProvider, IConfigurationSection, IVoiceCatalogProvider&gt;? ResolveCatalog { get; init; }
+    public Func&lt;IServiceProvider, IConfigurationSection, IVoiceCloneProvider&gt;?  ResolveCloner  { get; init; }
+}</code></pre>
+
+<span class="filelabel">src/Voxa.AspNetCore/VoxaProviderRegistry.cs (additions)</span>
+<pre><code><span class="cm">// Sugar over TryGetTts + descriptor.ResolveCatalog/.ResolveCloner. The caller supplies the</span>
+<span class="cm">// captured "Voxa" root section — the composer holds one, and Studio passes</span>
+<span class="cm">// services.Configuration.GetSection("Voxa") — because the registry must never</span>
+<span class="cm">// service-locate IConfiguration (the config-capture rule, §3.3).</span>
+public bool TryGetVoiceCatalog(string ttsName, IServiceProvider sp, IConfigurationSection voxaRoot, out IVoiceCatalogProvider provider);
+public bool TryGetVoiceCloner (string ttsName, IServiceProvider sp, IConfigurationSection voxaRoot, out IVoiceCloneProvider  provider);</code></pre>
+
+<h4>WS0 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS0-A1</span>Unit: a TTS descriptor with null resolvers reports no catalog/clone capability; <code>TryGetVoiceCatalog</code> returns false. A descriptor with resolvers returns a live instance.</li>
+  <li><span class="tid">WS0-A2</span>Unit (plain <code>ServiceCollection</code>, no <code>IConfiguration</code> registered): resolving a catalog/cloner does not throw — proving the config-capture rule is honoured (the VST-001 <code>DefaultAgentFactory</code> class of bug).</li>
+  <li><span class="tid">WS0-A3</span>Golden: existing composition (Piper/Kokoro) is byte-identical; the new init-only members default null and change nothing.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws1">WS1 — ElevenLabs: live catalog + instant voice cloning <span class="badge p0">P0</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>Voxa.Speech.ElevenLabs</code> (existing)</span>
+  <span><b>Depends on</b> WS0</span>
+</div>
+
+<p>The package already has <code>ElevenLabsOptions</code> (ApiKey, ApiBaseUrl) and an <code>HttpClient</code> resolution path. Add two small classes implementing the seams, and wire the resolvers onto <code>ElevenLabsDescriptors.Tts</code>.</p>
+
+<span class="filelabel">src/Voxa.Speech.ElevenLabs/ElevenLabsVoiceCatalog.cs</span>
+<pre><code>internal sealed class ElevenLabsVoiceCatalog(ElevenLabsOptions o, HttpClient http)
+    : IVoiceCatalogProvider, IVoiceCloneProvider
+{
+    public async Task&lt;IReadOnlyList&lt;ProviderVoice&gt;&gt; ListVoicesAsync(CancellationToken ct)
+    {
+        <span class="cm">// GET {ApiBaseUrl}/voices  (xi-api-key header) → map voice_id/name/category</span>
+        <span class="cm">// category=="cloned" ⇒ VoiceKind.Cloned, else Standard</span>
+    }
+
+    public async Task&lt;ProviderVoice&gt; CreateVoiceAsync(VoiceCloneRequest r, CancellationToken ct)
+    {
+        <span class="cm">// POST {ApiBaseUrl}/voices/add  multipart: name + files[] (the samples) + labels</span>
+        <span class="cm">// → returns voice_id; re-read to fill DisplayName/Kind</span>
+    }
+
+    public Task DeleteVoiceAsync(string voiceId, CancellationToken ct);  <span class="cm">// DELETE /voices/{id}</span>
+}</code></pre>
+
+<span class="filelabel">src/Voxa.Speech.ElevenLabs/ElevenLabsDescriptors.cs (wire-up)</span>
+<pre><code>public static VoxaTtsDescriptor Tts { get; } = new(/* …existing… */)
+{
+    <span class="cm">// BindOptions already tolerates a blank VoiceId (s["VoiceId"] ?? string.Empty), and the</span>
+    <span class="cm">// capability paths never route through the TTS Validate (which also demands a VoiceId).</span>
+    ResolveCatalog = (sp, root) =&gt; new ElevenLabsVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+    ResolveCloner  = (sp, root) =&gt; new ElevenLabsVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+};</code></pre>
+
+<div class="callout"><b>Validation note.</b> Catalog/clone need only <code>Voxa:ElevenLabs:ApiKey</code> — not <code>VoiceId</code>, which only the TTS engine's <code>Validate</code> demands. A missing key surfaces as a typed "ElevenLabs key required to list/clone voices" state in the UI, never an unhandled exception. Cloning is also <em>plan-gated</em> on ElevenLabs (the free tier cannot use Instant Voice Clone) — a 4xx from <code>/voices/add</code> must surface the provider's own message readably, not a bare <code>HttpRequestException</code>.</div>
+
+<h4>WS1 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS1-A1</span>Unit (fake <code>HttpMessageHandler</code>): <code>ListVoicesAsync</code> maps a recorded <code>/voices</code> payload to <code>ProviderVoice[]</code> with correct <code>Kind</code>; standard and cloned both present.</li>
+  <li><span class="tid">WS1-A2</span>Unit (fake handler): <code>CreateVoiceAsync</code> posts multipart with the sample bytes and the name, parses the returned id, and never includes the key in anything but the request header.</li>
+  <li><span class="tid">WS1-A3</span>Unit: a blank key yields a typed "key required" result, not a thrown <code>HttpRequestException</code>.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws2">WS2 — Mistral: voice catalog + cloning + Voxtral STT <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>Voxa.Speech.Mistral</code> (existing)</span>
+  <span><b>Depends on</b> WS0</span>
+</div>
+
+<p>Two additions to the existing TTS-only package.</p>
+
+<h4>2a — voice catalog + cloning</h4>
+<p>Mistral's voice API is <code>GET /v1/audio/voices</code> (list) and <code>POST /v1/audio/voices</code> (create from a reference sample). Same shape as WS1: one class implementing both seams, wired onto <code>MistralDescriptors.Tts</code> via the new resolvers. A created voice is referenced by name in <code>Voxa:Mistral:Voice</code> at synthesis time.</p>
+
+<h4>2b — Voxtral STT <span class="badge additive">additive</span></h4>
+<p>A new <code>VoxaSttDescriptor</code> named <code>"Mistral"</code> backed by <code>MistralSpeechToTextEngine : ISpeechToTextEngine</code>. Voxtral transcription is request/response, not a streaming socket — so the engine is <b>utterance-buffered</b>: accumulate PCM written via <code>WriteAudioAsync</code>, and on <code>FlushAsync</code> (the pipeline's end-of-utterance, driven by VAD close) POST the buffer to <code>/v1/audio/transcriptions</code> and yield one final <code>TranscriptionResult</code>.</p>
+
+<span class="filelabel">src/Voxa.Speech.Mistral/MistralSpeechToTextEngine.cs</span>
+<pre><code>internal sealed class MistralSpeechToTextEngine(MistralSpeechOptions o, HttpClient http)
+    : ISpeechToTextEngine
+{
+    <span class="cm">// RequiredSampleRate: 16000 (resampled by the device/STT processor as usual)</span>
+    public ValueTask WriteAudioAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct);  <span class="cm">// buffer</span>
+    <span class="cm">// SpeechToTextProcessor calls FlushAsync when it observes UserStoppedSpeakingFrame —</span>
+    <span class="cm">// the documented ISpeechToTextEngine seam for batch engines ("REST Whisper, etc.").</span>
+    public async Task FlushAsync();                       <span class="cm">// POST /v1/audio/transcriptions (multipart wav), enqueue final</span>
+    public IAsyncEnumerable&lt;TranscriptionResult&gt; ReadTranscriptsAsync(CancellationToken ct);  <span class="cm">// finals only (WhisperCpp precedent)</span>
+}</code></pre>
+
+<div class="callout warn"><b>Latency &amp; profile guidance.</b> Because Voxtral is utterance-based, its first transcript lands after end-of-speech, not incrementally — the same latency shape as any non-streaming cloud STT. The docs steer it toward the <code>Quality</code> profile, and the Talk waterfall will show the <code>stt_final</code> stage carrying the round-trip. (No streaming partials in v1; noted in §11.)</div>
+
+<span class="filelabel">src/Voxa.Speech.Mistral/MistralDescriptors.cs (additions)</span>
+<pre><code>public static VoxaSttDescriptor Stt { get; } = new(
+    Name: "Mistral", ConfigSection: "Mistral",
+    PreferredInputSampleRate: 16000,
+    Validate: root =&gt; root["Mistral:ApiKey"] is { Length: &gt; 0 } ? []
+                      : ["Voxa:Mistral:ApiKey is required when Voxa:Stt is 'Mistral'."],
+    CreateProcessor: (sp, root) =&gt; new SpeechToTextProcessor(
+        new MistralSpeechToTextEngine(BindOptions(root), ResolveHttpClient(sp))));
+<span class="cm">// BindOptions is the existing private binder; MistralSpeechOptions (a record) gains one init</span>
+<span class="cm">// member: SttModel, default "voxtral-mini-latest". Registration is one voxa.AddProvider line</span>
+<span class="cm">// in src/Voxa/VoxaDefaults.cs beside the existing MistralDescriptors.Tts — Studio's STT</span>
+<span class="cm">// dropdown then lists "Mistral" automatically (ConfigViewModel.SttProviders binds registry.SttNames).</span>
+
+public static VoxaTtsDescriptor Tts { get; } = new(/* …existing… */)
+{
+    ResolveCatalog = (sp, root) =&gt; new MistralVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+    ResolveCloner  = (sp, root) =&gt; new MistralVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+};</code></pre>
+
+<h4>WS2 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS2-A1</span>Unit (fake handler): Mistral <code>ListVoicesAsync</code>/<code>CreateVoiceAsync</code> map a recorded payload; key only in the request.</li>
+  <li><span class="tid">WS2-A2</span>Unit (fake handler): <code>MistralSpeechToTextEngine</code> buffers two <code>WriteAudioAsync</code> calls, and on <code>FlushAsync</code> posts the concatenated PCM once and yields exactly one final transcript.</li>
+  <li><span class="tid">WS2-A3</span>Unit: the Mistral STT descriptor validates a missing key with a readable message; the meta-package registers it so <code>registry.SttNames</code> contains <code>"Mistral"</code>.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws3">WS3 — <code>Voxa.Speech.VoiceClone</code>: keyless local cloning (ONNX) <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> new <code>src/Voxa.Speech.VoiceClone</code> (refs <code>Voxa.Speech.Kokoro</code>, <code>Microsoft.ML.OnnxRuntime</code>)</span>
+  <span><b>Depends on</b> WS0; VLS-001 model cache</span>
+</div>
+
+<p>The keyless headline. A package that does enrollment (reference clip → speaker embedding) and synthesis (base TTS → tone-color converter) entirely on-device, reusing the Kokoro-style ONNX session and the SHA-256-pinned <code>VoxaModelCache</code>.</p>
+
+<span class="filelabel">src/Voxa.Speech.VoiceClone/OpenVoiceCatalog.cs</span>
+<pre><code><span class="cm">/// Pinned ONNX artifacts, declared exactly like KokoroCatalog / PiperVoiceCatalog.</span>
+public static class OpenVoiceCatalog
+{
+    public const int SampleRate = 24000;
+    public static VoxaModelArtifact Converter { get; } = new(
+        "voiceclone/tone-color-converter.onnx", new Uri(BaseUrl + "converter.onnx"),
+        Sha256: "…", SizeBytes: …);
+    public static VoxaModelArtifact SpeakerEncoder { get; } = new(
+        "voiceclone/speaker-encoder.onnx", new Uri(BaseUrl + "speaker_encoder.onnx"),
+        Sha256: "…", SizeBytes: …);
+}</code></pre>
+
+<span class="filelabel">src/Voxa.Speech.VoiceClone/OpenVoiceCloneEngine.cs</span>
+<pre><code><span class="cm">/// Implements TTS + both voice capabilities. The "voices" it lists/creates are local</span>
+<span class="cm">/// speaker embeddings under the cache; deletion just removes the .spk file — so a local</span>
+<span class="cm">/// voice can never go stale against a remote (§4.2).</span>
+internal sealed class OpenVoiceCloneEngine
+    : ITextToSpeechEngine, IVoiceCatalogProvider, IVoiceCloneProvider
+{
+    <span class="cm">// ENROLL: decode wav → speaker-encoder.onnx → 256-d embedding → cache/voices/local/{id}.spk</span>
+    public async Task&lt;ProviderVoice&gt; CreateVoiceAsync(VoiceCloneRequest r, CancellationToken ct);
+    public Task DeleteVoiceAsync(string id, CancellationToken ct);        <span class="cm">// delete the .spk</span>
+    public Task&lt;IReadOnlyList&lt;ProviderVoice&gt;&gt; ListVoicesAsync(CancellationToken ct);  <span class="cm">// scan .spk files</span>
+
+    <span class="cm">// SYNTHESIZE: KokoroTtsEngine base PCM → tone-color-converter.onnx(embedding) → cloned PCM</span>
+    public async IAsyncEnumerable&lt;ReadOnlyMemory&lt;byte&gt;&gt; SynthesizeAsync(string text,
+        [EnumeratorCancellation] CancellationToken ct);
+}</code></pre>
+
+<p>Config selects the active local voice (<code>Voxa:VoiceClone:Voice</code> = an embedding id) and the base (<code>Voxa:VoiceClone:BaseVoice</code> = a Kokoro voice, default <code>af_heart</code>). The descriptor registers as TTS named <code>"VoiceClone"</code> with both capability resolvers and a <code>WarmUpAsync</code> that resolves the two ONNX artifacts — one new <code>voxa.AddProvider(VoiceCloneDescriptors.Tts)</code> line in the local/offline tier block of <code>src/Voxa/VoxaDefaults.cs</code>. Because Studio references the meta-package, the new package joins Studio's output closure automatically — where the existing <code>DependencyGateTests</code> (<code>tests/Voxa.Studio.Tests</code>) already scan every shipped file; WS3-A4 extends those assertions rather than inventing a new gate.</p>
+
+<div class="callout danger"><b>WS3-A0 is a gate, not a task.</b> Before any of WS3-A1…A4: prove (spike) that an MIT-licensed ONNX export of the converter + speaker-encoder exists or can be produced, and that Kokoro-base → converter yields intelligible, on-timbre audio. Record a short before/after WAV in the PR. If it cannot be made to work cleanly, stop and escalate per §10 R2 — do <em>not</em> ship a degraded local clone to hit a checkbox.</div>
+
+<h4>WS3 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS3-A0</span><b>Spike gate:</b> ONNX export validated (license + intelligibility); before/after sample attached. Blocks the rest of WS3.</li>
+  <li><span class="tid">WS3-A1</span>Unit (no models): catalog scan of a temp cache lists <code>.spk</code> files as <code>ProviderVoice</code> (Kind=Cloned, Provider="Local"); delete removes the file.</li>
+  <li><span class="tid">WS3-A2</span>Integration (<code>Category=LocalModels</code>): enroll from a fixture clip produces a <code>.spk</code>; synthesize yields finite PCM at 24 kHz; round-trips through the existing <code>WavAudio</code> reader (<code>Voxa.Speech.Piper</code>).</li>
+  <li><span class="tid">WS3-A3</span>Offline test: with models cached and <code>Voxa:Models:Offline=true</code>, enroll + synthesize touch no network.</li>
+  <li><span class="tid">WS3-A4</span>License gate: dependency-graph test sees only MIT/Apache deps; espeak (Kokoro's phonemizer) stays out-of-process.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws4">WS4 — the library: profile, store, reconciliation <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS0</span>
+  <span><b>Unblocks</b> WS5, WS6</span>
+</div>
+
+<p>The persistence and aggregation layer, modelled on VST-002 D4's <code>RunStore</code> (folder scan, one JSON per item, corrupt-skip).</p>
+
+<span class="filelabel">apps/Voxa.Studio/Services/VoiceProfile.cs</span>
+<pre><code><span class="cm">/// A library entry: a pointer to a provider voice + local provenance. No secrets, ever.</span>
+public sealed record VoiceProfile(
+    string Id,                 <span class="cm">// Voxa-local guid</span>
+    string DisplayName,
+    string ProviderName,       <span class="cm">// "ElevenLabs" | "Mistral" | "Local"</span>
+    string ProviderVoiceId,    <span class="cm">// remote id, or local embedding id</span>
+    VoiceKind Kind,
+    string? Language,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? ConsentAttestedAt,   <span class="cm">// set ⇔ this profile was cloned with consent</span>
+    IReadOnlyList&lt;string&gt; SamplePaths,    <span class="cm">// the user's own reference clips, under the profile dir</span>
+    string? Notes);</code></pre>
+
+<span class="filelabel">apps/Voxa.Studio/Services/VoiceStore.cs</span>
+<pre><code><span class="cm">/// ~/voxa-voices/&lt;id&gt;.json  +  ~/voxa-voices/&lt;id&gt;/samples/*.wav. Corrupt files skipped.</span>
+<span class="cm">/// Mirrors RunStore exactly: default Path.Combine(UserProfile, "voxa-voices"); the ctor</span>
+<span class="cm">/// override is the test seam (the RunsDirOverride precedent) — deliberately not a config key.</span>
+public sealed class VoiceStore(string? dir = null)
+{
+    public IReadOnlyList&lt;VoiceProfile&gt; Load();          <span class="cm">// scan + skip-corrupt</span>
+    public void Save(VoiceProfile p, IReadOnlyList&lt;VoiceSample&gt; samplesToPersist);
+    public void Delete(VoiceProfile p);                <span class="cm">// removes json + samples dir</span>
+}</code></pre>
+
+<span class="filelabel">apps/Voxa.Studio/Services/VoiceCatalogService.cs</span>
+<pre><code><span class="cm">/// The picker's single source of truth. Merges three streams and reconciles (§4.2).</span>
+<span class="cm">/// Takes StudioServices (Configuration + Provider + Registry) because Config Apply rebuilds</span>
+<span class="cm">/// the container — resolve Registry/Configuration per call, never cache them across an Apply.</span>
+public sealed class VoiceCatalogService(StudioServices services, VoiceStore store)
+{
+    <span class="cm">// For a given TTS provider: static catalog voices ∪ live ListVoicesAsync ∪ local profiles,</span>
+    <span class="cm">// de-duped by (provider, id), each tagged Live / Stale / Discovered. Short-cached (§3.3).</span>
+    public Task&lt;IReadOnlyList&lt;LibraryVoice&gt;&gt; ForProviderAsync(string ttsName, CancellationToken ct);
+    public Task&lt;IReadOnlyList&lt;LibraryVoice&gt;&gt; AllAsync(CancellationToken ct);   <span class="cm">// the library grid</span>
+}
+
+public sealed record LibraryVoice(ProviderVoice Voice, VoiceState State, VoiceProfile? Profile);
+public enum VoiceState { Live, Stale, Discovered, LocalCatalog }</code></pre>
+
+<h4>WS4 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS4-A1</span>Unit: <code>VoiceStore</code> round-trips a profile + samples in a temp dir; a hand-corrupted json is skipped, not fatal; the JSON contains no key field.</li>
+  <li><span class="tid">WS4-A2</span>Unit (fake catalog providers): reconciliation tags a profile whose id is absent from the live list as <code>Stale</code>, a live-but-unsaved voice as <code>Discovered</code>, a saved+live one as <code>Live</code>.</li>
+  <li><span class="tid">WS4-A3</span>Unit: a provider with no key (catalog throws "key required") degrades to local-catalog + saved profiles only — never an empty crash.</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws5">WS5 — Studio <b>Voices</b> section <span class="badge p1">P1</span></h3>
+<div class="ws-head">
+  <span><b>Project</b> <code>apps/Voxa.Studio</code></span>
+  <span><b>Depends on</b> WS4 (+ WS1/WS2/WS3 for live capability)</span>
+</div>
+
+<p>A new nav section in the rail at index 2, after Playgrounds — the order becomes <code>0 Talk, 1 Playgrounds, 2 Voices, 3 Builder, 4 Metrics, 5 Models, 6 Config</code> (update the <code>MainWindowViewModel</code> section doc comment and any capture/deep-link indices). The view-model is Avalonia-free per the house convention; it needs no 33 ms drain timer (no hub event stream — provider IO is plain async/await).</p>
+<ul>
+  <li><b>Library grid</b> — rows from <code>VoiceCatalogService.AllAsync</code>: name, provider chip, Standard/Cloned, state (Live/Stale/Discovered), audition ▶ (re-uses the TTS playground synth path), and per-row actions (Add to library / Forget / Delete). Stale rows are visibly dimmed with a "no longer on &lt;provider&gt;" note.</li>
+  <li><b>Provider status strip</b> — one chip per cloud provider: key present? can clone? — so the user understands why a list is empty without guessing.</li>
+  <li><b>Clone wizard</b> — name → add samples (file picker, or record via the existing <code>IStudioAudioDevice</code> capture) → <b>consent checkbox</b> (required) → choose target (ElevenLabs / Mistral / "Local — no account") → Create. The create command's <code>CanExecute</code> is false until a name, ≥1 sample, a consent tick, and a target are present. Progress + cancel for the (possibly slow) remote/enroll call. On success the new <code>VoiceProfile</code> is saved with <code>ConsentAttestedAt = now</code> and appears in the grid.</li>
+  <li><b>Device arbitration &amp; refresh</b> — recording a sample uses the same single audio device as Talk/Metrics. Join the existing <code>MainWindowViewModel.SyncLiveState()</code>: <code>Voices.RecordBlocked = Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning</code> (the exact <code>Playgrounds.Stt.CaptureBlocked</code> precedent). And <code>Voices.Refresh()</code> joins the Config-applied fan-out beside <code>Models.Refresh()</code>, so a key added in Config lights the provider chips without a restart.</li>
+</ul>
+
+<div class="callout danger"><b>The consent gate is the spec, not the UI polish.</b> The attestation must gate the <em>command</em>, not merely show a dialog — a headless test (WS5-A2) constructs the view-model, fills name+sample+target, and asserts <code>CreateCommand.CanExecute</code> is false until consent is set true. Cloud providers enforce their own terms on top; Studio's gate is the floor, never the ceiling.</div>
+
+<h4>WS5 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS5-A1</span>Headless: with two fake providers (one keyed, one not) and one saved local profile, the library view-model renders Live/Discovered/Stale/LocalCatalog rows correctly; the unkeyed provider's chip reads "key required".</li>
+  <li><span class="tid">WS5-A2</span>Headless: <code>CreateCommand.CanExecute</code> is false until name + ≥1 sample + target + consent are all set; flipping consent off re-blocks it.</li>
+  <li><span class="tid">WS5-A3</span>Headless (fake cloner): a successful clone saves a <code>VoiceProfile</code> with a non-null <code>ConsentAttestedAt</code>, persists the samples, and the new row shows in the grid. A cancelled clone leaves the store untouched.</li>
+  <li><span class="tid">WS5-A4</span>Headless: <code>RecordBlocked</code> is true while a Talk/Builder/Metrics run is live (<code>SyncLiveState</code>), with a readable reason, and clears when the run stops.</li>
+  <li><span class="tid">WS5-A5</span>Capture utility (<code>VOXA_STUDIO_CAPTURE=1</code>): renders <code>voices.png</code> for brand review (mirrors the BrandTests capture).</li>
+</ul>
+
+<!-- ──────────────────────────────────────────────────────────── -->
+<h3 id="ws6">WS6 — picker wiring, tests, docs, license gate <span class="badge p2">P2</span></h3>
+<div class="ws-head">
+  <span><b>Projects</b> <code>apps/Voxa.Studio</code>, repo</span>
+  <span><b>Depends on</b> WS1–WS5</span>
+</div>
+<ul>
+  <li><b>Picker hand-off:</b> the Config voice dropdown and the Builder TTS-node inspector bind to <code>VoiceCatalogService.ForProviderAsync(selectedTts)</code> instead of the static <code>PiperVoices</code>/<code>KokoroVoices</code> lists. Selecting a voice writes the right config key for the provider (<code>ElevenLabs:VoiceId</code> / <code>Mistral:Voice</code> / <code>VoiceClone:Voice</code> / <code>Piper:Voice</code> …). Local-catalog providers keep working exactly as before (their list now arrives via the same service).</li>
+  <li><b>Exporter parity:</b> the Builder C# code-gen and the Config <code>appsettings.json</code> export emit the selected voice key; secrets still excluded (D3 precedent).</li>
+  <li><b>Docs:</b> <code>docs/voice-library.md</code> (discover, clone cloud, clone local, consent, where files live), README "Voices &amp; cloning" section, ROADMAP entry; a note in <code>docs/local-speech.md</code> that local cloning joins the keyless tier.</li>
+  <li><b>License/dependency gate:</b> extend the graph test to <code>Voxa.Speech.VoiceClone</code> (OnnxRuntime + Kokoro; assert no GPL/LGPL-static, espeak out-of-process).</li>
+</ul>
+
+<h4>WS6 acceptance</h4>
+<ul class="cl">
+  <li><span class="tid">WS6-A1</span>Headless: changing the Config TTS provider repopulates the voice list from <code>VoiceCatalogService</code>; selecting a voice writes the provider-correct config key.</li>
+  <li><span class="tid">WS6-A2</span>Golden: exported JSON and generated C# carry the selected voice key and contain no API key.</li>
+  <li><span class="tid">WS6-A3</span>Dependency-graph gate green for the new package; default suite + <code>-warnaserror</code> green.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Configuration reference</h2>
+
+<table>
+  <tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>Voxa:Stt</code> = <code>"Mistral"</code></td><td>—</td><td>Selects Voxtral STT (utterance-buffered). Needs <code>Voxa:Mistral:ApiKey</code>.</td></tr>
+  <tr><td><code>Voxa:Mistral:SttModel</code></td><td><code>voxtral-mini-latest</code></td><td>Voxtral transcription model id.</td></tr>
+  <tr><td><code>Voxa:Tts</code> = <code>"VoiceClone"</code></td><td>—</td><td>Selects the local ONNX clone engine (keyless).</td></tr>
+  <tr><td><code>Voxa:VoiceClone:Voice</code></td><td>—</td><td>Local embedding id (a cloned voice) to synthesize with.</td></tr>
+  <tr><td><code>Voxa:VoiceClone:BaseVoice</code></td><td><code>af_heart</code></td><td>Kokoro base voice the converter re-colors.</td></tr>
+  <tr><td><code>Voxa:ElevenLabs:VoiceId</code> / <code>Voxa:Mistral:Voice</code></td><td>—</td><td>Existing TTS voice selectors; now populated by the picker from live/cloned voices.</td></tr>
+</table>
+<p>No new top-level config system — everything hangs off the existing <code>Voxa:*</code> section, and API keys stay in their current per-provider sections (§3.3). Two deliberate non-keys: the library root is fixed at <code>~/voxa-voices</code> with a constructor override as the test seam (the <code>RunStore</code>/<code>RunsDirOverride</code> precedent), and the 60 s provider-list cache is a Studio constant with a test seam — neither earns a config knob until someone needs one.</p>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Plan of action — phases &amp; dependencies</h2>
+
+<div class="arrowflow">Phase A   WS0  capability seams + descriptor/registry hooks         (framework; independently shippable)
+Phase B   WS1  ElevenLabs catalog + clone ──┐
+          WS2  Mistral catalog + clone + Voxtral STT ┼── parallel once WS0 lands
+          WS3  local ONNX clone (WS3-A0 spike FIRST) ┘
+Phase C   WS4  VoiceProfile + VoiceStore + VoiceCatalogService     (needs WS0; samples-cloud-local shapes)
+Phase D   WS5  Studio Voices section + clone wizard + consent
+          WS6  picker hand-off, docs, license gate</div>
+
+<p>Phase A is a clean framework PR (capabilities + null-safe defaults) that ships value even if Studio slips — a server host can list/clone through the registry. <b>WS3 must not start past its A0 spike gate</b> until the ONNX path is proven; the cloud workstreams (WS1/WS2) carry the feature on their own if the local spike is deferred. Branch: <code>feat/vvl-001-voice-library</code> (sub-branches per phase if the diff grows).</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
+<p class="progress-note">Proposal — nothing built yet. Tick as workstreams land; acceptance ids reference §5.</p>
+<ul class="cl">
+  <li><input type="checkbox"> <span class="tid">WS0</span>Capability seams, descriptor resolvers, registry lookups <span class="ac">WS0-A1…A3; golden composition unchanged; config-capture honoured on plain ServiceCollection</span></li>
+  <li><input type="checkbox"> <span class="tid">WS1</span>ElevenLabs catalog + instant clone + delete <span class="ac">WS1-A1…A3 (fake-handler mapping; key only in header)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS2</span>Mistral catalog + clone; Voxtral STT engine + descriptor <span class="ac">WS2-A1…A3 (buffered-utterance STT; registry exposes "Mistral" STT)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS3</span><code>Voxa.Speech.VoiceClone</code> ONNX engine <span class="ac">WS3-A0 spike gate FIRST; A1…A4 (catalog scan, enroll/synth LocalModels, offline, license)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS4</span><code>VoiceProfile</code>, <code>VoiceStore</code>, <code>VoiceCatalogService</code> reconciliation <span class="ac">WS4-A1…A3 (round-trip no-secret, Live/Stale/Discovered, keyless degrade)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS5</span>Studio Voices section: grid, status, clone wizard, consent gate <span class="ac">WS5-A1…A5 (states, consent CanExecute, clone persists w/ attestation, arbitration, capture)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS6</span>Picker hand-off, exporter parity, docs, license gate <span class="ac">WS6-A1…A3</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Verification protocol</h2>
+<ol>
+  <li><b>Build:</b> <code>dotnet build Voxa.slnx -warnaserror</code> on Linux and Windows.</li>
+  <li><b>Default suite:</b> <code>dotnet test --filter "Category!=LocalModels"</code> — all seam, fake-handler provider, store/reconciliation, and headless view-model tests. No network, no keys, no models.</li>
+  <li><b>Local-models suite:</b> WS3-A2/A3 (real enroll + synth, offline) where the ONNX models are cached; the existing zero-network lane stays green (proves the new package did not disturb VLS-001 cache paths).</li>
+  <li><b>Manual (recorded in the PR):</b> (a) with an ElevenLabs key, the library lists real voices and a clone made from a recorded sample appears and is selectable in Talk; (b) delete it server-side → the library marks it Stale on refresh; (c) Voxtral STT transcribes a spoken utterance; (d) <em>keyless</em>: clone locally, hear the cloned voice in Talk with no network; (e) the consent box truly gates Create; (f) exported JSON / generated C# carry the voice key and no API key.</li>
+  <li><b>Secret-leak spot-check:</b> grep the <code>~/voxa-voices/</code> tree and every export produced during the manual run for the configured key — must be absent.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Risk register</h2>
+<table>
+  <tr><th>#</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Misuse: cloning a non-consenting person's voice (impersonation, fraud, deepfakes)</td><td class="sev-crit">Crit</td><td>Consent gate on the command (WS5-A2) with a recorded attestation; impersonation is an explicit non-goal (§3.2); cloud providers' own consent terms enforced on top; docs state the intended use plainly</td></tr>
+  <tr><td>R2</td><td>Local ONNX path fails: no clean MIT ONNX export of the OpenVoice converter/encoder, or Kokoro-base recolor quality is poor</td><td class="sev-high">High</td><td>WS3-A0 spike <em>gates</em> the rest of WS3 with a real before/after sample; cloud cloning (WS1/WS2) delivers the feature independently; fallback options if the spike fails: export the converter ourselves, or defer local cloning to a follow-up while shipping cloud + the seams</td></tr>
+  <tr><td>R3</td><td>API key leaks into the on-disk library or an export</td><td class="sev-crit">Crit</td><td><code>VoiceProfile</code> has no key field; store round-trip test asserts no secret (WS4-A1); export tests assert no key (WS6-A2); manual grep spot-check (§9.5) — same discipline as VST-002 D3/D4</td></tr>
+  <tr><td>R4</td><td>Remote voice state drifts (deleted/renamed server-side) and a pipeline silently uses a dead id</td><td class="sev-high">High</td><td>Reconciliation tags Stale (§4.2, WS4-A2); the picker offers only Live/Local voices; the library shows stale entries dimmed with a forget/re-clone action</td></tr>
+  <tr><td>R5</td><td>Network fetch on the UI thread, or a slow clone, freezes Studio</td><td class="sev-med">Med</td><td>All provider IO async + cancellable; short list cache (§3.3); clone shows progress; view-models hold zero Avalonia types and drain on the 33 ms timer</td></tr>
+  <tr><td>R6</td><td>Config-capture regression (catalog/clone resolver service-locates <code>IConfiguration</code>) throws on Studio/tests</td><td class="sev-med">Med</td><td>Resolvers thread the captured root (WS0-A2 on a plain <code>ServiceCollection</code>); the exact VST-001 <code>DefaultAgentFactory</code> bug class is a named test</td></tr>
+  <tr><td>R7</td><td>Voxtral's utterance-only latency surprises users expecting streaming partials</td><td class="sev-low">Low</td><td>Documented as non-streaming; steered to the Quality profile; the waterfall shows the round-trip in <code>stt_final</code>; streaming partials listed as deferred (§11)</td></tr>
+  <tr><td>R8</td><td>License creep via the new ONNX package or its base TTS</td><td class="sev-crit">Crit</td><td>OpenVoice v2 MIT, Kokoro Apache-2.0, espeak out-of-process; dependency-graph gate extended to <code>Voxa.Speech.VoiceClone</code> (WS3-A4) — same gate that bans <code>KokoroSharp</code></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Mistral as an LLM/agent provider</b> — this spec is voice + Voxtral STT only; a Mistral agent provider (joining Echo/OpenAI) is a separate spec.</li>
+  <li><b>Streaming Voxtral partials</b> — v1 is utterance-buffered; an incremental transcript path waits on Mistral's streaming transcription surface.</li>
+  <li><b>Cloud library sync / sharing / marketplace</b> — the store is local and personal; no cross-machine sync, no publishing of cloned voices.</li>
+  <li><b>Real-time voice conversion</b> — morphing a live mic stream to a target timbre; cloning here targets synthesis, not streaming conversion.</li>
+  <li><b>Local fine-tuning / training</b> — local cloning is few-shot embedding transfer, not training a new model.</li>
+  <li><b>Additional cloud cloners</b> (Cartesia, PlayHT, etc.) — additive once the seams exist; each is a thin provider class like WS1, deferred until asked for.</li>
+  <li><b>Voice editing</b> (pitch/speed/style sliders on a cloned voice) — beyond create/list/delete; revisit if the providers expose stable controls.</li>
+</ul>
+
+</div>
+</body>
+</html>
