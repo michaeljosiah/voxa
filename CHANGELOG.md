@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Voices section (VVL-001 WS5).** A new top-level *Voices* nav section (between
+  Playgrounds and Builder) — the managed voice library. A grid of every voice the pipeline can use,
+  each tagged `Live` / `Stale` / `Discovered` / `LocalCatalog`, with per-provider status chips (a
+  keyless provider reads "key required" rather than showing empty). The headline is a **clone
+  wizard** with a real consent gate: the Create command stays disabled until a name, ≥1 reference
+  sample, a target provider, and an explicit "I have the right to clone this voice" attestation are
+  all present — a successful clone persists a `VoiceProfile` stamped with `ConsentAttestedAt` and the
+  reference clips; a provider rejection (plan-gated / no key) shows its message and saves nothing.
+  Cloud cloning (ElevenLabs/Mistral) is fully wired; local ONNX cloning is shown as "coming soon"
+  (deferred, WS3). Recording a sample is blocked while a Talk/Builder/Metrics run holds the audio
+  device, and the library refreshes after a Config Apply. Audition deep-links to the TTS playground.
 - **Voice library store + reconciliation (VVL-001 WS4).** A key-free on-disk library in Voxa Studio:
   `VoiceProfile` (a pointer to a provider voice plus local provenance — provider, remote id, the
   user's own reference clips, a consent timestamp; never a secret) persisted one JSON-per-profile

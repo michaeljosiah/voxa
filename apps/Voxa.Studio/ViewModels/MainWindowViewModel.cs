@@ -15,6 +15,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Services = services;
         Talk = new TalkViewModel(services);
         Playgrounds = new PlaygroundsViewModel(services);
+        Voices = new VoicesViewModel(services);
         Builder = new BuilderViewModel(services);
         Metrics = new MetricsViewModel(services);
         Models = new ModelsViewModel(services);
@@ -39,21 +40,25 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Config.OpenInBuilderRequested += () =>
         {
             Builder.SeedFromPairs(Config.DraftPairs(includeSecrets: true));
-            SelectedSection = 2;
+            SelectedSection = 3;
         };
 
         // Talk's waterfall deep-link: land on that stage's series in the workbench (§5).
         Talk.OpenInMetricsRequested += stage =>
         {
             Metrics.FocusStage(stage);
-            SelectedSection = 3;
+            SelectedSection = 4;
         };
+
+        // Voices' audition: land in the TTS playground (its tested synth + playback path).
+        Voices.AuditionRequested += _ => SelectedSection = 1;
 
         // Config "Apply" rebuilt the container — every view re-reads from it.
         services.Reconfigured += () =>
         {
             Talk.RefreshFromConfig();
             Playgrounds.RefreshCacheState();
+            Voices.Refresh();
             Models.Refresh();
         };
     }
@@ -63,6 +68,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var live = Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;
         Playgrounds.Tts.PlaybackBlocked = live;
         Playgrounds.Stt.CaptureBlocked = live;
+        Voices.RecordBlocked = live;   // one audio device — recording a sample waits for the run
         // Talk: a live session's scope belongs to the old container. Metrics: the bundle is
         // evidence of the config the run started with — swapping the live config (and firing
         // the Reconfigured refresh) under a recording invites confusion even though the run's
@@ -77,12 +83,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public StudioServices Services { get; }
     public TalkViewModel Talk { get; }
     public PlaygroundsViewModel Playgrounds { get; }
+    public VoicesViewModel Voices { get; }
     public BuilderViewModel Builder { get; }
     public MetricsViewModel Metrics { get; }
     public ModelsViewModel Models { get; }
     public ConfigViewModel Config { get; }
 
-    /// <summary>0 Talk, 1 Playgrounds, 2 Builder, 3 Metrics, 4 Models, 5 Config — the nav rail.</summary>
+    /// <summary>0 Talk, 1 Playgrounds, 2 Voices, 3 Builder, 4 Metrics, 5 Models, 6 Config — the nav rail.</summary>
     [ObservableProperty] private int _selectedSection;
 
     public bool IsLive => Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;
@@ -92,8 +99,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // Entering cache-dependent views refreshes their state (downloads may have happened);
         // entering Metrics rescans the bundle folder (runs may have landed from another session).
         if (value == 1) Playgrounds.RefreshCacheState();
-        if (value == 2) Builder.RefreshCacheState();
-        if (value == 3) Metrics.RefreshRuns();
-        if (value == 4) Models.Refresh();
+        if (value == 2) Voices.Refresh();
+        if (value == 3) Builder.RefreshCacheState();
+        if (value == 4) Metrics.RefreshRuns();
+        if (value == 5) Models.Refresh();
     }
 }

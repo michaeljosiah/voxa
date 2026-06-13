@@ -67,6 +67,31 @@ public sealed class VoiceCatalogService
     /// </summary>
     internal Func<string, IVoiceCatalogProvider?>? CatalogOverride { get; set; }
 
+    /// <summary>Test seam for the clone capability — null falls through to the registry.</summary>
+    internal Func<string, IVoiceCloneProvider?>? ClonerOverride { get; set; }
+
+    /// <summary>True if the named provider can clone voices (it exposes <see cref="IVoiceCloneProvider"/>).</summary>
+    public bool CanClone(string ttsName)
+        => ClonerOverride?.Invoke(ttsName) is not null
+           || _services.Registry.TryGetVoiceCloner(ttsName, _services.Provider, VoxaRoot(), out _);
+
+    /// <summary>
+    /// Clone a voice on the named provider from the request's samples. The host is responsible for
+    /// the consent gate before calling this. Throws <see cref="VoiceProviderException"/> if the
+    /// provider cannot clone or the request fails (a missing key surfaces with <c>MissingApiKey</c>).
+    /// Drops the provider's cached voice list so the new voice shows on the next refresh.
+    /// </summary>
+    public async Task<ProviderVoice> CloneAsync(string ttsName, VoiceCloneRequest request, CancellationToken ct)
+    {
+        var cloner = ClonerOverride?.Invoke(ttsName);
+        if (cloner is null && !_services.Registry.TryGetVoiceCloner(ttsName, _services.Provider, VoxaRoot(), out cloner))
+            throw new VoiceProviderException($"Provider '{ttsName}' does not support voice cloning.");
+
+        var voice = await cloner!.CreateVoiceAsync(request, ct).ConfigureAwait(false);
+        lock (_cacheLock) _cache.Remove(ttsName);
+        return voice;
+    }
+
     /// <summary>Drop cached provider lists — called after a Config Apply (registry/keys may have changed).</summary>
     public void Invalidate()
     {

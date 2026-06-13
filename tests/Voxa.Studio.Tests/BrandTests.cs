@@ -254,11 +254,46 @@ public class BrandTests
             metricsWindow.Show();
             metricsWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "metrics.png"));
             metricsWindow.Close();
+
+            // VVL-001 D-equivalent: the Voices library with a saved clone, a discovered voice, and
+            // the local catalogs, plus the clone wizard mid-fill.
+            var voicesDir = TestSupport.TempDir();
+            var vstore = new VoiceStore(voicesDir);
+            vstore.Save(new VoiceProfile
+            {
+                DisplayName = "My Narrator", ProviderName = "ElevenLabs", ProviderVoiceId = "cloned-1",
+                Kind = Voxa.Speech.Voices.VoiceKind.Cloned, ConsentAttestedAt = DateTimeOffset.Now,
+            });
+            var voicesVm = new VoicesViewModel(TestSupport.Services(), vstore);
+            voicesVm.Catalog.CatalogOverride = name => name == "ElevenLabs"
+                ? new CaptureCatalog(
+                    new Voxa.Speech.Voices.ProviderVoice("cloned-1", "My Narrator", "ElevenLabs", Voxa.Speech.Voices.VoiceKind.Cloned),
+                    new Voxa.Speech.Voices.ProviderVoice("rachel", "Rachel", "ElevenLabs", Voxa.Speech.Voices.VoiceKind.Standard))
+                : null;
+            voicesVm.RefreshCommand.Execute(null);
+            voicesVm.CloneName = "New Voice";
+            voicesVm.SelectedCloneTarget = "ElevenLabs";
+            var voicesWindow = new Window
+            {
+                Width = 1280, Height = 760, Background = Avalonia.Media.Brush.Parse("#0B0F14"),
+                Content = new VoicesView { DataContext = voicesVm },
+            };
+            voicesWindow.Show();
+            voicesWindow.CaptureRenderedFrame()!.Save(Path.Combine(dir, "voices.png"));
+            voicesWindow.Close();
         }
         finally
         {
             MotionSettings.SetOverride(null);
         }
+    }
+
+    /// <summary>A controlled live catalog for the capture utility (no network).</summary>
+    private sealed class CaptureCatalog(params Voxa.Speech.Voices.ProviderVoice[] voices)
+        : Voxa.Speech.Voices.IVoiceCatalogProvider
+    {
+        public Task<IReadOnlyList<Voxa.Speech.Voices.ProviderVoice>> ListVoicesAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<Voxa.Speech.Voices.ProviderVoice>>(voices);
     }
 
     /// <summary>A realistic-shaped run for the capture: VAD-dominant turns with TTS chunks.</summary>
