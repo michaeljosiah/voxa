@@ -83,9 +83,11 @@ public class MetricsViewModelTests
         await vm.RunCommand.ExecuteAsync(null);
         Assert.True(vm.IsRunning);
 
-        // The driver ends the run itself: condition-poll, never a fixed sleep.
+        // The driver ends the run itself. Poll on the PERSISTED run, not IsRunning — IsRunning
+        // flips false at the top of StopRunAsync (re-entrancy gate) before the bundle is saved,
+        // so keying off it would race the teardown. The saved run is the honest done-signal.
         var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (vm.IsRunning && DateTime.UtcNow < deadline) await Task.Delay(25);
+        while (vm.SelectedRun is null && DateTime.UtcNow < deadline) await Task.Delay(25);
 
         Assert.False(vm.IsRunning);
         Assert.Single(vm.Runs);
@@ -135,27 +137,29 @@ public class MetricsViewModelTests
         // Regression: BuildBundle() read _services.Configuration at STOP time, so an Apply that
         // landed mid-run rewrote the saved label/profile/config — evidence describing a pipeline
         // that never produced those events. The identity is captured at run start.
+        //
+        // The run is held open (a long utterance timeout) and stopped EXPLICITLY after the Apply,
+        // so the assertion is deterministic — no wall-clock race on the self-ending driver.
         var services = TestSupport.Services();
         var vm = new MetricsViewModel(services) { RunsDirOverride = TestSupport.TempDir() };
         vm.SessionFactoryOverride = FakeSession;
-        vm.UtteranceTimeoutMs = 150;
-        vm.ScriptGraceMs = 10;
+        vm.UtteranceTimeoutMs = 60_000; // keep the run live; we stop it ourselves
         vm.GapMs = 500;
         vm.AddFixtureToScriptCommand.Execute(null);
 
         await vm.RunCommand.ExecuteAsync(null);
         Assert.True(vm.IsRunning);
 
-        // A config Apply lands while the run is recording (the shell normally blocks this for
-        // Metrics now, but the bundle must stay truthful regardless of who wins that race).
+        // A config Apply lands while the run is recording. The shell blocks this for Metrics now,
+        // but the bundle must stay truthful even if an Apply slips in mid-run.
         services.Reconfigure(new Dictionary<string, string?>
         {
             ["Voxa:Tts"] = "Kokoro",
             ["Voxa:Profile"] = "Quality",
         });
 
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while (vm.IsRunning && DateTime.UtcNow < deadline) await Task.Delay(25);
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRunning);
 
         var bundle = vm.SelectedRun!.Bundle;
         Assert.Equal("whispercpp·echo·piper", bundle.Label); // what RAN, not what was applied

@@ -53,7 +53,12 @@ public sealed partial class MetricsViewModel : ObservableObject
     private TalkSession? _session;
     private ServiceProvider? _runProvider;
     private CancellationTokenSource? _subscription;
-    private TaskCompletionSource? _botStopped;
+    // Bot-reply correlation for the scripted driver: a monotonic count of BotStopped events and
+    // a re-armed signal. Utterance i waits for the count to reach i+1, so a reply that lands LATE
+    // (after its utterance timed out) is absorbed by the count instead of falsely completing a
+    // later utterance's wait. See WaitForReplyAsync.
+    private int _botStoppedSeen;
+    private TaskCompletionSource? _replySignal;
     private Stopwatch _clock = new();
     private DateTimeOffset _runStarted;
     private string _sourceDescription = "";
@@ -207,6 +212,7 @@ public sealed partial class MetricsViewModel : ObservableObject
 
             _recorded.Clear();
             _liveStages.Clear();
+            _botStoppedSeen = 0;
             TurnCount = 0;
             RunErrorCount = 0;
             LastTtfbText = "—";
@@ -265,11 +271,10 @@ public sealed partial class MetricsViewModel : ObservableObject
         {
             for (var i = 0; i < files.Count; i++)
             {
-                _botStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var wav = WavIo.ReadMono(files[i], sampleRate);
                 device.EnqueueUtterance(wav.Pcm);
                 StatusText = $"Utterance {i + 1}/{files.Count}…";
-                await Task.WhenAny(_botStopped.Task, Task.Delay(UtteranceTimeoutMs, ct));
+                await WaitForReplyAsync(target: i + 1, ct);
                 await Task.Delay(gapMs, ct);
             }
             await Task.Delay(ScriptGraceMs, ct);
@@ -284,6 +289,26 @@ public sealed partial class MetricsViewModel : ObservableObject
             ErrorText = ex.Message;
             await StopRunAsync();
         }
+    }
+
+    /// <summary>
+    /// Wait for this utterance's bot reply, identified by the cumulative <c>BotStopped</c> count
+    /// reaching <paramref name="target"/> (one per reply, in order), or the per-utterance timeout.
+    /// Re-arming the signal each loop and gating on the count means a reply that arrives after its
+    /// utterance already timed out only advances the count — it never satisfies a later utterance's
+    /// wait, so the deck stays correlated turn-for-turn. Returns true if the reply landed.
+    /// </summary>
+    private async Task<bool> WaitForReplyAsync(int target, CancellationToken ct)
+    {
+        var timeout = Task.Delay(UtteranceTimeoutMs, ct);
+        while (_botStoppedSeen < target)
+        {
+            _replySignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (_botStoppedSeen >= target) return true; // landed between the check and the arm
+            if (await Task.WhenAny(_replySignal.Task, timeout).ConfigureAwait(false) == timeout)
+                return false;
+        }
+        return true;
     }
 
     private async Task StopRunAsync()
@@ -356,7 +381,11 @@ public sealed partial class MetricsViewModel : ObservableObject
             {
                 case TurnEvent turn:
                     _recorded.Add(new RunEvent { Micros = e.TimestampMicros, Kind = "turn", Edge = turn.Edge.ToString() });
-                    if (turn.Edge == TurnEdge.BotStopped) _botStopped?.TrySetResult();
+                    if (turn.Edge == TurnEdge.BotStopped)
+                    {
+                        _botStoppedSeen++;
+                        _replySignal?.TrySetResult();
+                    }
                     break;
                 case TranscriptEvent { IsFinal: true } t:
                     _recorded.Add(new RunEvent { Micros = e.TimestampMicros, Kind = "transcript", Text = t.Text });
