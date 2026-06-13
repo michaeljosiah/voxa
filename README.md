@@ -11,11 +11,13 @@
   <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-512BD4" alt=".NET 10"></a>
 </p>
 
-A frame-based, real-time voice AI pipeline framework for .NET. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
+**Voxa** is a frame-based, real-time voice AI pipeline framework for **.NET 10** — native STT, LLM, and TTS composed into low-latency voice agents. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
 > See [`ROADMAP.md`](ROADMAP.md) for tracked work — smart turn detection, echo suppression, JS client, local/offline speech, AONIK integration.
 
-> **Status: pre-alpha (0.1.x).** Public API stabilising. Not yet on NuGet.
+> **Status: pre-alpha.** Public API stabilising. Packages are published on [NuGet](https://www.nuget.org/packages?q=Voxa) as prerelease (`*-alpha`) — pin exact versions and expect breaking changes.
+
+> _Voxa is an independent, non-commercial open-source project for the .NET ecosystem, and is not affiliated with or endorsed by any other product or company using the name "Voxa"._
 
 ## What it is
 
