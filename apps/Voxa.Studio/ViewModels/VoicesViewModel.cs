@@ -84,7 +84,9 @@ public sealed partial class VoicesViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var sets = await Catalog.AllAsync(ct).ConfigureAwait(false);
+            // No ConfigureAwait(false): the continuation mutates UI-bound collections below, so it
+            // must resume on the UI thread (the Studio VM convention; Avalonia rejects off-thread).
+            var sets = await Catalog.AllAsync(ct);
 
             Providers.Clear();
             Voices.Clear();
@@ -136,7 +138,8 @@ public sealed partial class VoicesViewModel : ObservableObject
         CloneError = null;
         try
         {
-            var voice = await Catalog.CloneAsync(target, request, ct).ConfigureAwait(false);
+            // Stay on the UI thread — the wizard reset + RefreshAsync below mutate bound state.
+            var voice = await Catalog.CloneAsync(target, request, ct);
 
             // Record the clone with its consent attestation and the reference clips.
             _store.Save(new VoiceProfile
@@ -153,7 +156,7 @@ public sealed partial class VoicesViewModel : ObservableObject
             CloneName = "";
             ConsentAttested = false;
             CloneSamples.Clear();
-            await RefreshAsync(ct).ConfigureAwait(false);
+            await RefreshAsync(ct);
         }
         catch (VoiceProviderException ex)
         {

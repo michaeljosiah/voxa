@@ -117,6 +117,21 @@ public sealed partial class TtsPlaygroundViewModel : ObservableObject
         RefreshCacheState();
     }
 
+    /// <summary>
+    /// Select a catalog voice by engine + name (the Voices section's "audition" deep-link). Returns
+    /// false when no matching local row exists (e.g. a cloud/cloned voice the lab can't synthesize),
+    /// leaving the current selection untouched.
+    /// </summary>
+    public bool TrySelectVoice(string engine, string name)
+    {
+        var row = Voices.FirstOrDefault(v =>
+            string.Equals(v.Engine, engine, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (row is null) return false;
+        SelectedVoice = row;
+        return true;
+    }
+
     // ── bindable state ───────────────────────────────────────────────────────
 
     public ObservableCollection<VoiceRow> Voices { get; } = new();

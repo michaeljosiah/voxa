@@ -49,7 +49,10 @@ public sealed partial class ConfigViewModel : ObservableObject
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
 
         Regenerate();
-        _ = ReloadCloudVoicesAsync();   // if the seeded TTS is a cloud provider, pull its voices
+        // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
+        // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
+        // "Studio never touches the network before the user acts" invariant). The shell calls
+        // RefreshCloudVoices() when the Config section is first opened (a user action).
     }
 
     // ── choices (from the live registry + pinned catalogs) ──────────────────
@@ -122,14 +125,21 @@ public sealed partial class ConfigViewModel : ObservableObject
         _ => null,
     };
 
-    /// <summary>Reload the cloud voice list for the selected provider (live + cloned, key permitting).</summary>
+    /// <summary>
+    /// Load the cloud voice list for the selected provider (live + cloned, key permitting). Triggered
+    /// by a user action — opening the Config section or changing the TTS provider — never at startup.
+    /// </summary>
+    public void RefreshCloudVoices() => _ = ReloadCloudVoicesAsync();
+
     internal async Task ReloadCloudVoicesAsync()
     {
         CloudVoices.Clear();
         CloudVoiceKeyRequired = false;
         if (!ShowCloudVoiceOptions) { SelectedCloudVoice = null; return; }
 
-        var set = await VoiceCatalog.ForProviderAsync(SelectedTts, CancellationToken.None).ConfigureAwait(false);
+        // No ConfigureAwait(false): the continuation mutates UI-bound CloudVoices, so it must
+        // resume on the UI thread (Avalonia rejects off-thread collection changes).
+        var set = await VoiceCatalog.ForProviderAsync(SelectedTts, CancellationToken.None);
         CloudVoiceKeyRequired = set.MissingKey;
         foreach (var v in set.Voices) CloudVoices.Add(v.Voice.Id);
 

@@ -50,8 +50,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             SelectedSection = 4;
         };
 
-        // Voices' audition: land in the TTS playground (its tested synth + playback path).
-        Voices.AuditionRequested += _ => SelectedSection = 1;
+        // Voices' audition: open the TTS lab and preselect the voice (its tested synth + playback).
+        // A local catalog voice (Piper/Kokoro) is selected for real; a cloud/cloned voice the lab
+        // can't synthesize just opens the lab (TrySelectVoice returns false, selection untouched).
+        Voices.AuditionRequested += v =>
+        {
+            Playgrounds.SelectedLab = 1;   // TTS lab
+            Playgrounds.Tts.TrySelectVoice(v.Voice.ProviderName, v.Voice.Id);
+            SelectedSection = 1;
+        };
 
         // Config "Apply" rebuilt the container — every view re-reads from it.
         services.Reconfigured += () =>
@@ -59,6 +66,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Talk.RefreshFromConfig();
             Playgrounds.RefreshCacheState();
             Voices.Refresh();
+            Config.RefreshCloudVoices();   // keys may have changed; Apply is a user action
             Models.Refresh();
         };
     }
@@ -103,5 +111,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (value == 3) Builder.RefreshCacheState();
         if (value == 4) Metrics.RefreshRuns();
         if (value == 5) Models.Refresh();
+        // Opening Config is a user action — only now may a cloud provider's voices load over the
+        // network (the ctor deliberately doesn't, to honour "no network before the user acts").
+        if (value == 6) Config.RefreshCloudVoices();
     }
 }

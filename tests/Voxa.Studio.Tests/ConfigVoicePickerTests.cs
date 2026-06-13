@@ -1,4 +1,5 @@
 using Voxa.Speech.Voices;
+using Voxa.Studio.Audio;
 using Voxa.Studio.Services;
 using Voxa.Studio.ViewModels;
 
@@ -86,5 +87,26 @@ public class ConfigVoicePickerTests
 
         Assert.Contains("\"Voice\": \"nova\"", vm.ExportJson);
         Assert.DoesNotContain("ApiKey", vm.ExportJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact] // review fix — no network at startup, even when the configured TTS is a cloud provider
+    public async Task Constructing_With_A_Cloud_Tts_Does_Not_Load_Voices_At_Startup()
+    {
+        // A cloud TTS with a (fake) key: if the ctor eagerly loaded, it would make a live HTTP call
+        // before the user acts — the "Studio never touches the network before the user acts" rule.
+        var config = TestSupport.LocalConfig(null,
+            ("Voxa:Tts", "ElevenLabs"), ("Voxa:ElevenLabs:ApiKey", "fake-key"));
+        await using var services = new StudioServices(config, new NullAudioDevice());
+
+        var vm = new ConfigViewModel(services);
+
+        Assert.Empty(vm.CloudVoices);            // nothing loaded at construction
+        Assert.True(vm.ShowCloudVoiceOptions);   // …but it WOULD load on demand
+
+        // On a user action (open Config / change TTS) it loads — here with a controlled catalog.
+        vm.VoiceCatalog.CatalogOverride = _ => new FakeCatalog(
+            new ProviderVoice("v1", "V1", "ElevenLabs", VoiceKind.Standard));
+        await vm.ReloadCloudVoicesAsync();
+        Assert.Equal(["v1"], vm.CloudVoices);
     }
 }

@@ -137,4 +137,19 @@ public class VoicesViewModelTests
         shell.Builder.IsRunning = false;
         Assert.False(shell.Voices.RecordBlocked);
     }
+
+    [Fact] // review fix — auditioning a local voice opens the TTS lab with that voice selected
+    public void Auditioning_A_Local_Voice_Opens_The_Tts_Lab_With_That_Voice_Selected()
+    {
+        var shell = new MainWindowViewModel(TestSupport.Services());
+        var amy = new LibraryVoice(
+            new ProviderVoice("en_US-amy-low", "en_US-amy-low", "Piper", VoiceKind.Standard),
+            VoiceState.LocalCatalog);
+
+        shell.Voices.AuditionCommand.Execute(amy);
+
+        Assert.Equal(1, shell.SelectedSection);              // Playgrounds section
+        Assert.Equal(1, shell.Playgrounds.SelectedLab);      // TTS lab
+        Assert.Equal("en_US-amy-low", shell.Playgrounds.Tts.SelectedVoice?.Name);   // preselected for real
+    }
 }
