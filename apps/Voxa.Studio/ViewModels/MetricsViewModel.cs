@@ -59,6 +59,13 @@ public sealed partial class MetricsViewModel : ObservableObject
     private string _sourceDescription = "";
     private bool _modelsWereCached;
 
+    // The bundle must describe the configuration the run COMPOSED with — captured at run start,
+    // because a Config "Apply" while a run is live swaps _services.Configuration, and reading it
+    // at stop time would rewrite the evidence.
+    private string _runLabel = "";
+    private string _runProfile = "Default";
+    private Dictionary<string, string?> _runConfig = new();
+
     /// <summary>Test seam: replaces the ephemeral-container session creation.</summary>
     internal Func<IServiceProvider, IStudioAudioDevice, TalkSession>? SessionFactoryOverride;
 
@@ -212,6 +219,13 @@ public sealed partial class MetricsViewModel : ObservableObject
                 1 => $"wav · {Path.GetFileName(WavPath)}",
                 _ => "mic",
             };
+
+            // Capture the run's identity NOW (see the field comment — the live config can be
+            // swapped by an Apply before the run stops).
+            var voxa = _services.Configuration.GetSection("Voxa");
+            _runLabel = $"{voxa["Stt"] ?? "WhisperCpp"}·{voxa["Agent:Provider"] ?? "Echo"}·{voxa["Tts"] ?? "Piper"}".ToLowerInvariant();
+            _runProfile = voxa["Profile"] ?? "Default";
+            _runConfig = SnapshotConfig(_services.Configuration);
 
             _subscription = new CancellationTokenSource();
             _ = Task.Run(() => SubscribeAsync(_session, _subscription.Token));
@@ -372,15 +386,15 @@ public sealed partial class MetricsViewModel : ObservableObject
 
     private RunBundle BuildBundle()
     {
-        var voxa = _services.Configuration.GetSection("Voxa");
+        // Identity fields were captured at run start — never re-read the live config here.
         var bundle = new RunBundle
         {
-            Label = $"{voxa["Stt"] ?? "WhisperCpp"}·{voxa["Agent:Provider"] ?? "Echo"}·{voxa["Tts"] ?? "Piper"}".ToLowerInvariant(),
+            Label = _runLabel,
             StartedAt = _runStarted,
             DurationSeconds = _clock.Elapsed.TotalSeconds,
             SourceDescription = _sourceDescription,
-            Profile = voxa["Profile"] ?? "Default",
-            Config = SnapshotConfig(_services.Configuration),
+            Profile = _runProfile,
+            Config = _runConfig,
             Context = RunContext.Capture(_modelsWereCached),
             Events = new List<RunEvent>(_recorded),
         };

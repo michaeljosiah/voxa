@@ -46,25 +46,52 @@ public class RunBundleTests
     }
 
     [Fact]
-    public void Rtf_Uses_Chunk_Span_With_First_Byte_Fallback_For_Single_Chunks()
+    public void Rtf_Spans_The_Whole_Reply_Not_Just_The_Chunks_Before_Audio_Out()
     {
-        // Turn 1: three chunks spanning 1 s wall producing 2 s of 16 kHz audio → RTF 0.5.
-        var events = new List<RunEvent>
-        {
-            new() { Micros = 0, Kind = "tts", Bytes = 32000, SampleRate = 16000 },
-            new() { Micros = 500_000, Kind = "tts", Bytes = 16000, SampleRate = 16000 },
-            new() { Micros = 1_000_000, Kind = "tts", Bytes = 16000, SampleRate = 16000 },
-        };
-        events.AddRange(Turn(1_100_000, 100, 100, 100, 100, 1));
+        // The real stream shape: the sink publishes audio_out on the FIRST audio frame of a
+        // reply, so a streaming voice's later chunks arrive AFTER the turn's stages closed.
+        // Regression: those chunks must still belong to turn 1 — not contaminate turn 2.
+        var events = new List<RunEvent>();
 
-        // Turn 2: one chunk of 1 s audio; tts_first_byte was 200 ms → RTF 0.2.
-        events.Add(new RunEvent { Micros = 5_000_000, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
-        events.AddRange(Turn(5_100_000, 100, 100, 100, 200, 1));
+        // Turn 1: stages close at the first chunk; two more chunks stream after audio_out.
+        // Three chunks spanning 1 s wall producing 2 s of 16 kHz audio → RTF 0.5.
+        events.AddRange(Turn(0, 100, 100, 100, 100, 1));
+        events.Add(new RunEvent { Micros = 4500, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 504_500, Kind = "tts", Bytes = 16000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 1_004_500, Kind = "tts", Bytes = 16000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 1_100_000, Kind = "turn", Edge = "BotStopped" });
+
+        // Turn 2: a single-chunk reply of 1 s audio; tts_first_byte was 200 ms → RTF 0.2.
+        events.AddRange(Turn(5_000_000, 100, 100, 100, 200, 1));
+        events.Add(new RunEvent { Micros = 5_005_000, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 5_100_000, Kind = "turn", Edge = "BotStopped" });
+
+        var stats = RunStats.Compute(events);
+        Assert.Equal(0.5, stats.Turns[0].Rtf!.Value, 3); // all three chunks, not just the first
+        Assert.Equal(0.2, stats.Turns[1].Rtf!.Value, 3); // uncontaminated by turn 1's tail
+        Assert.Equal(0.35, stats.TtsRtfMean!.Value, 3);
+    }
+
+    [Fact]
+    public void Rtf_Finalizes_On_Interruption_And_At_Stream_End()
+    {
+        // An interrupted reply still measures what it produced before the cut: two 0.5 s chunks
+        // spanning 0.5 s wall → RTF 0.5.
+        var events = new List<RunEvent>();
+        events.AddRange(Turn(0, 100, 100, 100, 100, 1));
+        events.Add(new RunEvent { Micros = 5000, Kind = "tts", Bytes = 16000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 505_000, Kind = "tts", Bytes = 16000, SampleRate = 16000 });
+        events.Add(new RunEvent { Micros = 600_000, Kind = "turn", Edge = "Interrupted" });
+
+        // A run stopped mid-reply (no BotStopped ever lands) still attributes the tail:
+        // a single 1 s chunk → the 250 ms tts_first_byte fallback → RTF 0.25.
+        events.AddRange(Turn(3_000_000, 100, 100, 100, 250, 1));
+        events.Add(new RunEvent { Micros = 3_005_000, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
 
         var stats = RunStats.Compute(events);
         Assert.Equal(0.5, stats.Turns[0].Rtf!.Value, 3);
-        Assert.Equal(0.2, stats.Turns[1].Rtf!.Value, 3);
-        Assert.Equal(0.35, stats.TtsRtfMean!.Value, 3);
+        Assert.Equal(0.25, stats.Turns[1].Rtf!.Value, 3);
+        Assert.Equal(1, stats.InterruptionCount);
     }
 
     [Fact]

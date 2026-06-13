@@ -69,6 +69,10 @@ public sealed class RunStats
     /// <summary>
     /// Walk the event stream and assemble turns the same way the Talk view does: stage events
     /// accumulate, <c>audio_out</c> closes the turn (it is the last stage the sink publishes).
+    /// TTS chunks are NOT delimited by <c>audio_out</c> — the sink publishes that stage on the
+    /// FIRST audio frame of a reply, so a streaming voice's remaining chunks arrive after the
+    /// turn's stages closed. A reply's chunks finalize on <c>BotStopped</c>/<c>Interrupted</c>
+    /// (or the end of the stream) and attach their RTF to the turn that reply belongs to.
     /// </summary>
     public static RunStats Compute(IReadOnlyList<RunEvent> events)
     {
@@ -79,6 +83,20 @@ public sealed class RunStats
         long firstChunkMicros = 0, lastChunkMicros = 0;
         int chunkCount = 0;
 
+        void FinalizeReplyRtf()
+        {
+            if (chunkCount > 0 && turns.Count > 0 && turns[^1].Rtf is null)
+            {
+                var turn = turns[^1];
+                turns[^1] = turn with
+                {
+                    Rtf = TurnRtf(chunkCount, firstChunkMicros, lastChunkMicros, chunkAudioSeconds, turn.Stages),
+                };
+            }
+            chunkAudioSeconds = 0;
+            chunkCount = 0;
+        }
+
         foreach (var e in events)
         {
             switch (e.Kind)
@@ -88,6 +106,10 @@ public sealed class RunStats
                     break;
                 case "turn" when e.Edge == "Interrupted":
                     interruptions++;
+                    FinalizeReplyRtf(); // a cut-off reply still measures what it produced
+                    break;
+                case "turn" when e.Edge == "BotStopped":
+                    FinalizeReplyRtf();
                     break;
                 case "tts" when e is { Bytes: > 0, SampleRate: > 0 }:
                     chunkAudioSeconds += e.Bytes.Value / (2.0 * e.SampleRate.Value); // PCM16 mono
@@ -103,14 +125,15 @@ public sealed class RunStats
                             turns.Count + 1,
                             new Dictionary<string, double>(stages),
                             stages.Values.Sum(),
-                            TurnRtf(chunkCount, firstChunkMicros, lastChunkMicros, chunkAudioSeconds, stages)));
+                            Rtf: null)); // attached when the reply FINISHES, not when it starts
                         stages.Clear();
-                        chunkAudioSeconds = 0;
-                        chunkCount = 0;
                     }
                     break;
             }
         }
+
+        // A run stopped mid-reply (mic Stop) still attributes the chunks it saw.
+        FinalizeReplyRtf();
 
         var totals = turns.Select(t => t.TotalMs).ToList();
         var rtfs = turns.Where(t => t.Rtf is not null).Select(t => t.Rtf!.Value).ToList();

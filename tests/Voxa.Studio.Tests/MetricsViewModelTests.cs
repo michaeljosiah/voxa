@@ -117,6 +117,53 @@ public class MetricsViewModelTests
     }
 
     [Fact]
+    public void A_Live_Metrics_Run_Blocks_Config_Apply()
+    {
+        // Regression: only Talk used to set ApplyBlocked, so a draft could be applied while a
+        // run was recording — and the bundle then described the wrong config.
+        var shell = new MainWindowViewModel(TestSupport.Services());
+        Assert.False(shell.Config.ApplyBlocked);
+        shell.Metrics.IsRunning = true;
+        Assert.True(shell.Config.ApplyBlocked);
+        shell.Metrics.IsRunning = false;
+        Assert.False(shell.Config.ApplyBlocked);
+    }
+
+    [Fact]
+    public async Task The_Bundle_Describes_The_Config_The_Run_Started_With()
+    {
+        // Regression: BuildBundle() read _services.Configuration at STOP time, so an Apply that
+        // landed mid-run rewrote the saved label/profile/config — evidence describing a pipeline
+        // that never produced those events. The identity is captured at run start.
+        var services = TestSupport.Services();
+        var vm = new MetricsViewModel(services) { RunsDirOverride = TestSupport.TempDir() };
+        vm.SessionFactoryOverride = FakeSession;
+        vm.UtteranceTimeoutMs = 150;
+        vm.ScriptGraceMs = 10;
+        vm.GapMs = 500;
+        vm.AddFixtureToScriptCommand.Execute(null);
+
+        await vm.RunCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+
+        // A config Apply lands while the run is recording (the shell normally blocks this for
+        // Metrics now, but the bundle must stay truthful regardless of who wins that race).
+        services.Reconfigure(new Dictionary<string, string?>
+        {
+            ["Voxa:Tts"] = "Kokoro",
+            ["Voxa:Profile"] = "Quality",
+        });
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (vm.IsRunning && DateTime.UtcNow < deadline) await Task.Delay(25);
+
+        var bundle = vm.SelectedRun!.Bundle;
+        Assert.Equal("whispercpp·echo·piper", bundle.Label); // what RAN, not what was applied
+        Assert.Equal("Default", bundle.Profile);
+        Assert.Equal("Piper", bundle.Config["Voxa:Tts"]);
+    }
+
+    [Fact]
     public void Checking_Exactly_Two_Runs_Builds_A_Compare()
     {
         var dir = TestSupport.TempDir();

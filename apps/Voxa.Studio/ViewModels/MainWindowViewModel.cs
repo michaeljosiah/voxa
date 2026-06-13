@@ -63,7 +63,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var live = Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;
         Playgrounds.Tts.PlaybackBlocked = live;
         Playgrounds.Stt.CaptureBlocked = live;
-        Config.ApplyBlocked = Talk.IsRunning; // a live Talk session's scope belongs to the old container
+        // Talk: a live session's scope belongs to the old container. Metrics: the bundle is
+        // evidence of the config the run started with — swapping the live config (and firing
+        // the Reconfigured refresh) under a recording invites confusion even though the run's
+        // ephemeral container and start-captured snapshot survive it.
+        Config.ApplyBlocked = Talk.IsRunning || Metrics.IsRunning;
         Builder.RunBlocked = Talk.IsRunning || Metrics.IsRunning;
         Talk.StartBlocked = Builder.IsRunning || Metrics.IsRunning;
         Metrics.RunBlocked = Talk.IsRunning || Builder.IsRunning;

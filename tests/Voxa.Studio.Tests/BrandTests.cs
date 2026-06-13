@@ -268,13 +268,16 @@ public class BrandTests
         long t = 0;
         foreach (var ttfb in ttfbs)
         {
-            events.Add(new RunEvent { Micros = t, Kind = "tts", Bytes = 48000, SampleRate = 16000 });
-            events.Add(new RunEvent { Micros = t + 400_000, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
+            // The real stream order: stages close on the FIRST chunk; the reply keeps streaming
+            // after audio_out, and BotStopped delimits it.
             events.Add(new RunEvent { Micros = t + 500_000, Kind = "stage", Stage = "vad_close", Ms = ttfb * 0.55 });
             events.Add(new RunEvent { Micros = t + 600_000, Kind = "stage", Stage = "stt_final", Ms = ttfb * 0.30 });
             events.Add(new RunEvent { Micros = t + 700_000, Kind = "stage", Stage = "agent_first_token", Ms = ttfb * 0.02 });
             events.Add(new RunEvent { Micros = t + 800_000, Kind = "stage", Stage = "tts_first_byte", Ms = ttfb * 0.11 });
             events.Add(new RunEvent { Micros = t + 900_000, Kind = "stage", Stage = "audio_out", Ms = ttfb * 0.02 });
+            events.Add(new RunEvent { Micros = t + 900_000, Kind = "tts", Bytes = 48000, SampleRate = 16000 });
+            events.Add(new RunEvent { Micros = t + 1_300_000, Kind = "tts", Bytes = 32000, SampleRate = 16000 });
+            events.Add(new RunEvent { Micros = t + 1_400_000, Kind = "turn", Edge = "BotStopped" });
             t += 3_000_000;
         }
         var bundle = new RunBundle
