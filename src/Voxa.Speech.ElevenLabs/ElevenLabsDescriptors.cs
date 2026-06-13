@@ -23,7 +23,14 @@ public static class ElevenLabsDescriptors
             return errors;
         },
         CreateProcessor: (sp, root) =>
-            ElevenLabs.Synthesis(BindOptions(root), ResolveHttpClient(sp)));
+            ElevenLabs.Synthesis(BindOptions(root), ResolveHttpClient(sp)))
+    {
+        // Voice catalog + cloning (VVL-001 WS1). These need only the API key — BindOptions already
+        // tolerates a blank VoiceId, and the capability paths never run the TTS Validate (which also
+        // demands a VoiceId). A blank key surfaces as a typed VoiceProviderException in the catalog.
+        ResolveCatalog = (sp, root) => new ElevenLabsVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+        ResolveCloner  = (sp, root) => new ElevenLabsVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+    };
 
     private static ElevenLabsOptions BindOptions(IConfigurationSection root)
     {
