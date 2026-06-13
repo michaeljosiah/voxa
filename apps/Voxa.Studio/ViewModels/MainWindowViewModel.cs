@@ -71,16 +71,34 @@ public sealed partial class MainWindowViewModel : ObservableObject
         };
     }
 
+    /// <summary>True when a Settings save arrived during a live run and its apply is waiting for the run to stop.</summary>
+    private bool _settingsApplyPending;
+
     /// <summary>
     /// The Settings dialog saved (VST-003): push the stored credentials into the live container as
     /// the secrets layer — so a later Config "Apply" won't wipe them — and refresh the dropdowns that
-    /// depend on which providers are activated. <see cref="StudioServices.ApplySecrets"/> fires
-    /// <c>Reconfigured</c>, so Talk/Playgrounds/Voices/Models refresh through the existing fan-out.
+    /// depend on which providers are activated.
+    /// <para>
+    /// Applying rebuilds the container — <see cref="StudioServices.ApplySecrets"/> disposes the old
+    /// <c>ServiceProvider</c> — so it must NOT run under a live Talk/Builder/Metrics session whose
+    /// scope belongs to that provider (the same reason <c>Config.ApplyBlocked</c> guards Config Apply).
+    /// If a run is live, defer the apply until it stops; the secrets are already on disk (the dialog's
+    /// Save persisted them), so nothing is lost in the meantime.
+    /// </para>
     /// </summary>
     public void OnSettingsSaved()
     {
-        Services.ApplySecrets(Services.Secrets.BuildConfigPairs());
+        if (IsLive) { _settingsApplyPending = true; return; }
+        ApplySavedSettings();
+    }
+
+    private void ApplySavedSettings()
+    {
+        Services.ApplySecrets(Services.Secrets.BuildConfigPairs()); // fires Reconfigured → views refresh
         Config.RefreshProviderLists();
+        // Re-validate the Config draft against the new keys: a provider that was invalid only because
+        // its key was missing now re-enables Apply without the user having to touch an unrelated knob.
+        Config.Regenerate();
     }
 
     private void SyncLiveState()
@@ -98,6 +116,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Talk.StartBlocked = Builder.IsRunning || Metrics.IsRunning;
         Metrics.RunBlocked = Talk.IsRunning || Builder.IsRunning;
         OnPropertyChanged(nameof(IsLive));
+
+        // A Settings save that arrived mid-run applies now that nothing is live.
+        if (!live && _settingsApplyPending)
+        {
+            _settingsApplyPending = false;
+            ApplySavedSettings();
+        }
     }
 
     public StudioServices Services { get; }

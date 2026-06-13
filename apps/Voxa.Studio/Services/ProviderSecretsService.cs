@@ -51,9 +51,9 @@ public sealed class ProviderSecretsService
     public ProviderStatus StatusOf(ProviderManifest manifest)
     {
         if (manifest.IsLocal) return ProviderStatus.Local;
-        var allPresent = manifest.Fields
-            .Where(f => f.IsSecret)
-            .All(f => !string.IsNullOrEmpty(GetSecret(manifest.Name, f.Name)));
+        // Every manifest field is required (Azure needs SubscriptionKey AND the non-secret Region),
+        // so a provider is only "Configured" once all of them are present.
+        var allPresent = manifest.Fields.All(f => !string.IsNullOrEmpty(GetSecret(manifest.Name, f.Name)));
         return allPresent ? ProviderStatus.Configured : ProviderStatus.KeyMissing;
     }
 

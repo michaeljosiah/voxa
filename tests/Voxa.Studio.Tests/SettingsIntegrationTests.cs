@@ -1,3 +1,4 @@
+using Voxa.Studio.Audio;
 using Voxa.Studio.Services;
 using Voxa.Studio.ViewModels;
 
@@ -64,5 +65,45 @@ public class SettingsIntegrationTests
         config.ApplyCommand.Execute(null);
 
         Assert.Equal("sk_keep", services.Configuration["Voxa:OpenAI:ApiKey"]);
+    }
+
+    [Fact] // review fix (P2) — a Settings save during a live run defers the container rebuild until it stops
+    public async Task A_Settings_Save_During_A_Live_Run_Applies_Only_After_The_Run_Stops()
+    {
+        await using var services = TestSupport.Services();
+        var shell = new MainWindowViewModel(services);
+
+        shell.Builder.IsRunning = true;   // a live run still owns a scope from the current container
+
+        var settings = new SettingsViewModel(services.Secrets);
+        settings.Providers.AddProvider("ElevenLabs");
+        settings.Providers.Rows.Single(r => r.Manifest.Name == "ElevenLabs").Fields.Single().Value = "sk_live";
+        settings.Save();
+        shell.OnSettingsSaved();
+
+        Assert.Null(services.Configuration["Voxa:ElevenLabs:ApiKey"]);   // deferred — container not torn down mid-run
+
+        shell.Builder.IsRunning = false;   // run stops → the pending apply fires
+        Assert.Equal("sk_live", services.Configuration["Voxa:ElevenLabs:ApiKey"]);
+    }
+
+    [Fact] // review fix (P2) — saving a missing key re-validates Config so Apply re-enables without an extra edit
+    public async Task Saving_A_Key_Revalidates_The_Config_Draft()
+    {
+        var config = TestSupport.LocalConfig(null,
+            ("Voxa:Agent:Provider", "OpenAI"), ("Voxa:Agent:Model", "gpt-4o-mini"));
+        await using var services = new StudioServices(config, new NullAudioDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
+        var shell = new MainWindowViewModel(services);
+
+        Assert.False(shell.Config.IsValid);   // OpenAI agent selected, no key → invalid
+
+        var settings = new SettingsViewModel(services.Secrets);
+        settings.Providers.AddProvider("OpenAI");
+        settings.Providers.Rows.Single(r => r.Manifest.Name == "OpenAI").Fields.Single().Value = "sk-123";
+        settings.Save();
+        shell.OnSettingsSaved();
+
+        Assert.True(shell.Config.IsValid);    // re-validated against the new key; Apply is enabled again
     }
 }

@@ -53,9 +53,9 @@ public sealed partial class ProviderRowViewModel : ObservableObject
     private void RecomputeStatus()
     {
         if (IsLocal) { Status = ProviderStatus.Local; return; }
-        var allPresent = Fields
-            .Where(f => f.Descriptor.IsSecret)
-            .All(f => !string.IsNullOrWhiteSpace(f.Value));
+        // Every manifest field is required (e.g. Azure needs both SubscriptionKey AND the non-secret
+        // Region — the descriptor validates both), so don't go green until all of them are filled.
+        var allPresent = Fields.All(f => !string.IsNullOrWhiteSpace(f.Value));
         Status = allPresent ? ProviderStatus.Configured : ProviderStatus.KeyMissing;
     }
 }

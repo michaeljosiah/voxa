@@ -110,4 +110,18 @@ public class SettingsViewModelTests
         Assert.Equal(2, fields.Count);
         Assert.Contains(fields, f => f.Descriptor.Name == "Region" && !f.Descriptor.IsSecret);
     }
+
+    [Fact] // review fix (P2) — Azure isn't Configured until the required non-secret Region is filled too
+    public void Azure_Stays_KeyMissing_Until_The_NonSecret_Region_Is_Filled()
+    {
+        var vm = new ProvidersViewModel(Service());
+        vm.AddProvider("Azure");
+        var row = vm.Rows.Single(r => r.Manifest.Name == "Azure");
+
+        row.Fields.Single(f => f.Descriptor.Name == "SubscriptionKey").Value = "sub-key";
+        Assert.Equal(ProviderStatus.KeyMissing, row.Status);   // Region still blank — would fail Config validation
+
+        row.Fields.Single(f => f.Descriptor.Name == "Region").Value = "eastus";
+        Assert.Equal(ProviderStatus.Configured, row.Status);
+    }
 }
