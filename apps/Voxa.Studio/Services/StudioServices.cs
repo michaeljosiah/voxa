@@ -20,10 +20,19 @@ namespace Voxa.Studio.Services;
 /// re-layered with the user's overrides and the container rebuilds, so the next Talk session
 /// composes with the new settings — exactly what a server restart would do, without the restart.
 /// </para>
+///
+/// <para>
+/// Configuration is THREE layers, lowest priority first: base (appsettings + environment) →
+/// <b>secrets</b> (the DPAPI-backed credential store, VST-003) → overrides (the Config draft). Secrets
+/// are their own layer precisely because <see cref="Reconfigure"/> REPLACES the override set: if stored
+/// keys were overrides, the first Config "Apply" would wipe them. <see cref="ApplySecrets"/> swaps the
+/// secrets layer after a Settings Save while leaving the overrides intact.
+/// </para>
 /// </summary>
 public sealed class StudioServices : IAsyncDisposable
 {
     private readonly IConfiguration _baseConfiguration;
+    private IReadOnlyDictionary<string, string?> _secrets = new Dictionary<string, string?>();
     private IReadOnlyDictionary<string, string?> _overrides = new Dictionary<string, string?>();
 
     public IConfiguration Configuration { get; private set; }
@@ -31,12 +40,22 @@ public sealed class StudioServices : IAsyncDisposable
     public IStudioAudioDevice AudioDevice { get; }
     public VoxaModelCache ModelCache { get; private set; }
 
+    /// <summary>The credential store behind the secrets layer (DPAPI on Windows, in-memory elsewhere).</summary>
+    public ISecretsStore SecretsStore { get; }
+
+    /// <summary>Activation + credentials facade the Settings dialog and the Config filter share.</summary>
+    public ProviderSecretsService Secrets { get; }
+
     public VoxaProviderRegistry Registry => Provider.GetRequiredService<VoxaProviderRegistry>();
 
-    /// <summary>Raised after <see cref="Reconfigure"/> swaps the container — views refresh from it.</summary>
+    /// <summary>Raised after the container is swapped (Reconfigure / ApplySecrets) — views refresh from it.</summary>
     public event Action? Reconfigured;
 
-    public StudioServices(IConfiguration? configuration = null, IStudioAudioDevice? audioDevice = null)
+    public StudioServices(
+        IConfiguration? configuration = null,
+        IStudioAudioDevice? audioDevice = null,
+        ISecretsStore? secretsStore = null,
+        ProviderActivationStore? activationStore = null)
     {
         _baseConfiguration = configuration ?? new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -46,13 +65,33 @@ public sealed class StudioServices : IAsyncDisposable
 
         AudioDevice = audioDevice ?? StudioAudioDevice.CreatePlatformDefault();
 
-        (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _overrides);
+        // Credentials store: a DPAPI-encrypted file on Windows, in-memory elsewhere/tests. Disk read
+        // only — no network — so it is safe on the startup path (the "no network before the user acts"
+        // rule). Tests inject a MemorySecretsStore + temp activation path for isolation.
+        SecretsStore = secretsStore ?? CreateDefaultSecretsStore();
+        Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
+
+        // Fold the stored secrets into the FIRST build so a returning user's providers are live from
+        // the first session — no post-construction Reconfigure, no double build.
+        _secrets = Secrets.BuildConfigPairs();
+        (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
+    }
+
+    private static ISecretsStore CreateDefaultSecretsStore()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return new DpapiSecretsStore(Path.Combine(home, "voxa-secrets.dpapi"));
+        }
+        return new MemorySecretsStore();
     }
 
     /// <summary>
     /// Re-layer the base configuration with <paramref name="overrides"/> and rebuild the
-    /// container. Caller must ensure no Talk session is live (its scope belongs to the old
-    /// provider). Overrides REPLACE the previous override set — applying twice doesn't stack.
+    /// container, keeping the current secrets layer. Caller must ensure no Talk session is live
+    /// (its scope belongs to the old provider). Overrides REPLACE the previous override set —
+    /// applying twice doesn't stack.
     /// </summary>
     public void Reconfigure(IReadOnlyDictionary<string, string?> overrides)
     {
@@ -60,17 +99,36 @@ public sealed class StudioServices : IAsyncDisposable
 
         var old = Provider;
         _overrides = new Dictionary<string, string?>(overrides);
-        (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _overrides);
+        (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
+        old.Dispose();
+
+        Reconfigured?.Invoke();
+    }
+
+    /// <summary>
+    /// Swap the secrets layer (after a Settings "Save") and rebuild, keeping the current Config
+    /// overrides. This is how stored credentials reach the live container without a restart.
+    /// </summary>
+    public void ApplySecrets(IReadOnlyDictionary<string, string?> secrets)
+    {
+        ArgumentNullException.ThrowIfNull(secrets);
+
+        var old = Provider;
+        _secrets = new Dictionary<string, string?>(secrets);
+        (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
         old.Dispose();
 
         Reconfigured?.Invoke();
     }
 
     private static (IConfiguration, ServiceProvider, VoxaModelCache) Build(
-        IConfiguration baseConfiguration, IReadOnlyDictionary<string, string?> overrides)
+        IConfiguration baseConfiguration,
+        IReadOnlyDictionary<string, string?> secrets,
+        IReadOnlyDictionary<string, string?> overrides)
     {
         var configuration = new ConfigurationBuilder()
             .AddConfiguration(baseConfiguration)
+            .AddInMemoryCollection(secrets.Where(p => !string.IsNullOrEmpty(p.Value)))
             .AddInMemoryCollection(overrides.Where(p => !string.IsNullOrEmpty(p.Value)))
             .Build();
 

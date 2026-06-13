@@ -276,6 +276,20 @@ public sealed partial class BuilderViewModel : ObservableObject
         Revalidate();
     }
 
+    /// <summary>
+    /// Place a palette node at a dropped canvas point. Dragging from the palette is the only way to
+    /// add a node (the canvas drop hands the position here), so the node lands where the user let go.
+    /// </summary>
+    public void AddNodeAt(BuilderPaletteEntry entry, double x, double y)
+    {
+        PushUndo();
+        var vm = Materialise(NewNode(entry));
+        vm.X = Snap(Math.Max(0, x - BuilderNodeVm.NodeWidth / 2));
+        vm.Y = Snap(Math.Max(0, y - BuilderNodeVm.NodeHeight / 2));
+        Select(vm);
+        Revalidate();
+    }
+
     /// <summary>The '+' affordance: append a compatible node already wired to the dangling port.</summary>
     [RelayCommand]
     private void AddAndConnect(BuilderPaletteEntry entry)

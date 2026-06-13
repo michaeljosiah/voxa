@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Settings dialog with persistent provider credentials (VST-003).** A new **Settings**
+  dialog (the gear at the foot of the nav rail) manages which providers are active and stores their
+  API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter its key
+  once, and it is encrypted to disk via **Windows DPAPI** (`~/voxa-secrets.dpapi`, scoped to your user
+  account) and live from the next launch — no environment variables, no re-typing. Identities are
+  modelled by *role*: one OpenAI key powers Whisper STT, OpenAI TTS *and* the chat agent at once;
+  Mistral covers STT + TTS. Local providers (Whisper/Piper/Kokoro/Echo) are always listed and need no
+  keys. Config's STT/TTS/Agent dropdowns now filter to **activated-or-local** providers, so a fresh
+  Studio offers just the keyless local tier until you add a cloud provider. Secrets are a dedicated
+  configuration layer, so a Config **Apply** never wipes stored keys, and they are never written into
+  any export. New guide [`docs/settings.md`](docs/settings.md); spec
+  [`docs/specifications/vst-003-settings-dialog-spec.html`](docs/specifications/vst-003-settings-dialog-spec.html).
+- **Voxa Studio: selectable themes (VST-003).** Settings gains an **Appearance** category with a live
+  theme picker — **Warm** (default), **Cool** (the original cyan brand), **Slate**. Switching repaints
+  the whole app instantly (brushes are mutated in place; the brand mark and Talk bubbles follow the
+  accent) and the choice persists to `~/voxa-studio-prefs.json`. The five pipeline stage colours stay
+  fixed across themes — they encode meaning in the waterfall, traces and charts.
+- **Voxa Studio: the launch splash now lingers long enough to see (VST-003).** On a fast machine the
+  local boot finished before the ~2.2 s brand intro played; the splash now stays up for a minimum so
+  the mark and wordmark animate. Skipped under reduced-motion and bypassed by a click.
 - **Voice picker hand-off + docs (VVL-001 WS6).** The Config composer gains a dynamic voice picker
   for cloud providers: selecting ElevenLabs or Mistral as TTS loads its voices live from the library
   (your clones included) and writes the provider-correct key into the export (`ElevenLabs:VoiceId` /
@@ -100,6 +120,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   curated stress-phrase deck, and a batch bench producing TTFB p50/p95 + mean RTF per checked
   voice with CSV export. New shared `WaveformStripControl` (bottom-aligned envelope bars,
   optional interactive playhead) and an exact Levenshtein word-alignment `WordErrorRate`.
+
+### Changed
+
+- **Voxa Studio: redesigned toward a calmer, Claude-like look (VST-003).** Warm-neutral surfaces and a
+  single coral accent replace the cool ink + cyan palette; buttons, icons, radii and type are more
+  compact. The Settings dialog is a borderless modal with a category sidebar (Providers · Appearance),
+  each category shown on its own — providers are invisible under Appearance and vice-versa.
+- **Voxa Studio: the Builder palette is drag-to-add.** Dragging a node from the palette onto the canvas
+  is now the only way to add one (it lands where you drop it); clicking a palette item no longer places
+  a node. The dangling-port **+** quick-add is unchanged.
+- **Voxa Studio: removed decorative colour dots.** The Builder's per-node stage-colour bar, palette
+  dots and inspector dot are gone (the kind label is now neutral). Dots that signal *state* — provider
+  status, the live-session dot, validity, cached, listening/speaking — are kept.
 
 ### Fixed
 

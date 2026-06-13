@@ -26,6 +26,9 @@ public partial class BuilderView : UserControl
 
     private BuilderViewModel? Vm => DataContext as BuilderViewModel;
 
+    // Payload key for a palette → canvas drag (adding a node is drag-only; clicking does nothing).
+    private const string PaletteFormat = "voxa/palette-entry";
+
     public BuilderView()
     {
         InitializeComponent();
@@ -35,6 +38,31 @@ public partial class BuilderView : UserControl
             vm.DrainPending();
             if (vm.IsRunning) EdgesLayer.InvalidateVisual(); // particles move; idle canvas stays still
         };
+
+        AddHandler(DragDrop.DragOverEvent, OnPaletteDragOver);
+        AddHandler(DragDrop.DropEvent, OnPaletteDrop);
+    }
+
+    // ── add a node: drag from the palette onto the canvas (the only add path) ──
+
+    private async void OnPalettePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control { DataContext: BuilderPaletteEntry entry }) return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
+        var data = new DataObject();
+        data.Set(PaletteFormat, entry);
+        await DragDrop.DoDragDrop(e, data, DragDropEffects.Copy);
+    }
+
+    private void OnPaletteDragOver(object? sender, DragEventArgs e)
+        => e.DragEffects = e.Data.Contains(PaletteFormat) ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private void OnPaletteDrop(object? sender, DragEventArgs e)
+    {
+        if (Vm is not { } vm || e.Data.Get(PaletteFormat) is not BuilderPaletteEntry entry) return;
+        var pos = e.GetPosition(GraphPanel);
+        vm.AddNodeAt(entry, pos.X, pos.Y);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

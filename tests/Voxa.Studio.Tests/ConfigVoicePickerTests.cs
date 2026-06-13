@@ -106,7 +106,8 @@ public class ConfigVoicePickerTests
         // before the user acts — the "Studio never touches the network before the user acts" rule.
         var config = TestSupport.LocalConfig(null,
             ("Voxa:Tts", "ElevenLabs"), ("Voxa:ElevenLabs:ApiKey", "fake-key"));
-        await using var services = new StudioServices(config, new NullAudioDevice());
+        await using var services = new StudioServices(config, new NullAudioDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
 
         var vm = new ConfigViewModel(services);
 

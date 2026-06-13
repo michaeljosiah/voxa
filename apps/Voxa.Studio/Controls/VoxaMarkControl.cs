@@ -49,7 +49,10 @@ public sealed class VoxaMarkControl : Control
         set => SetValue(GlowProperty, value);
     }
 
-    private static readonly Color Pulse400 = Color.Parse("#4FC3F7");
+    // The brand accent, resolved live from the active theme (falls back to the original cyan).
+    private static Color AccentColor =>
+        Application.Current?.Resources.TryGetResource("VxAccentBrush", null, out var v) == true
+            && v is SolidColorBrush accent ? accent.Color : Color.Parse("#4FC3F7");
 
     // The V in brand-viewBox units. Total path length ≈ 154; the brand animation uses 160.
     private const double DashUnits = 160.0 / 7.0; // Avalonia dashes are in pen-thickness units
@@ -74,6 +77,7 @@ public sealed class VoxaMarkControl : Control
         base.OnAttachedToVisualTree(e);
         _attached = true;
         _introDone = !Animated || MotionSettings.ReduceMotion;
+        ThemeManager.Changed += OnThemeChanged;   // recolour the mark live on a theme switch
 
         if (MotionSettings.ReduceMotion) return; // static end-state; AffectsRender repaints Glow changes
 
@@ -94,9 +98,12 @@ public sealed class VoxaMarkControl : Control
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         _attached = false;
+        ThemeManager.Changed -= OnThemeChanged;
         StopTicker();
         base.OnDetachedFromVisualTree(e);
     }
+
+    private void OnThemeChanged() => InvalidateVisual();
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -201,7 +208,7 @@ public sealed class VoxaMarkControl : Control
             double height = h * grow;
             var rect = new Rect(x, y + h - height, 7, height);
             context.DrawRectangle(
-                new SolidColorBrush(Pulse400, opacity), null,
+                new SolidColorBrush(AccentColor, opacity), null,
                 new RoundedRect(rect, 3.5));
         }
     }
@@ -209,7 +216,7 @@ public sealed class VoxaMarkControl : Control
     private static void DrawV(DrawingContext context, double thickness, double opacity, double dashProgress)
     {
         if (opacity <= 0) return;
-        var pen = new Pen(new SolidColorBrush(Pulse400, opacity), thickness)
+        var pen = new Pen(new SolidColorBrush(AccentColor, opacity), thickness)
         {
             LineCap = PenLineCap.Round,
             LineJoin = PenLineJoin.Round,

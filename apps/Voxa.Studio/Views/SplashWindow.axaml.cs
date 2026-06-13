@@ -22,6 +22,12 @@ public partial class SplashWindow : Window
     private DispatcherTimer? _intro;
     private int _stageIndex;
 
+    /// <summary>
+    /// Raised when the user clicks to skip the intro. The host (App) uses this to bypass the
+    /// minimum on-screen hold — a deliberate skip should get the user into the shell at once.
+    /// </summary>
+    public event Action? SkipRequested;
+
     public SplashWindow()
     {
         InitializeComponent();
@@ -38,7 +44,11 @@ public partial class SplashWindow : Window
             _intro.Start();
         }
 
-        PointerPressed += (_, _) => SkipIntro();
+        PointerPressed += (_, _) =>
+        {
+            SkipIntro();
+            SkipRequested?.Invoke();
+        };
     }
 
     /// <summary>Wordmark fades in 1.25–1.95 s while the tracking settles; microcopy follows at 1.5 s.</summary>

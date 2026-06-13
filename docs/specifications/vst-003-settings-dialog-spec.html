@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VST-003 — Voxa Studio Settings Dialog</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  pre .kw { color: #79b8ff; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .badge.breaking { background: #3a1448; color: #ce93d8; }
+  .badge.new { background: #143a4a; color: #81d4fa; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .arrowflow { font-family: var(--mono); font-size: 0.8rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; overflow-x: auto; white-space: pre; line-height: 1.7; color: #c9d6e3; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+  .mockup { font-family: var(--mono); font-size: 0.78rem; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; white-space: pre; line-height: 1.65; color: #c9d6e3; overflow-x: auto; margin: 18px 0; }
+  .dot-green  { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--good);  margin-right: 6px; vertical-align: middle; }
+  .dot-amber  { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--warn);  margin-right: 6px; vertical-align: middle; }
+  .dot-gray   { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VST-003 — Voxa Studio Settings Dialog</h1>
+  <div class="sub">A first-class <b>Settings dialog</b> for Voxa Studio: a tabbed modal that replaces the current
+  ad-hoc credential fields scattered across the Config screen with a single, well-structured place to manage
+  <em>which providers are active</em> and <em>what credentials they need</em>. API keys are persisted to a
+  DPAPI-encrypted file so they survive restarts. The Providers tab lists every activated provider (STT, TTS,
+  Agent) with status indicators, lets the user add from a card-grid picker of all supported providers, and
+  exposes per-field configuration with masked secret inputs. Config dropdowns filter to activated providers only.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VST-003 v1.2</div>
+    <div><b>Date</b> 2026-06-13 (implemented 2026-06-13)</div>
+    <div><b>Status</b> Implemented on <code>feat/vst-003-settings-dialog</code>. WS1–WS4 &amp; WS6 automated-verified (Studio suite green); WS5 dialog UI built, pending manual Windows smoke. See §8.</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch <code>feat/vst-003-settings-dialog</code> from <code>main</code>)</div>
+    <div><b>Depends on</b> VST-001 (Studio shell), VST-002 (nav rail), VVL-001 (provider registry seams)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<div class="callout warn">
+  <b>v1.1 — codebase-review delta.</b> The v1.0 draft was reconciled against the live registry, descriptors and
+  <code>StudioServices</code>. Seven corrections, each carried into the relevant section:
+  <ul style="margin:8px 0 0;">
+    <li><b>Provider identity, not provider-per-role.</b> <code>OpenAI</code> is a single registry name serving
+    <em>STT, TTS and the chat agent</em>, all keyed on <code>Voxa:OpenAI:ApiKey</code>; <code>Mistral</code> serves
+    STT and TTS. Manifests are keyed by identity with a <code>Roles[]</code> list — one key entry can light up
+    three dropdowns. The v1.0 invented name <code>OpenAIWhisper</code> does not exist (§4.3, §6).</li>
+    <li><b>Azure is already registered</b> by the meta-package (STT + TTS, two-field credential). It cannot be
+    "deferred" — left out, it would haunt the Config dropdowns with no way to configure it. It is now in the
+    manifest as the canonical multi-field example (§6).</li>
+    <li><b>OpenAI TTS</b> existed in the registry and was missing from the v1.0 table (§6).</li>
+    <li><b>Secrets must be a configuration <em>layer</em>, not an override.</b> <code>Reconfigure</code> REPLACES
+    the override set, so loading secrets as overrides means the next Config "Apply" silently wipes every stored
+    key. <code>StudioServices</code> gains a dedicated secrets layer + <code>ApplySecrets</code> (§4.5.1).</li>
+    <li><b><code>StudioServices</code> needs a test seam.</b> The constructor takes no store; tests cannot inject a
+    pre-loaded <code>MemorySecretsStore</code>. An optional <code>ISecretsStore?</code> parameter is added (§4.5.1, WS3).</li>
+    <li><b><code>System.Security.Cryptography.ProtectedData</code> is a NuGet package</b> on .NET 10, not in the
+    BCL. It must be added to <code>Voxa.Studio.csproj</code> (§4.2, WS1).</li>
+    <li><b>The nav rail has no footer slot.</b> It is a top-aligned <code>StackPanel</code> of nav
+    <code>RadioButton</code>s; the gear must be a plain <code>Button</code> docked at the bottom, and the dialog
+    is shown from code-behind (the owner <code>Window</code> lives there, like the session clock) — §4.8, WS5.</li>
+  </ul>
+</div>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; constraints</a></li>
+    <li><a href="#s4">Architecture</a>
+      <ol>
+        <li><a href="#s4-1">Layer overview</a></li>
+        <li><a href="#s4-2"><code>ISecretsStore</code> — encrypted credential storage</a></li>
+        <li><a href="#s4-3"><code>ProviderManifest</code> — typed provider descriptors</a></li>
+        <li><a href="#s4-4"><code>ProviderActivationStore</code> — which providers are on</a></li>
+        <li><a href="#s4-5"><code>ProviderSecretsService</code> — unified facade</a></li>
+        <li><a href="#s4-5-1">Composing secrets with Config drafts (the layering rule)</a></li>
+        <li><a href="#s4-6">View-model hierarchy</a></li>
+        <li><a href="#s4-7">UI layout &amp; the Add-provider flyout</a></li>
+        <li><a href="#s4-8">Integration points with the existing shell</a></li>
+      </ol>
+    </li>
+    <li><a href="#s5">Workstreams (WS1–WS6)</a>
+      <ol>
+        <li><a href="#ws1">WS1 — <code>ISecretsStore</code>, <code>DpapiSecretsStore</code>, <code>ProviderActivationStore</code></a></li>
+        <li><a href="#ws2">WS2 — <code>ProviderManifest</code> catalog</a></li>
+        <li><a href="#ws3">WS3 — <code>ProviderSecretsService</code> + <code>StudioServices</code> integration</a></li>
+        <li><a href="#ws4">WS4 — <code>ProvidersViewModel</code> + <code>SettingsViewModel</code></a></li>
+        <li><a href="#ws5">WS5 — <code>SettingsDialog</code> XAML + add-provider flyout</a></li>
+        <li><a href="#ws6">WS6 — integration, Config filter, tests, docs</a></li>
+      </ol>
+    </li>
+    <li><a href="#s6">Provider manifest reference</a></li>
+    <li><a href="#s7">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s8">Progress checklist</a></li>
+    <li><a href="#s9">Verification protocol</a></li>
+    <li><a href="#s10">Risk register</a></li>
+    <li><a href="#s11">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span> What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What is the feature, in one sentence?</b>
+    <p>A modal <b>Settings dialog</b> — opened from a gear icon in the nav rail — where you manage
+    which voice and agent providers are active in your Studio and enter their credentials once, with
+    those credentials encrypted on disk and automatically available across restarts, so you never
+    re-type an API key after closing the app.</p>
+  </div>
+  <div class="qa">
+    <b>What is wrong today?</b>
+    <p>Credentials in Voxa Studio are ephemeral. The Config screen has a text box for the OpenAI
+    agent key; it goes into the live container when you hit Apply and evaporates when Studio exits.
+    Cloud TTS providers (ElevenLabs, Mistral, Azure) have no key input in Studio at all — you must set
+    environment variables or put keys in <code>appsettings.json</code> before launching. The Config
+    dropdowns list every provider the registry knows about regardless of whether you have credentials
+    for it, so a fresh Studio shows "ElevenLabs", "Mistral" and "Azure" in the TTS picker even if you've
+    never signed up for any of them. There is nowhere to discover <em>which providers Studio supports</em>
+    or <em>how to activate one</em>.</p>
+  </div>
+  <div class="qa">
+    <b>What does the Settings dialog look like?</b>
+    <p>A fixed-size modal window with a tab strip. The initial release ships one tab: <b>Providers</b>.
+    The tab has a master-detail layout: a left panel lists your activated providers with a coloured
+    status dot (green = configured, amber = key missing, grey = local / no credentials needed);
+    the right panel shows the configuration fields for whichever provider is selected. A "+ Add
+    provider" button at the bottom of the list opens a card-grid flyout of every supported provider
+    not yet in your list — you click a card and it's added instantly. Save commits all changes to
+    disk; Cancel discards them.</p>
+  </div>
+  <div class="qa">
+    <b>One key, three roles — what does activating "OpenAI" actually do?</b>
+    <p>Some providers wear several hats. In Voxa, <code>OpenAI</code> is a single identity that supplies
+    speech-to-text (Whisper), text-to-speech, <em>and</em> the chat agent — all reading the same
+    <code>Voxa:OpenAI:ApiKey</code>. So when you add OpenAI in Settings and type one key, it lights up
+    in the STT dropdown, the TTS dropdown, and the Agent dropdown at once. <code>Mistral</code> behaves
+    the same way for STT + TTS. The manifest models this with a <em>roles</em> list, so the dialog shows
+    "OpenAI · STT · TTS · Agent" as one row, not three.</p>
+  </div>
+  <div class="qa">
+    <b>Where do API keys actually live after I type them?</b>
+    <p>On Windows they are written to a DPAPI-encrypted binary file (<code>~/voxa-secrets.dpapi</code>).
+    DPAPI (Data Protection API) is the same mechanism Windows uses for browser saved passwords and
+    Wi-Fi keys — the ciphertext is tied to your Windows user account and can only be decrypted by
+    the same user on the same machine. The file is never exported, never included in any
+    <code>appsettings.json</code> bundle, and never travels over the network. On Studio startup the
+    file is decrypted in memory; the secrets are injected into the live configuration container as a
+    dedicated layer (see §4.5.1) so they survive even when you later "Apply" a Config draft.</p>
+  </div>
+  <div class="qa">
+    <b>What is a "supported provider" and who decides the list?</b>
+    <p>Each provider is described by a static <code>ProviderManifest</code> record in a compile-time
+    catalog. The manifest records the provider's display name, which roles it fills (STT, TTS, Agent),
+    a one-line description, a docs link, and a typed list of fields (label, placeholder, whether to
+    mask the value). The catalog is the authoritative list of what the Add-provider picker shows.
+    Adding a new provider to Voxa means adding a registry descriptor <em>and</em> a manifest entry —
+    both are required before Studio can surface it to users.</p>
+  </div>
+  <div class="qa">
+    <b>What happens to local providers like Piper and WhisperCpp?</b>
+    <p>They appear in the provider list as read-only entries with a grey dot labelled "Local — no
+    configuration required." They are always active; you cannot deactivate them. This makes the
+    provider list a complete inventory of what Studio can do, not just a key-management screen.
+    It also gives users a clear answer to "why isn't Kokoro in my Config dropdown?" — they see it
+    in Settings and understand it is already available without credentials.</p>
+  </div>
+  <div class="qa">
+    <b>How does this interact with the Config screen?</b>
+    <p>The Config screen's STT, TTS, and Agent dropdowns currently list every provider in the
+    registry. After VST-003 lands, they will filter to only providers that are either local (always
+    on) or have been explicitly activated by the user via Settings. A provider that is activated but
+    has no key yet still appears in Config (with a warning), so the user knows they need to return
+    to Settings to finish the setup. The credential fields currently embedded in Config
+    (<code>AgentApiKey</code>, etc.) are candidates for removal in a follow-up once Settings is
+    established as the canonical home — that removal is deliberately out of scope for this spec.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span> Executive summary</h2>
+
+<table>
+  <tr><th>Deliverable</th><th>What it is</th><th>Ships in</th></tr>
+  <tr>
+    <td><code>ISecretsStore</code> + <code>DpapiSecretsStore</code></td>
+    <td>Abstraction for keyed encrypted credential storage. Windows implementation uses <code>ProtectedData</code> (DPAPI, user scope) — requires adding the <code>System.Security.Cryptography.ProtectedData</code> NuGet package. <code>MemorySecretsStore</code> for tests and Linux CI.</td>
+    <td><code>apps/Voxa.Studio/Services/</code> + <code>.csproj</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td><code>ProviderActivationStore</code></td>
+    <td>Plain JSON list of which providers the user has activated (<code>~/voxa-activations.json</code>). Non-sensitive — no encryption needed. Mirrors the corrupt-skip pattern of <code>VoiceStore</code>/<code>RunStore</code>.</td>
+    <td><code>apps/Voxa.Studio/Services/</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td><code>ProviderManifest</code> catalog</td>
+    <td>Static compile-time descriptors for every supported provider <em>identity</em>: roles (STT/TTS/Agent), description, docs URL, and a typed list of <code>ProviderFieldDescriptor</code>s (name, label, placeholder, isSecret, config key). Drives the Add-provider picker and the detail panel. 8 identities — 4 with credentials (OpenAI, Azure, ElevenLabs, Mistral), 4 local (WhisperCpp, Piper, Kokoro, Echo).</td>
+    <td><code>apps/Voxa.Studio/Services/</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td><code>ProviderSecretsService</code></td>
+    <td>Unified facade over activation + secrets stores. Exposes activated identities, get/set per-field secrets, status derivation, and <code>BuildConfigPairs()</code> which returns the flat <code>Dictionary&lt;string,string?&gt;</code> for the secrets configuration layer.</td>
+    <td><code>apps/Voxa.Studio/Services/</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td><code>StudioServices</code> secrets layer + seam</td>
+    <td>A third configuration layer (base → <b>secrets</b> → overrides) so a Config "Apply" never wipes stored keys; <code>ApplySecrets()</code> to update it after a Settings Save; an optional <code>ISecretsStore?</code> constructor parameter so tests can inject a pre-loaded <code>MemorySecretsStore</code>.</td>
+    <td><code>apps/Voxa.Studio/Services/StudioServices.cs</code> <span class="badge additive">additive</span></td>
+  </tr>
+  <tr>
+    <td>Settings view-models</td>
+    <td><code>ProviderRowViewModel</code> (one per activated identity), <code>FieldValueViewModel</code> (one per configurable field), <code>ProvidersViewModel</code> (tab VM), <code>SettingsViewModel</code> (dialog VM). All Avalonia-free and headless-testable.</td>
+    <td><code>apps/Voxa.Studio/ViewModels/</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td><code>SettingsDialog</code> XAML + add-provider flyout + gear</td>
+    <td>Fixed-size Avalonia dialog window; tab control; master-detail layout; card-grid flyout; status dots; masked/reveal secret fields; Save/Cancel. Nav rail restructured to dock a gear <code>Button</code> at the bottom; dialog shown from <code>MainWindow</code> code-behind.</td>
+    <td><code>apps/Voxa.Studio/Views/</code> <span class="badge new">new</span></td>
+  </tr>
+  <tr>
+    <td>Config dropdown filter</td>
+    <td><code>ConfigViewModel</code> <code>SttProviders</code>, <code>TtsProviders</code>, <code>AgentProviders</code> filtered to activated-or-local identities whose roles match the dropdown. Existing dropdowns shrink to only what the user has set up.</td>
+    <td><code>apps/Voxa.Studio/ViewModels/ConfigViewModel.cs</code> <span class="badge additive">additive</span></td>
+  </tr>
+  <tr>
+    <td>Startup secret injection</td>
+    <td><code>StudioServices</code> loads <code>ProviderSecretsService</code> on boot and folds <code>BuildConfigPairs()</code> into the <em>first</em> container build, so secrets from the DPAPI file are live from the first session — no Apply, no double-build.</td>
+    <td><code>apps/Voxa.Studio/Services/StudioServices.cs</code> <span class="badge additive">additive</span></td>
+  </tr>
+</table>
+
+<div class="callout good">
+  <b>Separation of concerns.</b> The Settings dialog manages <em>which provider identities are active and what credentials they hold</em>.
+  The Config screen manages <em>which pipeline a session uses</em> (and per-provider model choices). These are distinct decisions; today they are
+  conflated. VST-003 begins the clean separation; removing the credential fields from Config is a follow-up
+  once Settings is established (see §11).
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span> Goals, non-goals &amp; constraints</h2>
+
+<h3>3.1 Goals</h3>
+<ul>
+  <li><b>G1.</b> A user types an API key once. It survives Studio restarts; the next session starts with that provider ready without any further action.</li>
+  <li><b>G2.</b> The set of providers visible in Config dropdowns always matches what the user has actually activated — no phantom providers cluttering the picker.</li>
+  <li><b>G3.</b> The Add-provider picker shows every supported identity the user has <em>not yet</em> added, with enough description to make an informed choice without leaving Studio.</li>
+  <li><b>G4.</b> Local providers (no credentials needed) are always visible in the provider list and always appear in Config dropdowns — they cannot be "accidentally removed".</li>
+  <li><b>G5.</b> Activating an identity that fills several roles (OpenAI: STT+TTS+Agent; Mistral: STT+TTS) makes it usable in every matching dropdown from a single key entry.</li>
+  <li><b>G6.</b> The secrets store is never read by any code path that exports configuration to disk or to the clipboard. DPAPI decryption happens only at startup and on Settings Save; the decrypted bytes go only into the in-memory <code>IConfiguration</code> container.</li>
+  <li><b>G7.</b> A Config "Apply" (which replaces the override layer) never drops the credentials loaded from the secrets store — secrets live in their own layer (§4.5.1).</li>
+  <li><b>G8.</b> All view-models are Avalonia-free and headless-testable. The dialog's UI is the only Avalonia dependency.</li>
+  <li><b>G9.</b> The "Studio never touches the network before the user acts" invariant is preserved. <code>ProviderSecretsService</code> loads from disk only; no HTTP call is made during startup or dialog construction.</li>
+</ul>
+
+<h3>3.2 Non-goals</h3>
+<ul>
+  <li><b>Not</b> a secrets vault with sharing, import/export, or team sync. DPAPI-encrypted local file only.</li>
+  <li><b>Not</b> removing existing credential fields from <code>ConfigViewModel</code> — that is a deliberate follow-up (§11).</li>
+  <li><b>Not</b> cross-platform DPAPI. On Linux/macOS Studio is not the primary target; <code>DpapiSecretsStore</code> is Windows-only. Tests use <code>MemorySecretsStore</code>. A future spec may add a Keychain/libsecret backend.</li>
+  <li><b>Not</b> managing the VAD engine. Silero/SilenceGate are local and chosen in Config; VAD carries no credential, so it has no place in Settings.</li>
+  <li><b>Not</b> an "Audio" settings tab in this spec. The tab strip reserves space; the tab is not built.</li>
+  <li><b>Not</b> provider discovery at runtime (no fetching a remote list of supported providers). The manifest catalog is compile-time.</li>
+  <li><b>Not</b> provider-level model selection (e.g. which Whisper/Kokoro model, agent chat model) — that remains in the Config screen where it is a pipeline decision, not a credential decision.</li>
+</ul>
+
+<h3>3.3 Hard rules (invariants carried from CLAUDE.md / VST history)</h3>
+<ul>
+  <li>Studio uses a <b>plain <code>ServiceCollection</code></b>, not the Generic Host. <code>IHostedService</code> must not be registered; eager network warm-up must not happen.</li>
+  <li>View-model async methods that mutate UI-bound <code>ObservableCollection</code>s must <b>not</b> use <code>.ConfigureAwait(false)</code>.</li>
+  <li>The <b>config-capture rule</b> applies to any new service that needs configuration: capture the <code>IConfiguration</code> or <code>IConfigurationSection</code> at construction time; never call <code>GetRequiredService&lt;IConfiguration&gt;()</code>.</li>
+  <li>DPAPI plaintext must not outlive its use: the JSON string produced by decryption is consumed into the dictionary and not retained; avoid logging any secret value.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span> Architecture</h2>
+
+<h3 id="s4-1">4.1 Layer overview</h3>
+
+<div class="arrowflow">Services layer (no Avalonia dependency)
+  ProviderManifestCatalog      — static compile-time manifest for all supported identities
+  ISecretsStore                — get/set/save per-key secrets
+    └─ DpapiSecretsStore       — ~/voxa-secrets.dpapi (Windows DPAPI, user scope)
+    └─ MemorySecretsStore      — tests / Linux CI
+  ProviderActivationStore      — ~/voxa-activations.json (plain JSON, non-sensitive)
+  ProviderSecretsService       — unified facade; BuildConfigPairs() → StudioServices secrets layer
+
+StudioServices  (base config → SECRETS layer → overrides → container)
+  ctor:  _secrets = secretsService.BuildConfigPairs();  first Build folds it in
+  ApplySecrets(pairs)  — Settings Save: swap secrets layer, keep overrides, rebuild
+  Reconfigure(pairs)   — Config Apply: swap overrides layer, keep secrets, rebuild
+
+ViewModel layer (Avalonia-free, ObservableObject)
+  SettingsViewModel            — dialog root; owns tab VMs; Save / Cancel
+    └─ ProvidersViewModel      — master list of ProviderRowViewModels; flyout state
+         └─ ProviderRowViewModel  — one per activated identity; status dot; fields
+              └─ FieldValueViewModel  — one per ProviderFieldDescriptor; masked value; reveal toggle
+
+View layer (Avalonia)
+  MainWindow nav rail          — DockPanel: nav radios (top) + gear Button (bottom)
+  SettingsDialog.axaml         — fixed-size Window, tab control; shown via ShowDialog from code-behind
+    └─ ProvidersView.axaml     — master-detail (ListBox + ContentControl)
+         └─ AddProviderFlyout  — Flyout with card-grid of Available identities</div>
+
+<h3 id="s4-2">4.2 <code>ISecretsStore</code> — encrypted credential storage</h3>
+
+<p>The abstraction is intentionally narrow — a keyed string dictionary with an explicit save gate:</p>
+
+<div class="filelabel">apps/Voxa.Studio/Services/ISecretsStore.cs</div>
+<pre><code><span class="cm">/// &lt;summary&gt;
+/// Per-key encrypted credential storage. Save() is explicit — callers control when the
+/// plaintext values hit disk (encrypted). Get() reads from the in-memory snapshot loaded
+/// at construction. Holds non-secret field values too (e.g. Azure Region); IsSecret on the
+/// manifest field governs UI masking, not what is stored.
+/// &lt;/summary&gt;</span>
+public interface ISecretsStore
+{
+    string? Get(string key);
+    void Set(string key, string? value);   <span class="cm">// null removes the entry</span>
+    IReadOnlyCollection&lt;string&gt; Keys { get; }
+    void Save();
+    void Reload();                          <span class="cm">// re-read disk → snapshot (backs Discard)</span>
+}</code></pre>
+
+<div class="callout warn">
+  <b>Package dependency.</b> <code>System.Security.Cryptography.ProtectedData</code> is <em>not</em> in the
+  .NET 10 BCL — it ships as a NuGet package. WS1 adds
+  <code>&lt;PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" /&gt;</code>
+  to <code>apps/Voxa.Studio/Voxa.Studio.csproj</code> (pin to the current patched release matching the SDK).
+  The type is referenced only from <code>DpapiSecretsStore</code>, which is gated by
+  <code>OperatingSystem.IsWindows()</code> and decorated <code>[SupportedOSPlatform("windows")]</code>.
+</div>
+
+<p><b><code>DpapiSecretsStore</code></b> (Windows-only, production):</p>
+<ul>
+  <li>File: <code>~/voxa-secrets.dpapi</code> — a DPAPI-protected binary blob.</li>
+  <li>On load: if the file is absent, start with an empty dictionary. If present, call
+  <code>ProtectedData.Unprotect(File.ReadAllBytes(path), null, DataProtectionScope.CurrentUser)</code>,
+  then <code>JsonSerializer.Deserialize&lt;Dictionary&lt;string,string&gt;&gt;</code> on the result.
+  A corrupt file (bad DPAPI padding — e.g. file from a different user account) is treated as empty
+  with a logged warning; it is never re-written unless the user explicitly saves.</li>
+  <li>On <code>Save()</code>: serialize the in-memory dictionary to JSON → DPAPI-protect →
+  <code>File.WriteAllBytes</code> (temp file + <code>File.Move(overwrite:true)</code> for atomicity).</li>
+  <li>Keys are namespaced by <em>identity</em> and <em>field</em>: <code>"ElevenLabs:ApiKey"</code>,
+  <code>"Mistral:ApiKey"</code>, <code>"OpenAI:ApiKey"</code>, <code>"Azure:SubscriptionKey"</code>,
+  <code>"Azure:Region"</code> — matching the manifest's identity name + field name, not the full
+  <code>Voxa:X:Y</code> config keys (the service maps store-key → <code>ConfigKey</code>).</li>
+</ul>
+
+<p><b><code>MemorySecretsStore</code></b>: a plain <code>Dictionary&lt;string,string&gt;</code>; <code>Save()</code> and <code>Reload()</code> against an in-memory snapshot. Used in all tests and on Linux CI.</p>
+
+<p><code>StudioServices</code> selects the implementation when no store is injected:</p>
+
+<pre><code>SecretsStore = injectedStore
+    ?? (OperatingSystem.IsWindows()
+        ? new DpapiSecretsStore(Path.Combine(homeDir, "voxa-secrets.dpapi"))
+        : new MemorySecretsStore());</code></pre>
+
+<h3 id="s4-3">4.3 <code>ProviderManifest</code> — typed provider descriptors</h3>
+
+<p>A manifest describes a provider <em>identity</em> — a single registry name + config section that may
+fill several roles. <code>OpenAI</code> is one manifest with <code>Roles = [Stt, Tts, Agent]</code>;
+<code>Mistral</code> is one manifest with <code>Roles = [Stt, Tts]</code>.</p>
+
+<pre><code>public enum ProviderRole { Stt, Tts, Agent }
+
+public sealed record ProviderFieldDescriptor(
+    string Name,           <span class="cm">// store-key suffix, e.g. "ApiKey", "SubscriptionKey", "Region"</span>
+    string Label,          <span class="cm">// UI label, e.g. "API Key"</span>
+    string? Placeholder,   <span class="cm">// hint text, e.g. "sk-..."</span>
+    bool IsSecret,         <span class="cm">// true → mask in UI (storage is encrypted regardless)</span>
+    string ConfigKey);     <span class="cm">// the Voxa:X:Y key written into the secrets layer</span>
+
+public sealed record ProviderManifest(
+    string Name,                                <span class="cm">// matches registry name exactly (OpenAI, Mistral, …)</span>
+    string DisplayName,
+    ProviderRole[] Roles,                       <span class="cm">// one identity may fill several</span>
+    string Description,
+    bool IsLocal,                               <span class="cm">// no credentials required</span>
+    string? DocsUrl,
+    IReadOnlyList&lt;ProviderFieldDescriptor&gt; Fields);
+
+public static class ProviderManifestCatalog
+{
+    public static IReadOnlyList&lt;ProviderManifest&gt; All { get; }
+    public static ProviderManifest? Find(string name);
+}</code></pre>
+
+<p>The full manifest table is in <a href="#s6">§6</a>. The catalog is a static initializer — no DI, no
+network, no async. <code>ProviderManifestCatalog.All</code> is populated at module load time.</p>
+
+<div class="callout">
+  <b>Shared keys are a feature, not a bug.</b> OpenAI STT, OpenAI TTS, and the OpenAI chat agent all read
+  <code>Voxa:OpenAI:ApiKey</code> (the agent falls back to it from <code>Voxa:Agent:ApiKey</code>, per
+  <code>DefaultAgentFactory.ResolveApiKey</code>). The OpenAI manifest therefore has a single
+  <code>ApiKey</code> field writing one config key — entering it once satisfies all three roles. The agent's
+  chat model (<code>Voxa:Agent:Model</code>) is a pipeline choice and stays in Config, not Settings.
+</div>
+
+<h3 id="s4-4">4.4 <code>ProviderActivationStore</code> — which providers are on</h3>
+
+<p>A plain JSON file (<code>~/voxa-activations.json</code>) containing an array of activation records.
+Non-sensitive; no encryption. Same corrupt-skip discipline as <code>VoiceStore</code> and a constructor
+override as the test seam (no config key).</p>
+
+<pre><code>public sealed record ProviderActivation(string Name, DateTimeOffset ActivatedAt);
+
+public sealed class ProviderActivationStore
+{
+    public ProviderActivationStore(string? path = null);   <span class="cm">// test seam</span>
+    public IReadOnlyList&lt;ProviderActivation&gt; Load();
+    public void Save(IEnumerable&lt;ProviderActivation&gt; activations);
+}</code></pre>
+
+<p>On first run the file is absent; <code>Load()</code> returns an empty list and the user adds
+providers via the Settings dialog. A corrupt file is treated as empty (logged warning).</p>
+
+<h3 id="s4-5">4.5 <code>ProviderSecretsService</code> — unified facade</h3>
+
+<pre><code>public sealed class ProviderSecretsService
+{
+    public ProviderSecretsService(ISecretsStore secrets, ProviderActivationStore activations);
+
+    <span class="cm">// Activated identities in the order they were added. Local identities are always</span>
+    <span class="cm">// present (the service supplies them), regardless of the activation file.</span>
+    public IReadOnlyList&lt;ProviderManifest&gt; Activated { get; }
+
+    public ProviderStatus StatusOf(ProviderManifest manifest);
+
+    public string? GetSecret(string providerName, string fieldName);
+    public void SetSecret(string providerName, string fieldName, string? value);
+
+    public void Activate(string providerName);     <span class="cm">// throws for local identities</span>
+    public void Deactivate(string providerName);    <span class="cm">// throws for local; clears that identity's secrets</span>
+
+    public void Save();      <span class="cm">// commit both stores. Called by SettingsViewModel.Save()</span>
+    public void Discard();   <span class="cm">// reload both stores from disk. Called by SettingsViewModel.Cancel()</span>
+
+    <span class="cm">// Flat Voxa:X:Y pairs for the StudioServices secrets layer. Only entries with a non-empty</span>
+    <span class="cm">// value are included. Never includes a file path or the DPAPI blob location.</span>
+    public Dictionary&lt;string, string?&gt; BuildConfigPairs();
+}</code></pre>
+
+<p><code>ProviderStatus</code>:</p>
+<pre><code>public enum ProviderStatus
+{
+    Local,       <span class="cm">// always available; no credentials; grey dot</span>
+    Configured,  <span class="cm">// all required secret fields are non-empty; green dot</span>
+    KeyMissing,  <span class="cm">// at least one required secret field is empty; amber dot</span>
+}</code></pre>
+
+<p><b><code>BuildConfigPairs()</code></b> maps each activated identity's fields to their <code>ConfigKey</code>.
+For OpenAI it emits a single <code>Voxa:OpenAI:ApiKey</code>; for Azure it emits both
+<code>Voxa:AzureSpeech:SubscriptionKey</code> and <code>Voxa:AzureSpeech:Region</code>. Local identities
+contribute nothing.</p>
+
+<h3 id="s4-5-1">4.5.1 Composing secrets with Config drafts (the layering rule)</h3>
+
+<div class="callout danger">
+  <b>The bug this rule prevents.</b> <code>StudioServices.Reconfigure</code> documents that "overrides
+  REPLACE the previous override set". If startup loaded the secrets as the override set, the very first
+  Config "Apply" — which calls <code>Reconfigure(DraftPairs())</code> — would replace them and the live
+  container would lose every stored key mid-session. Secrets must therefore be a <em>separate layer</em>,
+  not overrides.
+</div>
+
+<p><code>StudioServices.Build</code> grows to three layers, lowest-priority first:</p>
+
+<div class="filelabel">apps/Voxa.Studio/Services/StudioServices.cs (revised Build + new members)</div>
+<pre><code>private IReadOnlyDictionary&lt;string, string?&gt; _secrets = new Dictionary&lt;string, string?&gt;();
+private IReadOnlyDictionary&lt;string, string?&gt; _overrides = new Dictionary&lt;string, string?&gt;();
+
+public ISecretsStore SecretsStore { get; }
+public ProviderSecretsService Secrets { get; }
+
+public StudioServices(
+    IConfiguration? configuration = null,
+    IStudioAudioDevice? audioDevice = null,
+    ISecretsStore? secretsStore = null,          <span class="cm">// test seam — inject a MemorySecretsStore</span>
+    ProviderActivationStore? activationStore = null)
+{
+    _baseConfiguration = configuration ?? /* appsettings + env, as today */;
+    AudioDevice = audioDevice ?? StudioAudioDevice.CreatePlatformDefault();
+
+    SecretsStore = secretsStore ?? (OperatingSystem.IsWindows()
+        ? new DpapiSecretsStore(Path.Combine(HomeDir, "voxa-secrets.dpapi"))
+        : new MemorySecretsStore());
+    Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
+
+    _secrets = Secrets.BuildConfigPairs();        <span class="cm">// live from the FIRST build — no double build</span>
+    (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
+}
+
+<span class="cm">/// Settings Save: swap the secrets layer, KEEP the current Config overrides, rebuild.</span>
+public void ApplySecrets(IReadOnlyDictionary&lt;string, string?&gt; secrets)
+{
+    var old = Provider;
+    _secrets = new Dictionary&lt;string, string?&gt;(secrets);
+    (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
+    old.Dispose();
+    Reconfigured?.Invoke();
+}
+
+<span class="cm">/// Config Apply: swap the overrides layer, KEEP the secrets, rebuild. (existing method, +secrets arg)</span>
+public void Reconfigure(IReadOnlyDictionary&lt;string, string?&gt; overrides)
+{
+    var old = Provider;
+    _overrides = new Dictionary&lt;string, string?&gt;(overrides);
+    (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
+    old.Dispose();
+    Reconfigured?.Invoke();
+}
+
+private static (IConfiguration, ServiceProvider, VoxaModelCache) Build(
+    IConfiguration baseConfiguration,
+    IReadOnlyDictionary&lt;string, string?&gt; secrets,
+    IReadOnlyDictionary&lt;string, string?&gt; overrides)
+{
+    var configuration = new ConfigurationBuilder()
+        .AddConfiguration(baseConfiguration)                                       <span class="cm">// appsettings + env</span>
+        .AddInMemoryCollection(secrets.Where(p =&gt; !string.IsNullOrEmpty(p.Value)))  <span class="cm">// DPAPI store</span>
+        .AddInMemoryCollection(overrides.Where(p =&gt; !string.IsNullOrEmpty(p.Value)))<span class="cm">// Config draft (wins)</span>
+        .Build();
+    <span class="cm">// …services.AddVoxa(configuration), cache, etc. exactly as today.</span>
+}</code></pre>
+
+<p>Order matters: a key explicitly typed into a Config draft (e.g. <code>Voxa:Agent:ApiKey</code>) still
+wins over the stored secret, which is the intuitive "this session, use this" behaviour. Everything else
+falls back to the secrets layer, which falls back to appsettings/environment.</p>
+
+<h3 id="s4-6">4.6 View-model hierarchy</h3>
+
+<pre><code><span class="cm">// One per field in the selected identity's manifest.</span>
+public sealed partial class FieldValueViewModel : ObservableObject
+{
+    public ProviderFieldDescriptor Descriptor { get; }
+    [ObservableProperty] private string _value = "";
+    [ObservableProperty] private bool _isRevealed;   <span class="cm">// toggle eye icon</span>
+    public bool IsModified { get; }
+}
+
+<span class="cm">// One per activated identity (including local ones, which are read-only).</span>
+public sealed partial class ProviderRowViewModel : ObservableObject
+{
+    public ProviderManifest Manifest { get; }
+    public bool IsLocal =&gt; Manifest.IsLocal;
+    public string RolesLabel { get; }         <span class="cm">// "STT · TTS · Agent"</span>
+    public IReadOnlyList&lt;FieldValueViewModel&gt; Fields { get; }
+    public ProviderStatus Status { get; }     <span class="cm">// recomputed when any field changes</span>
+    public string StatusLabel { get; }        <span class="cm">// "Configured", "Key missing", "Local"</span>
+}
+
+<span class="cm">// The Providers tab.</span>
+public sealed partial class ProvidersViewModel : ObservableObject
+{
+    public ObservableCollection&lt;ProviderRowViewModel&gt; Rows { get; }
+    public IReadOnlyList&lt;ProviderManifest&gt; Available { get; }  <span class="cm">// non-local, not-yet-added → flyout cards</span>
+
+    [ObservableProperty] private ProviderRowViewModel? _selectedRow;
+    [ObservableProperty] private bool _addFlyoutOpen;
+
+    public void AddProvider(string manifestName);   <span class="cm">// idempotent</span>
+    public void RemoveProvider(string manifestName);<span class="cm">// no-op for local identities</span>
+    internal bool HasUnsavedChanges { get; }
+}
+
+<span class="cm">// The dialog root.</span>
+public sealed class SettingsViewModel
+{
+    public SettingsViewModel(ProviderSecretsService secrets) { ... }
+    public ProvidersViewModel Providers { get; }
+    public bool Saved { get; private set; }
+    public void Save();    <span class="cm">// field values → secrets service → Save(); sets Saved = true</span>
+    public void Cancel();  <span class="cm">// secrets.Discard()</span>
+}</code></pre>
+
+<p>The VM layer has zero Avalonia references. The 33 ms <code>DispatcherTimer</code> / <code>DrainPending()</code>
+convention from VST-001 does not apply here — the dialog is shown synchronously and all mutations
+happen on the UI thread directly via user interactions. No background refresh is needed.</p>
+
+<h3 id="s4-7">4.7 UI layout &amp; the Add-provider flyout</h3>
+
+<div class="mockup">┌──────────────────────────────────────────────────────────────────────────────┐
+│  Settings                                                              [ X ] │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  [ Providers ]                                                               │
+├──────────────────┬───────────────────────────────────────────────────────────┤
+│                  │                                                           │
+│  ● OpenAI        │  OpenAI                          STT · TTS · Agent        │
+│    STT·TTS·Agent │  Whisper STT, TTS, and the chat agent — one key.          │
+│                  │  platform.openai.com                                      │
+│  ● ElevenLabs    │                                                           │
+│    TTS           │  API Key ────────────────────────────────────────────     │
+│                  │  [ ••••••••••••••••••••••••••••••••• ] [ 👁 Show ]        │
+│  ○ Azure         │                                                           │
+│    STT · TTS     │  Status: ● Configured                                     │
+│                  │                                                           │
+│  ── Local ──     │                                                    [Remove]│
+│  · WhisperCpp    │                                                           │
+│  · Piper         │                                                           │
+│  · Kokoro        │                                                           │
+│  · Echo          │                                                           │
+│                  │                                                           │
+│  [+ Add provider]│                                                           │
+│                  │                                                           │
+├──────────────────┴───────────────────────────────────────────────────────────┤
+│                                                         [Cancel]     [Save]  │
+└──────────────────────────────────────────────────────────────────────────────┘</div>
+
+<p><b>Status dots:</b></p>
+<ul>
+  <li><span class="dot-green"></span><b>Green</b> — all required fields are filled.</li>
+  <li><span class="dot-amber"></span><b>Amber</b> — at least one required field is empty (provider activated but not yet usable).</li>
+  <li><span class="dot-gray"></span><b>Grey</b> — local provider; no credentials needed. Displayed below a separator in the list.</li>
+</ul>
+
+<p><b>Add-provider flyout</b> (card-grid, anchored to the "+ Add provider" button):</p>
+
+<div class="mockup">┌─────────────────────────────────────────────────────┐
+│  Add a provider                                     │
+│                                                     │
+│  ┌──────────────┐  ┌──────────────┐                 │
+│  │  Mistral     │  │  Azure       │                 │
+│  │  STT · TTS   │  │  STT · TTS   │                 │
+│  │  Voxtral STT │  │  Speech      │                 │
+│  │  + TTS       │  │  Services    │                 │
+│  └──────────────┘  └──────────────┘                 │
+│                                                     │
+└─────────────────────────────────────────────────────┘</div>
+
+<p>The flyout shows only non-local identities not already in the activated list. Clicking a card calls
+<code>ProvidersViewModel.AddProvider(name)</code>, closes the flyout, and selects the new row in the
+master list so the user can immediately enter credentials. Local identities never appear in the
+flyout — they are always present in the list and cannot be added/removed.</p>
+
+<h3 id="s4-8">4.8 Integration points with the existing shell</h3>
+
+<ul>
+  <li><b>Nav rail restructure:</b> today the rail is a single top-aligned <code>StackPanel</code> of nav
+  <code>RadioButton</code>s (<code>MainWindow.axaml</code>). To dock the gear at the bottom, the rail's
+  <code>Border</code> content becomes a <code>DockPanel</code>: the existing nav radios stay in a
+  <code>StackPanel</code> (default fill) and a new <b>plain <code>Button</code></b>
+  (<code>x:Name="NavSettings"</code>) is <code>DockPanel.Dock="Bottom"</code> with a gear
+  <code>PathIcon</code>. It is <em>not</em> a nav <code>RadioButton</code> — it opens a dialog, it does not
+  select a section, so it has no <code>GroupName="nav"</code> and does not participate in
+  <code>OnNavChanged</code> / <code>SelectedSection</code>.</li>
+  <li><b>Showing the dialog (code-behind):</b> <code>ShowDialog</code> needs the owner <code>Window</code>,
+  which lives in <code>MainWindow.axaml.cs</code> (the same place the session clock lives — a View concern).
+  The gear's <code>Click</code> handler constructs <code>new SettingsDialog(new SettingsViewModel(vm.Services.Secrets))</code>,
+  awaits <code>ShowDialog(this)</code>, and on <code>SettingsViewModel.Saved</code> calls back into the VM:
+  <pre><code>private async void OnSettingsClick(object? s, RoutedEventArgs e)
+{
+    if (DataContext is not MainWindowViewModel vm) return;
+    var settings = new SettingsViewModel(vm.Services.Secrets);
+    await new SettingsDialog { DataContext = settings }.ShowDialog(this);
+    if (settings.Saved) vm.OnSettingsSaved();
+}</code></pre></li>
+  <li><b><code>MainWindowViewModel.OnSettingsSaved()</code></b> applies the new credentials to the live
+  container and refreshes dependents:
+  <pre><code>public void OnSettingsSaved()
+{
+    Services.ApplySecrets(Services.Secrets.BuildConfigPairs()); <span class="cm">// secrets layer, not overrides</span>
+    Config.RefreshProviderLists();   <span class="cm">// dropdowns reflect new activations</span>
+    Voices.Refresh();                <span class="cm">// catalog can now see the new provider keys</span>
+}</code></pre>
+  (The titlebar is <code>IsHitTestVisible="False"</code>, so the gear cannot live there — the nav rail is the only viable home.)</li>
+  <li><b>Config dropdown filter:</b> <code>ConfigViewModel</code>'s <code>SttProviders</code>,
+  <code>TtsProviders</code>, and <code>AgentProviders</code> lists are computed by intersecting the
+  registry names (and the hardcoded agent pair) with the set of activated-or-local identities whose
+  roles match the dropdown. Re-computed at construction and from <code>OnSettingsSaved</code>.</li>
+  <li><b>No new nav section:</b> Settings is a dialog, not a nav section. No section index changes, so the
+  existing <code>OnNavChanged</code> / code-behind switch (Talk 0 … Config 6) is untouched.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span> Workstreams (WS1–WS6)</h2>
+
+<!-- WS1 -->
+<h3 id="ws1">WS1 — <code>ISecretsStore</code>, <code>DpapiSecretsStore</code>, <code>ProviderActivationStore</code></h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> ISecretsStore.cs, DpapiSecretsStore.cs, MemorySecretsStore.cs, ProviderActivationStore.cs, .csproj package ref</span>
+  <span><b>Layer</b> apps/Voxa.Studio/Services/</span>
+  <span><b>Test file</b> tests/Voxa.Studio.Tests/SecretsStoreTests.cs</span>
+</div>
+
+<h4>Contracts</h4>
+<p><code>ISecretsStore</code> as in §4.2 (incl. <code>Reload()</code>). Add
+<code>&lt;PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" /&gt;</code>
+to <code>Voxa.Studio.csproj</code>. <code>DpapiSecretsStore</code> is decorated
+<code>[SupportedOSPlatform("windows")]</code> and only constructed behind an
+<code>OperatingSystem.IsWindows()</code> guard, so the analyzer is satisfied under <code>-warnaserror</code>.
+<code>MemorySecretsStore</code> is unconditional.</p>
+
+<p><code>ProviderActivationStore</code> serializes <code>List&lt;ProviderActivation&gt;</code> via
+<code>System.Text.Json</code> with <code>JsonStringEnumConverter</code>. On a corrupt file: log and
+return empty; do NOT overwrite until the user explicitly saves.</p>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS1-A1.</b> <code>DpapiSecretsStore</code> round-trips a set/save/reload cycle: values written on instance A are readable on a new instance B loading the same file path. <span class="badge new">windows CI lane</span></li>
+  <li><b>WS1-A2.</b> A file written by a different Windows user (simulated by corrupting the DPAPI header bytes) is treated as empty on load without throwing. <span class="badge new">windows CI lane</span></li>
+  <li><b>WS1-A3.</b> <code>MemorySecretsStore</code> round-trips correctly; <code>Save()</code> is a no-op (does not create a file); <code>Reload()</code> restores the last-saved snapshot.</li>
+  <li><b>WS1-A4.</b> <code>ProviderActivationStore</code> round-trips a list of activations; a corrupt JSON file is returned as empty without throwing.</li>
+</ul>
+
+<!-- WS2 -->
+<h3 id="ws2">WS2 — <code>ProviderManifest</code> catalog</h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> ProviderManifest.cs, ProviderManifestCatalog.cs</span>
+  <span><b>Layer</b> apps/Voxa.Studio/Services/</span>
+  <span><b>Test file</b> tests/Voxa.Studio.Tests/ProviderManifestTests.cs</span>
+</div>
+
+<h4>Contracts</h4>
+<p>Types as in §4.3. <code>ProviderManifestCatalog.All</code> is a static, immutable list initialized
+at module load — the 8 identities in <a href="#s6">§6</a>. Each manifest's <code>Name</code> matches the
+corresponding registry name exactly (<code>OpenAISpeechDescriptors.Stt.Name == "OpenAI"</code>,
+<code>MistralDescriptors.Stt.Name == "Mistral"</code>, …). Agent identities map to the
+<code>DefaultAgentFactory</code> provider strings (<code>"OpenAI"</code>, <code>"Echo"</code>).</p>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS2-A1.</b> <code>ProviderManifestCatalog.All</code> contains exactly the 8 entries in §6; all <code>Name</code> values are distinct.</li>
+  <li><b>WS2-A2.</b> Every manifest whose <code>IsLocal = false</code> has at least one field, and at least one with <code>IsSecret = true</code>.</li>
+  <li><b>WS2-A3.</b> Every non-local manifest's <code>Name</code> appears in <code>services.Registry.SttNames ∪ TtsNames</code> for its STT/TTS roles. (Cross-checked against a live <code>StudioServices</code> — a provider rename that misses the manifest fails here.)</li>
+  <li><b>WS2-A4.</b> All local manifests have empty <code>Fields</code> and <code>IsLocal = true</code>; the local set is exactly { WhisperCpp, Piper, Kokoro, Echo }.</li>
+  <li><b>WS2-A5.</b> The OpenAI manifest has exactly one field (<code>ApiKey</code> → <code>Voxa:OpenAI:ApiKey</code>) and <code>Roles</code> = { Stt, Tts, Agent }; the Azure manifest has two fields (<code>SubscriptionKey</code> secret, <code>Region</code> non-secret).</li>
+</ul>
+
+<!-- WS3 -->
+<h3 id="ws3">WS3 — <code>ProviderSecretsService</code> + <code>StudioServices</code> integration</h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> ProviderSecretsService.cs + StudioServices.cs edits (secrets layer, ApplySecrets, ctor seam)</span>
+  <span><b>Layer</b> apps/Voxa.Studio/Services/</span>
+  <span><b>Test file</b> tests/Voxa.Studio.Tests/ProviderSecretsServiceTests.cs</span>
+</div>
+
+<h4>Contracts</h4>
+<p>As in §4.5 and §4.5.1. Key points:</p>
+<ul>
+  <li><b>Local identities are always in <code>Activated</code></b>, in manifest-catalog order, regardless of the activation file. <code>Activate</code>/<code>Deactivate</code> throw <code>InvalidOperationException</code> for them.</li>
+  <li><b><code>Discard()</code></b> calls <code>SecretsStore.Reload()</code> and re-loads the activation list, discarding in-memory mutations since the last <code>Save()</code>.</li>
+  <li><b><code>BuildConfigPairs()</code></b> maps each field's store value to its <code>ConfigKey</code>; only non-empty values; OpenAI → one <code>Voxa:OpenAI:ApiKey</code>; Azure → <code>SubscriptionKey</code> + <code>Region</code>.</li>
+  <li><b><code>StudioServices</code></b> adds <code>ISecretsStore SecretsStore</code> + <code>ProviderSecretsService Secrets</code>, the optional <code>ISecretsStore?</code> / <code>ProviderActivationStore?</code> constructor parameters, the <code>_secrets</code> layer, and <code>ApplySecrets</code>. The first <code>Build</code> folds in <code>Secrets.BuildConfigPairs()</code> — no post-construction <code>Reconfigure</code>, no double build.</li>
+</ul>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS3-A1.</b> A <code>StudioServices</code> constructed with a <code>MemorySecretsStore</code> pre-loaded with <code>"OpenAI:ApiKey" = "test-key"</code> exposes <code>Configuration["Voxa:OpenAI:ApiKey"] == "test-key"</code> with no manual call.</li>
+  <li><b>WS3-A2.</b> After a <code>Reconfigure(draft)</code> that does NOT mention <code>Voxa:OpenAI:ApiKey</code>, that key is still present (the secrets layer survives a Config Apply) — the regression guard for the §4.5.1 bug.</li>
+  <li><b>WS3-A3.</b> <code>Deactivate("ElevenLabs")</code> removes the activation record <em>and</em> clears <code>"ElevenLabs:ApiKey"</code> after <code>Save()</code>.</li>
+  <li><b>WS3-A4.</b> <code>BuildConfigPairs()</code> never returns a key or value containing a file path, <code>"dpapi"</code>, or <code>"voxa-secrets"</code>.</li>
+  <li><b>WS3-A5.</b> <code>Activate("Piper")</code> throws <code>InvalidOperationException</code> (local identity).</li>
+  <li><b>WS3-A6.</b> After <code>Discard()</code>, mutations made since construction are not reflected in <code>BuildConfigPairs()</code>.</li>
+</ul>
+
+<!-- WS4 -->
+<h3 id="ws4">WS4 — <code>ProvidersViewModel</code> + <code>SettingsViewModel</code></h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> FieldValueViewModel.cs, ProviderRowViewModel.cs, ProvidersViewModel.cs, SettingsViewModel.cs</span>
+  <span><b>Layer</b> apps/Voxa.Studio/ViewModels/</span>
+  <span><b>Test file</b> tests/Voxa.Studio.Tests/SettingsViewModelTests.cs</span>
+</div>
+
+<h4>Contracts</h4>
+<p>Types as in §4.6. Additional rules:</p>
+<ul>
+  <li><b>Local identities</b> appear at the bottom of <code>Rows</code>, after a logical separator, with no <code>FieldValueViewModel</code>s. <code>RemoveProvider</code> is a no-op for them.</li>
+  <li><b><code>Available</code></b> is recomputed whenever a row is added/removed: all non-local manifests not currently in <code>Rows</code>.</li>
+  <li><b>Status recomputation:</b> <code>ProviderRowViewModel.Status</code> recomputes whenever any field value changes — all required secret fields non-empty → <code>Configured</code>; else <code>KeyMissing</code>.</li>
+  <li><b><code>SettingsViewModel.Save()</code>:</b> writes each field value back via <code>SetSecret</code>, calls <code>secrets.Save()</code>, sets <code>Saved = true</code>. It does NOT touch <code>StudioServices</code> — the shell's <code>OnSettingsSaved</code> does (§4.8).</li>
+  <li><b><code>Cancel()</code>:</b> calls <code>secrets.Discard()</code>; <code>Saved</code> stays false.</li>
+</ul>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS4-A1.</b> A fresh <code>ProvidersViewModel</code> with no activation file has all four local identities in <code>Rows</code> and all four cloud identities (OpenAI, Azure, ElevenLabs, Mistral) in <code>Available</code>.</li>
+  <li><b>WS4-A2.</b> Adding OpenAI moves it from <code>Available</code> to <code>Rows</code> with <code>RolesLabel == "STT · TTS · Agent"</code> and initial status <code>KeyMissing</code>; entering a key flips it to <code>Configured</code>.</li>
+  <li><b>WS4-A3.</b> <code>RemoveProvider("Piper")</code> leaves <code>Rows</code> unchanged (local).</li>
+  <li><b>WS4-A4.</b> <code>Save()</code> followed by a fresh <code>SettingsViewModel</code> over the same service shows the same activations and field values.</li>
+  <li><b>WS4-A5.</b> <code>Cancel()</code> after modifying a field leaves the persisted value unchanged.</li>
+  <li><b>WS4-A6.</b> Toggling <code>FieldValueViewModel.IsRevealed</code> does not change <code>Value</code>.</li>
+  <li><b>WS4-A7.</b> Adding Azure yields two fields; the <code>Region</code> field has <code>IsSecret == false</code> (rendered unmasked).</li>
+</ul>
+
+<!-- WS5 -->
+<h3 id="ws5">WS5 — <code>SettingsDialog</code> XAML + add-provider flyout + gear</h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> SettingsDialog.axaml(.cs), ProvidersView.axaml(.cs), MainWindow.axaml(.cs) nav-rail + gear edits</span>
+  <span><b>Layer</b> apps/Voxa.Studio/Views/</span>
+  <span><b>Tests</b> WS4 VM tests (headless) + manual smoke on Windows</span>
+</div>
+
+<h4>Layout rules</h4>
+<ul>
+  <li>Fixed dialog size: <b>760 × 520 px</b>, <code>CanResize="False"</code>, <code>WindowStartupLocation="CenterOwner"</code>.</li>
+  <li>Tab control at the top with a single "Providers" tab; the tab strip stays visible (reserves space for a future "Audio" tab).</li>
+  <li>Master panel width <b>240 px</b> fixed; detail panel fills the remainder.</li>
+  <li>Local identities sit below a hairline rule and a "Local" group header in the master list.</li>
+  <li>The "Remove" button is <code>IsVisible="False"</code> for local identities.</li>
+  <li>Secret fields: a masked input (Avalonia <code>TextBox</code> with <code>PasswordChar</code>, or <code>RevealPassword</code> toggled) when not revealed; the eye-toggle is shown for secret fields only. Non-secret fields (Azure Region) render as a plain <code>TextBox</code>.</li>
+  <li>Add-provider flyout: an Avalonia <code>Flyout</code> anchored to "+ Add provider"; cards in a 2-column <code>WrapPanel</code>.</li>
+  <li>Footer: Save (<code>IsDefault="True"</code>), Cancel (<code>IsCancel="True"</code>). Save/Cancel route to <code>SettingsViewModel.Save()/Cancel()</code> then close the window.</li>
+  <li><b>Gear:</b> nav rail <code>Border</code> content becomes a <code>DockPanel</code>; nav radios in the fill area, a plain gear <code>Button x:Name="NavSettings" Click="OnSettingsClick"</code> docked <code>Bottom</code> with bottom margin. Styled with the nav glyph treatment but NOT in <code>GroupName="nav"</code>.</li>
+</ul>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS5-A1.</b> Opening Settings with two activated cloud identities and four local ones shows 6 rows (2 above the separator, 4 below).</li>
+  <li><b>WS5-A2.</b> Clicking a local row shows "Local — no configuration required", no fields, no Remove button.</li>
+  <li><b>WS5-A3.</b> "+ Add provider" opens the flyout; clicking a card closes it and selects the new row.</li>
+  <li><b>WS5-A4.</b> The eye-toggle switches a secret field between masked and revealed without clearing the value.</li>
+  <li><b>WS5-A5.</b> Cancel after editing a field closes the dialog without persisting (verified by re-opening).</li>
+  <li><b>WS5-A6.</b> The gear sits at the bottom of the nav rail, opens the dialog, and does not change the selected nav section.</li>
+</ul>
+
+<!-- WS6 -->
+<h3 id="ws6">WS6 — integration, Config filter, tests, docs</h3>
+<div class="ws-head">
+  <span><b>Deliverables</b> ConfigViewModel.cs edits, MainWindowViewModel.cs edits, CHANGELOG, README, ROADMAP, docs/settings.md</span>
+  <span><b>Test file</b> tests/Voxa.Studio.Tests/SettingsIntegrationTests.cs</span>
+</div>
+
+<h4>Config dropdown filter</h4>
+<p>Today <code>ConfigViewModel</code> builds <code>SttProviders</code>/<code>TtsProviders</code> from
+<code>services.Registry.SttNames</code>/<code>TtsNames</code> (ordered) and hardcodes
+<code>AgentProviders = ["Echo", "OpenAI"]</code>. WS6 adds <code>public void RefreshProviderLists()</code>
+that rebuilds all three by keeping a name only if its manifest is local, or its identity is activated, AND
+the manifest fills the matching role:</p>
+<pre><code>bool Visible(string name, ProviderRole role)
+{
+    var m = ProviderManifestCatalog.Find(name);
+    if (m is null) return true;                 <span class="cm">// unmanifested (e.g. a future provider) — don't hide</span>
+    if (!m.Roles.Contains(role)) return false;
+    return m.IsLocal || activatedNames.Contains(name);
+}</code></pre>
+<p>Called at construction (initial lists already filtered) and from <code>OnSettingsSaved</code>. If the
+current <code>SelectedStt</code>/<code>SelectedTts</code>/<code>SelectedAgent</code> falls out of the
+filtered list, it resets to the first item — the same fallback used today for an absent config value.</p>
+
+<div class="callout">
+  <b>One activation, three dropdowns.</b> Because the OpenAI manifest fills Stt, Tts and Agent, activating
+  OpenAI makes it appear in all three Config pickers at once. Activating Mistral makes it appear in STT and
+  TTS. This is the visible payoff of identity-based manifests (§4.3).
+</div>
+
+<h4>Acceptance criteria</h4>
+<ul>
+  <li><b>WS6-A1.</b> With only ElevenLabs activated (plus local identities), <code>TtsProviders</code> contains ElevenLabs, Piper, Kokoro — but not OpenAI, Azure, or Mistral; and <code>SttProviders</code> contains only WhisperCpp.</li>
+  <li><b>WS6-A2.</b> After activating OpenAI in Settings and saving, <code>SttProviders</code>, <code>TtsProviders</code>, and <code>AgentProviders</code> all include OpenAI without restarting Studio.</li>
+  <li><b>WS6-A3.</b> The gear in <code>MainWindow.axaml</code> triggers the dialog; no nav section index changes (Talk 0 … Config 6 unchanged).</li>
+  <li><b>WS6-A4.</b> A <code>StudioServices</code> built with a <code>MemorySecretsStore</code> holding an ElevenLabs key exposes <code>Configuration["Voxa:ElevenLabs:ApiKey"]</code> with no user action (startup injection).</li>
+  <li><b>WS6-A5.</b> A Config "Apply" after Settings activation keeps the stored key live (end-to-end of WS3-A2 through <code>ConfigViewModel.Apply</code>).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span> Provider manifest reference</h2>
+
+<p>Keyed by <em>identity</em> (registry name + config section). The roles column is what makes one row serve
+several Config dropdowns. Verified against <code>VoxaDefaults.AddVoxa</code> and the descriptor sources.</p>
+
+<table>
+  <tr>
+    <th>Name (registry)</th>
+    <th>Display name</th>
+    <th>Roles</th>
+    <th>Local</th>
+    <th>Fields</th>
+    <th>Config keys written by <code>BuildConfigPairs()</code></th>
+  </tr>
+  <tr>
+    <td><code>OpenAI</code></td>
+    <td>OpenAI</td>
+    <td>STT, TTS, Agent</td>
+    <td>No</td>
+    <td><code>ApiKey</code> (secret, <code>sk-…</code>)</td>
+    <td><code>Voxa:OpenAI:ApiKey</code> — shared by STT, TTS, and the agent (which falls back to it)</td>
+  </tr>
+  <tr>
+    <td><code>Azure</code></td>
+    <td>Azure Speech</td>
+    <td>STT, TTS</td>
+    <td>No</td>
+    <td><code>SubscriptionKey</code> (secret); <code>Region</code> (text, e.g. <code>eastus</code>)</td>
+    <td><code>Voxa:AzureSpeech:SubscriptionKey</code>, <code>Voxa:AzureSpeech:Region</code></td>
+  </tr>
+  <tr>
+    <td><code>ElevenLabs</code></td>
+    <td>ElevenLabs</td>
+    <td>TTS</td>
+    <td>No</td>
+    <td><code>ApiKey</code> (secret, <code>sk_…</code>)</td>
+    <td><code>Voxa:ElevenLabs:ApiKey</code></td>
+  </tr>
+  <tr>
+    <td><code>Mistral</code></td>
+    <td>Mistral</td>
+    <td>STT, TTS</td>
+    <td>No</td>
+    <td><code>ApiKey</code> (secret)</td>
+    <td><code>Voxa:Mistral:ApiKey</code> — shared by Voxtral STT and TTS</td>
+  </tr>
+  <tr>
+    <td><code>WhisperCpp</code></td>
+    <td>Whisper (local)</td>
+    <td>STT</td>
+    <td>Yes</td>
+    <td>—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>Piper</code></td>
+    <td>Piper (local)</td>
+    <td>TTS</td>
+    <td>Yes</td>
+    <td>—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>Kokoro</code></td>
+    <td>Kokoro (local)</td>
+    <td>TTS</td>
+    <td>Yes</td>
+    <td>—</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>Echo</code></td>
+    <td>Echo (local)</td>
+    <td>Agent</td>
+    <td>Yes</td>
+    <td>—</td>
+    <td>—</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <b>Adding a new provider.</b> (1) Add a registry descriptor (<code>VoxaSttDescriptor</code>/<code>VoxaTtsDescriptor</code>)
+  so it appears in the registry, and (2) add a <code>ProviderManifest</code> entry. Both are required. A manifest
+  whose <code>Name</code> doesn't match a registry entry fails WS2-A3. A registry entry with no manifest is
+  treated as always-available (it still shows in Config, like a local provider) — the filter's
+  <code>m is null → return true</code> branch — but it has no Settings card, so it cannot be given a key from
+  the UI until a manifest is added.
+</div>
+
+<div class="callout warn">
+  <b>VAD is intentionally absent.</b> Silero VAD is registered (<code>SileroVadDescriptors.Vad</code>) but
+  carries no credential and is selected in Config, not Settings (§3.2). It is not a manifest identity.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span> Plan of action — phases &amp; dependencies</h2>
+
+<table>
+  <tr><th>Phase</th><th>Work</th><th>Prerequisite</th></tr>
+  <tr><td>1</td><td>WS1: stores + package ref</td><td>—</td></tr>
+  <tr><td>2</td><td>WS2: manifest catalog</td><td>WS1 (store types for tests)</td></tr>
+  <tr><td>3</td><td>WS3: service + <code>StudioServices</code> secrets layer / seam</td><td>WS1, WS2</td></tr>
+  <tr><td>4</td><td>WS4: view models</td><td>WS3</td></tr>
+  <tr><td>5</td><td>WS5: XAML + dialog + nav-rail gear</td><td>WS4</td></tr>
+  <tr><td>6</td><td>WS6: Config filter + integration tests + docs</td><td>WS3, WS4, WS5</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span> Progress checklist</h2>
+
+<ul class="cl">
+  <li><input type="checkbox" checked> <span class="tid">WS1</span> <code>ISecretsStore</code> + <code>MemorySecretsStore</code> (+ <code>Reload</code>)
+    <span class="ac">SecretsStoreTests: WS1-A3</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span> <code>System.Security.Cryptography.ProtectedData</code> package ref in <code>Voxa.Studio.csproj</code></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span> <code>DpapiSecretsStore</code> (Windows-only, <code>[SupportedOSPlatform]</code>, atomic write)
+    <span class="ac">SecretsStoreTests: WS1-A1, A2 (windows lane)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span> <code>ProviderActivationStore</code> (plain JSON, corrupt-skip, test seam)
+    <span class="ac">SecretsStoreTests: WS1-A4</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS2</span> <code>ProviderManifest</code> + <code>ProviderFieldDescriptor</code> + <code>ProviderRole</code>
+    <span class="ac">ProviderManifestTests: WS2-A1..A5</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS2</span> <code>ProviderManifestCatalog.All</code> — the 8 identities of §6 (roles-collapsed)
+    <span class="ac">ProviderManifestTests: WS2-A1..A5</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS3</span> <code>ProviderSecretsService</code> (activate/deactivate, get/set, discard, build pairs, local-pinning)
+    <span class="ac">ProviderSecretsServiceTests: WS3-A1, A3..A6</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS3</span> <code>StudioServices</code> secrets layer + <code>ApplySecrets</code> + <code>ISecretsStore?</code> ctor seam + first-build injection
+    <span class="ac">ProviderSecretsServiceTests: WS3-A2 (Reconfigure keeps secrets); SettingsIntegrationTests: WS6-A4</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span> <code>FieldValueViewModel</code> + <code>ProviderRowViewModel</code> (roles label, status)
+    <span class="ac">SettingsViewModelTests: WS4-A2, A6, A7</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span> <code>ProvidersViewModel</code> (add/remove, available list, local pinning)
+    <span class="ac">SettingsViewModelTests: WS4-A1..A3, A7</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span> <code>SettingsViewModel</code> (save/cancel, <code>Saved</code> flag)
+    <span class="ac">SettingsViewModelTests: WS4-A4, A5</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span> <code>SettingsDialog.axaml</code> (fixed size, tab control, footer)
+    <span class="ac">WS5-A1: manual smoke</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span> <code>ProvidersView.axaml</code> (master list, separator, detail panel, status dots, masked fields)
+    <span class="ac">WS5-A2, A4: manual smoke</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span> Add-provider flyout (2-column card grid, closes + selects on click)
+    <span class="ac">WS5-A3: manual smoke</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span> Nav-rail <code>DockPanel</code> + gear <code>Button</code> + code-behind <code>ShowDialog</code>
+    <span class="ac">WS5-A6: manual smoke</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span> <code>ConfigViewModel.RefreshProviderLists()</code> + role-aware filter
+    <span class="ac">SettingsIntegrationTests: WS6-A1, A2</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span> <code>MainWindowViewModel.OnSettingsSaved()</code> — <code>ApplySecrets</code> + refresh + <code>Voices.Refresh</code>
+    <span class="ac">SettingsIntegrationTests: WS6-A2, A5</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span> CHANGELOG, README, ROADMAP entry, <code>docs/settings.md</code></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span> Verification protocol</h2>
+
+<h3>Automated</h3>
+<pre><code><span class="cm"># Inner loop (no model downloads)</span>
+dotnet test Voxa.slnx --filter "Category!=LocalModels"
+
+<span class="cm"># Target project only</span>
+dotnet test tests/Voxa.Studio.Tests
+
+<span class="cm"># Specific workstream</span>
+dotnet test tests/Voxa.Studio.Tests --filter "FullyQualifiedName~SecretsStore"
+dotnet test tests/Voxa.Studio.Tests --filter "FullyQualifiedName~ProviderManifest"
+dotnet test tests/Voxa.Studio.Tests --filter "FullyQualifiedName~ProviderSecretsService"
+dotnet test tests/Voxa.Studio.Tests --filter "FullyQualifiedName~SettingsViewModel"
+dotnet test tests/Voxa.Studio.Tests --filter "FullyQualifiedName~SettingsIntegration"
+
+<span class="cm"># -warnaserror matches CI (the [SupportedOSPlatform] guard must hold here)</span>
+dotnet build Voxa.slnx -warnaserror</code></pre>
+
+<p>WS1-A1/A2 (DPAPI round-trip) run only on the <b>windows-latest</b> Studio lane — <code>ProtectedData</code>
+is unavailable on the ubuntu default lane, so those facts are trait-gated or wrapped in
+<code>OperatingSystem.IsWindows()</code> guards in the test body.</p>
+
+<h3>Manual smoke (Windows)</h3>
+<ol>
+  <li>Launch Studio. Open Settings (gear, bottom of nav rail). Local identities (WhisperCpp, Piper, Kokoro, Echo) visible with grey dots.</li>
+  <li>"+ Add provider" → OpenAI. Row shows "STT · TTS · Agent", amber dot. Enter an API key → dot turns green. Save.</li>
+  <li>Open Config. OpenAI now appears in the STT, TTS, <em>and</em> Agent dropdowns (it was absent in all three before).</li>
+  <li>Change TTS to Piper, hit Config "Apply". Re-open Settings — OpenAI's key is still there; re-open Config — OpenAI still in the dropdowns (the Apply did not wipe the secrets layer).</li>
+  <li>Close Studio. Reopen. Open Settings. OpenAI is still listed with the key filled in.</li>
+  <li>Settings → OpenAI → Remove → Save. Config dropdowns no longer offer OpenAI.</li>
+  <li>Settings → Add ElevenLabs, enter key, press <b>Cancel</b>. Re-open Settings — ElevenLabs is absent (Cancel discarded).</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span> Risk register</h2>
+
+<table>
+  <tr><th>Risk</th><th>Likelihood</th><th>Impact</th><th>Mitigation</th></tr>
+  <tr>
+    <td>A Config "Apply" wipes the DPAPI-loaded keys (the layering bug)</td>
+    <td>Was certain in v1.0</td>
+    <td>High</td>
+    <td>Secrets are a dedicated configuration layer between base and overrides; <code>Reconfigure</code> only swaps overrides (§4.5.1). WS3-A2 is the regression guard.</td>
+  </tr>
+  <tr>
+    <td><code>ProtectedData</code> NuGet package not added → build fails or <code>DpapiSecretsStore</code> won't compile</td>
+    <td>Medium</td>
+    <td>Medium</td>
+    <td>WS1 adds the package ref explicitly; the checklist tracks it; the type is referenced only behind the Windows guard.</td>
+  </tr>
+  <tr>
+    <td>DPAPI blob readable by another Windows user on a shared machine</td>
+    <td>Low</td>
+    <td>High</td>
+    <td><code>DataProtectionScope.CurrentUser</code> ties ciphertext to the account; documented in the store's doc comment.</td>
+  </tr>
+  <tr>
+    <td>DPAPI blob unreadable after profile migration / roaming profile change</td>
+    <td>Low</td>
+    <td>Medium</td>
+    <td>Failed decrypt → empty store (G6-safe); user re-enters keys. A detail-panel note ("Credentials cleared — please re-enter") surfaces it.</td>
+  </tr>
+  <tr>
+    <td><code>[SupportedOSPlatform]</code> analyzer (CA1416) errors under <code>-warnaserror</code> on the ubuntu lane</td>
+    <td>Medium</td>
+    <td>Low</td>
+    <td>All <code>DpapiSecretsStore</code> construction sits behind <code>OperatingSystem.IsWindows()</code> guards the analyzer recognizes; the platform attribute decorates the class.</td>
+  </tr>
+  <tr>
+    <td>Manifest <code>Name</code> drifts from a renamed registry name</td>
+    <td>Medium</td>
+    <td>Medium</td>
+    <td>WS2-A3 cross-checks every non-local manifest against the live registry — a rename that misses the manifest fails the suite.</td>
+  </tr>
+  <tr>
+    <td>Config dropdown selected value invalid after a removal</td>
+    <td>Medium</td>
+    <td>Low</td>
+    <td><code>RefreshProviderLists()</code> resets the selection to the first filtered item — the same fallback used for an absent config value today.</td>
+  </tr>
+  <tr>
+    <td>Off-UI-thread <code>ObservableCollection</code> mutation</td>
+    <td>Low</td>
+    <td>Medium</td>
+    <td>The Settings VMs have no background refresh — all mutations are synchronous user actions. Enforced by review + headless tests if any async path is later added.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span> Out of scope / deferred</h2>
+
+<ul>
+  <li><b>Removing credential fields from <code>ConfigViewModel</code></b> — the <code>AgentApiKey</code> box and related entry stay in Config for this spec. Removal is a follow-up once Settings is proven as the canonical home. (Until then both coexist: a Config-typed agent key is an override that wins over the stored one — §4.5.1.)</li>
+  <li><b>Audio tab</b> — the tab strip reserves space; a future spec covers default capture/playback device selection.</li>
+  <li><b>Cross-platform secrets backend</b> — macOS Keychain, Linux libsecret/kwallet. The <code>ISecretsStore</code> abstraction accepts them without changing higher layers; out of scope here.</li>
+  <li><b>Provider-level model selection</b> (Whisper model, Kokoro precision, agent chat model) — pipeline decisions that belong in Config, not provider activation.</li>
+  <li><b>Secrets import/export / multi-machine sync</b> — no mechanism to move the DPAPI blob. By design.</li>
+  <li><b>Provider health / "Test connection"</b> — would make a live HTTP call, which conflicts with "no network before the user acts on a pipeline". An amber→green dot from key presence is sufficient signal; a Talk session fails fast with a clear error if the key is wrong.</li>
+  <li><b>VAD management</b> — Silero/SilenceGate are local, credential-free, and chosen in Config (§3.2, §6).</li>
+</ul>
+
+</div>
+</body>
+</html>
