@@ -77,9 +77,9 @@
   <h1>VVL-001 — Voxa Voice Library &amp; Cloning Specification</h1>
   <div class="sub">A managed <b>voice library</b> in Voxa Studio: a first-class place to discover the voices a provider actually offers — fetched live, not hardcoded — to <em>clone</em> new voices from a few seconds of audio (cloud via ElevenLabs / Mistral, or fully local via an ONNX tone-color converter), and to feed those voices straight into the pipeline builder's voice picker. Built on two small, capability-based framework seams (<code>IVoiceCatalogProvider</code>, <code>IVoiceCloneProvider</code>) that any TTS provider may implement, plus a new keyless local clone engine and Voxtral speech-to-text.</div>
   <div class="meta-grid">
-    <div><b>Document</b> VVL-001 v1.0</div>
-    <div><b>Date</b> 2026-06-13</div>
-    <div><b>Status</b> Proposal — grounded against <code>main</code> (2026-06-13); see §8 checklist</div>
+    <div><b>Document</b> VVL-001 v1.1</div>
+    <div><b>Date</b> 2026-06-13 (impl. cloud-first 2026-06-13)</div>
+    <div><b>Status</b> Implemented — cloud-first; WS3 (local clone) deferred. See §8 checklist</div>
     <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
     <div><b>Repository</b> Voxa (branch <code>feat/vvl-001-voice-library</code> from <code>main</code>)</div>
     <div><b>Depends on</b> VDX-001 (registry/descriptors), VLS-001 (model cache, ONNX runtime), VST-001/002 (Studio shell, diagnostics)</div>
@@ -623,15 +623,15 @@ Phase D   WS5  Studio Voices section + clone wizard + consent
 
 <!-- ============================================================ -->
 <h2 id="s8"><span class="secno">8.</span>Progress checklist</h2>
-<p class="progress-note">Proposal — nothing built yet. Tick as workstreams land; acceptance ids reference §5.</p>
+<p class="progress-note">Cloud-first shipped 2026-06-13 (commits on <code>feat/vvl-001-voice-library</code>). Acceptance ids reference §5.</p>
 <ul class="cl">
-  <li><input type="checkbox"> <span class="tid">WS0</span>Capability seams, descriptor resolvers, registry lookups <span class="ac">WS0-A1…A3; golden composition unchanged; config-capture honoured on plain ServiceCollection</span></li>
-  <li><input type="checkbox"> <span class="tid">WS1</span>ElevenLabs catalog + instant clone + delete <span class="ac">WS1-A1…A3 (fake-handler mapping; key only in header)</span></li>
-  <li><input type="checkbox"> <span class="tid">WS2</span>Mistral catalog + clone; Voxtral STT engine + descriptor <span class="ac">WS2-A1…A3 (buffered-utterance STT; registry exposes "Mistral" STT)</span></li>
-  <li><input type="checkbox"> <span class="tid">WS3</span><code>Voxa.Speech.VoiceClone</code> ONNX engine <span class="ac">WS3-A0 spike gate FIRST; A1…A4 (catalog scan, enroll/synth LocalModels, offline, license)</span></li>
-  <li><input type="checkbox"> <span class="tid">WS4</span><code>VoiceProfile</code>, <code>VoiceStore</code>, <code>VoiceCatalogService</code> reconciliation <span class="ac">WS4-A1…A3 (round-trip no-secret, Live/Stale/Discovered, keyless degrade)</span></li>
-  <li><input type="checkbox"> <span class="tid">WS5</span>Studio Voices section: grid, status, clone wizard, consent gate <span class="ac">WS5-A1…A5 (states, consent CanExecute, clone persists w/ attestation, arbitration, capture)</span></li>
-  <li><input type="checkbox"> <span class="tid">WS6</span>Picker hand-off, exporter parity, docs, license gate <span class="ac">WS6-A1…A3</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS0</span>Capability seams, descriptor resolvers, registry lookups <span class="ac">WS0-A1…A3 green; golden composition unchanged; config-capture honoured on plain ServiceCollection. <b>Refinement:</b> <code>TryGetVoiceCatalog</code>/<code>TryGetVoiceCloner</code> take the caller-supplied captured <code>"Voxa"</code> section (the registry holds no config).</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS1</span>ElevenLabs catalog + instant clone + delete <span class="ac">WS1-A1…A3 green (fake-handler mapping; key only in header; plan-gated rejection surfaces readably via <code>VoiceProviderException</code>)</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS2</span>Mistral catalog + clone; Voxtral STT engine + descriptor <span class="ac">WS2-A1…A3 green (buffered-utterance STT mirroring the OpenAI Whisper batch engine; registry exposes "Mistral" STT)</span></li>
+  <li><input type="checkbox"> <span class="tid">WS3</span><code>Voxa.Speech.VoiceClone</code> ONNX engine <span class="ac"><b>Deferred</b> — the WS3-A0 spike gate (a validated MIT ONNX export of the converter/encoder + a Kokoro-base recolor quality check) needs real model artifacts not available in the build environment; shipping a degraded clone is explicitly disallowed (§4.3, R2). Cloud cloning carries the feature; the wizard shows local as "coming soon".</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS4</span><code>VoiceProfile</code>, <code>VoiceStore</code>, <code>VoiceCatalogService</code> reconciliation <span class="ac">WS4-A1…A3 green (round-trip no-secret, Live/Stale/Discovered, keyless degrade). <b>Refinement:</b> <code>ForProviderAsync</code>/<code>AllAsync</code> return a <code>ProviderVoiceSet</code> (voices + <code>MissingKey</code>/<code>Error</code>) so the status strip can render per-provider chips.</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS5</span>Studio Voices section: grid, status, clone wizard, consent gate <span class="ac">WS5-A1…A5 green (states, consent <code>CanExecute</code> gate, clone persists w/ attestation, device arbitration, <code>voices.png</code> capture). Audition deep-links to the TTS playground (its tested synth+playback) rather than duplicating engine wiring.</span></li>
+  <li><input type="checkbox" checked> <span class="tid">WS6</span>Picker hand-off, exporter parity, docs <span class="ac">WS6-A1/A2 green. <b>Refinement:</b> the cloud voice picker is additive in Config (ElevenLabs/Mistral gain a live dropdown; Piper/Kokoro keep their static pickers); the Builder-inspector picker is a follow-up. The license gate needs no extension while WS3 is deferred (no new package).</span></li>
 </ul>
 
 <!-- ============================================================ -->
