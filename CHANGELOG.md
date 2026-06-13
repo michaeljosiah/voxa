@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voice capability seams (VVL-001 WS0).** Two optional, capability-based framework interfaces a
+  TTS provider may implement — `IVoiceCatalogProvider` (list a provider's voices live) and
+  `IVoiceCloneProvider` (create/delete a voice from samples) — plus the `ProviderVoice` /
+  `VoiceCloneRequest` records, all in `Voxa.Speech.Abstractions` (`Voxa.Speech.Voices`). A
+  provider opts in by setting `ResolveCatalog` / `ResolveCloner` on its `VoxaTtsDescriptor`;
+  providers whose voices are a compiled-in list (Piper, Kokoro) leave them null. The registry
+  exposes `TryGetVoiceCatalog` / `TryGetVoiceCloner`, which take the caller-supplied captured
+  `"Voxa"` config section so they never service-locate `IConfiguration` (works on a plain
+  `ServiceCollection` host). Foundation for the Studio voice library and cloning (VVL-001).
 - **Voxa Studio: Run & Metrics workbench (VST-002 D4).** A new top-level *Metrics* section that
   turns sessions into evidence. A **run** = one configuration × one input source → a JSON
   bundle under `~/voxa-runs` (config snapshot without secrets, recorded event stream, computed

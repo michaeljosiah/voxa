@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Voxa.Processors;
+using Voxa.Speech.Voices;
 
 namespace Voxa.Speech;
 
@@ -80,6 +81,19 @@ public sealed record VoxaTtsDescriptor(
     public int GetEffectiveOutputSampleRate(IConfigurationSection root)
         => ResolveOutputSampleRate?.Invoke(root)
            ?? root.GetSection(ConfigSection).GetValue("OutputSampleRate", OutputSampleRate);
+
+    /// <summary>
+    /// Optional capability (VVL-001 WS0): list the voices this provider can use right now. Null ⇒
+    /// the provider has no live catalog (its voices are a compiled-in list, e.g. Piper/Kokoro).
+    /// Receives the same captured "Voxa" root section the factories do — never service-locate config.
+    /// </summary>
+    public Func<IServiceProvider, IConfigurationSection, IVoiceCatalogProvider>? ResolveCatalog { get; init; }
+
+    /// <summary>
+    /// Optional capability (VVL-001 WS0): create/delete voices from samples. Null ⇒ this provider
+    /// cannot clone. Resolved with the captured "Voxa" root section; the host owns the consent gate.
+    /// </summary>
+    public Func<IServiceProvider, IConfigurationSection, IVoiceCloneProvider>? ResolveCloner { get; init; }
 }
 
 /// <summary>
