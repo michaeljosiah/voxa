@@ -37,4 +37,16 @@
     <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
   </ItemGroup>
 
+  <!-- Whisper.net.Runtime marks its native DLLs as <Pack>true</Pack> so consuming APPS copy them to
+       their output. When THIS library is packed for NuGet that re-bundles the natives as package
+       content (NU5100: native DLL outside lib/; NU5118: content/ vs contentFiles/ duplicate). They
+       already reach consumers transitively via the Whisper.net.Runtime dependency, so flip Pack=false
+       on exactly those cache-sourced items just before pack collects files. -->
+  <Target Name="ExcludeWhisperNativeDllsFromPack" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Update="@(None)" Pack="false"
+            Condition="$([System.String]::new('%(Identity)').ToLowerInvariant().Contains('whisper.net.runtime'))" />
+    </ItemGroup>
+  </Target>
+
 </Project>
