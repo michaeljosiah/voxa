@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voice picker hand-off + docs (VVL-001 WS6).** The Config composer gains a dynamic voice picker
+  for cloud providers: selecting ElevenLabs or Mistral as TTS loads its voices live from the library
+  (your clones included) and writes the provider-correct key into the export (`ElevenLabs:VoiceId` /
+  `Mistral:Voice`) — never an API key. A keyless provider shows "key required" instead of an empty
+  list. Piper/Kokoro keep their compiled-in catalog pickers. New guide
+  [`docs/voice-library.md`](docs/voice-library.md); README and ROADMAP updated. (The GPL/license gate
+  needs no extension yet — local cloning, which would add a package, is deferred.)
 - **Voxa Studio: Voices section (VVL-001 WS5).** A new top-level *Voices* nav section (between
   Playgrounds and Builder) — the managed voice library. A grid of every voice the pipeline can use,
   each tagged `Live` / `Stale` / `Discovered` / `LocalCatalog`, with per-provider status chips (a

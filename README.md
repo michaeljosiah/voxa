@@ -86,7 +86,7 @@ you what's happening inside it. Keyless out of the box — no cloud account need
 dotnet run --project apps/Voxa.Studio
 ```
 
-**The six views:**
+**The seven views:**
 
 1. **Talk** — pick a microphone and speaker, press **● Start session**, and speak. The first
    session downloads the default models (~155 MB, progress shown); after that it's fully
@@ -102,20 +102,27 @@ dotnet run --project apps/Voxa.Studio
    RTF measured on your hardware — replayable take history with a waveform scrubber, **A**/**B**
    pins plus an **A/B/X blind test**, a stress-phrase deck, and a batch bench that tables TTFB
    p50/p95 per voice (CSV export).
-3. **Builder** — a node canvas over the live provider registry. Wire Source → VAD → STT →
+3. **Voices** — a managed voice library over the live providers. See every voice your pipeline
+   can use — local Piper/Kokoro catalogs, the live voices from each keyed cloud provider, and
+   the ones you've **cloned** — each tagged Live / Stale / Discovered. **Clone a voice** from a
+   few seconds of audio to ElevenLabs or Mistral behind a consent gate (the create button stays
+   disabled until you attest you have the right to clone it), then pick it in Config like any
+   built-in voice. Local keyless cloning (ONNX) is *coming soon*. Guide:
+   [`docs/voice-library.md`](docs/voice-library.md).
+4. **Builder** — a node canvas over the live provider registry. Wire Source → VAD → STT →
    agent → TTS → Sink with typed ports (incompatible wires refuse with the reason in words),
    edit options in the inspector, then **Run graph** — the canvas compiles to the same chain a
    server composes and runs it live, with edges pulsing on real frame events and per-stage
    latency on the nodes. Export the result as an `appsettings.json` block, or as generated C#
    composition code when the shape goes beyond what config can express.
-4. **Metrics** — turn sessions into evidence. Record a **run** from the mic, a WAV, or a
+5. **Metrics** — turn sessions into evidence. Record a **run** from the mic, a WAV, or a
    **scripted utterance deck** (same input, two configs, honest comparison); get TTFB
    percentiles, per-turn stage stacks, per-stage trends, and a one-sentence takeaway naming
    the dominant stage and the knob to turn. Compare any two runs — with a warning when the
    machine context differs. Bundles are JSON under `~/voxa-runs`; nothing leaves the machine.
-5. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
+6. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
    **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
-6. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
+7. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
    export the `appsettings.json` block for your server — or open the draft as a graph in the
    Builder. **To talk to a real LLM instead of the echo agent:** set *Agent* to `OpenAI`,
    enter a chat model (e.g. `gpt-4o-mini`) and your API key (or leave it blank to use
