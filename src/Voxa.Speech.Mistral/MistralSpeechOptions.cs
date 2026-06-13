@@ -20,4 +20,20 @@ public sealed record MistralSpeechOptions
 
     /// <summary>Output sample rate for PCM.</summary>
     public int OutputSampleRate { get; init; } = 24000;
+
+    /// <summary>Voxtral transcription model id (VVL-001 WS2) — used when Voxa:Stt is "Mistral".</summary>
+    public string SttModel { get; init; } = "voxtral-mini-latest";
+
+    /// <summary>PCM sample rate the STT engine receives and wraps as WAV before posting.</summary>
+    public int InputSampleRate { get; init; } = 16000;
+
+    /// <summary>Optional BCP-47 language hint for transcription; null lets Voxtral auto-detect.</summary>
+    public string? SttLanguage { get; init; }
+
+    /// <summary>
+    /// Safety-backstop flush interval (seconds) for the buffered transcription path: if VAD never
+    /// fires <c>UserStoppedSpeaking</c> (runaway monologue / VAD-less pipeline) the buffer is posted
+    /// once it exceeds this span. The primary flush is <c>FlushAsync</c> at speech-end. 0 disables it.
+    /// </summary>
+    public double SttBufferSeconds { get; init; } = 30;
 }

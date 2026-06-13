@@ -21,7 +21,27 @@ public static class MistralDescriptors
             return errors;
         },
         CreateProcessor: (sp, root) =>
-            Mistral.Synthesis(BindOptions(root), ResolveHttpClient(sp)));
+            Mistral.Synthesis(BindOptions(root), ResolveHttpClient(sp)))
+    {
+        // Voice catalog + cloning (VVL-001 WS2) — only the API key is needed for these.
+        ResolveCatalog = (sp, root) => new MistralVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+        ResolveCloner  = (sp, root) => new MistralVoiceCatalog(BindOptions(root), ResolveHttpClient(sp)),
+    };
+
+    /// <summary>Voxtral speech-to-text (VVL-001 WS2). Utterance-buffered REST transcription.</summary>
+    public static VoxaSttDescriptor Stt { get; } = new(
+        Name: "Mistral",
+        ConfigSection: "Mistral",
+        PreferredInputSampleRate: 16000,
+        Validate: root =>
+        {
+            var errors = new List<string>();
+            if (string.IsNullOrEmpty(root["Mistral:ApiKey"]))
+                errors.Add("Voxa:Mistral:ApiKey is required when Voxa:Stt is 'Mistral'.");
+            return errors;
+        },
+        CreateProcessor: (sp, root) =>
+            new SpeechToTextProcessor(new MistralSpeechToTextEngine(BindOptions(root), ResolveHttpClient(sp))));
 
     private static MistralSpeechOptions BindOptions(IConfigurationSection root)
     {
@@ -33,6 +53,10 @@ public static class MistralDescriptors
             Model            = s["Model"] ?? "voxtral-tts",
             Voice            = s["Voice"] ?? "alloy",
             OutputSampleRate = s.GetValue("OutputSampleRate", 24000),
+            SttModel         = s["SttModel"] ?? "voxtral-mini-latest",
+            InputSampleRate  = s.GetValue("InputSampleRate", 16000),
+            SttLanguage      = s["SttLanguage"],
+            SttBufferSeconds = s.GetValue("SttBufferSeconds", 30.0),
         };
     }
 

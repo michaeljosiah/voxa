@@ -45,6 +45,7 @@ public static class VoxaDefaultsExtensions
             voxa.AddProvider(AzureSpeechDescriptors.Tts);
             voxa.AddProvider(ElevenLabsDescriptors.Tts);
             voxa.AddProvider(MistralDescriptors.Tts);
+            voxa.AddProvider(MistralDescriptors.Stt);   // Voxtral STT (VVL-001 WS2)
             voxa.AddProvider(SileroVadDescriptors.Vad);
             // The local/offline tier (VLS-001): no API keys, no network after first-run download.
             voxa.AddProvider(WhisperCppDescriptors.Stt);

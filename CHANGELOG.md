@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **ElevenLabs & Mistral voice catalogs + cloning, Voxtral STT (VVL-001 WS1–WS2).** Both cloud TTS
+  packages now implement the WS0 capability seams: `ElevenLabsVoiceCatalog` (`GET /voices`, instant
+  clone via `POST /voices/add`, `DELETE /voices/{id}`) and `MistralVoiceCatalog` (`/v1/audio/voices`)
+  list and create voices live; a blank key surfaces as a typed `VoiceProviderException(MissingApiKey)`
+  and a provider rejection (e.g. plan-gated cloning) carries the provider's message rather than a raw
+  `HttpRequestException`. `Voxa.Speech.Mistral` also gains **Voxtral STT** — a new `Mistral` STT
+  provider (`MistralSpeechToTextEngine`, utterance-buffered: it posts the whole utterance to
+  `/v1/audio/transcriptions` on speech-end and yields one final transcript), registered by the
+  meta-package beside Mistral TTS, so Studio's STT dropdown lists it automatically.
 - **Voice capability seams (VVL-001 WS0).** Two optional, capability-based framework interfaces a
   TTS provider may implement — `IVoiceCatalogProvider` (list a provider's voices live) and
   `IVoiceCloneProvider` (create/delete a voice from samples) — plus the `ProviderVoice` /
