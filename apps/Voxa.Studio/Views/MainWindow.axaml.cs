@@ -32,10 +32,11 @@ public partial class MainWindow : Window
                     var radio = vm.SelectedSection switch
                     {
                         1 => NavPlaygrounds,
-                        2 => NavBuilder,
-                        3 => NavMetrics,
-                        4 => NavModels,
-                        5 => NavConfig,
+                        2 => NavVoices,
+                        3 => NavBuilder,
+                        4 => NavMetrics,
+                        5 => NavModels,
+                        6 => NavConfig,
                         _ => NavTalk,
                     };
                     radio.IsChecked = true;
@@ -65,10 +66,11 @@ public partial class MainWindow : Window
         var section = radio.Tag switch
         {
             "Playgrounds" => 1,
-            "Builder" => 2,
-            "Metrics" => 3,
-            "Models" => 4,
-            "Config" => 5,
+            "Voices" => 2,
+            "Builder" => 3,
+            "Metrics" => 4,
+            "Models" => 5,
+            "Config" => 6,
             _ => 0,
         };
 
@@ -77,9 +79,10 @@ public partial class MainWindow : Window
 
         TalkHost.IsVisible = section == 0;
         PlaygroundsHost.IsVisible = section == 1;
-        BuilderHost.IsVisible = section == 2;
-        MetricsHost.IsVisible = section == 3;
-        ModelsHost.IsVisible = section == 4;
-        ConfigHost.IsVisible = section == 5;
+        VoicesHost.IsVisible = section == 2;
+        BuilderHost.IsVisible = section == 3;
+        MetricsHost.IsVisible = section == 4;
+        ModelsHost.IsVisible = section == 5;
+        ConfigHost.IsVisible = section == 6;
     }
 }

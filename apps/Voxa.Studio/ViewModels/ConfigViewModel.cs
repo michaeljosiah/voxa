@@ -26,6 +26,7 @@ public sealed partial class ConfigViewModel : ObservableObject
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
+        VoiceCatalog = new VoiceCatalogService(services, new VoiceStore());
 
         SttProviders = services.Registry.SttNames.OrderBy(n => n, StringComparer.Ordinal).ToList();
         TtsProviders = services.Registry.TtsNames.OrderBy(n => n, StringComparer.Ordinal).ToList();
@@ -48,6 +49,10 @@ public sealed partial class ConfigViewModel : ObservableObject
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
 
         Regenerate();
+        // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
+        // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
+        // "Studio never touches the network before the user acts" invariant). The shell calls
+        // RefreshCloudVoices() when the Config section is first opened (a user action).
     }
 
     // ── choices (from the live registry + pinned catalogs) ──────────────────
@@ -90,10 +95,73 @@ public sealed partial class ConfigViewModel : ObservableObject
 
     [ObservableProperty] private string? _applyStatus;
 
+    // ── cloud/cloned voice picker (VVL-001 WS6) ──────────────────────────────
+    // ElevenLabs/Mistral/VoiceClone get a dynamic voice list from the live library (cloned voices
+    // included) instead of a hand-typed id. Piper/Kokoro keep their compiled-in catalog pickers.
+
+    /// <summary>The reconciliation service behind the cloud voice list — exposed for the test seam.</summary>
+    internal VoiceCatalogService VoiceCatalog { get; }
+
+    /// <summary>Voice ids offered by the selected cloud/clone provider (live + your clones).</summary>
+    public ObservableCollection<string> CloudVoices { get; } = new();
+
+    [ObservableProperty] private string? _selectedCloudVoice;
+
+    /// <summary>True when the selected cloud provider has no resolvable key — the list can't load.</summary>
+    [ObservableProperty] private bool _cloudVoiceKeyRequired;
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
+    public bool ShowCloudVoiceOptions => CloudVoiceKeyFor(SelectedTts) is not null;
     public bool ShowAgentOptions => string.Equals(SelectedAgent, "OpenAI", StringComparison.OrdinalIgnoreCase);
+
+    // The config key each library-backed provider selects its voice with.
+    private static string? CloudVoiceKeyFor(string? tts) => tts?.ToLowerInvariant() switch
+    {
+        "elevenlabs" => "Voxa:ElevenLabs:VoiceId",
+        "mistral"    => "Voxa:Mistral:Voice",
+        "voiceclone" => "Voxa:VoiceClone:Voice",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Load the cloud voice list for the selected provider (live + cloned, key permitting). Triggered
+    /// by a user action — opening the Config section or changing the TTS provider — never at startup.
+    /// </summary>
+    public void RefreshCloudVoices() => _ = ReloadCloudVoicesAsync();
+
+    internal async Task ReloadCloudVoicesAsync()
+    {
+        // Capture the provider this request is for, up front — the user may switch providers during
+        // the await (these calls are fire-and-forget from OnSelectedTtsChanged), and resuming against
+        // the *current* SelectedTts would null-deref CloudVoiceKeyFor for Piper/Kokoro or write the
+        // wrong provider's voices into the picker.
+        var provider = SelectedTts;
+        var voiceKey = CloudVoiceKeyFor(provider);
+
+        CloudVoices.Clear();
+        CloudVoiceKeyRequired = false;
+        if (voiceKey is null) { SelectedCloudVoice = null; return; }
+
+        // No ConfigureAwait(false): the continuation mutates UI-bound CloudVoices, so it must
+        // resume on the UI thread (Avalonia rejects off-thread collection changes).
+        var set = await VoiceCatalog.ForProviderAsync(provider, CancellationToken.None);
+
+        // Discard a stale result if the selection changed while the request was in flight.
+        if (!string.Equals(provider, SelectedTts, StringComparison.OrdinalIgnoreCase)) return;
+
+        CloudVoiceKeyRequired = set.MissingKey;
+        foreach (var v in set.Voices) CloudVoices.Add(v.Voice.Id);
+
+        // Seed from the running config so the picker opens on the configured voice.
+        var current = _services.Configuration[voiceKey];
+        SelectedCloudVoice = !string.IsNullOrWhiteSpace(current) && CloudVoices.Contains(current)
+            ? current
+            : CloudVoices.FirstOrDefault();
+    }
+
+    partial void OnSelectedCloudVoiceChanged(string? value) => Regenerate();
 
     [ObservableProperty] private string _exportJson = "";
     [ObservableProperty] private string _validationText = "";
@@ -105,7 +173,9 @@ public sealed partial class ConfigViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ShowPiperOptions));
         OnPropertyChanged(nameof(ShowKokoroOptions));
+        OnPropertyChanged(nameof(ShowCloudVoiceOptions));
         Regenerate();
+        _ = ReloadCloudVoicesAsync();
     }
     partial void OnSelectedVadChanged(string value) => Regenerate();
     partial void OnSelectedProfileChanged(string value) => Regenerate();
@@ -143,6 +213,10 @@ public sealed partial class ConfigViewModel : ObservableObject
             pairs["Voxa:Kokoro:Voice"] = SelectedKokoroVoice;
             pairs["Voxa:Kokoro:Precision"] = SelectedKokoroPrecision;
         }
+        // A library-backed cloud voice (ElevenLabs/Mistral/VoiceClone) writes its provider's key —
+        // the voice id only, never an API key.
+        if (CloudVoiceKeyFor(SelectedTts) is { } voiceKey && !string.IsNullOrWhiteSpace(SelectedCloudVoice))
+            pairs[voiceKey] = SelectedCloudVoice;
         if (ShowAgentOptions)
         {
             pairs["Voxa:Agent:Model"] = AgentModel;

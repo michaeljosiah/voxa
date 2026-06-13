@@ -1,0 +1,141 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:svc="using:Voxa.Studio.Services"
+             xmlns:voices="using:Voxa.Speech.Voices"
+             x:Class="Voxa.Studio.Views.VoicesView"
+             x:DataType="vm:VoicesViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- ── header ── -->
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+          <TextBlock Classes="vx-h1" Text="Voices" />
+          <TextBlock Classes="vx-sub"
+                     Text="Discover, clone, and manage the voices your pipeline can use." />
+        </StackPanel>
+
+        <!-- provider status chips -->
+        <ItemsControl Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center"
+                      ItemsSource="{Binding Providers}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="6" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="svc:ProviderVoiceSet">
+              <Border Classes="vx-chip" ToolTip.Tip="{Binding Error}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock FontSize="10" Text="{Binding Provider}" />
+                  <TextBlock FontSize="10" Foreground="{StaticResource VxWarnBrush}"
+                             Text="key required" IsVisible="{Binding MissingKey}" />
+                  <TextBlock FontSize="10" Foreground="{StaticResource VxMutedBrush}"
+                             Text="{Binding Voices.Count, StringFormat='{}{0} voices'}"
+                             IsVisible="{Binding !MissingKey}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Button Grid.Column="2" Classes="vx-ghost" Content="Refresh"
+                Command="{Binding RefreshCommand}" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,360" Margin="20,12,20,16">
+
+      <!-- ── library grid ── -->
+      <Border Grid.Column="0" Classes="vx-card-flush" Margin="0,0,12,0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Voices}" Margin="8">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="svc:LibraryVoice">
+                <Border BorderBrush="{StaticResource VxBorderBrush}" BorderThickness="0,0,0,1" Padding="10,8">
+                  <Grid ColumnDefinitions="*,90,84,Auto,Auto,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                      <TextBlock FontSize="13" Text="{Binding Voice.DisplayName}" />
+                      <TextBlock Classes="vx-mono vx-muted" FontSize="10" Text="{Binding Voice.Id}" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="vx-chip" HorizontalAlignment="Left" VerticalAlignment="Center">
+                      <TextBlock FontSize="10" Text="{Binding Voice.ProviderName}" />
+                    </Border>
+                    <TextBlock Grid.Column="2" Classes="vx-muted" FontSize="11" VerticalAlignment="Center"
+                               Text="{Binding State}" />
+                    <Button Grid.Column="3" Classes="vx-ghost" Padding="10,4" Content="audition" Margin="0,0,6,0"
+                            Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).AuditionCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="4" Classes="vx-ghost" Padding="10,4" Content="add" Margin="0,0,6,0"
+                            Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).AddToLibraryCommand}"
+                            CommandParameter="{Binding}"
+                            IsVisible="{Binding Profile, Converter={x:Static ObjectConverters.IsNull}}" />
+                    <Button Grid.Column="5" Classes="vx-danger" Padding="10,4" Content="forget"
+                            Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).ForgetCommand}"
+                            CommandParameter="{Binding}"
+                            IsVisible="{Binding Profile, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+
+      <!-- ── clone wizard ── -->
+      <Border Grid.Column="1" Classes="vx-card" Padding="16">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="vx-h2" Text="Clone a voice" />
+
+          <StackPanel Spacing="4">
+            <TextBlock Classes="vx-sub" Text="Name" />
+            <TextBox Text="{Binding CloneName}" Watermark="e.g. My Narrator" />
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Classes="vx-sub" Text="Reference samples" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="vx-ghost" Padding="8,2" Content="Add file…"
+                      Click="OnAddSample" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding CloneSamples}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="voices:VoiceSample">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                    <TextBlock Grid.Column="0" Classes="vx-mono" FontSize="11" Text="{Binding FileName}"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="vx-ghost" Padding="6,1" Content="✕"
+                            Command="{Binding $parent[ItemsControl].((vm:VoicesViewModel)DataContext).RemoveSampleCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Classes="vx-sub" Text="Clone to" />
+            <ComboBox ItemsSource="{Binding CloneTargets}" SelectedItem="{Binding SelectedCloneTarget}"
+                      HorizontalAlignment="Stretch" />
+            <TextBlock Classes="vx-muted" FontSize="11" Text="Local cloning (no account) — coming soon"
+                       IsVisible="{Binding !LocalCloningAvailable}" />
+          </StackPanel>
+
+          <CheckBox IsChecked="{Binding ConsentAttested}">
+            <TextBlock TextWrapping="Wrap" FontSize="12"
+                       Text="I have the right to clone this voice — it is my own, or one I am licensed to use." />
+          </CheckBox>
+
+          <Button Classes="vx-primary" HorizontalAlignment="Stretch" Content="Create voice"
+                  Command="{Binding CloneCommand}" />
+
+          <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
+                     Text="{Binding CloneError}"
+                     IsVisible="{Binding CloneError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Classes="vx-muted" FontSize="11" Text="Recording is paused while a session is live."
+                     IsVisible="{Binding RecordBlocked}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

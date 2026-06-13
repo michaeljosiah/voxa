@@ -8,6 +8,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voice picker hand-off + docs (VVL-001 WS6).** The Config composer gains a dynamic voice picker
+  for cloud providers: selecting ElevenLabs or Mistral as TTS loads its voices live from the library
+  (your clones included) and writes the provider-correct key into the export (`ElevenLabs:VoiceId` /
+  `Mistral:Voice`) — never an API key. A keyless provider shows "key required" instead of an empty
+  list. Piper/Kokoro keep their compiled-in catalog pickers. New guide
+  [`docs/voice-library.md`](docs/voice-library.md); README and ROADMAP updated. (The GPL/license gate
+  needs no extension yet — local cloning, which would add a package, is deferred.)
+- **Voxa Studio: Voices section (VVL-001 WS5).** A new top-level *Voices* nav section (between
+  Playgrounds and Builder) — the managed voice library. A grid of every voice the pipeline can use,
+  each tagged `Live` / `Stale` / `Discovered` / `LocalCatalog`, with per-provider status chips (a
+  keyless provider reads "key required" rather than showing empty). The headline is a **clone
+  wizard** with a real consent gate: the Create command stays disabled until a name, ≥1 reference
+  sample, a target provider, and an explicit "I have the right to clone this voice" attestation are
+  all present — a successful clone persists a `VoiceProfile` stamped with `ConsentAttestedAt` and the
+  reference clips; a provider rejection (plan-gated / no key) shows its message and saves nothing.
+  Cloud cloning (ElevenLabs/Mistral) is fully wired; local ONNX cloning is shown as "coming soon"
+  (deferred, WS3). Recording a sample is blocked while a Talk/Builder/Metrics run holds the audio
+  device, and the library refreshes after a Config Apply. Audition deep-links to the TTS playground.
+- **Voice library store + reconciliation (VVL-001 WS4).** A key-free on-disk library in Voxa Studio:
+  `VoiceProfile` (a pointer to a provider voice plus local provenance — provider, remote id, the
+  user's own reference clips, a consent timestamp; never a secret) persisted one JSON-per-profile
+  under `~/voxa-voices` by `VoiceStore` (folder scan, corrupt-skip, ctor override as the test seam —
+  the `RunStore` pattern). `VoiceCatalogService` is the picker's single source of truth: for each TTS
+  provider it merges the compiled-in catalog (Piper/Kokoro), the provider's live `ListVoicesAsync`,
+  and saved profiles, reconciling each into `Live` / `Stale` / `Discovered` / `LocalCatalog` (a
+  voice deleted server-side shows `Stale`, never silently usable), with a short (60 s) list cache and
+  graceful degrade — a provider with no key surfaces its profiles plus a `MissingKey` flag rather
+  than crashing.
+- **ElevenLabs & Mistral voice catalogs + cloning, Voxtral STT (VVL-001 WS1–WS2).** Both cloud TTS
+  packages now implement the WS0 capability seams: `ElevenLabsVoiceCatalog` (`GET /voices`, instant
+  clone via `POST /voices/add`, `DELETE /voices/{id}`) and `MistralVoiceCatalog` (`/v1/audio/voices`)
+  list and create voices live; a blank key surfaces as a typed `VoiceProviderException(MissingApiKey)`
+  and a provider rejection (e.g. plan-gated cloning) carries the provider's message rather than a raw
+  `HttpRequestException`. `Voxa.Speech.Mistral` also gains **Voxtral STT** — a new `Mistral` STT
+  provider (`MistralSpeechToTextEngine`, utterance-buffered: it posts the whole utterance to
+  `/v1/audio/transcriptions` on speech-end and yields one final transcript), registered by the
+  meta-package beside Mistral TTS, so Studio's STT dropdown lists it automatically.
+- **Voice capability seams (VVL-001 WS0).** Two optional, capability-based framework interfaces a
+  TTS provider may implement — `IVoiceCatalogProvider` (list a provider's voices live) and
+  `IVoiceCloneProvider` (create/delete a voice from samples) — plus the `ProviderVoice` /
+  `VoiceCloneRequest` records, all in `Voxa.Speech.Abstractions` (`Voxa.Speech.Voices`). A
+  provider opts in by setting `ResolveCatalog` / `ResolveCloner` on its `VoxaTtsDescriptor`;
+  providers whose voices are a compiled-in list (Piper, Kokoro) leave them null. The registry
+  exposes `TryGetVoiceCatalog` / `TryGetVoiceCloner`, which take the caller-supplied captured
+  `"Voxa"` config section so they never service-locate `IConfiguration` (works on a plain
+  `ServiceCollection` host). Foundation for the Studio voice library and cloning (VVL-001).
 - **Voxa Studio: Run & Metrics workbench (VST-002 D4).** A new top-level *Metrics* section that
   turns sessions into evidence. A **run** = one configuration × one input source → a JSON
   bundle under `~/voxa-runs` (config snapshot without secrets, recorded event stream, computed

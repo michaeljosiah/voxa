@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Voxa.Speech;
+using Voxa.Speech.Voices;
 
 namespace Voxa.AspNetCore;
 
@@ -50,4 +52,47 @@ public sealed class VoxaProviderRegistry
 
     public bool TryGetVad(string name, out VoxaVadDescriptor descriptor)
         => _vad.TryGetValue(name, out descriptor!);
+
+    /// <summary>
+    /// Resolve the live voice-catalog capability for a named TTS provider, if it offers one
+    /// (VVL-001 WS0). Sugar over <see cref="TryGetTts"/> + <c>descriptor.ResolveCatalog</c>.
+    /// </summary>
+    /// <param name="ttsName">The TTS provider name (e.g. "ElevenLabs").</param>
+    /// <param name="services">DI provider passed to the resolver (for an <c>HttpClient</c> etc.).</param>
+    /// <param name="voxaRoot">
+    /// The captured <c>"Voxa"</c> configuration section. The caller supplies it (the composer holds
+    /// one; Studio passes <c>services.Configuration.GetSection("Voxa")</c>) because the registry must
+    /// never service-locate <see cref="IConfiguration"/> — plain-<c>ServiceCollection</c> hosts have none.
+    /// </param>
+    /// <param name="provider">The resolved catalog capability when the method returns true.</param>
+    public bool TryGetVoiceCatalog(
+        string ttsName, IServiceProvider services, IConfigurationSection voxaRoot,
+        out IVoiceCatalogProvider provider)
+    {
+        if (_tts.TryGetValue(ttsName, out var descriptor) && descriptor.ResolveCatalog is { } resolve)
+        {
+            provider = resolve(services, voxaRoot);
+            return true;
+        }
+        provider = null!;
+        return false;
+    }
+
+    /// <summary>
+    /// Resolve the voice-cloning capability for a named TTS provider, if it offers one (VVL-001 WS0).
+    /// The host owns the consent gate — this only constructs the transport. See
+    /// <see cref="TryGetVoiceCatalog"/> for why <paramref name="voxaRoot"/> is caller-supplied.
+    /// </summary>
+    public bool TryGetVoiceCloner(
+        string ttsName, IServiceProvider services, IConfigurationSection voxaRoot,
+        out IVoiceCloneProvider provider)
+    {
+        if (_tts.TryGetValue(ttsName, out var descriptor) && descriptor.ResolveCloner is { } resolve)
+        {
+            provider = resolve(services, voxaRoot);
+            return true;
+        }
+        provider = null!;
+        return false;
+    }
 }

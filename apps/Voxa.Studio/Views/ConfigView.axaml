@@ -82,6 +82,22 @@
         </Grid>
       </Border>
 
+      <!-- Cloud / cloned voice (VVL-001 WS6): the live library for the selected provider. -->
+      <Border Classes="vx-card" IsVisible="{Binding ShowCloudVoiceOptions}">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="130,*">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Voice" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding CloudVoices}" SelectedItem="{Binding SelectedCloudVoice}" />
+          </Grid>
+          <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}"
+                     Text="Add this provider's API key (in Voices or the environment) to load its voices."
+                     IsVisible="{Binding CloudVoiceKeyRequired}" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     Text="Voices come live from the provider — your clones included. Manage them in the Voices section." />
+        </StackPanel>
+      </Border>
+
       <!-- LLM agent: pick OpenAI above and the local pipeline answers with a real model. -->
       <Border Classes="vx-card" IsVisible="{Binding ShowAgentOptions}">
         <StackPanel Spacing="8">
