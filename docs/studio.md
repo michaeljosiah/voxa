@@ -2,10 +2,10 @@
 
 A desktop app that runs the real Voxa pipeline against your microphone and speakers and lets
 you **watch it think**: a live VAD probability trace, a per-turn latency waterfall, standalone
-STT and TTS playgrounds, a node-canvas pipeline builder, a model-cache manager, and a config
-composer. Specced as [VST-001](specifications/voxa-studio-spec.html); the v2 brand, splash,
-playgrounds, and builder follow the
-[VST-002 design brief](specifications/voxa-studio-design-brief.html).
+STT and TTS playgrounds, a node-canvas pipeline builder, a run & metrics workbench, a
+model-cache manager, and a config composer. Specced as
+[VST-001](specifications/voxa-studio-spec.html); the v2 brand, splash, playgrounds, builder,
+and metrics follow the [VST-002 design brief](specifications/voxa-studio-design-brief.html).
 
 Studio is keyless out of the box — its default pipeline is the local tier from
 [VLS-001](local-speech.md) (WhisperCpp STT + Echo agent + Piper TTS). Cloud providers light up
@@ -27,7 +27,7 @@ Nothing downloads at launch. The first **Talk** session (or the first voice you 
 downloads the pinned models with visible progress — `tiny.en` (~75 MB) plus the Piper voice and
 binary (~80 MB) for the default config.
 
-## The five views
+## The six views
 
 ### Talk
 
@@ -113,6 +113,35 @@ single-in/single-out wiring and makes that feel intentional rather than limited.
 
 Run is disabled while a Talk session owns the audio device, and vice versa.
 
+### Metrics
+
+The run & metrics workbench (VST-002 §9): turn sessions into **evidence**. A *run* is one
+configuration exercised by one input source for some duration; it lands as a JSON bundle —
+config snapshot (never including keys), recorded event stream, computed stats, and the machine
+context it ran in — under `~/voxa-runs`. Nothing leaves the machine.
+
+- **Three sources.** The live mic; a single utterance WAV; or a **scripted deck** — a list of
+  utterance WAVs replayed turn-paced (each waits for the bot's reply plus a configurable gap)
+  through the *exact* pipeline a live session uses, via a capture device that plays the script.
+  Scripted runs are the point: same input, two configs, honest comparison.
+- **During a run** only a compact header updates (elapsed, turns, last TTFB, errors) — the heavy
+  charts populate on completion so the measurement stays unperturbed.
+- **Reading a run.** The TTFB percentile card (p50/p95/max, TTS RTF, delta vs the previous run),
+  per-turn stage stacks, and a per-stage trend — all in the same five stage colors as Talk and
+  the Builder. Above the charts, one generated **takeaway** sentence names the dominant stage
+  and the obvious lever ("VAD hangover is 55% of p50 — lower `Voxa:Vad:StopDurationMs` or pick
+  the LowLatency profile"). Rule-based, not an LLM; every lever it names is a real knob.
+- **Compare.** Check two runs: the older becomes the baseline and every metric shows its delta.
+  Runs record machine context (cores, OS, whether models were cached), and the compare pane
+  *warns* when contexts differ — cross-machine or cold-cache deltas imply trends the numbers
+  can't support.
+- **Export.** Per-turn stage CSV next to the bundle; the bundle itself is already shareable JSON.
+- **Cross-navigation.** Clicking any stage block in Talk's waterfall deep-links here with that
+  stage's trend series highlighted.
+
+Run is blocked while Talk or the Builder is live (one audio device, one set of cores — a
+concurrent session would skew every number), and vice versa.
+
 ### Models
 
 The model cache, visible: every entry with size and engine, the effective cache root and where
@@ -171,5 +200,5 @@ on but unobserved, the cost is one boolean check per frame. Stage latencies also
 | First session is slow to start | First-run model download (~155 MB for the defaults) — progress shows in the status line. Subsequent sessions are offline. |
 | VAD trace flat at zero while speaking | Mic muted / wrong device, or genuinely a VAD regression — check the trace against the threshold rule. |
 | `verify` shows ✗ | The cached file is corrupt. Purge it; the next session re-downloads through the SHA-256-verified resolver. |
-| Playground play/record/bench disabled | A Talk session owns the audio device — stop it first. |
+| Playground play/record/bench disabled | A Talk, Builder, or Metrics session is live — stop it first. |
 | STT lab rejects my audio file | Only 16-bit PCM WAV is read (stereo/other rates are converted). Re-export compressed formats as PCM WAV first. |

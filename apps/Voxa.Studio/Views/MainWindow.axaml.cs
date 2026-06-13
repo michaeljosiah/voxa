@@ -33,8 +33,9 @@ public partial class MainWindow : Window
                     {
                         1 => NavPlaygrounds,
                         2 => NavBuilder,
-                        3 => NavModels,
-                        4 => NavConfig,
+                        3 => NavMetrics,
+                        4 => NavModels,
+                        5 => NavConfig,
                         _ => NavTalk,
                     };
                     radio.IsChecked = true;
@@ -65,8 +66,9 @@ public partial class MainWindow : Window
         {
             "Playgrounds" => 1,
             "Builder" => 2,
-            "Models" => 3,
-            "Config" => 4,
+            "Metrics" => 3,
+            "Models" => 4,
+            "Config" => 5,
             _ => 0,
         };
 
@@ -76,7 +78,8 @@ public partial class MainWindow : Window
         TalkHost.IsVisible = section == 0;
         PlaygroundsHost.IsVisible = section == 1;
         BuilderHost.IsVisible = section == 2;
-        ModelsHost.IsVisible = section == 3;
-        ConfigHost.IsVisible = section == 4;
+        MetricsHost.IsVisible = section == 3;
+        ModelsHost.IsVisible = section == 4;
+        ConfigHost.IsVisible = section == 5;
     }
 }

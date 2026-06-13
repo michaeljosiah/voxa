@@ -1,20 +1,45 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Controls;
 
+/// <summary>Raised when a waterfall stage block is clicked — Talk's deep-link into Metrics.</summary>
+public sealed class StageTappedEventArgs : RoutedEventArgs
+{
+    public StageTappedEventArgs(string stage) : base(WaterfallControl.StageTappedEvent) => Stage = stage;
+    public string Stage { get; }
+}
+
 /// <summary>
 /// One turn's stage-latency waterfall (VST-001 WS2): a stacked horizontal bar — one colored
 /// block per measured stage, width proportional to its share of the turn — with stage + ms
 /// labels underneath. Hover any block for the exact number (tooltip set per draw is overkill;
-/// the labels carry the numbers).
+/// the labels carry the numbers). Clicking a block bubbles <see cref="StageTappedEvent"/> —
+/// the §5 cross-navigation into that stage's series in the Metrics workbench.
 /// </summary>
 public sealed class WaterfallControl : Control
 {
     public static readonly StyledProperty<TurnWaterfall?> WaterfallProperty =
         AvaloniaProperty.Register<WaterfallControl, TurnWaterfall?>(nameof(Waterfall));
+
+    /// <summary>Bubbles, so the hosting view subscribes once for every waterfall in the list.</summary>
+    public static readonly RoutedEvent<StageTappedEventArgs> StageTappedEvent =
+        RoutedEvent.Register<WaterfallControl, StageTappedEventArgs>(nameof(StageTapped), RoutingStrategies.Bubble);
+
+    public event EventHandler<StageTappedEventArgs> StageTapped
+    {
+        add => AddHandler(StageTappedEvent, value);
+        remove => RemoveHandler(StageTappedEvent, value);
+    }
+
+    public WaterfallControl()
+    {
+        Cursor = new Cursor(StandardCursorType.Hand);
+    }
 
     static WaterfallControl()
     {
@@ -73,5 +98,34 @@ public sealed class WaterfallControl : Control
 
             x += width + Gap;
         }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left && HitStage(e.GetPosition(this).X) is { } stage)
+        {
+            RaiseEvent(new StageTappedEventArgs(stage));
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Which stage block sits at <paramref name="px"/> — the exact layout walk Render does.</summary>
+    private string? HitStage(double px)
+    {
+        var waterfall = Waterfall;
+        var w = Bounds.Width;
+        if (waterfall is null || waterfall.Segments.Count == 0 || w <= 0) return null;
+
+        var total = Math.Max(waterfall.TotalMs, 0.001);
+        const double minBlock = 3;
+        double x = 0;
+        foreach (var segment in waterfall.Segments)
+        {
+            var width = Math.Max(segment.Ms / total * (w - (waterfall.Segments.Count - 1) * Gap), minBlock);
+            if (px >= x && px < x + width) return segment.Stage;
+            x += width + Gap;
+        }
+        return null;
     }
 }
