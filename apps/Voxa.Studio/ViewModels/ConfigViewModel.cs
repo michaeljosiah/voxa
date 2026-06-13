@@ -133,18 +133,29 @@ public sealed partial class ConfigViewModel : ObservableObject
 
     internal async Task ReloadCloudVoicesAsync()
     {
+        // Capture the provider this request is for, up front — the user may switch providers during
+        // the await (these calls are fire-and-forget from OnSelectedTtsChanged), and resuming against
+        // the *current* SelectedTts would null-deref CloudVoiceKeyFor for Piper/Kokoro or write the
+        // wrong provider's voices into the picker.
+        var provider = SelectedTts;
+        var voiceKey = CloudVoiceKeyFor(provider);
+
         CloudVoices.Clear();
         CloudVoiceKeyRequired = false;
-        if (!ShowCloudVoiceOptions) { SelectedCloudVoice = null; return; }
+        if (voiceKey is null) { SelectedCloudVoice = null; return; }
 
         // No ConfigureAwait(false): the continuation mutates UI-bound CloudVoices, so it must
         // resume on the UI thread (Avalonia rejects off-thread collection changes).
-        var set = await VoiceCatalog.ForProviderAsync(SelectedTts, CancellationToken.None);
+        var set = await VoiceCatalog.ForProviderAsync(provider, CancellationToken.None);
+
+        // Discard a stale result if the selection changed while the request was in flight.
+        if (!string.Equals(provider, SelectedTts, StringComparison.OrdinalIgnoreCase)) return;
+
         CloudVoiceKeyRequired = set.MissingKey;
         foreach (var v in set.Voices) CloudVoices.Add(v.Voice.Id);
 
         // Seed from the running config so the picker opens on the configured voice.
-        var current = _services.Configuration[CloudVoiceKeyFor(SelectedTts)!];
+        var current = _services.Configuration[voiceKey];
         SelectedCloudVoice = !string.IsNullOrWhiteSpace(current) && CloudVoices.Contains(current)
             ? current
             : CloudVoices.FirstOrDefault();

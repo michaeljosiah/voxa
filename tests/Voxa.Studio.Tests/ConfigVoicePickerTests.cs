@@ -18,6 +18,16 @@ public class ConfigVoicePickerTests
             => Task.FromResult<IReadOnlyList<ProviderVoice>>(voices);
     }
 
+    // A catalog whose list completes only when the gate is released — to drive the in-flight race.
+    private sealed class GatedCatalog(Task gate, params ProviderVoice[] voices) : IVoiceCatalogProvider
+    {
+        public async Task<IReadOnlyList<ProviderVoice>> ListVoicesAsync(CancellationToken ct)
+        {
+            await gate;
+            return voices;
+        }
+    }
+
     [Fact] // WS6-A1
     public async Task Selecting_ElevenLabs_Loads_Library_Voices_And_Writes_The_VoiceId_Key()
     {
@@ -108,5 +118,27 @@ public class ConfigVoicePickerTests
             new ProviderVoice("v1", "V1", "ElevenLabs", VoiceKind.Standard));
         await vm.ReloadCloudVoicesAsync();
         Assert.Equal(["v1"], vm.CloudVoices);
+    }
+
+    [Fact] // review fix (P2) — a provider switch mid-request discards the stale result, no NRE
+    public async Task Switching_Provider_While_A_Voice_List_Is_In_Flight_Discards_The_Stale_Result()
+    {
+        await using var services = TestSupport.Services();
+        var vm = new ConfigViewModel(services);
+
+        var gate = new TaskCompletionSource();
+        vm.VoiceCatalog.CatalogOverride = name => name == "ElevenLabs"
+            ? new GatedCatalog(gate.Task, new ProviderVoice("el-late", "Late", "ElevenLabs", VoiceKind.Standard))
+            : null;
+
+        vm.SelectedTts = "ElevenLabs";
+        var pending = vm.ReloadCloudVoicesAsync();   // starts for ElevenLabs, parks on the gate
+
+        vm.SelectedTts = "Piper";                    // user switches to a local provider mid-flight
+        gate.SetResult();                            // the ElevenLabs list now returns
+        await pending;                               // must not throw, must not write stale voices
+
+        Assert.False(vm.ShowCloudVoiceOptions);      // now on Piper (static picker)
+        Assert.DoesNotContain("el-late", vm.CloudVoices);
     }
 }
