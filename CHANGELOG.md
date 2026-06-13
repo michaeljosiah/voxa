@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voice library store + reconciliation (VVL-001 WS4).** A key-free on-disk library in Voxa Studio:
+  `VoiceProfile` (a pointer to a provider voice plus local provenance — provider, remote id, the
+  user's own reference clips, a consent timestamp; never a secret) persisted one JSON-per-profile
+  under `~/voxa-voices` by `VoiceStore` (folder scan, corrupt-skip, ctor override as the test seam —
+  the `RunStore` pattern). `VoiceCatalogService` is the picker's single source of truth: for each TTS
+  provider it merges the compiled-in catalog (Piper/Kokoro), the provider's live `ListVoicesAsync`,
+  and saved profiles, reconciling each into `Live` / `Stale` / `Discovered` / `LocalCatalog` (a
+  voice deleted server-side shows `Stale`, never silently usable), with a short (60 s) list cache and
+  graceful degrade — a provider with no key surfaces its profiles plus a `MissingKey` flag rather
+  than crashing.
 - **ElevenLabs & Mistral voice catalogs + cloning, Voxtral STT (VVL-001 WS1–WS2).** Both cloud TTS
   packages now implement the WS0 capability seams: `ElevenLabsVoiceCatalog` (`GET /voices`, instant
   clone via `POST /voices/add`, `DELETE /voices/{id}`) and `MistralVoiceCatalog` (`/v1/audio/voices`)
