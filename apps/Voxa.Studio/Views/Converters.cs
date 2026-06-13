@@ -15,12 +15,14 @@ public static class Converters
         new FuncValueConverter<bool, HorizontalAlignment>(isUser =>
             isUser ? HorizontalAlignment.Right : HorizontalAlignment.Left);
 
+    // User bubbles are accent-soft, bot bubbles are the raised surface — both resolved from the live
+    // theme so they follow a theme switch (the accent-soft tint becomes coral under the Warm theme).
     public static readonly IValueConverter BubbleBrush =
         new FuncValueConverter<bool, IBrush?>(isUser =>
-            isUser ? UserBrush : BotBrush);
+            Themed(isUser ? "VxAccentDimBrush" : "VxRaisedBrush"));
 
-    private static readonly IBrush UserBrush = new SolidColorBrush(Color.Parse("#1F4FC3F7")); // accent-soft
-    private static readonly IBrush BotBrush = new SolidColorBrush(Color.Parse("#1C2330"));    // ink-800 raised
+    private static IBrush? Themed(string key) =>
+        Avalonia.Application.Current?.Resources.TryGetResource(key, null, out var v) == true ? v as IBrush : null;
 
     // ── WER diff coloring (§6.1): sub = warn, ins = info cyan, del = danger ──
 
@@ -53,6 +55,15 @@ public static class Converters
             "tts" => StageTtsBrush,
             "out" => StageOutBrush,
             _ => StageVadBrush,
+        });
+
+    /// <summary>Settings status dot (VST-003): configured green, key-missing amber, local grey.</summary>
+    public static readonly IValueConverter ProviderStatusBrush =
+        new FuncValueConverter<ProviderStatus, IBrush?>(status => status switch
+        {
+            ProviderStatus.Configured => StageOutBrush, // good green
+            ProviderStatus.KeyMissing => WarnBrush,      // amber
+            _ => StageVadBrush,                          // local grey
         });
 
     public static readonly IValueConverter PortBrush =

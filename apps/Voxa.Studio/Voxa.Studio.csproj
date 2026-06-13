@@ -24,6 +24,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <!-- WASAPI capture/render for the v1 Windows audio backend (MIT licensed). -->
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <!-- Transitive of Avalonia.FreeDesktop; 0.21.2 has GHSA-xrw6-gwf8-vvr9 (NU1903) — lift to the patched release. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>

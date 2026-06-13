@@ -122,13 +122,21 @@ dotnet run --project apps/Voxa.Studio
    machine context differs. Bundles are JSON under `~/voxa-runs`; nothing leaves the machine.
 6. **Models** — see what's in the model cache, re-verify hashes, purge entries, or
    **Prefetch full catalog** and copy the folder to provision an air-gapped machine.
-7. **Config** — compose a pipeline from dropdowns (fed by the live provider registry) and
-   export the `appsettings.json` block for your server — or open the draft as a graph in the
-   Builder. **To talk to a real LLM instead of the echo agent:** set *Agent* to `OpenAI`,
-   enter a chat model (e.g. `gpt-4o-mini`) and your API key (or leave it blank to use
-   `Voxa__OpenAI__ApiKey` from the environment), then press **⚡ Apply to Studio** — the next
-   Talk session answers with the model. The key is applied to the running app only; it is
-   never written to disk or into the exported JSON.
+7. **Config** — compose a pipeline from dropdowns (fed by the live provider registry, filtered
+   to the providers you've activated in **Settings**) and export the `appsettings.json` block for
+   your server — or open the draft as a graph in the Builder. **To talk to a real LLM instead of
+   the echo agent:** add `OpenAI` in Settings with your key, set *Agent* to `OpenAI`, enter a chat
+   model (e.g. `gpt-4o-mini`), then press **⚡ Apply to Studio** — the next Talk session answers
+   with the model. Keys are applied to the running app only; they are never written into the export.
+
+**Settings** (the gear at the foot of the nav rail) — manage which providers are active and store
+their API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter
+its key once, and it is encrypted to disk (Windows DPAPI, scoped to your user account) and live from
+the next launch — no environment variables, no re-typing. Activating one identity can light up
+several roles at once: `OpenAI` covers STT, TTS *and* the chat agent off a single key. Local
+providers (Whisper, Piper, Kokoro, Echo) are always listed and need no keys. Activated providers are
+exactly the ones Config offers. Keys never leave the machine and are never written into any export.
+Guide: [`docs/settings.md`](docs/settings.md).
 
 Full guide — every view, server-side diagnostics, troubleshooting: [`docs/studio.md`](docs/studio.md).
 

@@ -191,7 +191,8 @@ public class SttPlaygroundViewModelTests
         // command that was mid-execution — async RelayCommands disable themselves while running,
         // so the user could never stop a recording before the 30 s cap. Stop must be a separate
         // synchronous command that stays executable during the recording.
-        var services = new StudioServices(TestSupport.LocalConfig(), new FakeMicDevice());
+        var services = new StudioServices(TestSupport.LocalConfig(), new FakeMicDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
         var vm = new SttPlaygroundViewModel(services) { Source = SttSource.Mic };
         vm.EngineFactoryOverride = _ => new FakeSttEngine("stopped mid stream");
 

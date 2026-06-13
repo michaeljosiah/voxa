@@ -71,6 +71,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         };
     }
 
+    /// <summary>
+    /// The Settings dialog saved (VST-003): push the stored credentials into the live container as
+    /// the secrets layer — so a later Config "Apply" won't wipe them — and refresh the dropdowns that
+    /// depend on which providers are activated. <see cref="StudioServices.ApplySecrets"/> fires
+    /// <c>Reconfigured</c>, so Talk/Playgrounds/Voices/Models refresh through the existing fan-out.
+    /// </summary>
+    public void OnSettingsSaved()
+    {
+        Services.ApplySecrets(Services.Secrets.BuildConfigPairs());
+        Config.RefreshProviderLists();
+    }
+
     private void SyncLiveState()
     {
         var live = Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;

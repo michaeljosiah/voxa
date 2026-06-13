@@ -8,38 +8,38 @@
   <Application.Resources>
     <ResourceDictionary>
 
-      <!-- ════════ VOXA design tokens (VST-002 brief · voxa-design skill) ════════
-           Dark-only. Ink = neutral blue-grey scale, Pulse = THE single cyan accent,
-           Halo = agent/LLM violet (semantic only). Color beyond cyan is semantic:
-           the five stage colors and ok/warn/danger. No gradients, ever. -->
+      <!-- ════════ VOXA design tokens (VST-002 brief, re-toned VST-003) ════════
+           Dark-only. Ink = warm-neutral grey scale (Claude-like), Accent = THE single
+           coral, Halo = agent/LLM violet (semantic only). Color beyond the accent is
+           semantic: the five stage colors and ok/warn/danger. No gradients, ever. -->
 
-      <!-- ── Ink · neutral scale ── -->
-      <Color x:Key="VxBg">#0B0F14</Color>          <!-- ink-950 · page -->
-      <Color x:Key="VxPanel">#11161D</Color>       <!-- ink-900 · panel -->
-      <Color x:Key="VxPanel2">#161C26</Color>      <!-- ink-850 · card -->
-      <Color x:Key="VxRaised">#1C2330</Color>      <!-- ink-800 · raised -->
-      <Color x:Key="VxInk700">#222B36</Color>
-      <Color x:Key="VxInk600">#2C3645</Color>
-      <Color x:Key="VxInk500">#3A4656</Color>
-      <Color x:Key="VxInk400">#4E5C70</Color>
+      <!-- ── Ink · warm-neutral scale ── -->
+      <Color x:Key="VxBg">#1C1C19</Color>          <!-- page -->
+      <Color x:Key="VxPanel">#232320</Color>       <!-- panel -->
+      <Color x:Key="VxPanel2">#2A2A26</Color>      <!-- card -->
+      <Color x:Key="VxRaised">#33322E</Color>      <!-- raised -->
+      <Color x:Key="VxInk700">#3C3B36</Color>
+      <Color x:Key="VxInk600">#47463F</Color>
+      <Color x:Key="VxInk500">#57564D</Color>
+      <Color x:Key="VxInk400">#6E6C61</Color>
 
-      <!-- ── Text ── -->
-      <Color x:Key="VxText">#EAF1F8</Color>        <!-- text-1 · titles -->
-      <Color x:Key="VxText2">#A6B2C2</Color>       <!-- text-2 · body -->
-      <Color x:Key="VxMuted">#76849B</Color>       <!-- text-3 · muted (AA on page) -->
-      <Color x:Key="VxOnAccent">#0B0F14</Color>    <!-- text on cyan is ink, never white -->
+      <!-- ── Text (warm) ── -->
+      <Color x:Key="VxText">#ECEAE3</Color>        <!-- text-1 · titles -->
+      <Color x:Key="VxText2">#C0BCB1</Color>       <!-- text-2 · body -->
+      <Color x:Key="VxMuted">#8B877B</Color>       <!-- text-3 · muted -->
+      <Color x:Key="VxOnAccent">#FCFAF6</Color>    <!-- text on coral is warm white -->
 
-      <!-- ── Hairlines (white-alpha) ── -->
-      <Color x:Key="VxLine1">#1AA6B2C2</Color>     <!-- 10% · resting -->
-      <Color x:Key="VxLine2">#29A6B2C2</Color>     <!-- 16% · controls -->
-      <Color x:Key="VxLine3">#47A6B2C2</Color>     <!-- 28% · hover -->
-      <Color x:Key="VxBorder">#1AA6B2C2</Color>    <!-- legacy alias = line-1 -->
+      <!-- ── Hairlines (warm white-alpha) ── -->
+      <Color x:Key="VxLine1">#12D8D2C4</Color>     <!-- ~7% · resting -->
+      <Color x:Key="VxLine2">#20D8D2C4</Color>     <!-- ~13% · controls -->
+      <Color x:Key="VxLine3">#3CD8D2C4</Color>     <!-- ~24% · hover -->
+      <Color x:Key="VxBorder">#12D8D2C4</Color>    <!-- legacy alias = line-1 -->
 
-      <!-- ── Pulse · the accent ── -->
-      <Color x:Key="VxAccent">#4FC3F7</Color>      <!-- pulse-400 -->
-      <Color x:Key="VxAccent2">#81D4FA</Color>     <!-- pulse-300 · micro-labels/section heads -->
-      <Color x:Key="VxAccentPressed">#29A8E0</Color> <!-- pulse-500 -->
-      <Color x:Key="VxAccentDim">#1F4FC3F7</Color> <!-- accent-soft (12%) · selection bg -->
+      <!-- ── Accent · the single coral (Claude) ── -->
+      <Color x:Key="VxAccent">#C96442</Color>      <!-- coral-500 -->
+      <Color x:Key="VxAccent2">#D97757</Color>     <!-- coral-400 · micro-labels/section heads -->
+      <Color x:Key="VxAccentPressed">#AE5536</Color> <!-- coral-600 -->
+      <Color x:Key="VxAccentDim">#24C96442</Color> <!-- accent-soft (~14%) · selection bg -->
 
       <!-- ── Halo · agent violet (semantic only) ── -->
       <Color x:Key="VxHalo">#CE93D8</Color>

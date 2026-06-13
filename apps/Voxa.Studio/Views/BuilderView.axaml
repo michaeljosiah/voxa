@@ -27,17 +27,16 @@
       </Style.Animations>
     </Style>
 
-    <Style Selector="Button.vx-palette">
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <!-- palette item is a Border (not a Button): a Button marks PointerPressed handled for its
+         click, which would stop DragDrop.DoDragDrop from ever starting. Adding a node is drag-only. -->
+    <Style Selector="Border.vx-palette">
       <Setter Property="Padding" Value="9,7" />
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
       <Setter Property="BorderBrush" Value="{StaticResource VxLine1Brush}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
     </Style>
-    <Style Selector="Button.vx-palette:pointerover /template/ ContentPresenter">
+    <Style Selector="Border.vx-palette:pointerover">
       <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
     </Style>
 
@@ -103,15 +102,10 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:BuilderPaletteEntry">
-                          <Button Classes="vx-palette"
-                                  Command="{Binding $parent[UserControl].((vm:BuilderViewModel)DataContext).AddNodeCommand}"
-                                  CommandParameter="{Binding}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                              <Ellipse Width="8" Height="8" VerticalAlignment="Center"
-                                       Fill="{Binding DotType, Converter={x:Static views:Converters.PortBrush}}" />
-                              <TextBlock Text="{Binding Label}" FontSize="12" />
-                            </StackPanel>
-                          </Button>
+                          <Border Classes="vx-palette" Cursor="Hand" PointerPressed="OnPalettePressed">
+                            <TextBlock Text="{Binding Label}" FontSize="12"
+                                       Foreground="{StaticResource VxText2Brush}" />
+                          </Border>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -120,7 +114,7 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
-                       Text="Click to place a node. A dangling port's + offers only type-compatible follow-ups." />
+                       Text="Drag a node onto the canvas to add it. A dangling port's + offers only type-compatible follow-ups." />
           </StackPanel>
         </ScrollViewer>
       </Border>
@@ -131,6 +125,7 @@
                       Background="{StaticResource VxBgBrush}" PointerWheelChanged="OnCanvasWheel">
           <LayoutTransformControl x:Name="ZoomHost">
             <Panel x:Name="GraphPanel" Width="1680" Height="640" Background="Transparent"
+                   DragDrop.AllowDrop="True"
                    PointerPressed="OnCanvasPressed" PointerMoved="OnCanvasMoved"
                    PointerReleased="OnCanvasReleased">
 
@@ -167,13 +162,10 @@
                             <Binding Path="StageKey" />
                           </MultiBinding>
                         </Border.BoxShadow>
-                        <Grid ColumnDefinitions="3,*">
-                          <Rectangle Grid.Column="0" Margin="0,7" RadiusX="1.5" RadiusY="1.5"
-                                     Fill="{Binding StageKey, Converter={x:Static views:Converters.StageBrush}}" />
-                          <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center" Spacing="1">
+                        <StackPanel Margin="12,8" VerticalAlignment="Center" Spacing="1">
                             <TextBlock Classes="vx-mono" FontSize="9" LetterSpacing="1.2"
                                        Text="{Binding KindLabel}"
-                                       Foreground="{Binding StageKey, Converter={x:Static views:Converters.StageBrush}}" />
+                                       Foreground="{StaticResource VxMutedBrush}" />
                             <TextBlock FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                        Foreground="{StaticResource VxTextBrush}" Text="{Binding Name}" />
                             <StackPanel Orientation="Horizontal" Spacing="5">
@@ -192,7 +184,6 @@
                                          IsVisible="{Binding QueueText, Converter={x:Static ObjectConverters.IsNotNull}}" />
                             </StackPanel>
                           </StackPanel>
-                        </Grid>
                       </Border>
 
                       <!-- typed ports (colors = frame type = stage palette) -->
@@ -282,8 +273,6 @@
             <StackPanel Spacing="14"
                         IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}">
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Ellipse Width="9" Height="9" VerticalAlignment="Center"
-                         Fill="{Binding SelectedNode.StageKey, FallbackValue={x:Null}, Converter={x:Static views:Converters.StageBrush}}" />
                 <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource VxTextBrush}"
                            Text="{Binding SelectedNode.Name, FallbackValue=''}" />
                 <Border CornerRadius="4" Background="#1F66BB6A" Padding="6,2" VerticalAlignment="Center"

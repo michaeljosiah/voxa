@@ -39,15 +39,31 @@ public class ConfigViewModelTests
     }
 
     [Fact]
-    public void Registry_Populates_The_Dropdowns()
+    public void Dropdowns_Show_Local_Providers_And_Hide_Unactivated_Cloud_Providers()
     {
+        // VST-003: the dropdowns are the live registry filtered to activated-or-local identities.
+        // With nothing activated, only the local tier shows — cloud providers stay hidden until the
+        // user adds them in Settings.
         var vm = Vm();
-        // The live registry — not a hardcoded list — feeds the choices.
-        Assert.Contains("WhisperCpp", vm.SttProviders);
-        Assert.Contains("OpenAI", vm.SttProviders);
-        Assert.Contains("Piper", vm.TtsProviders);
-        Assert.Contains("Kokoro", vm.TtsProviders);
-        Assert.Contains("ElevenLabs", vm.TtsProviders);
+        Assert.Contains("WhisperCpp", vm.SttProviders);     // local STT
+        Assert.Contains("Piper", vm.TtsProviders);          // local TTS
+        Assert.Contains("Kokoro", vm.TtsProviders);         // local TTS
+        Assert.DoesNotContain("OpenAI", vm.SttProviders);   // cloud, not activated
+        Assert.DoesNotContain("ElevenLabs", vm.TtsProviders); // cloud, not activated
+    }
+
+    [Fact]
+    public void Activating_A_Cloud_Provider_Adds_It_To_The_Dropdowns_On_Refresh()
+    {
+        var services = TestSupport.Services();
+        var vm = new ConfigViewModel(services);
+        Assert.DoesNotContain("ElevenLabs", vm.TtsProviders);
+
+        services.Secrets.Activate("ElevenLabs");
+        vm.RefreshProviderLists();
+
+        Assert.Contains("ElevenLabs", vm.TtsProviders);     // now offered
+        Assert.Contains("Piper", vm.TtsProviders);          // locals still present
     }
 
     [Fact]

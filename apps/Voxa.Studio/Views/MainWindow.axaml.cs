@@ -59,6 +59,21 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Open the Settings dialog (VST-003). Showing it is a View concern — <c>ShowDialog</c> needs the
+    /// owner window, which lives here (like the session clock). A fresh <see cref="SettingsViewModel"/>
+    /// works over the shared secrets service; on Save the shell applies the new credentials.
+    /// </summary>
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+
+        var settings = new SettingsViewModel(vm.Services.Secrets);
+        await new SettingsDialog { DataContext = settings }.ShowDialog(this);
+
+        if (settings.Saved) vm.OnSettingsSaved();
+    }
+
     private void OnNavChanged(object? sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton { IsChecked: true } radio) return;

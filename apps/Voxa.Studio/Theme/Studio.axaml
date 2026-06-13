@@ -1,12 +1,12 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- ════════ VOXA Studio stylesheet (VST-002 · voxa-design skill) ════════
-       Dark, calm, one accent: ink surfaces, white-alpha hairlines, cyan doing all
-       the talking. Radii: 6 chips · 10 controls · 14 cards · 20 modals. Motion
-       tokens (Theme/Motion.cs): fast 120 · standard 240 · draw 1100 · pulse 2600;
-       XAML transitions hardcode the same values. Text on cyan is ink, never white.
-       If a screen looks exciting while idle, it's wrong. -->
+  <!-- ════════ VOXA Studio stylesheet (VST-002, re-toned VST-003) ════════
+       Dark, calm, one accent: warm-neutral surfaces, warm hairlines, a single coral
+       doing the talking (Claude-like). Compact controls — radii: 7 controls · 10 cards
+       · 12 modals. Motion tokens (Theme/Motion.cs): fast 120 · standard 240 · draw 1100
+       · pulse 2600; XAML transitions hardcode the same values. Text on coral is warm
+       white. If a screen looks exciting while idle, it's wrong. -->
 
   <Style Selector="Window">
     <Setter Property="Background" Value="{StaticResource VxBgBrush}" />
@@ -19,8 +19,8 @@
 
   <!-- View title (the ViewBar pattern): 18 bold, tight tracking. -->
   <Style Selector="TextBlock.vx-h1">
-    <Setter Property="FontSize" Value="18" />
-    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="LetterSpacing" Value="-0.2" />
     <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
   </Style>
@@ -62,17 +62,17 @@
     <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine1Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
-    <Setter Property="Padding" Value="16" />
-    <Setter Property="BoxShadow" Value="0 1 2 0 #66000000, inset 0 1 0 0 #0DEAF1F8" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="14" />
+    <Setter Property="BoxShadow" Value="0 1 2 0 #33000000" />
   </Style>
 
   <Style Selector="Border.vx-card-flush">
     <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine1Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
-    <Setter Property="BoxShadow" Value="0 1 2 0 #66000000, inset 0 1 0 0 #0DEAF1F8" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="BoxShadow" Value="0 1 2 0 #33000000" />
   </Style>
 
   <Style Selector="Border.vx-chip">
@@ -94,7 +94,8 @@
   <!-- ── buttons (hover lightens one step + line-3; press = 1px down, no scale) ── -->
 
   <Style Selector="Button">
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="FontSize" Value="13" />
     <Setter Property="Transitions">
       <Transitions>
         <!-- fast 120 / ease-out: hover + press -->
@@ -110,7 +111,7 @@
     <Setter Property="Background" Value="{StaticResource VxAccentBrush}" />
     <Setter Property="Foreground" Value="{StaticResource VxOnAccentBrush}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Padding" Value="18,9" />
+    <Setter Property="Padding" Value="13,6" />
   </Style>
   <Style Selector="Button.vx-primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource VxAccent2Brush}" />
@@ -130,7 +131,7 @@
     <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="Padding" Value="11,6" />
   </Style>
   <Style Selector="Button.vx-secondary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource VxInk700Brush}" />
@@ -142,7 +143,7 @@
     <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="Padding" Value="11,6" />
   </Style>
   <Style Selector="Button.vx-ghost:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
@@ -155,7 +156,7 @@
     <Setter Property="Foreground" Value="{StaticResource VxBadBrush}" />
     <Setter Property="BorderBrush" Value="#59EF5350" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="Padding" Value="11,6" />
   </Style>
   <Style Selector="Button.vx-danger:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource VxBadSoftBrush}" />
@@ -223,8 +224,8 @@
   </Style>
   <Style Selector="RadioButton.vx-nav PathIcon">
     <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
-    <Setter Property="Width" Value="20" />
-    <Setter Property="Height" Value="20" />
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="17" />
   </Style>
   <Style Selector="RadioButton.vx-nav:pointerover PathIcon">
     <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
@@ -244,7 +245,7 @@
   <Style Selector="RadioButton.vx-seg">
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Name="segBorder" CornerRadius="8" Background="Transparent" Padding="12,6">
+        <Border Name="segBorder" CornerRadius="7" Background="Transparent" Padding="11,5">
           <ContentPresenter Content="{TemplateBinding Content}"
                             HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
@@ -341,7 +342,7 @@
   <Style Selector="ComboBox">
     <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="CornerRadius" Value="7" />
   </Style>
   <Style Selector="ComboBox:pointerover /template/ Border#Background">
     <Setter Property="BorderBrush" Value="{StaticResource VxLine3Brush}" />
@@ -350,7 +351,7 @@
   <Style Selector="TextBox">
     <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
     <Setter Property="BorderBrush" Value="{StaticResource VxLine2Brush}" />
-    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="CornerRadius" Value="7" />
     <Setter Property="SelectionBrush" Value="{StaticResource VxAccentDimBrush}" />
   </Style>
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
@@ -363,8 +364,8 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="ListBoxItem">
-    <Setter Property="CornerRadius" Value="10" />
-    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="9,6" />
   </Style>
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
     <Setter Property="Background" Value="{StaticResource VxAccentDimBrush}" />

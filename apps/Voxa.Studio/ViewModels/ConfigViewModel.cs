@@ -28,12 +28,11 @@ public sealed partial class ConfigViewModel : ObservableObject
         _services = services;
         VoiceCatalog = new VoiceCatalogService(services, new VoiceStore());
 
-        SttProviders = services.Registry.SttNames.OrderBy(n => n, StringComparer.Ordinal).ToList();
-        TtsProviders = services.Registry.TtsNames.OrderBy(n => n, StringComparer.Ordinal).ToList();
         VadEngines = new[] { "Silero", "SilenceGate", "None" }
             .Union(services.Registry.VadNames, StringComparer.OrdinalIgnoreCase)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        RefreshProviderLists();   // VST-003: the dropdowns are the registry filtered to activated-or-local
 
         // Seed from the running config so "Config" opens showing what Talk is using.
         var voxa = services.Configuration.GetSection("Voxa");
@@ -57,11 +56,12 @@ public sealed partial class ConfigViewModel : ObservableObject
 
     // ── choices (from the live registry + pinned catalogs) ──────────────────
 
-    public IReadOnlyList<string> SttProviders { get; }
-    public IReadOnlyList<string> TtsProviders { get; }
+    // VST-003: filtered to activated-or-local identities; rebuilt by RefreshProviderLists().
+    public ObservableCollection<string> SttProviders { get; } = new();
+    public ObservableCollection<string> TtsProviders { get; } = new();
+    public ObservableCollection<string> AgentProviders { get; } = new();
     public IReadOnlyList<string> VadEngines { get; }
     public IReadOnlyList<string> Profiles { get; } = ["Default", "LowLatency", "Quality", "Cheap"];
-    public IReadOnlyList<string> AgentProviders { get; } = ["Echo", "OpenAI"];
     public IReadOnlyList<string> WhisperModels { get; } = WhisperCppModelCatalog.KnownModels.ToList();
     public IReadOnlyList<string> PiperVoices { get; } = PiperVoiceCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroVoices { get; } = KokoroCatalog.KnownVoices.ToList();
@@ -76,6 +76,46 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedPiperVoice;
     [ObservableProperty] private string _selectedKokoroVoice;
     [ObservableProperty] private string _selectedKokoroPrecision;
+
+    // Agent providers aren't registry STT/TTS entries — they're DefaultAgentFactory's pair.
+    private static readonly string[] AgentProviderNames = ["Echo", "OpenAI"];
+
+    /// <summary>
+    /// Rebuild the STT/TTS/Agent dropdowns from the live registry, filtered to identities that are
+    /// local (always available) or activated in Settings (VST-003 WS6). Called at construction and
+    /// after the Settings dialog changes activations. The current selection is left as-is even if it
+    /// falls outside the filtered list — an appsettings-configured provider stays selected and exports
+    /// correctly; the dropdown simply won't offer un-activated alternatives.
+    /// </summary>
+    public void RefreshProviderLists()
+    {
+        var activated = _services.Secrets.Activated
+            .Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        ReplaceList(SttProviders, _services.Registry.SttNames, ProviderRole.Stt, activated);
+        ReplaceList(TtsProviders, _services.Registry.TtsNames, ProviderRole.Tts, activated);
+        ReplaceList(AgentProviders, AgentProviderNames, ProviderRole.Agent, activated);
+    }
+
+    private static void ReplaceList(
+        ObservableCollection<string> target, IEnumerable<string> source,
+        ProviderRole role, IReadOnlySet<string> activated)
+    {
+        var kept = source
+            .Where(name => Visible(name, role, activated))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+        target.Clear();
+        foreach (var name in kept) target.Add(name);
+    }
+
+    private static bool Visible(string name, ProviderRole role, IReadOnlySet<string> activated)
+    {
+        var manifest = ProviderManifestCatalog.Find(name);
+        if (manifest is null) return true;                  // unmanifested → don't hide
+        if (!manifest.Roles.Contains(role)) return false;   // described, but not for this role
+        return manifest.IsLocal || activated.Contains(name);
+    }
 
     // ── LLM agent (the "talk to a real model" path) ──────────────────────────
 

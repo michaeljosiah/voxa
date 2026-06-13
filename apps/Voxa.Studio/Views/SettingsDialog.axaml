@@ -1,0 +1,241 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Voxa.Studio.ViewModels"
+        xmlns:services="using:Voxa.Studio.Services"
+        xmlns:views="using:Voxa.Studio.Views"
+        xmlns:theme="using:Voxa.Studio.Theme"
+        x:Class="Voxa.Studio.Views.SettingsDialog"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="760" Height="520"
+        CanResize="False"
+        SystemDecorations="None"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        WindowStartupLocation="CenterOwner">
+
+  <Window.Styles>
+    <!-- sidebar category list: flat single-line rows, soft rounded highlight on the selected one -->
+    <Style Selector="ListBox.vx-side">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+    </Style>
+    <Style Selector="ListBox.vx-side ListBoxItem">
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Margin" Value="0,1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector="ListBox.vx-side ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    </Style>
+    <Style Selector="ListBox.vx-side ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource VxPanel2Brush}" />
+    </Style>
+
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+
+    <Style Selector="Button.vx-flat">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource VxText2Brush}" />
+    </Style>
+    <Style Selector="Button.vx-flat:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource VxRaisedBrush}" />
+    </Style>
+    <Style Selector="Button.vx-close PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+      <Setter Property="Width" Value="11" />
+      <Setter Property="Height" Value="11" />
+    </Style>
+    <Style Selector="Button.vx-close:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Border CornerRadius="12" ClipToBounds="True"
+          Background="{StaticResource VxPanelBrush}"
+          BorderBrush="{StaticResource VxLine2Brush}" BorderThickness="1"
+          BoxShadow="0 24 70 0 #88000000">
+    <Grid ColumnDefinitions="216,*">
+
+      <!-- ── sidebar: categories only ── -->
+      <DockPanel Grid.Column="0" Background="{StaticResource VxBgBrush}">
+        <TextBlock DockPanel.Dock="Top" Classes="eyebrow" Text="Settings" Margin="16,16,0,8" />
+        <ListBox Classes="vx-side" ItemsSource="{Binding Categories}"
+                 SelectedItem="{Binding SelectedCategory}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsCategoryItem">
+              <StackPanel Orientation="Horizontal" Spacing="11">
+                <PathIcon Width="15" Height="15" Data="{Binding IconData}"
+                          Foreground="{StaticResource VxMutedBrush}" />
+                <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{StaticResource VxText2Brush}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+
+      <!-- ── content: one category at a time ── -->
+      <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto">
+
+        <!-- top bar: drag handle + close -->
+        <Panel Grid.Row="0" Height="40" PointerPressed="OnDragMove">
+          <Button Classes="vx-flat vx-close" Click="OnCancel" Width="30" Height="30"
+                  CornerRadius="6" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0">
+            <PathIcon Data="M5.6,4.2 L12,10.6 L18.4,4.2 L19.8,5.6 L13.4,12 L19.8,18.4 L18.4,19.8 L12,13.4 L5.6,19.8 L4.2,18.4 L10.6,12 L4.2,5.6 Z" />
+          </Button>
+        </Panel>
+
+        <Panel Grid.Row="1">
+
+          <!-- ════ Providers ════ -->
+          <ScrollViewer IsVisible="{Binding IsProviders}">
+            <StackPanel Margin="32,4,32,8">
+              <TextBlock Text="Providers" Foreground="{StaticResource VxTextBrush}"
+                         FontSize="19" FontWeight="SemiBold" />
+              <TextBlock Classes="eyebrow" TextWrapping="Wrap" MaxWidth="430" Margin="0,6,0,0"
+                         Text="Activate the providers you use and store their keys. Keys are encrypted on disk and never leave this machine." />
+
+              <!-- activated cloud providers, each with its key fields inline -->
+              <ItemsControl ItemsSource="{Binding Providers.CloudRows}" Margin="0,22,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ProviderRowViewModel">
+                    <StackPanel Margin="0,0,0,24">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="{Binding DisplayName}" Foreground="{StaticResource VxTextBrush}"
+                                     FontSize="14" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding RolesLabel}" Foreground="{StaticResource VxAccentBrush}"
+                                     FontSize="11" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="vx-danger" Content="Remove" Click="OnRemoveProvider"
+                                VerticalAlignment="Top" />
+                      </Grid>
+
+                      <ItemsControl ItemsSource="{Binding Fields}" Margin="0,12,0,0">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:FieldValueViewModel">
+                            <StackPanel Margin="0,0,0,10">
+                              <TextBlock Text="{Binding Descriptor.Label}" Foreground="{StaticResource VxText2Brush}"
+                                         FontSize="12" Margin="0,0,0,5" />
+                              <Grid ColumnDefinitions="*,Auto">
+                                <TextBox Text="{Binding Value}" Height="34"
+                                         Watermark="{Binding Descriptor.Placeholder}"
+                                         PasswordChar="{Binding EffectivePasswordChar}" />
+                                <ToggleButton Grid.Column="1" Classes="vx-ghost" Margin="8,0,0,0" Height="34"
+                                              Content="Show" IsChecked="{Binding IsRevealed}"
+                                              IsVisible="{Binding Descriptor.IsSecret}" />
+                              </Grid>
+                            </StackPanel>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+
+                      <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{Binding Status, Converter={x:Static views:Converters.ProviderStatusBrush}}" />
+                        <TextBlock Text="{Binding StatusLabel}" Classes="vx-sub" />
+                      </StackPanel>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Button x:Name="AddProviderButton" Classes="vx-ghost" Content="+ Add provider"
+                      HorizontalAlignment="Left">
+                <Button.Flyout>
+                  <Flyout Placement="Bottom">
+                    <Border Width="246" Padding="4">
+                      <StackPanel>
+                        <TextBlock Classes="eyebrow" Text="Add a provider" Margin="10,6,0,4" />
+                        <ItemsControl ItemsSource="{Binding Providers.Available}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="services:ProviderManifest">
+                              <Button Click="OnAddProviderCard" Classes="vx-flat" Padding="10,8"
+                                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                      CornerRadius="6">
+                                <StackPanel Spacing="2">
+                                  <TextBlock Text="{Binding DisplayName}"
+                                             Foreground="{StaticResource VxTextBrush}" FontWeight="SemiBold" />
+                                  <TextBlock Text="{Binding RolesLabel}" Classes="vx-sub" />
+                                </StackPanel>
+                              </Button>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="vx-sub" Margin="10,4,0,6" Text="All providers added."
+                                   IsVisible="{Binding !Providers.Available.Count}" />
+                      </StackPanel>
+                    </Border>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+
+              <!-- local tier: read-only -->
+              <Border Height="1" Background="{StaticResource VxLine1Brush}" Margin="0,20,0,0" />
+              <TextBlock Classes="eyebrow" Text="Local — always available, no keys" Margin="0,14,0,6" />
+              <ItemsControl ItemsSource="{Binding Providers.LocalRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ProviderRowViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,5">
+                      <TextBlock Text="{Binding DisplayName}" Foreground="{StaticResource VxText2Brush}"
+                                 FontSize="13" VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding RolesLabel}" Classes="vx-sub" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+
+          <!-- ════ Appearance ════ -->
+          <ScrollViewer IsVisible="{Binding IsAppearance}">
+            <StackPanel Margin="32,4,32,8">
+              <TextBlock Text="Appearance" Foreground="{StaticResource VxTextBrush}"
+                         FontSize="19" FontWeight="SemiBold" />
+              <TextBlock Text="Theme" Foreground="{StaticResource VxText2Brush}" FontSize="12"
+                         Margin="0,22,0,8" />
+              <ListBox ItemsSource="{Binding Appearance.Themes}"
+                       SelectedItem="{Binding Appearance.SelectedTheme}"
+                       Background="Transparent" BorderThickness="0"
+                       MaxWidth="360" HorizontalAlignment="Left">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="theme:StudioTheme">
+                    <Grid ColumnDefinitions="Auto,*" Margin="2,3">
+                      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="15" Height="15" CornerRadius="4,0,0,4" Background="{Binding SwatchBg}" />
+                        <Border Width="15" Height="15" Background="{Binding SwatchPanel}" />
+                        <Border Width="15" Height="15" CornerRadius="0,4,4,0" Background="{Binding SwatchAccent}" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="12,0,0,0"
+                                 VerticalAlignment="Center" FontSize="13"
+                                 Foreground="{StaticResource VxTextBrush}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Classes="vx-sub" TextWrapping="Wrap" MaxWidth="380" HorizontalAlignment="Left"
+                         Margin="0,12,0,0"
+                         Text="Theme changes apply immediately and are saved for next launch. The pipeline stage colours (waterfall, traces, charts) stay fixed across themes." />
+            </StackPanel>
+          </ScrollViewer>
+
+        </Panel>
+
+        <!-- actions -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="10" Margin="32,8,32,20">
+          <Button Classes="vx-ghost" Content="Cancel" Click="OnCancel" IsCancel="True" />
+          <Button Classes="vx-primary" Content="Save" Click="OnSave" IsDefault="True" />
+        </StackPanel>
+
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
