@@ -18,8 +18,10 @@ account, or (after first run) a network connection**. Spec:
 
 That's the whole switch. The five-line `Program.cs` from the main README is unchanged. First run
 downloads the models (SHA-256-verified, with progress logged at startup); afterwards everything
-is local. Swap `"Echo"` for `"OpenAI"` (plus a key) when you want a real LLM — or register any
-`IChatClient` in DI (e.g. an Ollama client) for a fully local brain.
+is local. Swap `"Echo"` for `"OpenAI"` (plus a key) when you want a cloud LLM, or `"Ollama"` for a
+fully-local brain — point `Voxa:Agent:Provider` at a running [Ollama](https://ollama.com) daemon
+(keyless; set `Voxa:Agent:Model` to a pulled model such as `llama3.2`, and `Voxa:Agent:BaseUrl` if it
+is not on `http://localhost:11434/v1`). You can still register any `IChatClient` in DI to override.
 
 ### Try it in a browser
 

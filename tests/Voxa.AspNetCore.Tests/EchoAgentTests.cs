@@ -59,6 +59,7 @@ public class EchoAgentTests
         var error = Assert.Single(errors);
         Assert.Contains("Anthropic", error);
         Assert.Contains("OpenAI", error);
+        Assert.Contains("Ollama", error);
         Assert.Contains("Echo", error);
     }
 
@@ -125,5 +126,42 @@ public class EchoAgentTests
         guard.Arm();
 
         await guard.StartAsync(CancellationToken.None); // throws on any validation error
+    }
+
+    // ── VLS-003: the local Ollama brain (OpenAI-compatible, keyless) ──────────
+
+    [Fact]
+    public void Ollama_Validates_Keyless()
+    {
+        var (factory, sp) = MetaPackageFactory(); // no API key anywhere
+        using var _ = sp;
+
+        // A local Ollama daemon needs no credential; validation must not demand one — and must not
+        // probe the daemon, so boot can't depend on `ollama serve` already running.
+        Assert.Empty(factory.Validate(new VoxaAgentOptions { Provider = "Ollama" }));
+        Assert.Empty(factory.Validate(new VoxaAgentOptions { Provider = "ollama" })); // case-insensitive
+    }
+
+    [Fact]
+    public void Ollama_With_A_Malformed_BaseUrl_Is_Rejected()
+    {
+        var (factory, sp) = MetaPackageFactory(("Voxa:Agent:BaseUrl", "not-a-url"));
+        using var _ = sp;
+
+        var error = Assert.Single(factory.Validate(new VoxaAgentOptions { Provider = "Ollama" }));
+        Assert.Contains("not-a-url", error);
+        Assert.Contains("11434", error); // the default endpoint is named in the remedy
+    }
+
+    [Fact]
+    public void Ollama_Create_Builds_An_Agent_Without_A_Key_Or_A_Running_Daemon()
+    {
+        var (factory, sp) = MetaPackageFactory();
+        using var _ = sp;
+
+        // Construction only wires an OpenAI-compatible client at the local endpoint — no network call
+        // until the agent actually runs, so this succeeds with no key and no daemon.
+        var agent = factory.Create(sp, new VoxaAgentOptions { Provider = "Ollama" });
+        Assert.NotNull(agent);
     }
 }
