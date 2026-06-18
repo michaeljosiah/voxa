@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **MCP server: give your agent a voice and ears (VDX-002).** A new `Voxa.Mcp` dotnet tool runs a
+  Model Context Protocol server over stdio (built on the official `ModelContextProtocol` SDK),
+  exposing `voxa_speak` (text → WAV via Piper/Kokoro), `voxa_transcribe` (WAV → text via whisper.cpp)
+  and `voxa_list_voices` — all backed by the keyless local tier, so any MCP-aware agent (Claude Code,
+  Cursor, …) gets a voice you own with no API key. Install with `dotnet tool install -g Voxa.Mcp` and
+  register the `voxa-mcp` command as an MCP server.
 - **Voxa Studio: Settings dialog with persistent provider credentials (VST-003).** A new **Settings**
   dialog (the gear at the foot of the nav rail) manages which providers are active and stores their
   API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter its key
