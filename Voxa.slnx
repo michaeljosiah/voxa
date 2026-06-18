@@ -25,6 +25,7 @@
     <Project Path="src/Voxa.Speech.Kokoro/Voxa.Speech.Kokoro.csproj" />
     <Project Path="src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj" />
     <Project Path="src/Voxa.Speech.Piper/Voxa.Speech.Piper.csproj" />
+    <Project Path="src/Voxa.Speech.Sidecar/Voxa.Speech.Sidecar.csproj" />
     <Project Path="src/Voxa.Speech.WhisperCpp/Voxa.Speech.WhisperCpp.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
     <Project Path="src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj" />
@@ -45,6 +46,7 @@
     <Project Path="tests/Voxa.Speech.Kokoro.Tests/Voxa.Speech.Kokoro.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.OpenAI.Tests/Voxa.Speech.OpenAI.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Piper.Tests/Voxa.Speech.Piper.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Sidecar.Tests/Voxa.Speech.Sidecar.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
     <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />

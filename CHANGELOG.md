@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Expressive / cloning TTS via an out-of-process sidecar (VVL-002, foundation).** A new
+  `Voxa.Speech.Sidecar` package runs heavy PyTorch voices (XTTS-v2 / OpenVoice) in a separate process
+  — the same isolation Piper uses for espeak-ng — exposed as an ordinary `ITextToSpeechEngine` over a
+  tiny stdio protocol (`SidecarProtocol`, unit-tested over an in-memory stream). Opt-in heavy tier:
+  `AddProvider(SidecarDescriptors.Tts)` with `Voxa:Sidecar:ExecutablePath` (a built/frozen binary) or
+  `Voxa:Sidecar:PythonScript` (dev). Ships the runnable Python sidecar source; the pinned per-platform
+  frozen binaries + cache catalog, the XTTS-v2-vs-OpenVoice spike, and local cloning (same transport)
+  are the documented next steps — no binary is bundled or SHA-pinned yet. See the package README.
 - **Voxa Studio: Settings dialog with persistent provider credentials (VST-003).** A new **Settings**
   dialog (the gear at the foot of the nav rail) manages which providers are active and stores their
   API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter its key
