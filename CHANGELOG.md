@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: dictation core (VST-004, foundation).** A new headless `DictationSession` service —
+  push-to-talk capture of the mic into an utterance buffer, then local whisper.cpp transcription —
+  walking `Idle → Recording → Transcribing → Completed/Failed` for the UI to render. Avalonia-free and
+  unit-tested with fakes. The dictation *view* + global push-to-talk hotkey + floating session pill,
+  and the Config grey-out-incompatible selectors / Metrics provenance polish, are the remaining
+  interactive UI work.
 - **Voxa Studio: Settings dialog with persistent provider credentials (VST-003).** A new **Settings**
   dialog (the gear at the foot of the nav rail) manages which providers are active and stores their
   API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter its key
