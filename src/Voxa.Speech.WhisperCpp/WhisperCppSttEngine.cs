@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Whisper.net;
+using Whisper.net.LibraryLoader;
 
 namespace Voxa.Speech.WhisperCpp;
 
@@ -34,8 +35,9 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
     /// <summary>Flushes below ~0.3 s are VAD blips — transcribing them invites hallucinated text.</summary>
     private const int MinUtteranceSamples = (int)(0.3 * RequiredSampleRate);
 
-    // One factory (= one copy of the model weights) per model path, process-wide. Lazy so two
-    // connections racing on first use don't both pay the load.
+    // One factory (= one copy of the model weights) per (model path, device), process-wide. Lazy so
+    // two connections racing on first use don't both pay the load. The device is part of the key so a
+    // faulted GPU load can't poison a later CPU engine on the same model path.
     private static readonly ConcurrentDictionary<string, Lazy<WhisperFactory>> Factories = new();
 
     private readonly WhisperCppOptions _options;
@@ -99,9 +101,36 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
             modelPath = await _cache!.ResolveAsync(artifact, ct).ConfigureAwait(false);
         }
 
-        var factory = Factories.GetOrAdd(
-            Path.GetFullPath(modelPath),
-            p => new Lazy<WhisperFactory>(() => WhisperFactory.FromPath(p))).Value;
+        // VLS-002 — choose the native runtime backend before the (process-wide, lazily-built) factory
+        // loads it. RuntimeOptions is global and only honoured before the first factory loads, so it is
+        // set here from the process-wide Device config; the first model load then locks the native
+        // library in for the process (a Whisper.net constraint — fine for a single Device config).
+        var useGpu = _options.Device != WhisperDevice.Cpu;
+        ApplyRuntimeLibraryOrder(_options.Device);
+
+        WhisperFactory factory;
+        try
+        {
+            factory = Factories.GetOrAdd(
+                $"{Path.GetFullPath(modelPath)}|{_options.Device}",
+                _ => new Lazy<WhisperFactory>(
+                    () => WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = useGpu }))).Value;
+        }
+        catch (Exception ex) when (_options.Device is not (WhisperDevice.Cpu or WhisperDevice.Auto))
+        {
+            // Explicit GPU backend requested but its native runtime couldn't load: fail loudly with the
+            // fix rather than silently dropping to CPU (which would be a confusing latency regression).
+            throw new VoxaModelUnavailableException(
+                $"Voxa:WhisperCpp:Device={_options.Device} but that runtime could not be loaded. Add the matching " +
+                "Whisper.net.Runtime.* package (e.g. Whisper.net.Runtime.Cuda) to your application and ensure the GPU " +
+                $"driver/toolkit is installed, or set Voxa:WhisperCpp:Device=cpu. ({ex.Message})", ex);
+        }
+
+        if (!useGpu && IsHeavyModel(Path.GetFileName(modelPath)))
+            _logger.LogWarning(
+                "WhisperCpp STT: '{Model}' is a large/medium model on CPU — expect well above real-time latency. " +
+                "Set Voxa:WhisperCpp:Device to a GPU backend (and add the matching Whisper.net.Runtime.* package) for live use.",
+                Path.GetFileName(modelPath));
 
         var builder = factory.CreateBuilder()
             .WithThreads(_options.Threads ?? Math.Min(4, Environment.ProcessorCount));
@@ -112,8 +141,9 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
 
         _processor = builder.Build();
         _logger.LogInformation(
-            "WhisperCpp STT ready: model {Model}, language {Language}",
-            Path.GetFileName(modelPath), _options.AutoDetectLanguage ? "(auto)" : _options.Language);
+            "WhisperCpp STT ready: model {Model}, language {Language}, device {Device} (runtime {Runtime})",
+            Path.GetFileName(modelPath), _options.AutoDetectLanguage ? "(auto)" : _options.Language,
+            _options.Device, RuntimeOptions.LoadedLibrary);
     }
 
     public ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
@@ -181,6 +211,28 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
     }
 
     // ── internals ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Set Whisper.net's global native-runtime preference from the configured device. <c>Auto</c> keeps
+    /// the library's own order (GPU→…→CPU); <c>Cpu</c> is forced explicitly so a GPU runtime package
+    /// present for other reasons can't silently change the default tier; each explicit GPU backend omits
+    /// the CPU fallback so an unavailable runtime fails loudly at load (see <see cref="StartAsync"/>).
+    /// </summary>
+    private static void ApplyRuntimeLibraryOrder(WhisperDevice device)
+    {
+        switch (device)
+        {
+            case WhisperDevice.Cpu:    RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx]; break;
+            case WhisperDevice.Cuda:   RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cuda, RuntimeLibrary.Cuda12]; break;
+            case WhisperDevice.Vulkan: RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Vulkan]; break;
+            case WhisperDevice.CoreML: RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.CoreML]; break;
+            case WhisperDevice.Auto:   break; // keep Whisper.net's default order
+        }
+    }
+
+    private static bool IsHeavyModel(string fileName) =>
+        fileName.Contains("large", StringComparison.OrdinalIgnoreCase) ||
+        fileName.Contains("medium", StringComparison.OrdinalIgnoreCase);
 
     private void AppendPcm16(ReadOnlySpan<byte> pcm)
     {

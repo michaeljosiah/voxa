@@ -64,6 +64,41 @@ roughly `transcription time` later than a cloud pipeline would. Rough CPU figure
 
 For interactive development: `tiny.en`/`base.en` + `"Profile": "LowLatency"`.
 
+### Bigger models & GPU (VLS-002)
+
+The catalog also carries the larger Whisper families for higher accuracy — `medium` / `medium.en`,
+`large-v3`, and `large-v3-turbo` (each with a `-q5_0` quantization), SHA-256-pinned like the rest
+([spec](specifications/vls-002-gpu-stt-catalog-spec.html)). They are **far slower than real time on
+CPU** — `large-v3` is ~3.1 GB and only practical on a GPU — so the engine logs a warning when a
+large/medium model runs on CPU.
+
+Pick the inference backend with `Voxa:WhisperCpp:Device` (default `cpu`):
+
+```json
+{
+  "Voxa": {
+    "Stt": "WhisperCpp",
+    "WhisperCpp": { "Model": "large-v3-turbo", "Device": "cuda" }
+  }
+}
+```
+
+| `Device` | Behaviour |
+|---|---|
+| `cpu` *(default)* | CPU only — deterministic, no extra packages. What CI uses. |
+| `auto` | Best available accelerator, falling back to CPU. |
+| `cuda` / `vulkan` / `coreml` | Require that runtime; **fail at startup** if it can't load (no silent CPU fallback). |
+
+**Voxa never bundles GPU natives** — the default package stays CPU-only and small. To use a GPU, add
+the matching runtime to *your* app and set `Device`:
+
+```xml
+<PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" />
+```
+
+`large-v3-turbo` is the sweet spot: ~8× faster than `large-v3` with near-large accuracy. `coreml` is
+best-effort — it needs an extra Core ML encoder bundle that VLS-002 does not yet provision.
+
 ## The model cache
 
 | Setting | Default | Notes |

@@ -119,16 +119,51 @@ public class WhisperCppDescriptorTests
     }
 
     [Fact]
-    public void Catalog_Sizes_Stay_In_The_Curated_Range()
+    public void Catalog_Entries_Declare_Plausible_Sizes_And_Pinned_Hashes()
     {
-        // Guardrail from the spec's budgets table: every catalog entry stays under ~500 MB and
-        // declares a plausible size (the progress logging and error messages rely on it).
+        // VLS-002 widened the upper bound: the large-v3 family runs up to ~3.1 GB (the catalog stopped
+        // at ~500 MB when small was the largest). Every entry still declares a plausible size — the
+        // progress logging and error messages rely on it — a 64-char SHA-256, and the pinned host.
         foreach (var name in WhisperCppModelCatalog.KnownModels)
         {
             Assert.True(WhisperCppModelCatalog.TryGet(name, out var artifact));
-            Assert.InRange(artifact.SizeBytes, 10_000_000, 500_000_000);
+            Assert.InRange(artifact.SizeBytes, 10_000_000, 3_200_000_000);
             Assert.Equal(64, artifact.Sha256.Length);
             Assert.StartsWith("https://huggingface.co/ggerganov/whisper.cpp/", artifact.DownloadUrl.ToString());
         }
+    }
+
+    [Fact]
+    public void Catalog_Includes_The_VLS002_Large_Models()
+    {
+        foreach (var name in new[]
+                 { "medium", "medium.en", "medium-q5_0", "large-v3", "large-v3-q5_0", "large-v3-turbo", "large-v3-turbo-q5_0" })
+            Assert.True(WhisperCppModelCatalog.TryGet(name, out _), $"catalog is missing '{name}'");
+    }
+
+    [Fact]
+    public void Device_Defaults_To_Cpu_And_Parses_Known_Values()
+    {
+        Assert.Equal(WhisperDevice.Cpu, WhisperCppOptions.FromConfiguration(VoxaRoot()).Device);
+        Assert.Equal(WhisperDevice.Cuda, WhisperCppOptions.FromConfiguration(VoxaRoot(("WhisperCpp:Device", "cuda"))).Device);
+        Assert.Equal(WhisperDevice.Auto, WhisperCppOptions.FromConfiguration(VoxaRoot(("WhisperCpp:Device", "Auto"))).Device);
+        Assert.Equal(WhisperDevice.CoreML, WhisperCppOptions.FromConfiguration(VoxaRoot(("WhisperCpp:Device", "coreml"))).Device);
+    }
+
+    [Fact]
+    public void Known_Device_Validates_Without_Probing_Hardware()
+    {
+        // Config validation is keyless and hardware-agnostic: an unavailable GPU surfaces at
+        // StartAsync, not here. A syntactically valid device therefore passes validation.
+        Assert.Empty(WhisperCppDescriptors.Stt.Validate(VoxaRoot(("WhisperCpp:Device", "cuda"))));
+    }
+
+    [Fact]
+    public void Unknown_Device_Is_Rejected_With_Valid_Values()
+    {
+        var error = Assert.Single(WhisperCppDescriptors.Stt.Validate(VoxaRoot(("WhisperCpp:Device", "gpu"))));
+        Assert.Contains("gpu", error);
+        Assert.Contains("cuda", error);
+        Assert.Contains("cpu", error);
     }
 }
