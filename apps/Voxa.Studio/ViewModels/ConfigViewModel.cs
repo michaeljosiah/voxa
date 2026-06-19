@@ -49,6 +49,14 @@ public sealed partial class ConfigViewModel : ObservableObject
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
         _agentBaseUrl = voxa["Agent:BaseUrl"] ?? "http://localhost:11434/v1";
 
+        var smartTurnProvider = voxa["SmartTurn:Provider"];
+        _smartTurnEnabled = !string.IsNullOrWhiteSpace(smartTurnProvider)
+            && SmartTurnProviders.Contains(smartTurnProvider, StringComparer.OrdinalIgnoreCase);
+        if (_smartTurnEnabled) _selectedSmartTurnProvider = smartTurnProvider!;
+        _smartTurnEndpoint = voxa["SmartTurn:Endpoint"] ?? "http://localhost:8000/predict";
+        _smartTurnPythonExe = voxa["SmartTurn:PythonExe"] ?? "python";
+        _smartTurnPythonScript = voxa["SmartTurn:PythonScript"] ?? "sidecar/voxa_smart_turn_sidecar.py";
+
         Regenerate();
         // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
         // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
@@ -157,6 +165,28 @@ public sealed partial class ConfigViewModel : ObservableObject
     /// <summary>True when the selected cloud provider has no resolvable key — the list can't load.</summary>
     [ObservableProperty] private bool _cloudVoiceKeyRequired;
 
+    // ── smart turn (P0): an opt-in classifier above the silence VAD ───────────
+    // When on, the VAD asks a model "is the user actually done?" at the silence timeout, so a pause to
+    // think doesn't end the turn early — letting the VAD stop duration drop without clipping. Two
+    // classifiers: a local Python "Sidecar" (the real pipecat-ai/smart-turn-v3) or an "Http" model
+    // server. Off = classic silence VAD, no new dependencies.
+
+    public IReadOnlyList<string> SmartTurnProviders { get; } = ["Sidecar", "Http"];
+
+    [ObservableProperty] private bool _smartTurnEnabled;
+    [ObservableProperty] private string _selectedSmartTurnProvider = "Sidecar";
+    [ObservableProperty] private string _smartTurnEndpoint = "http://localhost:8000/predict";
+    [ObservableProperty] private string _smartTurnPythonExe = "python";
+    [ObservableProperty] private string _smartTurnPythonScript = "sidecar/voxa_smart_turn_sidecar.py";
+
+    public bool ShowSmartTurnOptions => SmartTurnEnabled;
+    public bool ShowSmartTurnHttp => SmartTurnEnabled && string.Equals(SelectedSmartTurnProvider, "Http", StringComparison.OrdinalIgnoreCase);
+    public bool ShowSmartTurnSidecar => SmartTurnEnabled && string.Equals(SelectedSmartTurnProvider, "Sidecar", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Enabled but the required field for the chosen classifier is blank — the toggle is a no-op until filled.</summary>
+    public bool SmartTurnIncomplete => SmartTurnEnabled &&
+        (ShowSmartTurnHttp ? string.IsNullOrWhiteSpace(SmartTurnEndpoint) : string.IsNullOrWhiteSpace(SmartTurnPythonScript));
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
@@ -251,6 +281,24 @@ public sealed partial class ConfigViewModel : ObservableObject
     partial void OnAgentModelChanged(string value) => Regenerate();
     partial void OnAgentApiKeyChanged(string value) => Regenerate();
     partial void OnAgentBaseUrlChanged(string value) => Regenerate();
+    partial void OnSmartTurnEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowSmartTurnOptions));
+        OnPropertyChanged(nameof(ShowSmartTurnHttp));
+        OnPropertyChanged(nameof(ShowSmartTurnSidecar));
+        OnPropertyChanged(nameof(SmartTurnIncomplete));
+        Regenerate();
+    }
+    partial void OnSelectedSmartTurnProviderChanged(string value)
+    {
+        OnPropertyChanged(nameof(ShowSmartTurnHttp));
+        OnPropertyChanged(nameof(ShowSmartTurnSidecar));
+        OnPropertyChanged(nameof(SmartTurnIncomplete));
+        Regenerate();
+    }
+    partial void OnSmartTurnEndpointChanged(string value) { OnPropertyChanged(nameof(SmartTurnIncomplete)); Regenerate(); }
+    partial void OnSmartTurnPythonExeChanged(string value) => Regenerate();
+    partial void OnSmartTurnPythonScriptChanged(string value) { OnPropertyChanged(nameof(SmartTurnIncomplete)); Regenerate(); }
 
     // ── draft → JSON + validation ────────────────────────────────────────────
 
@@ -290,6 +338,23 @@ public sealed partial class ConfigViewModel : ObservableObject
         if (ShowAgentBaseUrl && !string.IsNullOrWhiteSpace(AgentBaseUrl) &&
             !string.Equals(AgentBaseUrl, "http://localhost:11434/v1", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Agent:BaseUrl"] = AgentBaseUrl.Trim();
+        // Smart turn (P0): only emit a COMPLETE classifier config — a half-filled toggle stays "off" so
+        // AddVoxaSmartTurn never fails fast on a missing field.
+        if (SmartTurnEnabled)
+        {
+            if (ShowSmartTurnHttp && !string.IsNullOrWhiteSpace(SmartTurnEndpoint))
+            {
+                pairs["Voxa:SmartTurn:Provider"] = "Http";
+                pairs["Voxa:SmartTurn:Endpoint"] = SmartTurnEndpoint.Trim();
+            }
+            else if (ShowSmartTurnSidecar && !string.IsNullOrWhiteSpace(SmartTurnPythonScript))
+            {
+                pairs["Voxa:SmartTurn:Provider"] = "Sidecar";
+                pairs["Voxa:SmartTurn:PythonExe"] =
+                    string.IsNullOrWhiteSpace(SmartTurnPythonExe) ? "python" : SmartTurnPythonExe.Trim();
+                pairs["Voxa:SmartTurn:PythonScript"] = SmartTurnPythonScript.Trim();
+            }
+        }
         return pairs;
     }
 

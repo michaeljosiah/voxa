@@ -35,6 +35,11 @@
     <!-- The Voxa meta-package: AddVoxa() with every built-in provider, incl. the keyless
          local tier (WhisperCpp / Piper / Kokoro / Silero / Echo) Studio defaults to. -->
     <ProjectReference Include="..\..\src\Voxa\Voxa.csproj" />
+    <!-- Smart turn detection (P0) is opt-in (a call on the turn-taking path) so it is NOT in the
+         meta-package — reference it directly. StudioServices calls AddVoxaSmartTurn so the Config
+         "Smart turn detection" toggle can register a classifier; the package's bundled Python sidecar
+         script copies into the output via this reference. -->
+    <ProjectReference Include="..\..\src\Voxa.Audio.SmartTurn\Voxa.Audio.SmartTurn.csproj" />
   </ItemGroup>
 
   <ItemGroup>

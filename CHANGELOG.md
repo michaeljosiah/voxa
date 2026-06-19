@@ -24,6 +24,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: Smart turn detection toggle (Config).** The Config view gains a **Smart turn detection**
+  card — flip it on, pick a classifier (**Sidecar**, the real local `pipecat-ai/smart-turn-v3` via Python,
+  or **Http**, a model server), and the next Talk session asks "is the user actually done?" at the silence
+  timeout instead of ending the turn on raw silence. Off by default and zero-cost (no classifier
+  registered). A half-filled form stays inert (it won't fail-fast), and the choice flows through the same
+  Apply/Export path as the rest of the pipeline. The bundled sidecar script now resolves relative to the
+  app, so the in-app default works without fuss.
 - **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
   (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
   plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.

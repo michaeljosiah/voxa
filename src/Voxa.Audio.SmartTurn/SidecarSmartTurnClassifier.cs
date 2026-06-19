@@ -152,11 +152,21 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
     private static (string FileName, IReadOnlyList<string> Args) ResolveLaunch(SmartTurnOptions o)
     {
         if (!string.IsNullOrEmpty(o.ExecutablePath)) return (o.ExecutablePath, []);
-        if (!string.IsNullOrEmpty(o.PythonScript)) return (o.PythonExe, [o.PythonScript]);
+        if (!string.IsNullOrEmpty(o.PythonScript)) return (o.PythonExe, [ResolveScript(o.PythonScript)]);
         throw new InvalidOperationException(
             "No Voxa smart-turn sidecar is configured. Set Voxa:SmartTurn:PythonScript (with " +
             "Voxa:SmartTurn:PythonExe) to run sidecar/voxa_smart_turn_sidecar.py, or " +
             "Voxa:SmartTurn:ExecutablePath to a frozen binary. See the Voxa.Audio.SmartTurn README.");
+    }
+
+    // A relative script (the default "sidecar/voxa_smart_turn_sidecar.py", which the package copies next
+    // to the host's output) resolves against the app base directory first, then falls back to the path as
+    // given (cwd-relative) — so the bundled script works regardless of the process's working directory.
+    private static string ResolveScript(string script)
+    {
+        if (Path.IsPathRooted(script)) return script;
+        var local = Path.Combine(AppContext.BaseDirectory, script);
+        return File.Exists(local) ? local : script;
     }
 
     private void DisposeProcess()

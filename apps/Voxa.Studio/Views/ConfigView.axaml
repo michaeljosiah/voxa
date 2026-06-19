@@ -124,6 +124,53 @@
         </StackPanel>
       </Border>
 
+      <!-- Smart turn (P0): a classifier above the silence VAD so a mid-sentence pause doesn't end the turn. -->
+      <Border Classes="vx-card">
+        <StackPanel Spacing="8">
+          <CheckBox IsChecked="{Binding SmartTurnEnabled}" Content="Smart turn detection" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     Text="Ask a model 'is the user actually done?' at the silence timeout, so a pause to think doesn't cut them off — letting you drop the VAD stop duration without clipping. Off = classic silence detection." />
+
+          <StackPanel Spacing="8" IsVisible="{Binding ShowSmartTurnOptions}">
+            <Grid ColumnDefinitions="130,*">
+              <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Classifier" />
+              <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding SmartTurnProviders}" SelectedItem="{Binding SelectedSmartTurnProvider}" />
+            </Grid>
+
+            <!-- Sidecar: the real pipecat-ai/smart-turn-v3 model in a local Python process. -->
+            <StackPanel Spacing="8" IsVisible="{Binding ShowSmartTurnSidecar}">
+              <Grid ColumnDefinitions="130,*">
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Python" />
+                <TextBox Grid.Column="1" Text="{Binding SmartTurnPythonExe}" Watermark="python" />
+              </Grid>
+              <Grid ColumnDefinitions="130,*">
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Script" />
+                <TextBox Grid.Column="1" Text="{Binding SmartTurnPythonScript}" Watermark="sidecar/voxa_smart_turn_sidecar.py" />
+              </Grid>
+              <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                         Text="Runs the real pipecat-ai/smart-turn-v3 model locally (bundled script). One-time setup: pip install onnxruntime transformers huggingface_hub numpy." />
+            </StackPanel>
+
+            <!-- Http: a smart-turn model server — no local Python needed. -->
+            <StackPanel Spacing="8" IsVisible="{Binding ShowSmartTurnHttp}">
+              <Grid ColumnDefinitions="130,*">
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Endpoint" />
+                <TextBox Grid.Column="1" Text="{Binding SmartTurnEndpoint}" Watermark="http://localhost:8000/predict" />
+              </Grid>
+              <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                         Text="POSTs recent speech to a smart-turn model server. No local Python needed." />
+            </StackPanel>
+
+            <TextBlock Classes="vx-sub" Foreground="{StaticResource VxWarnBrush}" TextWrapping="Wrap"
+                       Text="Fill the field above — the toggle is inactive until it's set."
+                       IsVisible="{Binding SmartTurnIncomplete}" />
+            <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                       Text="On a server, call AddVoxaSmartTurn(configuration) alongside AddVoxa for this block to take effect (it's opt-in)." />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <!-- validation + apply -->
       <StackPanel Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="8">
