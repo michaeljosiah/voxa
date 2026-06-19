@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Voxa.Diagnostics;
 using Voxa.Studio.Audio;
 using Voxa.Studio.Services;
@@ -10,6 +11,12 @@ namespace Voxa.Studio.ViewModels;
 
 /// <summary>One rendered VAD inference window (the trace control's unit of drawing).</summary>
 public readonly record struct VadSample(float Probability, bool Voiced, bool GateOpen);
+
+/// <summary>
+/// The live pipeline state shown as the Talk status pill — derived from the diagnostics hub's turn
+/// and stage events so the user always knows what's happening (and when the mic is actually live).
+/// </summary>
+public enum TalkPhase { Idle, WarmingUp, Listening, Hearing, Transcribing, Thinking, Speaking }
 
 /// <summary>A transcript bubble. Bot bubbles stream — Text grows as agent deltas arrive.</summary>
 public sealed partial class ChatBubble : ObservableObject
@@ -60,6 +67,16 @@ public sealed partial class TalkViewModel : ObservableObject
     private ChatBubble? _streamingBot;
     private Dictionary<string, double> _stages = new();
     private int _turnNumber;
+    private long _lastBotTick;     // debounces the per-sentence Bot edges so Speaking doesn't flicker
+    private long _phaseSinceTick;  // when Transcribing/Thinking began — a timeout safety net
+    private long _lastTraceTick;   // throttles the VAD-trace snapshot (render-jank reduction)
+
+    /// <summary>Test seam for the time-based phase debounce/throttle (Environment.TickCount64).</summary>
+    internal Func<long> NowTick = () => Environment.TickCount64;
+
+    private const long BotIdleMs = 600;          // quiet gap after the last bot signal → turn is done
+    private const long ThinkingTimeoutMs = 12_000; // a turn that yields no speech falls back to Listening
+    private const long TraceThrottleMs = 80;     // ~12 fps trace updates — smooth enough, far less GC
 
     public TalkViewModel(StudioServices services)
     {
@@ -108,6 +125,26 @@ public sealed partial class TalkViewModel : ObservableObject
     [ObservableProperty] private bool _isBotSpeaking;
     [ObservableProperty] private bool _showEventLog;
 
+    /// <summary>The live pipeline state — the prominent status pill binds to this.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PhaseLabel)), NotifyPropertyChangedFor(nameof(PhasePulse))]
+    private TalkPhase _phase = TalkPhase.Idle;
+
+    public string PhaseLabel => Phase switch
+    {
+        TalkPhase.WarmingUp => "Warming up…",
+        TalkPhase.Listening => "Listening",
+        TalkPhase.Hearing => "Hearing you",
+        TalkPhase.Transcribing => "Transcribing…",
+        TalkPhase.Thinking => "Thinking…",
+        TalkPhase.Speaking => "Speaking",
+        _ => "Idle",
+    };
+
+    /// <summary>In-progress phases pulse; settled ones (Idle/Listening) hold steady.</summary>
+    public bool PhasePulse => Phase is TalkPhase.WarmingUp or TalkPhase.Hearing
+        or TalkPhase.Transcribing or TalkPhase.Thinking or TalkPhase.Speaking;
+
     /// <summary>True while a Builder or Metrics run owns the pipeline — starting Talk is blocked.</summary>
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private bool _startBlocked;
@@ -150,6 +187,7 @@ public sealed partial class TalkViewModel : ObservableObject
         }
 
         ErrorText = null;
+        Phase = TalkPhase.WarmingUp;
         try
         {
             // First-run downloads happen HERE, with visible progress — never at app start.
@@ -165,6 +203,12 @@ public sealed partial class TalkViewModel : ObservableObject
                 await _services.ModelCache.PrefetchAsync(missing, progress);
             }
 
+            // Load the model weights into memory NOW (a user action, so it honors "no work before the
+            // user acts"), so the FIRST turn isn't a multi-second cold start. whisper.cpp caches its
+            // factory process-wide, so the session reuses exactly what we warm here.
+            StatusText = "Warming up models…";
+            await WarmUpEnginesAsync();
+
             StatusText = "Starting pipeline…";
             _session = _services.CreateTalkSession();
 
@@ -174,6 +218,7 @@ public sealed partial class TalkViewModel : ObservableObject
 
             await _session.StartAsync(SelectedMicrophone, SelectedSpeaker);
             IsRunning = true;
+            Phase = TalkPhase.Listening;
             StatusText = $"Live — {_session.InputSampleRate / 1000.0:0.#} kHz in, {_session.OutputSampleRate / 1000.0:0.#} kHz out. Say something.";
         }
         catch (Exception ex)
@@ -182,6 +227,27 @@ public sealed partial class TalkViewModel : ObservableObject
             StatusText = "Failed to start.";
             await TearDownAsync();
         }
+    }
+
+    /// <summary>
+    /// Load the configured STT/TTS model weights before the first turn, via the same descriptor warm-up
+    /// the server's hosted guard runs. Best-effort: a failure here doesn't block the session (it's just
+    /// colder), and a genuinely broken model resurfaces when the pipeline starts.
+    /// </summary>
+    private async Task WarmUpEnginesAsync()
+    {
+        var voxa = _services.Configuration.GetSection("Voxa");
+        var registry = _services.Registry;
+        using var scope = _services.Provider.CreateScope();
+        var sp = scope.ServiceProvider;
+        try
+        {
+            if (voxa["Stt"] is { } sttName && registry.TryGetStt(sttName, out var stt) && stt.WarmUpAsync is not null)
+                await stt.WarmUpAsync(sp, voxa, CancellationToken.None);
+            if (voxa["Tts"] is { } ttsName && registry.TryGetTts(ttsName, out var tts) && tts.WarmUpAsync is not null)
+                await tts.WarmUpAsync(sp, voxa, CancellationToken.None);
+        }
+        catch { /* best-effort; the pipeline start surfaces any real model failure with remediation */ }
     }
 
     [RelayCommand(CanExecute = nameof(CanStop))]
@@ -203,6 +269,7 @@ public sealed partial class TalkViewModel : ObservableObject
         IsRunning = false;
         IsUserSpeaking = false;
         IsBotSpeaking = false;
+        Phase = TalkPhase.Idle;
         _streamingBot = null;
     }
 
@@ -234,6 +301,7 @@ public sealed partial class TalkViewModel : ObservableObject
     /// <summary>Apply buffered hub events to the bindable state. Single-threaded by contract.</summary>
     public void DrainPending()
     {
+        var now = NowTick();
         bool traceChanged = false;
         while (_pending.TryDequeue(out var e))
         {
@@ -246,12 +314,13 @@ public sealed partial class TalkViewModel : ObservableObject
                     break;
 
                 case TurnEvent turn:
-                    ApplyTurn(turn);
+                    ApplyTurn(turn, now);
                     Log(e, turn.Edge.ToString());
                     break;
 
                 case TranscriptEvent { IsFinal: true } t:
                     Transcript.Add(new ChatBubble { IsUser = true, Text = t.Text });
+                    if (Phase is TalkPhase.Hearing or TalkPhase.Transcribing) Phase = TalkPhase.Thinking;
                     Log(e, $"\"{t.Text}\"");
                     break;
 
@@ -267,6 +336,8 @@ public sealed partial class TalkViewModel : ObservableObject
                     break;
 
                 case TtsChunkEvent chunk:
+                    Phase = TalkPhase.Speaking;
+                    _lastBotTick = now;
                     Log(e, $"{chunk.Bytes} B @ {chunk.SampleRate} Hz");
                     break;
 
@@ -277,33 +348,53 @@ public sealed partial class TalkViewModel : ObservableObject
             }
         }
 
-        if (traceChanged)
+        // Per-sentence Bot edges flicker, so hold Speaking until the bot has been quiet for a beat;
+        // and never strand Transcribing/Thinking if a turn produced no speech at all.
+        if (Phase == TalkPhase.Speaking && now - _lastBotTick > BotIdleMs)
+            Phase = TalkPhase.Listening;
+        else if (Phase is (TalkPhase.Transcribing or TalkPhase.Thinking)
+                 && now - _phaseSinceTick > ThinkingTimeoutMs)
+            Phase = TalkPhase.Listening;
+
+        // Throttle the trace snapshot: the VAD trace is smooth at ~12 fps, and this avoids a
+        // 1250-element array allocation (+ a control redraw) on every 33 ms frame.
+        if (traceChanged && now - _lastTraceTick >= TraceThrottleMs)
+        {
             TraceSnapshot = _trace.ToArray();
+            _lastTraceTick = now;
+        }
     }
 
-    private void ApplyTurn(TurnEvent turn)
+    private void ApplyTurn(TurnEvent turn, long now)
     {
         switch (turn.Edge)
         {
             case TurnEdge.UserStarted:
                 IsUserSpeaking = true;
                 _streamingBot = null; // anything the bot says next is a NEW reply
+                Phase = TalkPhase.Hearing;
                 break;
             case TurnEdge.UserStopped:
                 IsUserSpeaking = false;
                 _stages = new Dictionary<string, double>(); // new turn measurement begins
+                Phase = TalkPhase.Transcribing;
+                _phaseSinceTick = now;
                 break;
             case TurnEdge.BotStarted:
                 IsBotSpeaking = true;
+                Phase = TalkPhase.Speaking;
+                _lastBotTick = now;
                 break;
             case TurnEdge.BotStopped:
                 IsBotSpeaking = false;
                 _streamingBot = null;
+                _lastBotTick = now; // stay Speaking through the debounce — another sentence may follow
                 break;
             case TurnEdge.Interrupted:
                 IsBotSpeaking = false;
                 if (_streamingBot is not null) _streamingBot.IsInterrupted = true;
                 _streamingBot = null;
+                Phase = TalkPhase.Listening;
                 break;
         }
     }

@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Voxa.Studio.Controls;
 using Voxa.Studio.Services;
+using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Views;
 
@@ -101,6 +102,20 @@ public static class Converters
             {
                 Blur = 22, Spread = -4, Color = Color.FromArgb(0x66, color.R, color.G, color.B),
             });
+        });
+
+    /// <summary>TalkPhase → status-pill accent: warm-up amber, listening green, hearing accent,
+    /// transcribing cyan, thinking purple, speaking orange, idle grey.</summary>
+    public static readonly IValueConverter PhaseBrush =
+        new FuncValueConverter<TalkPhase, IBrush?>(phase => phase switch
+        {
+            TalkPhase.WarmingUp    => WarnBrush,
+            TalkPhase.Listening    => StageOutBrush,
+            TalkPhase.Hearing      => Themed("VxAccentBrush") ?? StageSttBrush,
+            TalkPhase.Transcribing => StageSttBrush,
+            TalkPhase.Thinking     => StageAgentBrush,
+            TalkPhase.Speaking     => StageTtsBrush,
+            _                      => MatchBrush,
         });
 
     private static readonly IBrush Line2Brush = new SolidColorBrush(Color.Parse("#29A6B2C2")); // line-2

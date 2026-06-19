@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Talk feels alive — pipeline state, warm-up, smoother render.** Talk used to look
+  frozen while it worked. A prominent **status pill** now shows the live pipeline state — Warming up →
+  Listening → Hearing you → Transcribing → Thinking → Speaking — derived from the diagnostics hub, so
+  you always know what's happening (and, crucially with half-duplex on speakers, exactly when the mic is
+  live: *Listening* = your turn). It debounces the per-sentence TTS edges so it doesn't flicker mid-reply.
+  On **Start**, the configured STT/TTS models are **warmed up** (whisper.cpp caches its factory
+  process-wide, so the session reuses them) — the first turn is no longer a silent multi-second cold
+  start. The active **pipeline** (VAD · STT · agent · TTS · voice) is shown as an always-visible chip.
+  And the VAD-trace render is throttled to ~12 fps, cutting per-frame allocations and stutter.
 - **Voxa Studio: Builder reliability + validation (Phase 1).** The Pipeline Builder canvas was flaky
   and easy to leave in a broken state. Node dragging now captures the pointer, so a fast drag no longer
   stalls or strands the gesture (it matched wire-dragging's behavior, which already captured). A new
