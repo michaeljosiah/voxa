@@ -50,6 +50,13 @@ public static class WhisperCppDescriptors
                 $"{WhisperCppSttEngine.RequiredSampleRate} Hz mono. Remove the override.");
         }
 
+        // VLS-002: validate the GPU device value here (keyless, no side effects) so a typo fails at
+        // startup, not with a confusing native-load error on the first utterance.
+        var deviceValue = s["Device"];
+        if (!WhisperCppOptions.TryParseDevice(deviceValue, out _))
+            errors.Add(
+                $"Unknown Voxa:WhisperCpp:Device '{deviceValue}'. Valid values: cpu, auto, cuda, vulkan, coreml.");
+
         if (!string.IsNullOrEmpty(options.ModelPath))
         {
             // Explicit path wins and bypasses the catalog — but a wrong explicit path is a config
