@@ -13,7 +13,7 @@
 
 **Voxa** is a frame-based, real-time voice AI pipeline framework for **.NET 10** — native STT, LLM, and TTS composed into low-latency voice agents. Inspired by [Pipecat](https://github.com/pipecat-ai/pipecat); built around the Microsoft Agent Framework, Azure Voice Live, and Azure Speech.
 
-> See [`ROADMAP.md`](ROADMAP.md) for tracked work — smart turn detection, echo suppression, JS client, local/offline speech, AONIK integration.
+> See [`ROADMAP.md`](ROADMAP.md) for tracked work — echo cancellation, a `@voxa/client` JS package, session resilience, AONIK integration.
 
 > **Status: pre-alpha.** Public API stabilising. Packages are published on [NuGet](https://www.nuget.org/packages?q=Voxa) as prerelease (`*-alpha`) — pin exact versions and expect breaking changes.
 
@@ -79,6 +79,23 @@ Set `"Tts": "Kokoro"` for markedly more natural speech (heavier on CPU), and swa
 real agent when you have keys. Details — model catalogs, latency expectations, air-gapped
 deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
 
+### Smart turn detection — don't cut people off mid-thought
+
+A silence-only VAD ends the turn on a fixed pause, so `Voxa:Vad:StopDuration` has to stay conservative
+(~800 ms) to avoid clipping someone who pauses to think. The **opt-in** `Voxa.Audio.SmartTurn` package
+adds a classifier on top of the silence VAD: when silence is detected it asks *"is the user actually
+done?"* — and only a **complete** verdict ends the turn, so `StopDuration` can drop to ~200 ms.
+
+```csharp
+builder.Services.AddVoxa(builder.Configuration);
+builder.Services.AddVoxaSmartTurn(builder.Configuration);   // opt-in; reads Voxa:SmartTurn
+```
+
+Point `Voxa:SmartTurn:Provider` at an `Http` model server, or run the real `pipecat-ai/smart-turn-v3`
+model in a Voxa-managed local Python `Sidecar`. It's **zero-cost when unregistered** (classic silence VAD,
+unchanged) and **fails "complete"** on any classifier error, so a flaky endpoint never strands a turn.
+Guide: [`src/Voxa.Audio.SmartTurn/README.md`](src/Voxa.Audio.SmartTurn/README.md).
+
 ### Voxa Studio — talk to the pipeline and watch it think
 
 A desktop app (Windows) that runs the real pipeline against your mic and speakers and shows
@@ -130,6 +147,8 @@ dotnet run --project apps/Voxa.Studio
    the echo agent:** add `OpenAI` in Settings with your key, set *Agent* to `OpenAI`, enter a chat
    model (e.g. `gpt-4o-mini`), then press **⚡ Apply to Studio** — the next Talk session answers
    with the model. Keys are applied to the running app only; they are never written into the export.
+   A **Smart turn detection** toggle here wires the opt-in classifier (local Python sidecar or an HTTP
+   model server) into the pipeline; **Models** and **Voices** add per-provider filters to narrow long lists.
 
 **Settings** (the gear at the foot of the nav rail) — manage which providers are active and store
 their API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter
@@ -139,6 +158,11 @@ several roles at once: `OpenAI` covers STT, TTS *and* the chat agent off a singl
 providers (Whisper, Piper, Kokoro, Echo) are always listed and need no keys. Activated providers are
 exactly the ones Config offers. Keys never leave the machine and are never written into any export.
 Guide: [`docs/settings.md`](docs/settings.md).
+
+**Pipeline profiles** — save a pipeline you've composed (in Config or the Builder) as a named profile,
+then switch the whole app to it from the **Pipeline Profile** bar above every view: Talk, the Playgrounds,
+the lot, all at once. The choice persists, so Studio reopens on the pipeline you left. Profiles store only
+the provider/model selection — **never API keys** (those stay in the encrypted secrets layer).
 
 Full guide — every view, server-side diagnostics, troubleshooting: [`docs/studio.md`](docs/studio.md).
 
@@ -194,6 +218,8 @@ All keys live under the `Voxa` section. Provider sub-sections (e.g. `Voxa:OpenAI
 | `Voxa:Stt` | string | — | STT provider name: `"OpenAI"`, `"Azure"`, or `"WhisperCpp"` (local, no key). Required when using `UseDefaults()`. |
 | `Voxa:Tts` | string | — | TTS provider name: `"OpenAI"`, `"ElevenLabs"`, `"Azure"`, `"Mistral"`, or local/no-key `"Piper"` / `"Kokoro"`. Required when using `UseDefaults()`. |
 | `Voxa:Vad:Engine` | string | `"Silero"` | `"Silero"`, `"SilenceGate"` (energy-only), or `"None"`. |
+| `Voxa:SmartTurn:Provider` | string | — | Opt-in smart-turn classifier (needs `AddVoxaSmartTurn` + the `Silero` VAD): `"Http"`, `"Sidecar"`, or `"None"`. Absent/`None` = classic silence-only VAD. |
+| `Voxa:SmartTurn:Endpoint` | string | — | Model-server URL for the `Http` classifier (the `Sidecar` provider uses `PythonScript`/`ExecutablePath` instead). |
 | `Voxa:Agent:Provider` | string | — | `"OpenAI"` uses the built-in factory; `"Echo"` is a keyless diagnostic agent for demos/CI. Omit to supply your own `AIAgent` / `IChatClient` via DI. |
 | `Voxa:Agent:Model` | string | `"gpt-4o-mini"` | Chat model passed to the agent factory. |
 | `Voxa:Agent:Instructions` | string | (brief assistant) | System prompt. |
@@ -249,6 +275,7 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 | Package | Description |
 |---------|-------------|
 | `Voxa.Audio.SileroVad` | ML-based VAD using the bundled Silero VAD v5 ONNX model. Drop-in replacement for `SilenceGateProcessor` for noisy environments. |
+| `Voxa.Audio.SmartTurn` | **Opt-in** smart turn detection (P0 latency). `AddVoxaSmartTurn(configuration)` plugs an `ISmartTurnClassifier` into the VAD's silence timeout — an `Http` classifier or a local Python `Sidecar` running `pipecat-ai/smart-turn-v3` — so `Voxa:Vad:StopDuration` can drop without clipping mid-sentence pauses. Zero-cost when unregistered. |
 
 Mix-and-match: use any STT vendor with any LLM with any TTS vendor.
 
@@ -375,7 +402,7 @@ Voxa's hot paths are engineered for real-time audio — GC pauses are the worst 
 - **Transport:** single-copy binary receive; pooled buffers for fragmented messages; outbound sends drain through a single-writer queue instead of a lock held across network I/O.
 - **Barge-in purge:** when the user interrupts, bot audio already queued for the socket is dropped (epoch-stamped queue) and the `interruption` envelope jumps ahead — the bot actually stops talking.
 - **TTS time-to-first-byte:** all four TTS engines stream chunk-by-chunk (Azure included, via `AudioDataStream`); HTTP engines share one connection pool (`VoxaHttp.Shared`) and pre-warm TLS at session start.
-- **Latency knobs:** eager first-sentence flush (`SentenceAggregator.EagerFirstChunkMinChars`), configurable VAD hangover, and a smart-turn seam (`SileroVadOptions.ConfirmTurnEnd`).
+- **Latency knobs:** eager first-sentence flush (`SentenceAggregator.EagerFirstChunkMinChars`), configurable VAD hangover, and opt-in smart-turn detection (`Voxa.Audio.SmartTurn`) so `Voxa:Vad:StopDuration` can drop to ~200 ms without clipping speakers who pause to think.
 
 Measured numbers live in [`bench/BASELINE.md`](bench/BASELINE.md) (BenchmarkDotNet project under `bench/`); every knob is documented with its trade-off in [`docs/performance-tuning.md`](docs/performance-tuning.md). The full engineering spec is [`docs/specifications/voxa-performance-optimization-spec.html`](docs/specifications/voxa-performance-optimization-spec.html).
 
@@ -481,10 +508,12 @@ Targets `net10.0`. Requires .NET 10 SDK.
 | P6 (partial) | ✅ VLS-001 local/offline speech tier — `WhisperCpp` STT, `Piper` + `Kokoro` TTS, SHA-256-pinned model cache with offline mode, keyless `Echo` agent, startup warm-up, zero-network CI conversation lane ([docs](docs/local-speech.md)) |
 | P8 | ✅ VST-001 Voxa Studio — desktop app with live VAD trace + latency waterfall over the new `VoxaDiagnosticsHub` pipeline event stream (also closes the P7 stage-latency item: `voxa.stage.latency`), voice lab, model-cache manager, config composer ([docs](docs/studio.md)) |
 | P8.5 | ✅ VST-002 Studio 2.0 — brand + animated mark + splash, STT/TTS playgrounds (WER harness, A/B/X, batch bench), node-canvas pipeline builder with run-from-canvas and honest exporters, run & metrics workbench with scripted decks and run compare |
+| P8.6 | ✅ Studio settings & profiles — provider activation with DPAPI-encrypted credentials, app-wide named pipeline profiles, Models/Voices provider filters |
+| P0 | ✅ Smart turn detection — `ISmartTurnClassifier` seam through the VAD + composer; opt-in `Voxa.Audio.SmartTurn` (HTTP classifier + local Python sidecar running `pipecat-ai/smart-turn-v3`); Studio toggle |
 | **6 (current)** | Observability, OSS release, NuGet publish, CI |
 | 4 | Mobile client integration (downstream consumers) |
 
-(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — smart turn detection, `@voxa/client` JS package, session resilience, latency waterfall — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
+(Phase 4 swapped to last since it lives in consuming repos, not Voxa itself.) Forward-looking items — a `@voxa/client` JS package, session resilience, echo cancellation — are tracked with detail in [`ROADMAP.md`](ROADMAP.md).
 
 ## Contributing
 
