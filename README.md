@@ -81,10 +81,10 @@ deployment, zero-cost CI — in [`docs/local-speech.md`](docs/local-speech.md).
 
 ### Smart turn detection — don't cut people off mid-thought
 
-A silence-only VAD ends the turn on a fixed pause, so `Voxa:Vad:StopDuration` has to stay conservative
+A silence-only VAD ends the turn on a fixed pause, so `Voxa:Vad:StopDurationMs` has to stay conservative
 (~800 ms) to avoid clipping someone who pauses to think. The **opt-in** `Voxa.Audio.SmartTurn` package
 adds a classifier on top of the silence VAD: when silence is detected it asks *"is the user actually
-done?"* — and only a **complete** verdict ends the turn, so `StopDuration` can drop to ~200 ms.
+done?"* — and only a **complete** verdict ends the turn, so that timeout can drop to ~200 ms.
 
 ```csharp
 builder.Services.AddVoxa(builder.Configuration);
@@ -275,7 +275,7 @@ The same `AzureVoiceLiveProcessor` speaks **Azure Voice Live**, **Azure OpenAI R
 | Package | Description |
 |---------|-------------|
 | `Voxa.Audio.SileroVad` | ML-based VAD using the bundled Silero VAD v5 ONNX model. Drop-in replacement for `SilenceGateProcessor` for noisy environments. |
-| `Voxa.Audio.SmartTurn` | **Opt-in** smart turn detection (P0 latency). `AddVoxaSmartTurn(configuration)` plugs an `ISmartTurnClassifier` into the VAD's silence timeout — an `Http` classifier or a local Python `Sidecar` running `pipecat-ai/smart-turn-v3` — so `Voxa:Vad:StopDuration` can drop without clipping mid-sentence pauses. Zero-cost when unregistered. |
+| `Voxa.Audio.SmartTurn` | **Opt-in** smart turn detection (P0 latency). `AddVoxaSmartTurn(configuration)` plugs an `ISmartTurnClassifier` into the VAD's silence timeout — an `Http` classifier or a local Python `Sidecar` running `pipecat-ai/smart-turn-v3` — so `Voxa:Vad:StopDurationMs` can drop without clipping mid-sentence pauses. Zero-cost when unregistered. |
 
 Mix-and-match: use any STT vendor with any LLM with any TTS vendor.
 
@@ -402,7 +402,7 @@ Voxa's hot paths are engineered for real-time audio — GC pauses are the worst 
 - **Transport:** single-copy binary receive; pooled buffers for fragmented messages; outbound sends drain through a single-writer queue instead of a lock held across network I/O.
 - **Barge-in purge:** when the user interrupts, bot audio already queued for the socket is dropped (epoch-stamped queue) and the `interruption` envelope jumps ahead — the bot actually stops talking.
 - **TTS time-to-first-byte:** all four TTS engines stream chunk-by-chunk (Azure included, via `AudioDataStream`); HTTP engines share one connection pool (`VoxaHttp.Shared`) and pre-warm TLS at session start.
-- **Latency knobs:** eager first-sentence flush (`SentenceAggregator.EagerFirstChunkMinChars`), configurable VAD hangover, and opt-in smart-turn detection (`Voxa.Audio.SmartTurn`) so `Voxa:Vad:StopDuration` can drop to ~200 ms without clipping speakers who pause to think.
+- **Latency knobs:** eager first-sentence flush (`SentenceAggregator.EagerFirstChunkMinChars`), configurable VAD hangover, and opt-in smart-turn detection (`Voxa.Audio.SmartTurn`) so `Voxa:Vad:StopDurationMs` can drop to ~200 ms without clipping speakers who pause to think.
 
 Measured numbers live in [`bench/BASELINE.md`](bench/BASELINE.md) (BenchmarkDotNet project under `bench/`); every knob is documented with its trade-off in [`docs/performance-tuning.md`](docs/performance-tuning.md). The full engineering spec is [`docs/specifications/voxa-performance-optimization-spec.html`](docs/specifications/voxa-performance-optimization-spec.html).
 

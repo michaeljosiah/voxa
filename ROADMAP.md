@@ -28,7 +28,7 @@ The chained `Whisper → gpt-4o-mini → TTS` pipeline currently sits at ~1.6 s 
 > (in `Voxa.Speech.Abstractions`), `VoxaVadSettings.ConfirmTurnEnd` plumbed through `SileroVadDescriptors`,
 > and `DefaultVoicePipelineComposer` auto-wiring any DI-registered classifier into the VAD (zero-cost when
 > absent). A new opt-in **`Voxa.Audio.SmartTurn`** package ships `HttpSmartTurnClassifier` + `AddVoxaSmartTurn`
-> (`Voxa:SmartTurn`). With one registered, `Voxa:Vad:StopDuration` can safely drop to ~200 ms. **Remaining:**
+> (`Voxa:SmartTurn`). With one registered, `Voxa:Vad:StopDurationMs` can safely drop to ~200 ms. **Remaining:**
 > the on-device `LocalSmartTurnClassifier` (a SHA-256-pinned ONNX model + an audio-preprocessing spike to
 > match the model's input tensor) — the seam is ready for it.
 
