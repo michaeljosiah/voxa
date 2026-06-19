@@ -52,6 +52,20 @@ def load_model(model_id):
         return None, None, None
 
 
+def resample_to_16k(audio_f32, src_rate):
+    """Linear resample to 16 kHz (smart-turn-v3's rate). Voxa may run the VAD at 8 kHz; this is coarse and
+    dependency-free, but far better than feeding off-rate PCM as if it were 16 kHz (which shifts the
+    apparent duration and pitch and makes the verdict unreliable)."""
+    import numpy as np
+
+    if src_rate == 16000 or len(audio_f32) == 0:
+        return audio_f32
+    n_out = max(1, round(len(audio_f32) * 16000 / src_rate))
+    x_old = np.linspace(0.0, 1.0, num=len(audio_f32), endpoint=False)
+    x_new = np.linspace(0.0, 1.0, num=n_out, endpoint=False)
+    return np.interp(x_new, x_old, audio_f32).astype(np.float32)
+
+
 def predict(extractor, session, input_name, audio_f32):
     """Match smart-turn-v3 inference: last 8 s, Whisper features (1, 80, 800), sigmoid probability."""
     import numpy as np

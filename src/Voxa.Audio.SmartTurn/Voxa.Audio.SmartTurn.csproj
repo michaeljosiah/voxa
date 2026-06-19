@@ -22,8 +22,15 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
-    <!-- Ship the Python sidecar source so users (and a future PyInstaller freeze) have it. -->
-    <None Include="sidecar\**" Pack="true" PackagePath="sidecar\" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Ship the Python sidecar source. CopyToOutputDirectory covers this project and ProjectReference
+         consumers (e.g. Studio); packing under contentFiles with copyToOutput covers PackageReference
+         consumers — so the documented default PythonScript ("sidecar/voxa_smart_turn_sidecar.py") resolves
+         against the app output (AppContext.BaseDirectory) in both cases. -->
+    <None Include="sidecar\voxa_smart_turn_sidecar.py"
+          Pack="true"
+          PackagePath="contentFiles\any\any\sidecar\voxa_smart_turn_sidecar.py"
+          PackageCopyToOutput="true"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
