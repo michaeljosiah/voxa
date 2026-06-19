@@ -167,4 +167,21 @@ public class PipelineProfileIntegrationTests
         Assert.False(builder.IsDefaultShape);
         Assert.False(builder.SaveAsProfileCommand.CanExecute(null)); // custom shapes export as C#, not profiles
     }
+
+    [Fact]
+    public void Builder_Save_As_Profile_Is_Disabled_While_A_Session_Is_Live()
+    {
+        // Codex P2: saving both saves AND activates (a rebuild), which can't run under a live session —
+        // so the command is disabled rather than saving without applying and leaving the store stale.
+        var services = TestSupport.Services();
+        var builder = new BuilderViewModel(services);
+        builder.ProfileName = "X";
+        Assert.True(builder.SaveAsProfileCommand.CanExecute(null));
+
+        builder.RunBlocked = true; // a Talk/Metrics run owns the audio device
+        Assert.False(builder.SaveAsProfileCommand.CanExecute(null));
+
+        builder.RunBlocked = false;
+        Assert.True(builder.SaveAsProfileCommand.CanExecute(null));
+    }
 }

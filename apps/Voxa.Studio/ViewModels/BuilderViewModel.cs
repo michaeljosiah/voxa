@@ -221,10 +221,10 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     [ObservableProperty] private string _selectedProfile = "Default";
     [ObservableProperty] private BuilderNodeVm? _selectedNode;
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(SaveAsProfileCommand))]
     private bool _isRunning;
     /// <summary>True while a Talk session owns the audio device — Run disables.</summary>
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(SaveAsProfileCommand))]
     private bool _runBlocked;
     [ObservableProperty] private string _statusText = "Wire the chain — ports only accept matching frame types.";
     [ObservableProperty] private string? _errorText;
@@ -884,7 +884,12 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     // Only default-shape chains can be a profile: the app-wide pipeline composes from config, which
     // can't express custom shapes (those still export as C# code).
-    private bool CanSaveAsProfile() => IsChainValid && IsDefaultShape && !string.IsNullOrWhiteSpace(ProfileName);
+    // Disabled while any session is live: SaveAsProfile both saves AND activates (a container rebuild),
+    // which can't run under a live session. Saving-without-activating would leave the store claiming a
+    // profile active while StudioServices keeps the old live overrides until restart, so we forbid it
+    // outright rather than half-apply (Codex P2).
+    private bool CanSaveAsProfile() =>
+        IsChainValid && IsDefaultShape && !string.IsNullOrWhiteSpace(ProfileName) && !IsRunning && !RunBlocked;
 
     [RelayCommand(CanExecute = nameof(CanSaveAsProfile))]
     private void SaveAsProfile()
@@ -894,15 +899,8 @@ public sealed partial class BuilderViewModel : ObservableObject
         // includeSecrets:false → an inspector API key never reaches the saved profile (keys live in the
         // secrets layer); a default-shape chain's pairs fully describe the pipeline.
         _services.Profiles.Save(name, BuilderChainCompiler.Pairs(_graph, chain));
-        if (!IsRunning && !RunBlocked)
-        {
-            _services.ActivateProfile(name); // make it the live, app-wide pipeline now
-            StatusText = $"Saved & activated pipeline profile “{name}”.";
-        }
-        else
-        {
-            StatusText = $"Saved profile “{name}” — pick it in the Pipeline Profile bar when the session ends.";
-        }
+        _services.ActivateProfile(name); // CanExecute guarantees no live session — safe to apply now
+        StatusText = $"Saved & activated pipeline profile “{name}”.";
         ProfileName = "";
     }
 
