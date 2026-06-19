@@ -14,6 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `http://localhost:11434/v1`); `Voxa:Agent:Model` names the pulled model (default `llama3.2`). No API
   key and no new dependency; validation checks the endpoint shape without probing the daemon, so boot
   never depends on `ollama serve` already running.
+- **Local STT: bigger Whisper models + opt-in GPU (VLS-002).** The `WhisperCpp` catalog gains the
+  `medium`, `large-v3` and `large-v3-turbo` families (each with a `-q5_0` quantization), SHA-256-pinned
+  like the rest. A new `Voxa:WhisperCpp:Device` key (`cpu` default, plus `auto` / `cuda` / `vulkan` /
+  `coreml`) selects the Whisper.net native runtime; the GPU natives are **opt-in** — add the matching
+  `Whisper.net.Runtime.*` package to your app (Voxa never bundles them, so the default package is
+  unchanged and CPU-deterministic). Explicit GPU backends fail loudly at startup if their runtime can't
+  load, and a large/medium model on CPU logs a real-time-latency warning. Guide
+  [`docs/local-speech.md`](docs/local-speech.md); spec
+  [`docs/specifications/vls-002-gpu-stt-catalog-spec.html`](docs/specifications/vls-002-gpu-stt-catalog-spec.html).
 - **Voxa Studio: Settings dialog with persistent provider credentials (VST-003).** A new **Settings**
   dialog (the gear at the foot of the nav rail) manages which providers are active and stores their
   API keys. Add a provider from a card-grid picker (OpenAI, Azure, ElevenLabs, Mistral), enter its key

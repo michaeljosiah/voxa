@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-002 — Local STT GPU Acceleration &amp; Whisper Catalog Expansion</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-002 — Local STT GPU Acceleration &amp; Whisper Catalog Expansion</h1>
+  <div class="sub">Two additive enhancements to the local speech-to-text tier: bigger, more accurate
+    whisper.cpp models (<code>medium</code>, <code>large-v3</code>, <code>large-v3-turbo</code>) added to the
+    SHA-256-pinned catalog, and an <b>opt-in GPU execution seam</b> (<code>Voxa:WhisperCpp:Device</code>) so those
+    larger models are viable in real time on CUDA / Vulkan hardware — with the default package staying CPU-only and
+    byte-identical to today.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-002 v1.0</div>
+    <div><b>Date</b> 2026-06-18</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability (extends VLS-001)</div>
+    <div><b>Depends on</b> VLS-001 (<code>WhisperCpp</code> engine, <code>VoxaModelCache</code>, catalog/descriptor)</div>
+    <div><b>Program</b> Voicebox-Parity (<code>docs/voicebox-parity-program.md</code>), item M1</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">WS1 — STT catalog expansion</a></li>
+    <li><a href="#s6">WS2 — the GPU execution seam</a></li>
+    <li><a href="#s7">Configuration reference</a></li>
+    <li><a href="#s8">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-002 add, in one sentence?</b>
+    <p>It lets Voxa's on-device speech-to-text use <em>bigger, more accurate</em> Whisper models, and run them on a
+    <em>GPU</em> so they're fast enough for a live conversation — without changing anything for users who are happy on CPU.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>Today the local STT catalog (VLS-001) stops at the <code>small</code> model and runs CPU-only. <code>small</code>
+    is fine for clean English, but it mishears names, accents, and noisy audio. The fix is the bigger Whisper models
+    (<code>medium</code>, <code>large-v3</code>) — but those are 1.5–3&nbsp;GB and far too slow for real-time on a CPU.
+    They only make sense paired with GPU acceleration, so the two land together.</p>
+  </div>
+  <div class="qa">
+    <b>Does this make the package heavier or require a GPU?</b>
+    <p>No. The default <code>Voxa.Speech.WhisperCpp</code> package stays CPU-only and the same size as today. GPU support
+    is <em>opt-in</em>: a user who wants it adds a runtime package (e.g. <code>Whisper.net.Runtime.Cuda</code>) to their
+    own app and sets <code>Voxa:WhisperCpp:Device&nbsp;=&nbsp;cuda</code>. Nobody pays for a capability they don't use.</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The engine contract (still 16&nbsp;kHz mono, utterance-buffered, final-only transcripts), the model cache, the
+    offline/air-gap behaviour, and the descriptor wiring. This is purely additive.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-002 is two small, independent workstreams on the existing <code>Voxa.Speech.WhisperCpp</code> package:</p>
+
+<ul>
+  <li><b>WS1 — Catalog expansion <span class="badge additive">additive</span>.</b> Add <code>medium</code>,
+    <code>medium.en</code>, <code>large-v3</code>, <code>large-v3-turbo</code> and their <code>q5_0</code> quantizations to
+    <code>WhisperCppModelCatalog</code>, each SHA-256-pinned from the Hugging Face LFS metadata. Pure data; resolution,
+    download, verification, offline errors, and warm-up all flow through the unchanged <code>VoxaModelCache</code> path.</li>
+  <li><b>WS2 — GPU execution seam <span class="badge p1">P1</span>.</b> A new <code>Voxa:WhisperCpp:Device</code> key
+    (<code>cpu</code> default, plus <code>auto</code>/<code>cuda</code>/<code>vulkan</code>/<code>coreml</code>) that tells the
+    engine which Whisper.net native runtime to prefer at <code>StartAsync</code>. The GPU runtime <em>natives</em> are
+    never bundled by Voxa — the user adds the matching <code>Whisper.net.Runtime.*</code> package — so the default build
+    is unchanged and we avoid the native re-bundling problem fixed in <code>d2a11ae</code>.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A developer on an NVIDIA box can set
+<code>"Model": "large-v3", "Device": "cuda"</code> and get near-real-time, high-accuracy local transcription; everyone
+else is unaffected and CI stays CPU-deterministic.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Make <code>medium</code> / <code>large-v3</code> / <code>large-v3-turbo</code> selectable by config name, SHA-256-pinned like every other artifact.</li>
+  <li>Allow STT inference on GPU (CUDA first; Vulkan as a cross-vendor option) via a single config key, CPU default.</li>
+  <li>Keep the default package CPU-only and its pack output byte-identical to today (no new bundled natives).</li>
+  <li>Fail loudly and actionably when GPU is explicitly requested but unavailable.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>Streaming / interim transcripts (ROADMAP P0).</li>
+  <li><code>faster-whisper</code> / CTranslate2 / distil-whisper backends.</li>
+  <li>Kokoro (TTS) GPU — deferred; see §12.</li>
+  <li>Auto-downloading GPU runtime natives — the user opts in with a NuGet reference.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default-package size delta</td><td><b>0</b> — no new dependencies in the default reference set</td></tr>
+  <tr><td>Default test lane</td><td>No new network; new catalog entries covered by offline unit tests only</td></tr>
+  <tr><td><code>large-v3</code> on CUDA (mid-range GPU, ~5&nbsp;s utterance)</td><td>RTF &lt; 0.3 (target — confirm on hardware)</td></tr>
+  <tr><td><code>large-v3</code> on CPU</td><td>Expected RTF &gt; 1 (i.e. <i>not</i> real-time) — warn at warm-up</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>Everything here lives inside the existing package; no new project, no abstraction change.</p>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>WhisperCppModelCatalog.cs</code></td><td>WS1 — add catalog entries (data only).</td></tr>
+  <tr><td><code>WhisperCppOptions.cs</code></td><td>WS2 — add <code>Device</code> (parsed in <code>FromConfiguration</code>).</td></tr>
+  <tr><td><code>WhisperCppSttEngine.cs</code></td><td>WS2 — apply the chosen runtime before building the <code>WhisperFactory</code>; log which runtime actually loaded; warm-up warning for large-on-CPU.</td></tr>
+  <tr><td><code>WhisperCppDescriptors.cs</code></td><td>WS2 — validate the <code>Device</code> value (known enum).</td></tr>
+  <tr><td><code>VoxaModelCache</code>, descriptors, engine contract</td><td><b>Unchanged.</b> Larger files just take longer to download/verify on first run.</td></tr>
+</table>
+
+<div class="callout"><b>Invariant.</b> whisper.cpp remains 16&nbsp;kHz-mono and utterance-buffered. GPU changes only the
+inference backend, not the audio contract, the session envelope, or the VAD coupling.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — STT catalog expansion</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.WhisperCpp</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span></span>
+  <span><b>Network</b> first-run download only</span>
+  <span><b>Surface</b> additive (new config values)</span>
+</div>
+
+<p>The catalog is a compiled-in dictionary of <code>VoxaModelArtifact</code>s; each entry is one line via the existing
+<code>Entry(file, sha256, sizeBytes)</code> helper. We add the larger models from
+<code>huggingface.co/ggerganov/whisper.cpp</code>:</p>
+
+<table>
+  <tr><th>Catalog name</th><th>File</th><th>Approx size</th><th>Notes</th></tr>
+  <tr><td><code>medium</code></td><td><code>ggml-medium.bin</code></td><td>~1.53 GB</td><td>multilingual</td></tr>
+  <tr><td><code>medium.en</code></td><td><code>ggml-medium.en.bin</code></td><td>~1.53 GB</td><td>English-only</td></tr>
+  <tr><td><code>medium-q5_0</code></td><td><code>ggml-medium-q5_0.bin</code></td><td>~539 MB</td><td>quantized</td></tr>
+  <tr><td><code>large-v3</code></td><td><code>ggml-large-v3.bin</code></td><td>~3.1 GB</td><td>best accuracy</td></tr>
+  <tr><td><code>large-v3-q5_0</code></td><td><code>ggml-large-v3-q5_0.bin</code></td><td>~1.08 GB</td><td>quantized</td></tr>
+  <tr><td><code>large-v3-turbo</code></td><td><code>ggml-large-v3-turbo.bin</code></td><td>~1.62 GB</td><td>~8× faster than large, near-large accuracy</td></tr>
+  <tr><td><code>large-v3-turbo-q5_0</code></td><td><code>ggml-large-v3-turbo-q5_0.bin</code></td><td>~574 MB</td><td>quantized turbo</td></tr>
+</table>
+
+<div class="callout danger"><b>Do not fabricate hashes.</b> Sizes above are approximate, for the progress bar and
+error text only. The authoritative <code>SHA-256</code> and exact byte length <b>must</b> be read at implementation time
+from each file's Hugging Face LFS pointer — <code>GET huggingface.co/ggerganov/whisper.cpp/raw/main/&lt;file&gt;</code>
+returns a pointer containing <code>oid sha256:&lt;hash&gt;</code> and <code>size&nbsp;&lt;bytes&gt;</code>. This is exactly
+how the VLS-001 entries were sourced. A hand-written or guessed hash is a bug, not a placeholder.</div>
+
+<span class="filelabel">src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs (additions)</span>
+<pre><code>// &lt;-- sha256 + sizeBytes from the HF LFS pointer; never hand-written --&gt;
+["medium"]              = Entry("ggml-medium.bin",              "&lt;sha256&gt;", &lt;bytes&gt;),
+["medium.en"]           = Entry("ggml-medium.en.bin",           "&lt;sha256&gt;", &lt;bytes&gt;),
+["medium-q5_0"]         = Entry("ggml-medium-q5_0.bin",         "&lt;sha256&gt;", &lt;bytes&gt;),
+["large-v3"]            = Entry("ggml-large-v3.bin",            "&lt;sha256&gt;", &lt;bytes&gt;),
+["large-v3-q5_0"]       = Entry("ggml-large-v3-q5_0.bin",       "&lt;sha256&gt;", &lt;bytes&gt;),
+["large-v3-turbo"]      = Entry("ggml-large-v3-turbo.bin",      "&lt;sha256&gt;", &lt;bytes&gt;),
+["large-v3-turbo-q5_0"] = Entry("ggml-large-v3-turbo-q5_0.bin", "&lt;sha256&gt;", &lt;bytes&gt;),</code></pre>
+
+<p>No other code changes are required for WS1: <code>TryGet</code>, <code>KnownModels</code>, the descriptor's
+unknown-model error text, the offline-miss error, and warm-up all consume the dictionary generically.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the GPU execution seam</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.WhisperCpp</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (packaging)</span>
+  <span><b>Default</b> cpu (unchanged)</span>
+  <span><b>Natives</b> user-supplied, never bundled</span>
+</div>
+
+<h3>Config &amp; option</h3>
+<p>Add a <code>Device</code> to <code>WhisperCppOptions</code>, parsed from <code>Voxa:WhisperCpp:Device</code>:</p>
+<table>
+  <tr><th>Value</th><th>Meaning</th></tr>
+  <tr><td><code>cpu</code> <i>(default)</i></td><td>CPU runtime, as today. Deterministic; what CI uses.</td></tr>
+  <tr><td><code>auto</code></td><td>Prefer the best available GPU runtime, fall back to CPU with a warning log.</td></tr>
+  <tr><td><code>cuda</code></td><td>Require the CUDA runtime. If unavailable → <b>fail at start</b> with remediation (don't silently run slow).</td></tr>
+  <tr><td><code>vulkan</code></td><td>Require the Vulkan runtime (cross-vendor: NVIDIA/AMD/Intel).</td></tr>
+  <tr><td><code>coreml</code></td><td>Apple Silicon — <b>best-effort</b>, see the CoreML note below.</td></tr>
+</table>
+
+<h3>How the runtime is selected</h3>
+<p>Whisper.net loads a native backend chosen from the <code>Whisper.net.Runtime.*</code> packages present in the app and
+the loader's configured order. The engine sets that order from <code>Device</code> before constructing the (process-wide,
+cached) <code>WhisperFactory</code>, then logs which backend actually loaded so the choice is observable.</p>
+
+<span class="filelabel">src/Voxa.Speech.WhisperCpp/WhisperCppSttEngine.cs (sketch — pin exact API to the referenced Whisper.net version)</span>
+<pre><code><span class="cm">// Applied once, before the shared WhisperFactory is built. Exact API per Whisper.net version:</span>
+<span class="cm">// the runtime library order is the supported selection seam (Whisper.net RuntimeOptions).</span>
+static IReadOnlyList&lt;RuntimeLibrary&gt; OrderFor(WhisperDevice device) =&gt; device switch
+{
+    WhisperDevice.Cpu    =&gt; [RuntimeLibrary.Cpu],
+    WhisperDevice.Cuda   =&gt; [RuntimeLibrary.Cuda],                 <span class="cm">// no Cpu fallback: explicit means required</span>
+    WhisperDevice.Vulkan =&gt; [RuntimeLibrary.Vulkan],
+    WhisperDevice.CoreML =&gt; [RuntimeLibrary.CoreML],
+    WhisperDevice.Auto   =&gt; [RuntimeLibrary.Cuda, RuntimeLibrary.Vulkan, RuntimeLibrary.CoreML, RuntimeLibrary.Cpu],
+    _ =&gt; [RuntimeLibrary.Cpu],
+};
+<span class="cm">// On load failure for an explicit (non-auto, non-cpu) device, throw a VoxaModelUnavailable-style</span>
+<span class="cm">// error: "Voxa:WhisperCpp:Device=cuda but no CUDA runtime loaded. Add the Whisper.net.Runtime.Cuda</span>
+<span class="cm">// package to your app and ensure the CUDA toolkit/driver is installed, or use Device=cpu."</span></code></pre>
+
+<h3>Packaging — the load-bearing decision</h3>
+<div class="callout warn"><b>GPU natives are opt-in and never bundled by Voxa.</b> The default
+<code>Voxa.Speech.WhisperCpp</code> keeps referencing only the CPU runtime (with <code>PrivateAssets</code> as today, so
+it isn't re-flowed onto consumers — the concern behind commit <code>d2a11ae</code>). To enable GPU, the consuming app
+adds the matching package itself:
+<pre><code>&lt;PackageReference Include="Whisper.net.Runtime.Cuda" Version="..." /&gt;   <span class="cm">&lt;!-- in the app, not in Voxa --&gt;</span></code></pre>
+This keeps the default build byte-identical, sidesteps multi-GB GPU natives in our package, and means the GPU matrix is
+the user's (and Whisper.net's) concern, not ours.</div>
+
+<h3>Validation</h3>
+<p><code>WhisperCppDescriptors.Validate</code> rejects an unknown <code>Device</code> value at startup (keyless, no side
+effects — same shape as the existing <code>InputSampleRate</code> check). It does <b>not</b> probe for runtime-package
+presence (unreliable pre-load); a missing GPU runtime surfaces as a clear <code>StartAsync</code> error per the sketch
+above. When a <i>large</i> model resolves on <code>Device=cpu</code>, warm-up logs a warning that real-time latency is
+unlikely.</p>
+
+<h3>CoreML note</h3>
+<div class="callout"><b>CoreML is best-effort.</b> whisper.cpp's CoreML path typically needs a <i>separate</i> Core ML
+encoder bundle alongside the GGML file, not just a runtime swap. Pinning/extracting that extra artifact is extra scope,
+so <code>coreml</code> is wired as a value but its model-side provisioning is deferred (§12); CUDA and Vulkan need only
+the GGML file already in the catalog and are the supported GPU paths in VLS-002.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Configuration reference</h2>
+
+<span class="filelabel">appsettings.json — new/affected keys (all under Voxa:WhisperCpp)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "WhisperCpp",
+    "WhisperCpp": {
+      "Model": "large-v3-turbo",   <span class="cm">// now also: medium, medium.en, medium-q5_0,</span>
+                                    <span class="cm">//   large-v3, large-v3-q5_0, large-v3-turbo-q5_0</span>
+      "Device": "cuda"             <span class="cm">// NEW. cpu (default) | auto | cuda | vulkan | coreml</span>
+    }
+  }
+}</code></pre>
+<p>Unchanged keys (<code>ModelPath</code>, <code>Language</code>, <code>Threads</code>, <code>Translate</code>) keep their
+VLS-001 semantics. <code>Threads</code> continues to apply on the CPU runtime.</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — WS1 catalog (ships alone).</b> Add entries with real LFS hashes + tests. Independently mergeable and
+    immediately useful on CPU for the <code>medium</code>/<code>turbo-q5_0</code> sizes.</li>
+  <li><b>Phase B — WS2 GPU seam.</b> <code>Device</code> option + runtime selection + validation + the large-on-CPU
+    warning + docs. Depends on nothing in Phase A but lands second so the larger models exist to exercise it.</li>
+</ol>
+<p>One logical change per PR (per CONTRIBUTING) — Phase A and Phase B are two PRs. Both add a <code>[Unreleased]</code>
+CHANGELOG entry and update <code>docs/local-speech.md</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Add <code>medium</code> / <code>medium.en</code> / <code>medium-q5_0</code> entries (LFS-sourced sha256 + size).
+    <span class="ac">AC: <code>TryGet</code> resolves each; appears in <code>KnownModels</code>.</span></li>
+  <li><span class="tid">T1.2</span> Add <code>large-v3</code> / <code>large-v3-q5_0</code> entries.
+    <span class="ac">AC: resolve + (cached) hash verify pass.</span></li>
+  <li><span class="tid">T1.3</span> Add <code>large-v3-turbo</code> / <code>large-v3-turbo-q5_0</code> entries.</li>
+  <li><span class="tid">T1.4</span> Unit test: every catalog name resolves to a well-formed artifact; offline-miss error names the new model.
+    <span class="ac">AC: runs in the default (offline) lane, no download.</span></li>
+  <li><span class="tid">T2.1</span> Add <code>WhisperDevice</code> enum + <code>Device</code> to <code>WhisperCppOptions.FromConfiguration</code>.</li>
+  <li><span class="tid">T2.2</span> Apply runtime-library order from <code>Device</code> in <code>WhisperCppSttEngine.StartAsync</code>; log the loaded backend.</li>
+  <li><span class="tid">T2.3</span> Explicit-GPU-unavailable → actionable <code>StartAsync</code> error; <code>auto</code> → CPU fallback + warning.</li>
+  <li><span class="tid">T2.4</span> <code>Validate</code> rejects unknown <code>Device</code>; large-on-CPU warm-up warning.</li>
+  <li><span class="tid">T2.5</span> Unit test: <code>Device</code> parsing + validation error text (default lane, no GPU needed).</li>
+  <li><span class="tid">T2.6</span> Docs: <code>docs/local-speech.md</code> GPU section (how to add the runtime package, the matrix, latency caveat).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td>Catalog resolution, <code>KnownModels</code>, offline-miss text, <code>Device</code> parse/validate. No download, no GPU.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>Download + SHA-256 verify of one <i>moderate</i> new model (<code>medium-q5_0</code>) to prove the catalog entries are correct. <b>Do not</b> add <code>large-v3</code> (3&nbsp;GB) to routine CI — gate it behind an explicit opt-in to protect the lane's time/bandwidth budget.</td></tr>
+  <tr><td><b>Manual / hardware</b></td><td>On a CUDA box: <code>Model=large-v3, Device=cuda</code>; confirm the loaded-backend log says CUDA and the STT segment of Studio's latency waterfall drops vs CPU. Confirm <code>Device=cuda</code> with no runtime package fails with the remediation message.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>GPU runtime natives bloat the package or get re-bundled onto consumers (cf. <code>d2a11ae</code>).</td><td class="sev-high">High</td><td>Base package references only the CPU runtime, <code>PrivateAssets</code> as today; GPU runtimes are user-added. Pack-output golden check stays green.</td></tr>
+  <tr><td>R2</td><td>Incorrect / fabricated SHA-256 → silent wrong file or perpetual verify failure.</td><td class="sev-high">High</td><td>Source every hash from the HF LFS pointer; <code>LocalModels</code> test verifies a downloaded file against the pin.</td></tr>
+  <tr><td>R3</td><td><code>large-v3</code> (3&nbsp;GB) blows the CI time/bandwidth budget.</td><td class="sev-med">Med</td><td>Routine <code>LocalModels</code> lane downloads only <code>medium-q5_0</code>; large models gated behind explicit opt-in.</td></tr>
+  <tr><td>R4</td><td>Explicit <code>cuda</code> but no runtime/driver → confusing failure.</td><td class="sev-med">Med</td><td>Clear <code>StartAsync</code> error with the exact package + driver remediation; <code>auto</code> falls back with a warning.</td></tr>
+  <tr><td>R5</td><td>User picks <code>large-v3</code> on CPU and blames Voxa for being slow.</td><td class="sev-low">Low</td><td>Warm-up warning; latency caveat in the config docs and the model table.</td></tr>
+  <tr><td>R6</td><td>Whisper.net runtime-selection API differs across versions.</td><td class="sev-low">Low</td><td>Pin the exact call to the referenced Whisper.net version at implementation; the sketch is intent, not a contract.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Kokoro / ONNX-Runtime GPU.</b> The ORT CPU and GPU packages provide the same assembly and conflict in-process; enabling Kokoro GPU needs a build variant, and Kokoro is already acceptable on CPU. Revisit on demand (likely its own item).</li>
+  <li><b>CoreML model-side provisioning.</b> The extra Core ML encoder bundle whisper.cpp needs is not pinned here; <code>coreml</code> is wired but unprovisioned (§6). Follow-up if Apple-Silicon GPU STT is requested.</li>
+  <li><b>Streaming / interim transcripts</b> (ROADMAP P0).</li>
+  <li><b><code>faster-whisper</code> / CTranslate2 / distil-whisper</b> alternative backends.</li>
+  <li><b>Auto-downloading GPU runtime natives.</b> Opt-in via NuGet reference, by design.</li>
+</ul>
+
+</div>
+</body>
+</html>
