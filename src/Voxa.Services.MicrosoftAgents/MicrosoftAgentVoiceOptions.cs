@@ -72,4 +72,11 @@ public sealed class MicrosoftAgentVoiceOptions
 
     /// <summary>Fired when the driver throws. Hooked from <see cref="AgentLoopProcessor"/>.</summary>
     public Func<VoiceTurnContext, Exception, CancellationToken, ValueTask>? OnTurnFailed { get; set; }
+
+    /// <summary>
+    /// Optional response-duration cap (VRT-002 WS2 §6.5), passed through to
+    /// <see cref="AgentLoopProcessor"/>. When set, a single turn stops pumping the driver's yielded frames
+    /// once its wall-clock elapsed time reaches this bound and closes cleanly. Null ⇒ no cap (default).
+    /// </summary>
+    public TimeSpan? MaxResponseDuration { get; set; }
 }

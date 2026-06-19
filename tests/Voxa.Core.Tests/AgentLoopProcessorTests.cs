@@ -104,6 +104,64 @@ public class AgentLoopProcessorTests
     }
 
     [Fact]
+    public async Task Empty_Final_Is_Forwarded_And_A_Later_Real_Final_Still_Runs_A_Turn()
+    {
+        // VRT-002 WS2 §6.3: an empty/whitespace final must not wedge the pipeline — a subsequent real
+        // transcription must still run a turn normally (no anticipatory state latched on a turn that never comes).
+        var invocations = 0;
+        var driver = new StubDriver(_ => { Interlocked.Increment(ref invocations); return Yield(new LlmTextChunkFrame("ok")); });
+        var (runner, captured, pipeline) = Build(driver);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new TranscriptionFrame("   ", IsFinal: true));   // empty → recovery
+            await pipeline.Source.IngestAsync(new TranscriptionFrame("hello", IsFinal: true)); // real → turn
+
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
+
+            Assert.Equal(1, invocations); // only the real transcription ran a turn
+            // The empty final is still forwarded downstream so transports can clear a "listening" affordance.
+            Assert.Contains(captured.Captured, f => f is TranscriptionFrame t && string.IsNullOrWhiteSpace(t.Text));
+        }
+    }
+
+    [Fact]
+    public async Task MaxResponseDuration_Truncates_A_Runaway_Turn_But_Still_Ends_It()
+    {
+        // VRT-002 WS2 §6.5: an unbounded driver stream is truncated at the cap — and the cap is what lets the
+        // turn end at all (LlmTurnEndedFrame still fires via the existing finally).
+        var driver = new StubDriver(_ => InfiniteChunks());
+        var processor = new AgentLoopProcessor(driver, maxResponseDuration: TimeSpan.FromMilliseconds(80));
+        var captured = new CapturingProcessor();
+        var pipeline = Pipeline.Build()
+            .Source(new PipelineSource())
+            .Then(processor)
+            .Then(captured)
+            .Sink(new PipelineSink());
+
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+
+        await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(3));
+
+        Assert.Contains(captured.Captured, f => f is LlmTurnEndedFrame);
+        var chunks = captured.Captured.OfType<LlmTextChunkFrame>().Count();
+        Assert.InRange(chunks, 1, 1000); // some output, then bounded — not the infinite stream
+    }
+
+    private static async IAsyncEnumerable<Frame> InfiniteChunks(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        while (true)
+        {
+            yield return new LlmTextChunkFrame("x");
+            await Task.Delay(25, ct);
+        }
+    }
+
+    [Fact]
     public async Task TranscriptionFrame_Is_Forwarded_Downstream_Before_Driver_Yields_Anything()
     {
         // UI ordering: user transcript bubble must render before bot text starts streaming.

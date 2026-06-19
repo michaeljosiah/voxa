@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Voxa.Audio;
 using Voxa.Frames;
 using Voxa.Processors;
 using Voxa.Services.MicrosoftAgents;
@@ -91,6 +92,29 @@ public sealed class DefaultVoicePipelineComposer
         var inputSampleRate  = stt.GetEffectiveInputSampleRate(root);
         var outputSampleRate = tts.GetEffectiveOutputSampleRate(root);
 
+        // 0. Acoustic echo cancellation (VRT-003). Inserted only when configured, so the default chain
+        //    is byte-identical to today — no AEC stage and no far-end tap (the same discipline as the
+        //    diagnostics taps). The near-end stage runs before the VAD; the far-end (bot-audio) tap is
+        //    added after TTS below. Both resolve the same per-session (scoped) IEchoCanceller — the AEC
+        //    provider package registers it scoped, exactly as VoxaDiagnosticsHub is — so the near-end
+        //    cancel and the far-end feed share one canceller for the session.
+        var aecEnabled = false;
+        if (!string.Equals(o.Aec.Engine, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_registry.TryGetAec(o.Aec.Engine, out var aecDesc))
+            {
+                var aecSettings = new VoxaAecSettings(SampleRate: inputSampleRate);
+                parts.Add(sp => aecDesc.CreateProcessor(sp, aecSettings)); // near-end, before the VAD
+                aecEnabled = true;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Voxa:Aec:Engine '{Engine}' not found in registry; running without echo cancellation.",
+                    o.Aec.Engine);
+            }
+        }
+
         // 1. VAD (engine names are case-insensitive, matching Profile and provider lookups)
         if (!string.Equals(o.Vad.Engine, "None", StringComparison.OrdinalIgnoreCase))
         {
@@ -100,7 +124,12 @@ public sealed class DefaultVoicePipelineComposer
                 MinRms:               tuning.VadMinRms,
                 StartDuration:        tuning.VadStartDuration,
                 StopDuration:         tuning.VadStopDuration,
-                PrerollDuration:      tuning.VadPrerollDuration);
+                PrerollDuration:      tuning.VadPrerollDuration)
+            {
+                // VRT-002 (null in Default ⇒ byte-identical golden); WithSmartTurn/WithVadObserver preserve these.
+                EagerSttDelay        = tuning.VadEagerSttDelay,
+                MaxUtteranceDuration = tuning.VadMaxUtteranceDuration,
+            };
 
             if (string.Equals(o.Vad.Engine, "SilenceGate", StringComparison.OrdinalIgnoreCase))
             {
@@ -132,7 +161,7 @@ public sealed class DefaultVoicePipelineComposer
         var history = o.Agent.ConversationMemory
             ? new InMemoryChatHistory(o.Agent.MaxHistoryMessages)
             : null;
-        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, history));
+        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, history, tuning.MaxResponseDuration));
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Agent);
 
         // 5. Sentence aggregator (profile-tuned)
@@ -145,6 +174,12 @@ public sealed class DefaultVoicePipelineComposer
         // 6. TTS
         parts.Add(sp => tts.CreateProcessor(sp, root));
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Tts);
+
+        // 7. Far-end (bot-audio) reference tap (VRT-003) — added only when an AEC engine resolved, so
+        // the default chain has no tap. It feeds each outbound bot AudioRawFrame into the session's
+        // shared (scoped) IEchoCanceller and forwards every frame unchanged; the sink is untouched.
+        if (aecEnabled)
+            parts.Add(sp => new EchoReferenceTapProcessor(sp.GetRequiredService<IEchoCanceller>()));
 
         return new ComposedVoice(
             Parts:            parts,
@@ -203,7 +238,8 @@ public sealed class DefaultVoicePipelineComposer
     private FrameProcessor CreateAgentProcessor(
         IServiceProvider sp,
         VoxaAgentOptions agentOpts,
-        InMemoryChatHistory? history)
+        InMemoryChatHistory? history,
+        TimeSpan? maxResponseDuration)
     {
         // Resolution order: AIAgent (DI) → IChatClient (DI) → IVoiceAgentFactory (provider-backed)
         AIAgent? agent = sp.GetService<AIAgent>()
@@ -217,6 +253,8 @@ public sealed class DefaultVoicePipelineComposer
 
         return MicrosoftAgentVoice.CreateProcessor(agent, opts =>
         {
+            opts.MaxResponseDuration = maxResponseDuration; // VRT-002 WS2 §6.5 (null ⇒ no cap)
+
             if (history is not null)
             {
                 opts.BuildMessages = (turnCtx, ct) =>

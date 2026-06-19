@@ -25,7 +25,9 @@ namespace Voxa.Audio.SileroVad;
 public sealed class SileroVadProcessor : FrameProcessor
 {
     private readonly SileroVadOptions _options;
-    private readonly SileroVadEngine _engine;
+    private readonly SileroVadEngine? _engine;
+    private readonly Func<float[], float>? _probabilityOverride; // test seam: bypass the ONNX model
+    private readonly int _windowSize;
     private readonly ILogger _logger;
 
     private readonly List<float> _samples = new();
@@ -34,6 +36,14 @@ public sealed class SileroVadProcessor : FrameProcessor
     private bool _isSpeaking;
     private TimeSpan _voicedAccum = TimeSpan.Zero;
     private TimeSpan _unvoicedAccum = TimeSpan.Zero;
+
+    // Eager STT (VRT-002 WS1): one speculative dispatch per hangover, tagged with a monotonic utterance id.
+    private bool _eagerDispatched;
+    private long _eagerUtteranceId;
+    private long _eagerUtteranceCounter;
+
+    // Force-split (VRT-002 WS2): time the gate has been continuously open for the current utterance.
+    private TimeSpan _utteranceOpenDuration = TimeSpan.Zero;
 
     // Pre-roll: keeps the last N windows so when the gate opens we don't lose the first word.
     private readonly Queue<byte[]> _preroll = new();
@@ -49,14 +59,31 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly int _windowsPerSecond;
 
     public SileroVadProcessor(SileroVadOptions? options = null, ILogger? logger = null)
+        : this(options ?? new SileroVadOptions(), probability: null, windowSizeOverride: null, logger: logger)
+    { }
+
+    /// <summary>
+    /// Test seam (VRT-002): bypasses the ONNX model. <paramref name="probability"/> receives each inference
+    /// window and returns the speech probability, so the eager / turn state machine can be driven with a
+    /// deterministic, synthetic VAD-probability sequence without loading or running the real model.
+    /// </summary>
+    internal SileroVadProcessor(
+        SileroVadOptions options, int windowSize, Func<float[], float> probability, ILogger? logger = null)
+        : this(options, probability ?? throw new ArgumentNullException(nameof(probability)), windowSize, logger)
+    { }
+
+    private SileroVadProcessor(
+        SileroVadOptions options, Func<float[], float>? probability, int? windowSizeOverride, ILogger? logger)
         : base("SileroVad")
     {
-        _options = options ?? new SileroVadOptions();
-        _engine = new SileroVadEngine(_options.SampleRate);
-        _window = new float[_engine.WindowSize];
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _probabilityOverride = probability;
+        _engine = probability is null ? new SileroVadEngine(_options.SampleRate) : null;
+        _windowSize = windowSizeOverride ?? _engine!.WindowSize;
+        _window = new float[_windowSize];
         _logger = logger ?? NullLogger.Instance;
-        _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
-        _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
+        _windowDuration = TimeSpan.FromSeconds((double)_windowSize / _options.SampleRate);
+        _windowsPerSecond = Math.Max(1, _options.SampleRate / _windowSize);
         _prerollWindows = Math.Max(1, (int)Math.Ceiling(_options.PrerollDuration.TotalMilliseconds / _windowDuration.TotalMilliseconds));
         // Up to 8 s of the current turn for the smart-turn seam: smart-turn-v3 wants the whole current
         // turn (bounded to its 8 s window), not just a trailing tail, or completion decisions lose context.
@@ -67,7 +94,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     public int SampleRate => _options.SampleRate;
 
     /// <summary>The exact window size the engine consumes per inference (512 at 16 kHz, 256 at 8 kHz).</summary>
-    public int WindowSize => _engine.WindowSize;
+    public int WindowSize => _windowSize;
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
@@ -95,15 +122,15 @@ public sealed class SileroVadProcessor : FrameProcessor
             _samples.Add(s / 32768f);
         }
 
-        while (_samples.Count >= _engine.WindowSize)
+        while (_samples.Count >= _windowSize)
         {
             // Reused scratch buffer — this window feeds inference + RMS only and never escapes
             // into a downstream frame, so it's safe to overwrite each iteration.
             var window = _window;
-            _samples.CopyTo(0, window, 0, _engine.WindowSize);
-            _samples.RemoveRange(0, _engine.WindowSize);
+            _samples.CopyTo(0, window, 0, _windowSize);
+            _samples.RemoveRange(0, _windowSize);
 
-            float prob = _engine.Probability(window);
+            float prob = _probabilityOverride?.Invoke(window) ?? _engine!.Probability(window);
             double rms = ComputeRms(window);
 
             // Pipecat-style: BOTH must agree.
@@ -122,6 +149,16 @@ public sealed class SileroVadProcessor : FrameProcessor
             }
 
             bool wasSpeaking = _isSpeaking;
+
+            // Resume ⇒ discard (VRT-002 WS1): a voiced window while an eager pass is pending means the user
+            // resumed within the window. Supersede the speculative utterance (the STT processor drops its
+            // final) and raise NO barge-in — the marker said "continuation, not interruption". Gate stays open.
+            if (voiced && _eagerDispatched)
+            {
+                _eagerDispatched = false;
+                await PushFrameAsync(new SpeculativeUtteranceFrame(_eagerUtteranceId, Superseded: true), ct).ConfigureAwait(false);
+            }
+
             if (!_isSpeaking && voiced && _voicedAccum >= _options.StartDuration)
             {
                 _isSpeaking = true;
@@ -138,14 +175,36 @@ public sealed class SileroVadProcessor : FrameProcessor
 
                 if (confirmed)
                 {
+                    // Confirm ⇒ promote (VRT-002 WS1): a pending eager pass IS this turn's transcription.
+                    // Clear the flag WITHOUT superseding so the STT processor promotes its result (and skips
+                    // the redundant flush on the UserStoppedSpeakingFrame below).
                     _isSpeaking = false;
+                    _eagerDispatched = false;
                 }
                 else
                 {
-                    // Mid-sentence pause — keep the gate open and wait another StopDuration of
-                    // silence before asking again.
+                    // Smart-turn override (VRT-002 WS1): smart-turn false > eager. Supersede any pending eager
+                    // pass, then keep the gate open and wait another StopDuration of silence before re-asking.
+                    if (_eagerDispatched)
+                    {
+                        _eagerDispatched = false;
+                        await PushFrameAsync(new SpeculativeUtteranceFrame(_eagerUtteranceId, Superseded: true), ct).ConfigureAwait(false);
+                    }
                     _unvoicedAccum = TimeSpan.Zero;
                 }
+            }
+            else if (_isSpeaking && !voiced
+                     && _options.EagerSttDelay is { } eager
+                     && eager < _options.StopDuration
+                     && !_eagerDispatched
+                     && _unvoicedAccum >= eager)
+            {
+                // Arm (VRT-002 WS1): unvoiced silence has reached EagerSttDelay but not yet StopDuration. Emit
+                // a marked speculative end-of-utterance so STT flushes the buffered utterance now, overlapping
+                // the rest of the hangover. The gate stays OPEN (_isSpeaking unchanged).
+                _eagerDispatched = true;
+                _eagerUtteranceId = ++_eagerUtteranceCounter;
+                await PushFrameAsync(new SpeculativeUtteranceFrame(_eagerUtteranceId), ct).ConfigureAwait(false);
             }
 
             // Live per-window observer (diagnostics hub → Studio's VAD trace). Synchronous and
@@ -169,8 +228,8 @@ public sealed class SileroVadProcessor : FrameProcessor
             }
 
             // Convert this window to PCM16 once — we'll either buffer it (gate closed) or push it (gate open).
-            var pcmOut = new byte[_engine.WindowSize * 2];
-            for (int i = 0; i < _engine.WindowSize; i++)
+            var pcmOut = new byte[_windowSize * 2];
+            for (int i = 0; i < _windowSize; i++)
             {
                 short s = (short)Math.Clamp(window[i] * 32768f, short.MinValue, short.MaxValue);
                 BinaryPrimitives.WriteInt16LittleEndian(pcmOut.AsSpan(i * 2, 2), s);
@@ -178,6 +237,10 @@ public sealed class SileroVadProcessor : FrameProcessor
 
             if (_isSpeaking && !wasSpeaking)
             {
+                // Fresh utterance: reset the force-split timer and any stale eager-dispatch flag.
+                _utteranceOpenDuration = TimeSpan.Zero;
+                _eagerDispatched = false;
+
                 _logger.LogDebug(
                     "SileroVad: gate OPENED (prob {Prob:F2}, rms {Rms:F4}, prerolling {Count} windows ≈ {Ms} ms)",
                     prob, rms, _preroll.Count, (int)(_preroll.Count * _windowDuration.TotalMilliseconds));
@@ -201,6 +264,27 @@ public sealed class SileroVadProcessor : FrameProcessor
 
             if (_isSpeaking)
             {
+                _utteranceOpenDuration += _windowDuration;
+
+                // Force-split (VRT-002 WS2): cap continuous open-gate time. Emit a stop (so STT flushes an
+                // intermediate transcription) then immediately re-open a fresh utterance so capture continues —
+                // this bounds memory for a non-pausing speaker / stuck-open mic and yields periodic transcripts.
+                if (_options.MaxUtteranceDuration is { } maxUtt && _utteranceOpenDuration >= maxUtt)
+                {
+                    if (_eagerDispatched)
+                    {
+                        _eagerDispatched = false;
+                        await PushFrameAsync(new SpeculativeUtteranceFrame(_eagerUtteranceId, Superseded: true), ct).ConfigureAwait(false);
+                    }
+                    _logger.LogDebug(
+                        "SileroVad: force-split at {Ms} ms (MaxUtteranceDuration) — flushing intermediate transcript",
+                        (int)_utteranceOpenDuration.TotalMilliseconds);
+                    await PushFrameAsync(new UserStoppedSpeakingFrame(), ct).ConfigureAwait(false);
+                    await PushFrameAsync(new UserStartedSpeakingFrame(), ct).ConfigureAwait(false);
+                    _utteranceOpenDuration = TimeSpan.Zero;
+                    _recentSpeech.Clear();
+                }
+
                 // Keep a rolling tail of recent speech for the smart-turn confirmer (shares the
                 // pcmOut reference — no extra allocation; the array is immutable once built).
                 if (_options.ConfirmTurnEnd is not null)
@@ -245,7 +329,7 @@ public sealed class SileroVadProcessor : FrameProcessor
 
     protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
     {
-        _engine.Dispose();
+        _engine?.Dispose();
         return ValueTask.CompletedTask;
     }
 }

@@ -8,6 +8,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Acoustic echo cancellation seam (VRT-003).** A new zero-extra-dependency **`Voxa.Audio.Abstractions`**
+  package defines `IEchoCanceller` (`FeedReference(farEnd)` / `CancelEcho(nearEnd)` / `Reset()` / `SampleRate`)
+  — the plug a real DSP fits into for **barge-in over speakers**, where the bot's own audio loops back into the
+  mic. It ships the seam, not the DSP: a `NullEchoCanceller` passthrough, an `EchoCancellerProcessor` placed
+  *before* the VAD (cleans each mic frame; resets on session start and on an interruption epoch), and an
+  `EchoReferenceTapProcessor` placed *after* TTS that feeds the bot's outbound audio as the far-end reference
+  (transport-agnostic — the sink is untouched). A `VoxaAecDescriptor`/`VoxaAecSettings` pair + a `TryGetAec`
+  registry slot mirror the VAD provider model, and the composer inserts the stage + tap from `Voxa:Aec:Engine`
+  (default `None`), guarded by a fail-fast validator. With it unset/`None` the composed pipeline is
+  **byte-identical** to before (no stage, no tap — golden-tested). A production canceller (WebRTC APM / SpeexDSP)
+  is a separate opt-in `Voxa.Audio.Aec.*` follow-up.
+- **Eager / speculative STT (VRT-002 WS1).** A `SileroVadOptions.EagerSttDelay` (`< StopDuration`) lets the VAD
+  emit a marked `SpeculativeUtteranceFrame` once silence reaches that delay, so STT starts transcribing the
+  buffered utterance **before** the full end-of-turn hangover elapses — the transcript is often ready by the time
+  the turn is confirmed. If the user resumes within the window, or a smart-turn `ConfirmTurnEnd` returns `false`,
+  the speculative utterance is **superseded**: `SpeechToTextProcessor` drops its final before it becomes a
+  `TranscriptionFrame` (the guarantee — the per-frame cancellation token never reaches STT inference, so
+  suppression by id, not cancellation, is what discards it). On a confirmed end-of-turn the speculative pass is
+  *promoted* (no second STT pass). The contract change is minimal and additive: `TranscriptionResult` gains an
+  optional `UtteranceId`, and `ISpeechToTextEngine` gains defaulted `FlushAsync(long)` + `DiscardBufferedAudioAsync()`
+  hooks (whisper.cpp implements peek-without-clear + discard so a resume re-transcribes the full merged utterance).
+  Off by default; on in `LowLatency`/`Cheap` (`Voxa:Vad:EagerSttDelayMs`).
+- **Turn-taking robustness knobs (VRT-002 WS2).** Three opt-in, default-off guards against pipeline-wedging edge
+  cases: **empty/low-confidence STT recovery** (an empty final no longer leaves the agent loop waiting on a turn
+  that never comes — it's forwarded and the worker stays ready), **`MaxUtteranceDuration`** force-split (a
+  non-pausing speaker / stuck-open mic is split into periodic intermediate transcripts instead of buffering
+  forever — `Voxa:Vad:MaxUtteranceDurationMs`), and **`MaxResponseDuration`** (a runaway/looping LLM turn is
+  truncated and closed cleanly, `LlmTurnEndedFrame` still fires — `Voxa:Agent:MaxResponseDurationMs`). All wired
+  through the profiles (on in `LowLatency`/`Cheap`, off in `Default`/`Quality`); the `Default` profile keeps every
+  knob off so the composed pipeline stays byte-identical. The two *interruption* knobs from the spec
+  (`MinInterruptionDuration` debounce, `InterruptionRecoveryTimeout`) are intentionally deferred to a dedicated
+  follow-up — both require bot-speaking awareness at the VAD plus the sink's barge-in epoch interplay, which the
+  spec isolates as its highest-risk change.
 - **Turn-taking quality benchmark (VRT-001).** A new `bench/Voxa.TurnTaking` harness drives the **real
   composed pipeline** (`DefaultVoicePipelineComposer.Compose`) through a Full-Duplex-Bench-layout corpus and
   reduces the existing `VoxaDiagnosticsHub` stage timings to a per-sample JSON record + response WAV — no new

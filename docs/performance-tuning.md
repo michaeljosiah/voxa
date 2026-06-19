@@ -24,8 +24,19 @@ sample server, attach a `MeterListener` and log `voxa.turn.ttfb` per turn.
 | `SileroVadOptions.StartDuration` | 200 ms | Sustained voiced audio before the gate opens. | Lower = faster trigger but more false opens on brief noises. |
 | `SileroVadOptions.PrerollDuration` | 300 ms | Audio replayed when the gate opens so the first syllable isn't lost. | Larger = safer onset capture, slightly more audio to STT. |
 | `SileroVadOptions.ConfirmTurnEnd` | `null` | Smart-turn seam. When set, the silence timeout asks this callback "is the turn really over?" — return `false` to treat it as a mid-sentence pause. Lets `StopDuration` be aggressive (e.g. 200 ms) safely. | Adds a classifier call per turn-end candidate. The classifier itself (LLM/ONNX/HTTP) is a separate component that plugs in here. |
+| `SileroVadOptions.EagerSttDelay` | `null` (off; on in LowLatency/Cheap) | Speculative STT (VRT-002). At this silence delay (strictly `< StopDuration`) the VAD flushes STT speculatively so transcription overlaps the rest of the hangover — the transcript is often ready by the time the turn is confirmed. | Earlier transcripts on a clean end-of-turn; wasted (suppressed) STT work when the user resumes. Set ≈ `StopDuration − 250 ms`. Config: `Voxa:Vad:EagerSttDelayMs`. |
+| `SileroVadOptions.MaxUtteranceDuration` | `null` (off) | Force-split (VRT-002). Caps a single open-gate utterance; on reaching it the VAD emits an intermediate end-of-turn (flushing STT) and re-opens a fresh utterance. | Bounds memory and yields periodic transcripts for a non-pausing speaker / stuck-open mic; too low chops natural sentences. Config: `Voxa:Vad:MaxUtteranceDurationMs`. |
+| `VoxaAgentOptions.MaxResponseDuration` | `null` (off; 30 s in LowLatency/Cheap) | Response cap (VRT-002). Bounds a single turn's wall-clock output; a runaway/looping LLM is truncated and the turn closed cleanly (`LlmTurnEndedFrame` still fires). | A capped turn is a normal truncated completion, not an error. Config: `Voxa:Agent:MaxResponseDurationMs`. |
 | `SentenceAggregator.EagerFirstChunkMinChars` | 0 (off) | On the **first** flush of a turn, also break at a clause boundary (`, ; :`) once this many chars are buffered — gets the opening audio out 100–400 ms sooner. Later flushes use full sentence boundaries. | Slightly more, shorter first chunk. 40 is a good starting value (used by the sample server). |
 | `SentenceAggregator.MaxBufferChars` | 500 | Hard cap that forces a flush even without a boundary, so TTS never stalls on a runaway response. | — |
+
+**Eager ↔ smart-turn precedence (VRT-002).** Eager dispatch is a *bet* that the turn ended; `ConfirmTurnEnd`
+is the *authority* on whether it did. Precedence is one-directional: a `ConfirmTurnEnd → false` (or a resumed
+voiced window inside the eager window) always **supersedes** a pending eager pass — its utterance id is marked
+stale and `SpeechToTextProcessor` drops the speculative final before it becomes a turn (the per-frame
+cancellation token does not reach STT inference, so suppression by id, not cancellation, is the guarantee). So
+eager STT is safe to combine with smart turn: `LowLatency`/`Cheap` enable both; `Quality` leaves eager off to
+favour smart-turn accuracy. A misconfigured `EagerSttDelay ≥ StopDuration` is disabled with a warning.
 
 ## Provider notes
 
@@ -53,3 +64,14 @@ The `WebSocketAudioSink` drops queued bot **audio** from before an interruption 
 bot stops almost immediately when the user speaks over it; non-audio frames (transcriptions, tool
 calls, status) are never dropped. The client should handle the `{"type":"interruption"}` envelope by
 flushing its local playback buffer.
+
+### Echo cancellation seam (VRT-003)
+
+Real barge-in over **speakers** (not headphones) needs the bot's own audio removed from the mic before the
+VAD sees it — otherwise the bot hears itself. Voxa ships the **seam**, not a DSP: `IEchoCanceller` in
+`Voxa.Audio.Abstractions`, an `EchoCancellerProcessor` placed *before* the VAD, and a far-end tap that feeds
+the bot's outbound TTS audio as the reference. The default (`Voxa:Aec:Engine` unset or `None`) inserts **no**
+AEC stage and no tap, so the composed pipeline is byte-identical to today. A real canceller ships as a
+separate opt-in `Voxa.Audio.Aec.*` package (WebRTC APM / SpeexDSP / managed); reference it and set
+`Voxa:Aec:Engine` to its registered name to enable it. Buffering, frame alignment, and resampling between the
+far-end and near-end streams are the implementation's responsibility — the seam stays deliberately simple.

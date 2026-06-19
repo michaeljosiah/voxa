@@ -35,6 +35,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
     private readonly Func<VoiceTurnContext, TurnSummary, CancellationToken, ValueTask>? _onTurnCompleted;
     private readonly Func<VoiceTurnContext, Exception, CancellationToken, ValueTask>? _onTurnFailed;
     private readonly Func<VoiceTurnContext>? _contextFactory;
+    private readonly TimeSpan? _maxResponseDuration;
 
     private readonly Channel<string> _turnQueue = Channel.CreateUnbounded<string>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
@@ -61,12 +62,20 @@ public sealed class AgentLoopProcessor : FrameProcessor
     /// <see cref="VoiceTurnContext.UserText"/>, <see cref="VoiceTurnContext.FrontendTools"/>, and
     /// <see cref="VoiceTurnContext.Emitter"/> — those fields are owned by the loop.
     /// </param>
+    /// <param name="maxResponseDuration">
+    /// Optional response-duration cap (VRT-002 WS2 §6.5). When set, a single turn stops pumping the driver's
+    /// yielded frames once its wall-clock elapsed time reaches this bound, then closes the turn cleanly
+    /// (<see cref="LlmTurnEndedFrame"/> still fires; <paramref name="onTurnCompleted"/> still runs). A capped
+    /// turn is a normal truncated completion, not an error. Null ⇒ no cap (default). Guards against a looping
+    /// LLM or runaway TTS talking over the user's next turns.
+    /// </param>
     public AgentLoopProcessor(
         IAgentTurnDriver driver,
         Func<VoiceTurnContext, CancellationToken, ValueTask>? onTurnStarted = null,
         Func<VoiceTurnContext, TurnSummary, CancellationToken, ValueTask>? onTurnCompleted = null,
         Func<VoiceTurnContext, Exception, CancellationToken, ValueTask>? onTurnFailed = null,
-        Func<VoiceTurnContext>? contextFactory = null)
+        Func<VoiceTurnContext>? contextFactory = null,
+        TimeSpan? maxResponseDuration = null)
         : base(name: "AgentLoop")
     {
         _driver = driver ?? throw new ArgumentNullException(nameof(driver));
@@ -74,6 +83,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
         _onTurnCompleted = onTurnCompleted;
         _onTurnFailed = onTurnFailed;
         _contextFactory = contextFactory;
+        _maxResponseDuration = maxResponseDuration;
     }
 
     protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
@@ -126,6 +136,15 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 await _turnQueue.Writer.WriteAsync(t.Text, ct).ConfigureAwait(false);
                 return;
 
+            case TranscriptionFrame { IsFinal: true }:
+                // Empty / whitespace final (VRT-002 WS2 §6.3): a silence misfire, a noise burst, or a Whisper
+                // hallucination the filter dropped. Do NOT enqueue a turn — forward the frame so transports can
+                // clear any "thinking" affordance, and leave the worker idle and ready so the next
+                // UserStartedSpeakingFrame runs normally (no anticipatory state latched waiting on a turn that
+                // will never come — speech-core's stuck-pipeline guard).
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
             case ToolCallResultFrame r:
                 if (_pendingFrontendTools.TryRemove(r.CallId, out var pending))
                 {
@@ -170,6 +189,13 @@ public sealed class AgentLoopProcessor : FrameProcessor
 
                     await foreach (var frame in _driver.RunTurnAsync(ctx, ct).ConfigureAwait(false))
                     {
+                        // Response-duration cap (VRT-002 WS2 §6.5): stop pumping a runaway turn and close it
+                        // cleanly — the finally below still emits LlmTurnEndedFrame and OnTurnCompleted runs.
+                        if (_maxResponseDuration is { } cap && stopwatch.Elapsed >= cap)
+                        {
+                            break;
+                        }
+
                         switch (frame)
                         {
                             case LlmTextChunkFrame chunk:

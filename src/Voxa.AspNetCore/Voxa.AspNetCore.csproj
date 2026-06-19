@@ -42,6 +42,7 @@
       install just Voxa.Core / Voxa.Transports.WebSocket and wire pipelines manually.
     -->
     <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+    <ProjectReference Include="..\Voxa.Audio.Abstractions\Voxa.Audio.Abstractions.csproj" />
     <ProjectReference Include="..\Voxa.Services.MicrosoftAgents\Voxa.Services.MicrosoftAgents.csproj" />
   </ItemGroup>
 
