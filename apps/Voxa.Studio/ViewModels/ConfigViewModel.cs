@@ -23,6 +23,10 @@ public sealed partial class ConfigViewModel : ObservableObject
 {
     private readonly StudioServices _services;
 
+    // True if the boot config already registers a smart-turn classifier — so unchecking the toggle must
+    // emit an explicit "off" override rather than silently falling back to that base value.
+    private readonly bool _smartTurnInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -53,6 +57,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         _smartTurnEnabled = !string.IsNullOrWhiteSpace(smartTurnProvider)
             && SmartTurnProviders.Contains(smartTurnProvider, StringComparer.OrdinalIgnoreCase);
         if (_smartTurnEnabled) _selectedSmartTurnProvider = smartTurnProvider!;
+        _smartTurnInBaseConfig = _smartTurnEnabled; // booted with a registering provider?
         _smartTurnEndpoint = voxa["SmartTurn:Endpoint"] ?? "http://localhost:8000/predict";
         _smartTurnPythonExe = voxa["SmartTurn:PythonExe"] ?? "python";
         _smartTurnPythonScript = voxa["SmartTurn:PythonScript"] ?? "sidecar/voxa_smart_turn_sidecar.py";
@@ -338,14 +343,19 @@ public sealed partial class ConfigViewModel : ObservableObject
         if (ShowAgentBaseUrl && !string.IsNullOrWhiteSpace(AgentBaseUrl) &&
             !string.Equals(AgentBaseUrl, "http://localhost:11434/v1", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Agent:BaseUrl"] = AgentBaseUrl.Trim();
-        // Smart turn (P0): only emit a COMPLETE classifier config — a half-filled toggle stays "off" so
-        // AddVoxaSmartTurn never fails fast on a missing field.
+        // Smart turn (P0): emit a COMPLETE classifier block when enabled (a half-filled toggle stays "off"
+        // so AddVoxaSmartTurn never fails fast on a missing field). When off/incomplete, emit an explicit
+        // Provider="None" iff the base config registers a classifier — otherwise Reconfigure would fall back
+        // to that base value and smart turn would stay on despite the unchecked toggle. ("None" overrides the
+        // base; an empty value would be filtered out by the config layering.)
+        var emittedSmartTurn = false;
         if (SmartTurnEnabled)
         {
             if (ShowSmartTurnHttp && !string.IsNullOrWhiteSpace(SmartTurnEndpoint))
             {
                 pairs["Voxa:SmartTurn:Provider"] = "Http";
                 pairs["Voxa:SmartTurn:Endpoint"] = SmartTurnEndpoint.Trim();
+                emittedSmartTurn = true;
             }
             else if (ShowSmartTurnSidecar && !string.IsNullOrWhiteSpace(SmartTurnPythonScript))
             {
@@ -353,8 +363,11 @@ public sealed partial class ConfigViewModel : ObservableObject
                 pairs["Voxa:SmartTurn:PythonExe"] =
                     string.IsNullOrWhiteSpace(SmartTurnPythonExe) ? "python" : SmartTurnPythonExe.Trim();
                 pairs["Voxa:SmartTurn:PythonScript"] = SmartTurnPythonScript.Trim();
+                emittedSmartTurn = true;
             }
         }
+        if (!emittedSmartTurn && _smartTurnInBaseConfig)
+            pairs["Voxa:SmartTurn:Provider"] = "None";
         return pairs;
     }
 

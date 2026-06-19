@@ -19,6 +19,7 @@ public class SidecarSmartTurnClassifierTests
         public int Starts { get; private set; }
         public int Predicts { get; private set; }
         public int Disposes { get; private set; }
+        public int Resets { get; private set; }
 
         public async Task StartAsync(CancellationToken ct)
         {
@@ -36,6 +37,7 @@ public class SidecarSmartTurnClassifierTests
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public void Dispose() => Disposes++;
+        public void Reset() => Resets++;
     }
 
     [Fact]
@@ -146,6 +148,23 @@ public class SidecarSmartTurnClassifierTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             async () => await c.IsTurnCompleteAsync(new byte[320], 16000, cts.Token));
+
+        Assert.Equal(1, fake.Resets); // an interruption mid-predict also desyncs the process — reset it
+    }
+
+    [Fact] // Codex P2: a timed-out prediction must kill the process so the next turn relaunches (no stale response).
+    public async Task A_Timed_Out_Prediction_Resets_The_Process_And_The_Next_Turn_Relaunches()
+    {
+        var fake = new FakeSidecar(0.9, predictDelayMs: 5000);
+        var c = new SidecarSmartTurnClassifier(
+            new SmartTurnOptions { SidecarTimeoutMs = 50, SidecarReadyTimeoutMs = 5000 }, fake);
+
+        Assert.True(await c.IsTurnCompleteAsync(new byte[320], 16000, CancellationToken.None)); // times out → complete
+        Assert.Equal(1, fake.Resets);
+        Assert.Equal(1, fake.Starts);
+
+        await c.IsTurnCompleteAsync(new byte[320], 16000, CancellationToken.None);              // times out again
+        Assert.Equal(2, fake.Starts); // re-started, not skipped (the desynced process was discarded)
     }
 
     // ── Codex P2: the singleton must survive synchronous container teardown ──

@@ -96,4 +96,23 @@ public class ConfigSmartTurnTests
         // A configured pipeline registers the classifier from the first build — no Apply needed.
         Assert.IsType<HttpSmartTurnClassifier>(services.Provider.GetService<ISmartTurnClassifier>());
     }
+
+    [Fact] // Codex P2: unchecking the toggle must override a base-config provider, not fall back to it.
+    public async Task Disabling_Overrides_A_Base_Config_Provider()
+    {
+        var config = TestSupport.LocalConfig(null,
+            ("Voxa:SmartTurn:Provider", "Http"), ("Voxa:SmartTurn:Endpoint", "http://host/predict"));
+        await using var services = new StudioServices(config, new NullAudioDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
+        var vm = new ConfigViewModel(services);
+        Assert.True(vm.SmartTurnEnabled);   // seeded on from the base config
+
+        vm.SmartTurnEnabled = false;        // user unchecks
+        var pairs = vm.DraftPairs(includeSecrets: true);
+        Assert.Equal("None", pairs["Voxa:SmartTurn:Provider"]);   // explicit off, beating the base value
+
+        services.Reconfigure(pairs);
+        Assert.Null(services.Provider.GetService<ISmartTurnClassifier>());  // genuinely disabled
+    }
 }

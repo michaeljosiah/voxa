@@ -12,6 +12,9 @@ internal interface ISmartTurnSidecar : IAsyncDisposable, IDisposable
 {
     Task StartAsync(CancellationToken ct);
     Task<double> PredictAsync(ReadOnlyMemory<byte> pcm, int sampleRate, CancellationToken ct);
+
+    /// <summary>Kill the current process so the next <see cref="StartAsync"/> relaunches a clean one.</summary>
+    void Reset();
 }
 
 /// <summary>
@@ -64,15 +67,28 @@ public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier, IDisposab
                 await _sidecar.StartAsync(startCts.Token).ConfigureAwait(false);
                 _started = true;
             }
-            using var predictCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            predictCts.CancelAfter(_options.SidecarTimeoutMs);
-            var probability = await _sidecar.PredictAsync(recentSpeechPcm, sampleRate, predictCts.Token).ConfigureAwait(false);
-            return probability >= _options.Threshold;
+            try
+            {
+                using var predictCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                predictCts.CancelAfter(_options.SidecarTimeoutMs);
+                var probability = await _sidecar.PredictAsync(recentSpeechPcm, sampleRate, predictCts.Token).ConfigureAwait(false);
+                return probability >= _options.Threshold;
+            }
+            catch
+            {
+                // Any abandonment of an in-flight prediction — timeout, crash, OR a user interruption — leaves
+                // the request unanswered and a stale response queued, desyncing the process. Kill it so the
+                // next turn relaunches clean instead of reading the previous turn's probability. The outer
+                // handler then decides fail-safe-complete vs. propagating the interruption.
+                _started = false;
+                _sidecar.Reset();
+                throw;
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             // A crashed / erroring / timed-out sidecar must never hold the turn open — fail to "complete"
-            // and let the next turn relaunch it (ProcessSmartTurnSidecar.StartAsync relaunches a dead process).
+            // and let the next turn relaunch it (the process was reset above / StartAsync relaunches it).
             _started = false;
             _logger.LogDebug(ex, "Smart-turn sidecar failed or timed out; defaulting to turn-complete.");
             return true;
@@ -213,6 +229,8 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
         try { _process.Dispose(); } catch { }
         _process = null;
     }
+
+    public void Reset() => DisposeProcess();
 
     public void Dispose() => DisposeProcess();
 
