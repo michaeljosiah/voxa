@@ -185,19 +185,23 @@ once it lands — an additive refactor, not a prerequisite.
 ### VRT-004 · **[Core + Studio]** — Streaming STT: interim transcriptions end-to-end + first streaming engine
 - **Goal:** realise the already-streaming STT contract — lower local-tier latency, live partial captions — complementing
   ROADMAP P0 (Deepgram / Azure streaming).
-- **Why speech-core:** its Nemotron streaming STT shows on-device partials at ~RTF 1.0; Voxa's contract is already
-  shaped for this but no engine produces interims and they don't propagate downstream.
+- **Why speech-core:** its Nemotron streaming STT shows on-device partials at ~RTF 1.0. Voxa's contract is already
+  shaped for this — and interims **already propagate today** (`AzureSpeechToTextEngine` emits `IsFinal:false`,
+  `SpeechToTextProcessor.ReadLoopAsync` forwards every result ungated, `AgentLoopProcessor` matches `{IsFinal:true}`
+  only). The gap is that Studio doesn't render the live caption, nothing rate-bounds interim churn, and the batch/local
+  tier produces no interims at all.
 - **Scope (in):**
-  - End-to-end **interim propagation**: a streaming engine's interim `TranscriptionResult(IsFinal:false)` →
-    `TranscriptionFrame(IsFinal:false)` from `SpeechToTextProcessor` → diagnostics hub → Studio live caption. Ensure
-    `TranscriptionFilter` / agent act on finals only (interims are display/turn-signal, not turns).
-  - A **first true-streaming engine**: switch `Voxa.Speech.Azure` to the SDK's continuous-recognition mode (it exists,
-    just unused) **or** a new `Voxa.Speech.Deepgram` package (sub-200 ms partials). Pick one in the spec.
-  - Optionally feed interims to the smart-turn classifier (richer signal than audio alone).
-- **Scope (out):** a *local* streaming STT model (own item; would slot here as a second engine); Cartesia/streaming TTS
-  (separate P0 TTS bullet).
-- **Key files:** `SpeechToTextProcessor` (emit interim frames), `Voxa.Speech.Azure` *or* new `Voxa.Speech.Deepgram`,
-  diagnostics scope for interim captions, Studio caption view (Studio half).
+  - **Render + rate-bound the interims that already flow**: a Studio live caption from the existing diagnostics
+    `TranscriptEvent`; an additive `InterimMinInterval` coalescing knob on `SpeechToTextProcessor` so partial churn
+    can't flood the bounded channel; a regression test that the agent (already finals-only) keeps ignoring interims —
+    **no suppression gate; interims keep flowing**.
+  - **A lower-latency / local streaming engine**: Azure already runs continuous recognition and already emits interims
+    (the proof case), so the genuine engine gaps are *latency* (a new `Voxa.Speech.Deepgram`, sub-200 ms) and the
+    *local* streaming tier (Nemotron via VLS-007).
+  - Optionally feed the latest interim text to the smart-turn classifier (richer signal than audio alone).
+- **Scope (out):** a *local* streaming STT model lands via VLS-007; Cartesia/streaming TTS (separate P0 TTS bullet).
+- **Key files:** `SpeechToTextProcessor` (rate-coalesce interims), the agent finals-only regression test, the
+  diagnostics/Studio caption surface, `Voxa.Speech.Azure` (mapping test) / a future `Voxa.Speech.Deepgram`.
 - **Risks:** interim churn flooding the pipeline (throttle / coalesce); making sure interims never trigger a turn or
   feed the agent.
 - **Tests:** processor emits interim then final from a fake streaming engine; filter/agent ignore interims; engine
@@ -212,8 +216,9 @@ once it lands — an additive refactor, not a prerequisite.
 - **Scope (in):**
   - An `IAudioEnhancer` seam (`Enhance(pcm) → pcm`, sample-rate contract) + an `AudioEnhancerProcessor` placed
     **before** the VAD (`mic → [AEC] → [enhance] → VAD → STT`).
-  - One reference ONNX impl (DeepFilterNet3, permissive license) in a new `Voxa.Audio.Enhance` package, model
-    SHA-256-pinned in a catalog via `VoxaModelCache`; **opt-in**, default chain unchanged.
+  - One reference ONNX impl (DeepFilterNet3 — **licence pending verification**; if its weight-redistribution terms
+    don't clear, substitute a permissively-licensed RNNoise/NSNet2 export, per VLS-004) in a new `Voxa.Audio.Enhance`
+    package, model SHA-256-pinned in a catalog via `VoxaModelCache`; **opt-in**, default chain unchanged.
 - **Scope (out):** Sidon-style offline restoration of clone references (belongs with VVL-002 / Studio artifacts);
   GPU enhancement (rides VLS-002 patterns if needed).
 - **Key files:** new `Voxa.Audio.Enhance` package + descriptor; `DefaultVoicePipelineComposer` insertion;

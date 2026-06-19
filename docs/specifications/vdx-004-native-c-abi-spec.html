@@ -85,7 +85,7 @@
     <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
     <div><b>Roadmap item</b> Strategic / interop</div>
     <div><b>Depends on</b> a NativeAOT-clean Core subset; gated on mobile/native being a goal</div>
-    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M6</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M8</div>
     <div><b>Audience</b> Implementing engineer / agent</div>
   </div>
 </header>
@@ -129,7 +129,7 @@
   <div class="qa">
     <b>Why "<em>maybe</em>", and why is it sequenced last?</b>
     <p>Because Voxa is a predominantly-.NET project and <em>nobody has asked for native embedding yet</em>. This item is
-    the program's only <em>exploratory</em> entry: it sits at milestone <b>M6</b>, after every measured turn-taking and
+    the program's only <em>exploratory</em> entry: it sits at milestone <b>M8</b>, after every measured turn-taking and
     model-breadth item, and the program's <b>Open Decision #4</b> states it plainly — "is non-.NET embedding actually a
     goal? If not, <b>do not start</b>." The honest unknown underneath is technical: NativeAOT must statically compile the
     pipeline's <em>entire</em> dependency graph, and the meta-package pulls in Microsoft.Extensions.AI plus provider SDKs
@@ -558,7 +558,7 @@ int main(void) {
   <tr><td>R3</td><td>Callback re-entrancy / threading: host calls back into <code>voxa_pipeline_*</code> from inside the event callback and deadlocks the async bridge.</td><td class="sev-med">Med</td><td>Defined contract (S1.4): callback thread, re-entrancy rules, and a pump-thread + queue if needed so the sync C surface never blocks the managed loop.</td></tr>
   <tr><td>R4</td><td>Per-platform NativeAOT CI cost — each target (<code>linux-x64</code> / <code>win-x64</code> / <code>osx-arm64</code>) generally needs its own runner and toolchain.</td><td class="sev-med">Med</td><td>Spike targets <em>one</em> platform; additional platforms are Phase 3, only on a real consumer's demand. CI cost is an explicit input to the go/no-go.</td></tr>
   <tr><td>R5</td><td>Scope creep into mobile bindings — the JNI/Swift glue starts leaking into this repo.</td><td class="sev-med">Med</td><td>Hard non-goal (§3, §12): mobile bindings are <em>consumer</em> repos, siblings of the ABI, exactly like speech-core's. This item ships the C ABI + a C smoke consumer only.</td></tr>
-  <tr><td>R6</td><td>Building it at all when there is no demand — speculative effort on a .NET-only project.</td><td class="sev-low">Low</td><td>Open Decision #4 gate (Phase 0 / S0.1): do not start before a real mobile/native consumer is a goal. Sequenced last (M6) for this reason.</td></tr>
+  <tr><td>R6</td><td>Building it at all when there is no demand — speculative effort on a .NET-only project.</td><td class="sev-low">Low</td><td>Open Decision #4 gate (Phase 0 / S0.1): do not start before a real mobile/native consumer is a goal. Sequenced last (M8) for this reason.</td></tr>
 </table>
 
 <!-- ============================================================ -->
