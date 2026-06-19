@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Local LLM brain: first-class Ollama agent provider (VLS-003).** Set `Voxa:Agent:Provider` to
+  `Ollama` for a fully-local, keyless conversation loop (Whisper STT → Ollama → Piper/Kokoro). It
+  reuses the OpenAI-compatible client pointed at the local daemon (`Voxa:Agent:BaseUrl`, default
+  `http://localhost:11434/v1`); `Voxa:Agent:Model` names the pulled model (default `llama3.2`). No API
+  key and no new dependency; validation checks the endpoint shape without probing the daemon, so boot
+  never depends on `ollama serve` already running.
 - **`voxa` command-line interface (VDX-003).** A new `Voxa.Cli` dotnet tool — Core's headless entry
   point (the CLI half of "Core = SDK + CLI"). `voxa transcribe <wav>` (whisper.cpp STT to stdout),
   `voxa say "<text>" [--out f.wav]` (Piper/Kokoro TTS to a WAV), `voxa models [list | purge]` (inspect
