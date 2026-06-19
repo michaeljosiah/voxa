@@ -38,6 +38,15 @@ public sealed partial class VoicesViewModel : ObservableObject
     public ObservableCollection<LibraryVoice> Voices { get; } = [];
     public ObservableCollection<ProviderVoiceSet> Providers { get; } = [];
 
+    private const string AllProviders = "All providers";
+
+    /// <summary>Provider filter options ("All providers" + each provider present in the library).</summary>
+    public ObservableCollection<string> ProviderFilters { get; } = [AllProviders];
+    [ObservableProperty] private string _selectedProviderFilter = AllProviders;
+
+    /// <summary>Voices after the provider filter — the grid binds to this.</summary>
+    public ObservableCollection<LibraryVoice> VisibleVoices { get; } = [];
+
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>Set by the shell: a live Talk/Builder/Metrics run blocks recording a sample.</summary>
@@ -102,11 +111,35 @@ public sealed partial class VoicesViewModel : ObservableObject
             // Keep the wizard's target valid as keys/providers change.
             if (SelectedCloneTarget is null || !CloneTargets.Contains(SelectedCloneTarget))
                 SelectedCloneTarget = CloneTargets.FirstOrDefault();
+
+            RebuildProviderFilters();
+            ApplyVoiceFilter();
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    partial void OnSelectedProviderFilterChanged(string value) => ApplyVoiceFilter();
+
+    /// <summary>The providers present in the library, so the filter only offers real choices.</summary>
+    private void RebuildProviderFilters()
+    {
+        var providers = Voices.Select(v => v.Voice.ProviderName)
+            .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
+        ProviderFilters.Clear();
+        ProviderFilters.Add(AllProviders);
+        foreach (var p in providers) ProviderFilters.Add(p);
+        if (!ProviderFilters.Contains(SelectedProviderFilter)) SelectedProviderFilter = AllProviders;
+    }
+
+    private void ApplyVoiceFilter()
+    {
+        VisibleVoices.Clear();
+        foreach (var v in Voices.Where(v =>
+            SelectedProviderFilter == AllProviders || v.Voice.ProviderName == SelectedProviderFilter))
+            VisibleVoices.Add(v);
     }
 
     /// <summary>Add a reference clip to the pending clone (the view supplies bytes from a file/recording).</summary>

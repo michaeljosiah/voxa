@@ -91,4 +91,41 @@ public class ModelsViewModelTests
         Assert.Equal("from Voxa:Models:CachePath", vm.CacheRootSource);
         Assert.Contains("empty", vm.StatusText, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task Tabs_Group_By_Category_And_Each_Filters_By_Provider()
+    {
+        var cacheRoot = TestSupport.TempDir();
+        foreach (var rel in new[]
+        {
+            "whisper/ggml-tiny.en.bin", "piper/en_US-amy-low.onnx", "kokoro/model.onnx", "mystery.bin",
+        })
+        {
+            var p = Path.Combine(cacheRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+            await File.WriteAllBytesAsync(p, new byte[8]);
+        }
+        var vm = new ModelsViewModel(TestSupport.Services(cacheRoot));
+
+        // "All" shows every cache entry.
+        Assert.Equal("All", vm.SelectedTab);
+        Assert.Equal(4, vm.VisibleRows.Count);
+
+        // TTS tab groups Piper + Kokoro, and the provider filter offers exactly those.
+        vm.SelectedTab = "TTS";
+        Assert.Equal(2, vm.VisibleRows.Count);
+        Assert.All(vm.VisibleRows, r => Assert.Equal("TTS", r.Category));
+        Assert.Contains("Piper", vm.ProviderFilters);
+        Assert.Contains("Kokoro", vm.ProviderFilters);
+        Assert.DoesNotContain("Whisper", vm.ProviderFilters);
+
+        // Filter within the tab to a single provider.
+        vm.SelectedProvider = "Piper";
+        Assert.Equal("Piper", Assert.Single(vm.VisibleRows).Provider);
+
+        // Switching tabs resets a now-invalid provider selection and re-groups.
+        vm.SelectedTab = "STT";
+        Assert.Equal("All providers", vm.SelectedProvider);
+        Assert.Equal("STT", Assert.Single(vm.VisibleRows).Category);
+    }
 }
