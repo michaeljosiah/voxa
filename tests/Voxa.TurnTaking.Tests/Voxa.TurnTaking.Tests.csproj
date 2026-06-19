@@ -28,6 +28,8 @@
     <Content Include="..\..\bench\Voxa.TurnTaking\fixtures\**"
              Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\bench\Voxa.TurnTaking\baseline.json"
+             Link="baseline.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -8,15 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Turn-taking quality benchmark (VRT-001, Phase A).** A new `bench/Voxa.TurnTaking` harness drives the
-  **real composed pipeline** (`DefaultVoicePipelineComposer.Compose`) through a Full-Duplex-Bench-layout
-  corpus and reduces the existing `VoxaDiagnosticsHub` stage timings to a per-sample JSON record + response
-  WAV — no new runtime instrumentation, no parallel pipeline. It scores the three cascade-fair categories
-  (`pause_handling` / `smooth_turn_taking` / `user_interruption`) and discovers + skips `backchannel`
-  (N/A for a half-duplex cascade). The default lane is offline and deterministic — mock STT/TTS + the
-  keyless Echo agent over a tiny checked-in mini fixture (real audio derived from `jfk.wav`) — and an xUnit
-  smoke test gates it in CI. This is the measurement foundation the rest of the VRT line is gated against;
-  real local engines, the summary roll-up, and the `baseline.json` regression gate follow (Phases B–D).
+- **Turn-taking quality benchmark (VRT-001).** A new `bench/Voxa.TurnTaking` harness drives the **real
+  composed pipeline** (`DefaultVoicePipelineComposer.Compose`) through a Full-Duplex-Bench-layout corpus and
+  reduces the existing `VoxaDiagnosticsHub` stage timings to a per-sample JSON record + response WAV — no new
+  runtime instrumentation, no parallel pipeline, so the numbers equal what production reports. It rolls those
+  up to a per-category `summary.csv` (p50/p90/p99) and a direction-aware `score.json` — a turn-offset-rate
+  for `pause_handling` (lower is better; silence through a thinking-pause is the win) and first-word latency
+  for `smooth_turn_taking` / `user_interruption` — then diffs against a checked-in `baseline.json` so a
+  turn-taking regression **fails the build**. `backchannel` is discovered and skipped (N/A for a half-duplex
+  cascade), never faked. The default lane is offline + deterministic (mock STT/TTS + the keyless Echo agent
+  over a tiny checked-in mini fixture of real `jfk.wav`-derived audio) and gates in CI via an xUnit smoke
+  test; real local engines (WhisperCpp/Kokoro) run behind `Category=LocalModels`. This is the measurement
+  foundation the rest of the VRT line (eager STT, barge-in/AEC, streaming captions) is gated against.
 - **Smart turn detection (P0 latency).** A within-sentence pause no longer has to end the turn. A new
   `ISmartTurnClassifier` seam (in `Voxa.Speech.Abstractions`) is wired through the VAD
   (`VoxaVadSettings.ConfirmTurnEnd` → `SileroVadOptions`) and the `DefaultVoicePipelineComposer`, which

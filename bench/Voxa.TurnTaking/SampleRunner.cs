@@ -63,6 +63,7 @@ internal static class SampleRunner
                 sample.SampleId, sample.Category, engines,
                 ReduceTimings(events, sw.Elapsed.TotalMilliseconds),
                 new SampleTranscripts(sample.ReferenceText, LastFinalTranscript(events)),
+                ReduceSignals(events),
                 File.Exists(responsePath) ? responseName : null,
                 Error: null);
             WriteRecord(outDir, sample, record);
@@ -75,6 +76,7 @@ internal static class SampleRunner
                 sample.SampleId, sample.Category, engines,
                 new SampleTimings(null, null, null, null, null),
                 new SampleTranscripts(sample.ReferenceText, null),
+                new TurnSignals(0, 0),
                 File.Exists(responsePath) ? responseName : null,
                 Error: $"{ex.GetType().Name}: {ex.Message}");
             WriteRecord(outDir, sample, record);
@@ -95,6 +97,14 @@ internal static class SampleRunner
 
         return new SampleTimings(
             Stage("stt_final"), Stage("agent_first_token"), Stage("tts_first_byte"), ttfb, totalWallMs);
+    }
+
+    private static TurnSignals ReduceSignals(IReadOnlyList<DiagnosticEvent> events)
+    {
+        var turns = events.OfType<TurnEvent>().ToList();
+        return new TurnSignals(
+            UserStoppedEdges: turns.Count(e => e.Edge == TurnEdge.UserStopped),
+            BotStartedEdges: turns.Count(e => e.Edge == TurnEdge.BotStarted));
     }
 
     private static string? LastFinalTranscript(IReadOnlyList<DiagnosticEvent> events)

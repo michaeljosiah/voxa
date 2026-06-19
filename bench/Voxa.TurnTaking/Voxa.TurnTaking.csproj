@@ -26,6 +26,8 @@
     <!-- The checked-in mini fixture (real audio derived from jfk.wav) — the offline smoke corpus.
          Copied next to the output so the zero-argument run and the smoke test find it. -->
     <Content Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The checked-in regression baseline (mock engines, mini fixture). -->
+    <Content Include="baseline.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Voxa.AspNetCore;
@@ -17,7 +18,11 @@ public sealed class TurnTakingHarness
     public sealed record Options(
         string CorpusDir, string OutDir, string? Category, int? Limit, string Stt, string Tts, string Llm);
 
-    public sealed record Result(IReadOnlyList<SampleRecord> Records, IReadOnlyList<string> Skipped);
+    public sealed record Result(
+        IReadOnlyList<SampleRecord> Records,
+        IReadOnlyList<string> Skipped,
+        IReadOnlyList<CategorySummary> Summaries,
+        IReadOnlyList<CategoryScore> Scores);
 
     public static async Task<Result> RunAsync(Options options, Action<string>? log = null, CancellationToken ct = default)
     {
@@ -37,7 +42,16 @@ public sealed class TurnTakingHarness
             records.Add(await SampleRunner.RunAsync(root, sample, options.OutDir, engines, PerSampleWallCap, ct)
                 .ConfigureAwait(false));
         }
-        return new Result(records, skipped);
+
+        // WS3 + WS4: roll up to per-category percentiles and a direction-aware score, written alongside
+        // the per-sample records so a run is a single command producing the score (VRT-001 §2/§7).
+        var summaries = Summarizer.Summarize(records, skipped);
+        var scores = Scorer.Score(records, summaries);
+        Summarizer.WriteCsv(summaries, Path.Combine(options.OutDir, "summary.csv"));
+        File.WriteAllText(Path.Combine(options.OutDir, "score.json"),
+            JsonSerializer.Serialize(scores, new JsonSerializerOptions { WriteIndented = true }));
+
+        return new Result(records, skipped, summaries, scores);
     }
 
     private static ServiceProvider BuildServiceProvider(Options options)
