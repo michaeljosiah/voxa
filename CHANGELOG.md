@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **MCP server: give your agent a voice and ears (VDX-002).** A new `Voxa.Mcp` dotnet tool runs a
+  Model Context Protocol server over stdio (built on the official `ModelContextProtocol` SDK),
+  exposing `voxa_speak` (text → WAV via Piper/Kokoro), `voxa_transcribe` (WAV → text via whisper.cpp)
+  and `voxa_list_voices` — all backed by the keyless local tier, so any MCP-aware agent (Claude Code,
+  Cursor, …) gets a voice you own with no API key. Install with `dotnet tool install -g Voxa.Mcp` and
+  register the `voxa-mcp` command as an MCP server.
 - **Local STT: bigger Whisper models + opt-in GPU (VLS-002).** The `WhisperCpp` catalog gains the
   `medium`, `large-v3` and `large-v3-turbo` families (each with a `-q5_0` quantization), SHA-256-pinned
   like the rest. A new `Voxa:WhisperCpp:Device` key (`cpu` default, plus `auto` / `cuda` / `vulkan` /
