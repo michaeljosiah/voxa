@@ -14,6 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   unit-tested with fakes. The dictation *view* + global push-to-talk hotkey + floating session pill,
   and the Config grey-out-incompatible selectors / Metrics provenance polish, are the remaining
   interactive UI work.
+- **Expressive / cloning TTS via an out-of-process sidecar (VVL-002, foundation).** A new
+  `Voxa.Speech.Sidecar` package runs heavy PyTorch voices (XTTS-v2 / OpenVoice) in a separate process
+  — the same isolation Piper uses for espeak-ng — exposed as an ordinary `ITextToSpeechEngine` over a
+  tiny stdio protocol (`SidecarProtocol`, unit-tested over an in-memory stream). Opt-in heavy tier:
+  `AddProvider(SidecarDescriptors.Tts)` with `Voxa:Sidecar:ExecutablePath` (a built/frozen binary) or
+  `Voxa:Sidecar:PythonScript` (dev). Ships the runnable Python sidecar source; the pinned per-platform
+  frozen binaries + cache catalog, the XTTS-v2-vs-OpenVoice spike, and local cloning (same transport)
+  are the documented next steps — no binary is bundled or SHA-pinned yet. See the package README.
 - **Local LLM brain: first-class Ollama agent provider (VLS-003).** Set `Voxa:Agent:Provider` to
   `Ollama` for a fully-local, keyless conversation loop (Whisper STT → Ollama → Piper/Kokoro). It
   reuses the OpenAI-compatible client pointed at the local daemon (`Voxa:Agent:BaseUrl`, default
