@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`voxa` command-line interface (VDX-003).** A new `Voxa.Cli` dotnet tool — Core's headless entry
+  point (the CLI half of "Core = SDK + CLI"). `voxa transcribe <wav>` (whisper.cpp STT to stdout),
+  `voxa say "<text>" [--out f.wav]` (Piper/Kokoro TTS to a WAV), `voxa models [list | purge]` (inspect
+  or clear the SHA-256-pinned model cache), and `voxa check <appsettings.json>` (validate a pipeline
+  config — providers, models, credentials — without downloading). Install with
+  `dotnet tool install -g Voxa.Cli`.
 - **MCP server: give your agent a voice and ears (VDX-002).** A new `Voxa.Mcp` dotnet tool runs a
   Model Context Protocol server over stdio (built on the official `ModelContextProtocol` SDK),
   exposing `voxa_speak` (text → WAV via Piper/Kokoro), `voxa_transcribe` (WAV → text via whisper.cpp)
