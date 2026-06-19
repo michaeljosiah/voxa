@@ -104,7 +104,7 @@ public sealed class DefaultVoicePipelineComposer
 
             if (string.Equals(o.Vad.Engine, "SilenceGate", StringComparison.OrdinalIgnoreCase))
             {
-                parts.Add(_ => new SilenceGateProcessor(vadSettings.MinRms, vadSettings.StopDuration));
+                parts.Add(sp => CreateSilenceGate(sp, vadSettings));
             }
             else if (_registry.TryGetVad(o.Vad.Engine, out var vadDesc))
             {
@@ -115,7 +115,7 @@ public sealed class DefaultVoicePipelineComposer
                 _logger.LogWarning(
                     "Voxa:Vad:Engine '{Engine}' not found in registry; falling back to SilenceGate.",
                     o.Vad.Engine);
-                parts.Add(_ => new SilenceGateProcessor(vadSettings.MinRms, vadSettings.StopDuration));
+                parts.Add(sp => CreateSilenceGate(sp, vadSettings));
             }
         }
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Vad);
@@ -166,6 +166,18 @@ public sealed class DefaultVoicePipelineComposer
         {
             ConfirmTurnEnd = (pcm, ct) => classifier.IsTurnCompleteAsync(pcm, sampleRate, ct),
         };
+    }
+
+    // SilenceGate is a minimal RMS gate with no turn-confirmation seam, so a registered smart-turn
+    // classifier cannot apply to it. Warn rather than silently ignore the config (which would otherwise
+    // look like smart turn is active); the turn still ends on StopDuration.
+    private SilenceGateProcessor CreateSilenceGate(IServiceProvider sp, VoxaVadSettings vadSettings)
+    {
+        if (sp.GetService<ISmartTurnClassifier>() is not null)
+            _logger.LogWarning(
+                "A smart-turn classifier is registered but Voxa:Vad:Engine resolves to SilenceGate, which has " +
+                "no turn-confirmation seam — turns still end on StopDuration. Use Voxa:Vad:Engine=Silero for smart turn.");
+        return new SilenceGateProcessor(vadSettings.MinRms, vadSettings.StopDuration);
     }
 
     /// <summary>
