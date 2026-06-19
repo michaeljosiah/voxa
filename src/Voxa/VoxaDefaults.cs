@@ -103,10 +103,10 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
 
         IChatClient chatClient = IsOllama(options)
             // Ollama speaks the OpenAI chat-completions API, so the OpenAI client is reused, pointed at
-            // the local daemon. Ollama ignores the key, but ApiKeyCredential rejects an empty one, so a
-            // placeholder is passed — the brain stays keyless and fully offline (VLS-003).
+            // the local daemon. It needs no real credential — never reuse the OpenAI key here, or it
+            // would be sent as a bearer token to the Ollama endpoint (VLS-003).
             ? new OpenAIClient(
-                    new ApiKeyCredential(ResolveApiKey(options) ?? "ollama"),
+                    new ApiKeyCredential(OllamaApiKey(options)),
                     new OpenAIClientOptions { Endpoint = OllamaEndpoint() })
                 .GetChatClient(OllamaModel(options))
                 .AsIChatClient()
@@ -143,11 +143,12 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
         // never probe the daemon at startup, which would make boot depend on `ollama serve` running.
         if (IsOllama(options))
         {
-            return Uri.TryCreate(OllamaBaseUrl(), UriKind.Absolute, out _)
+            return Uri.TryCreate(OllamaBaseUrl(), UriKind.Absolute, out var uri)
+                   && uri.Scheme is "http" or "https" && !string.IsNullOrEmpty(uri.Host)
                 ? []
                 :
                 [
-                    $"Voxa:Agent:BaseUrl '{OllamaBaseUrl()}' is not a valid absolute URL. Point it at your " +
+                    $"Voxa:Agent:BaseUrl '{OllamaBaseUrl()}' is not a valid http(s) URL. Point it at your " +
                     "Ollama OpenAI-compatible endpoint (default http://localhost:11434/v1).",
                 ];
         }
@@ -179,6 +180,11 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
 
     private string? ResolveApiKey(VoxaAgentOptions options)
         => !string.IsNullOrEmpty(options.ApiKey) ? options.ApiKey : _configuration["Voxa:OpenAI:ApiKey"];
+
+    // Ollama needs no real credential; never reuse the OpenAI key (it would reach the Ollama endpoint).
+    // Honour an explicit Voxa:Agent:ApiKey only (a secured gateway), else a constant placeholder.
+    private static string OllamaApiKey(VoxaAgentOptions options)
+        => string.IsNullOrEmpty(options.ApiKey) ? "ollama" : options.ApiKey;
 
     // Ollama's OpenAI-compatible base URL (VLS-003): Voxa:Agent:BaseUrl wins, else Voxa:Ollama:BaseUrl,
     // else the daemon default.

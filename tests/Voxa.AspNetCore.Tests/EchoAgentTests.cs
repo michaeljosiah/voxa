@@ -164,4 +164,30 @@ public class EchoAgentTests
         var agent = factory.Create(sp, new VoxaAgentOptions { Provider = "Ollama" });
         Assert.NotNull(agent);
     }
+
+    [Fact]
+    public void Ollama_Does_Not_Fall_Back_To_The_OpenAI_Key()
+    {
+        // Codex P2: the Ollama client must not reuse the OpenAI key (it would be sent to the Ollama
+        // endpoint). An empty configured key also previously made keyless creation throw — now a
+        // placeholder is used, so Create succeeds regardless of the OpenAI key.
+        var (factory, sp) = MetaPackageFactory(("Voxa:OpenAI:ApiKey", ""));
+        using var _ = sp;
+
+        var agent = factory.Create(sp, new VoxaAgentOptions { Provider = "Ollama" });
+        Assert.NotNull(agent);
+    }
+
+    [Fact]
+    public void Ollama_Rejects_A_Schemeless_Or_NonHttp_BaseUrl()
+    {
+        // Codex P2: "localhost:11434/v1" parses as a 'localhost:' scheme and ftp:// is absolute but
+        // unusable — both must fail validation at startup, not later at agent use.
+        foreach (var bad in new[] { "localhost:11434/v1", "ftp://example/v1" })
+        {
+            var (factory, sp) = MetaPackageFactory(("Voxa:Agent:BaseUrl", bad));
+            using var _ = sp;
+            Assert.Single(factory.Validate(new VoxaAgentOptions { Provider = "Ollama" }));
+        }
+    }
 }
