@@ -49,6 +49,9 @@ public static class TestSupport
     /// <summary>A throwaway activation-store path so tests never read/write the real ~/voxa-activations.json.</summary>
     public static string TempActivationsPath() => Path.Combine(TempDir(), "voxa-activations.json");
 
+    /// <summary>A throwaway pipeline-profiles path so tests never touch the real ~/voxa-pipelines.json.</summary>
+    public static string TempProfilesPath() => Path.Combine(TempDir(), "voxa-pipelines.json");
+
     /// <summary>
     /// Studio services with the null audio backend and an isolated cache. The cache-root env var
     /// is cleared for the duration so a CI lane's VOXA_MODEL_CACHE cannot leak into VM tests. The
@@ -58,7 +61,8 @@ public static class TestSupport
     public static StudioServices Services(
         string? cacheRoot = null,
         ISecretsStore? secrets = null,
-        ProviderActivationStore? activations = null)
+        ProviderActivationStore? activations = null,
+        PipelineProfileStore? profiles = null)
     {
         var prior = Environment.GetEnvironmentVariable("VOXA_MODEL_CACHE");
         Environment.SetEnvironmentVariable("VOXA_MODEL_CACHE", null);
@@ -68,7 +72,8 @@ public static class TestSupport
                 LocalConfig(cacheRoot),
                 new NullAudioDevice(),
                 secrets ?? new MemorySecretsStore(),
-                activations ?? new ProviderActivationStore(TempActivationsPath()));
+                activations ?? new ProviderActivationStore(TempActivationsPath()),
+                profiles ?? new PipelineProfileStore(TempProfilesPath()));
         }
         finally
         {

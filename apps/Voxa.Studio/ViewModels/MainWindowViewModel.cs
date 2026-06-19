@@ -1,4 +1,6 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Voxa.Studio.Services;
 
 namespace Voxa.Studio.ViewModels;
@@ -71,6 +73,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // Pre-warm the newly-applied model (cached-only, background) so the next Talk start is warm.
             _ = Task.Run(() => services.WarmUpAsync(cachedOnly: true));
         };
+
+        // The pipeline-profile bar mirrors the store — refresh when one is saved/deleted/activated.
+        services.Profiles.Changed += RefreshProfiles;
+        RefreshProfiles();
     }
 
     /// <summary>True when a Settings save arrived during a live run and its apply is waiting for the run to stop.</summary>
@@ -140,6 +146,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int _selectedSection;
 
     public bool IsLive => Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;
+
+    // ── pipeline profiles (the app-wide active-pipeline selector, shown on every page) ──
+
+    /// <summary>Shown when the live config doesn't match a saved profile (e.g. after a Config Apply).</summary>
+    public const string CustomProfile = "— Custom —";
+
+    public ObservableCollection<string> PipelineProfiles { get; } = new();
+
+    /// <summary>True once at least one profile is saved (beyond the Custom sentinel) — gates the empty hint.</summary>
+    public bool HasPipelineProfiles => PipelineProfiles.Count > 1;
+
+    [ObservableProperty] private string? _selectedPipelineProfile;
+
+    private bool _suppressProfileActivate;
+
+    private void RefreshProfiles()
+    {
+        _suppressProfileActivate = true; // a programmatic SelectedItem set must not re-activate
+        PipelineProfiles.Clear();
+        PipelineProfiles.Add(CustomProfile);
+        foreach (var name in Services.Profiles.Names) PipelineProfiles.Add(name);
+        SelectedPipelineProfile = Services.Profiles.ActiveName ?? CustomProfile;
+        _suppressProfileActivate = false;
+        OnPropertyChanged(nameof(HasPipelineProfiles));
+    }
+
+    partial void OnSelectedPipelineProfileChanged(string? value)
+    {
+        // Picking a profile applies it app-wide. Custom is a display state, and a rebuild can't run
+        // under a live session (mirrors Config.ApplyBlocked) — the bar is disabled then anyway.
+        if (_suppressProfileActivate || value is null || value == CustomProfile || IsLive) return;
+        Services.ActivateProfile(value);
+    }
+
+    [RelayCommand]
+    private void DeleteProfile()
+    {
+        if (SelectedPipelineProfile is not { } name || name == CustomProfile) return;
+        var wasActive = string.Equals(Services.Profiles.ActiveName, name, StringComparison.OrdinalIgnoreCase);
+        Services.Profiles.Delete(name);
+        if (wasActive) Services.ActivateProfile(null); // the live profile was deleted — fall back to base config
+    }
 
     partial void OnSelectedSectionChanged(int value)
     {

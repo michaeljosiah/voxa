@@ -74,9 +74,11 @@
           <Button Classes="vx-ghost" Content="Tidy" Command="{Binding TidyCommand}" />
           <Button Classes="vx-ghost" Content="Reset" Command="{Binding ResetToDefaultCommand}"
                   ToolTip.Tip="Reset the canvas to the default pipeline (undoable)" />
-          <Button Classes="vx-ghost" Content="Save" Command="{Binding SaveGraphCommand}"
-                  ToolTip.Tip="Save the graph as JSON — enabled only when the chain is valid" />
-          <Button Classes="vx-ghost" Content="Load" Command="{Binding LoadGraphCommand}" />
+          <TextBox Width="124" Watermark="profile name" Text="{Binding ProfileName}"
+                   VerticalAlignment="Center"
+                   ToolTip.Tip="Name this pipeline to save it as an app-wide profile" />
+          <Button Classes="vx-ghost" Content="Save as profile" Command="{Binding SaveAsProfileCommand}"
+                  ToolTip.Tip="Save this (default-shape) pipeline as a profile and make it the active pipeline" />
           <Button Classes="vx-ghost" Content="appsettings" Command="{Binding ExportAppSettingsCommand}"
                   ToolTip.Tip="Export as config — enabled when the chain matches UseDefaults()" />
           <Button Classes="vx-ghost" Content="C# compose" Command="{Binding ExportCSharpCommand}"

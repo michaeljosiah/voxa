@@ -232,6 +232,11 @@ public sealed partial class BuilderViewModel : ObservableObject
     [ObservableProperty] private string _chainText = "";
     [ObservableProperty] private bool _isDefaultShape;
 
+    /// <summary>Name to save the current (default-shape) pipeline under as an app-wide profile.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAsProfileCommand))]
+    private string _profileName = "";
+
     // export pane (progressive disclosure: hidden until an export button is pressed)
     [ObservableProperty] private bool _isExportOpen;
     [ObservableProperty] private string _exportTitle = "";
@@ -483,6 +488,7 @@ public sealed partial class BuilderViewModel : ObservableObject
         RefreshPlusChoices();
         RunCommand.NotifyCanExecuteChanged();
         SaveGraphCommand.NotifyCanExecuteChanged();
+        SaveAsProfileCommand.NotifyCanExecuteChanged();
         ExportAppSettingsCommand.NotifyCanExecuteChanged();
         ExportCSharpCommand.NotifyCanExecuteChanged();
     }
@@ -873,6 +879,32 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     [RelayCommand]
     private void CloseExport() => IsExportOpen = false;
+
+    // ── save as an app-wide pipeline profile (Phase 2) ───────────────────────
+
+    // Only default-shape chains can be a profile: the app-wide pipeline composes from config, which
+    // can't express custom shapes (those still export as C# code).
+    private bool CanSaveAsProfile() => IsChainValid && IsDefaultShape && !string.IsNullOrWhiteSpace(ProfileName);
+
+    [RelayCommand(CanExecute = nameof(CanSaveAsProfile))]
+    private void SaveAsProfile()
+    {
+        if (!_graph.TryOrder(out var chain, out _)) return;
+        var name = ProfileName.Trim();
+        // includeSecrets:false → an inspector API key never reaches the saved profile (keys live in the
+        // secrets layer); a default-shape chain's pairs fully describe the pipeline.
+        _services.Profiles.Save(name, BuilderChainCompiler.Pairs(_graph, chain));
+        if (!IsRunning && !RunBlocked)
+        {
+            _services.ActivateProfile(name); // make it the live, app-wide pipeline now
+            StatusText = $"Saved & activated pipeline profile “{name}”.";
+        }
+        else
+        {
+            StatusText = $"Saved profile “{name}” — pick it in the Pipeline Profile bar when the session ends.";
+        }
+        ProfileName = "";
+    }
 
     // ── run from canvas ──────────────────────────────────────────────────────
 
