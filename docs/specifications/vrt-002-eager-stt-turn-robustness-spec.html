@@ -79,7 +79,7 @@
   <div class="meta-grid">
     <div><b>Document</b> VRT-002 v1.0</div>
     <div><b>Date</b> 2026-06-19</div>
-    <div><b>Status</b> Draft — for review</div>
+    <div><b>Status</b> Draft — for review (rev: speculative-STT discard mechanism)</div>
     <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
     <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
     <div><b>Roadmap item</b> P0 Latency + P2 Barge-in</div>
@@ -137,9 +137,10 @@
     <b>How does eager STT <em>compose</em> with the smart-turn seam rather than replace it?</b>
     <p>They answer different questions. Smart-turn answers <em>"is the turn actually over?"</em>; eager answers
     <em>"how fast do I act once I believe it is?"</em>. Eager fires a <em>speculative</em> transcription early; if
-    smart-turn later returns <code>false</code> (a mid-sentence pause), that verdict <b>overrides and cancels</b>
-    the pending eager dispatch. The speculative work is bounded and thrown away on resume — never promoted to a
-    turn unless end-of-turn is confirmed.</p>
+    smart-turn later returns <code>false</code> (a mid-sentence pause), that verdict <b>overrides and discards</b>
+    the pending eager dispatch — its result is <em>suppressed by utterance id</em> at the STT processor so it can
+    never become a turn (§5). The speculative work is bounded and thrown away on resume — never promoted to a turn
+    unless end-of-turn is confirmed.</p>
   </div>
 </div>
 
@@ -155,8 +156,11 @@ SentenceAggregator → TTS</code>), each knob individually mergeable:</p>
     the unvoiced hangover — <em>before</em> <code>StopDuration</code> / <code>ConfirmTurnEnd</code> confirm — the
     VAD speculatively emits an end-of-utterance signal so STT (and optionally an LLM prefetch) can start on the
     buffered utterance. The speculative utterance is <b>marked</b> so resumed speech isn't mistaken for an
-    interruption, and it is <b>discarded on resume</b> via the existing per-frame <code>CancellationToken</code>.
-    A smart-turn <code>ConfirmTurnEnd → false</code> cancels a pending eager dispatch.</li>
+    interruption, and it is <b>discarded on resume</b> by an <em>utterance-id suppression</em> rule in
+    <code>SpeechToTextProcessor</code> — a superseded speculative final is dropped <em>before</em> it becomes a
+    <code>TranscriptionFrame</code>, so it can never start a turn even when a batch engine (whisper.cpp) ran the
+    inference to completion. A smart-turn <code>ConfirmTurnEnd → false</code> supersedes a pending eager dispatch
+    the same way. (Aborting the flush itself is a best-effort optimization, not the guarantee — see §5.)</li>
   <li><b>WS2 — Robustness checklist <span class="badge p2">P2</span>.</b> Five tunable knobs, each with a single
     anti-bug rationale: <em>interruption debounce</em> (<code>MinInterruptionDuration</code>), <em>interruption
     recovery</em> (<code>InterruptionRecoveryTimeout</code>), <em>empty / low-confidence STT recovery</em>,
@@ -203,7 +207,7 @@ keep today's behaviour byte-for-byte.</div>
   <tr><th>Concern</th><th>Budget / target</th></tr>
   <tr><td>Behaviour with every new knob at default</td><td><b>Byte-identical</b> to today — golden-tested, diagnostics off.</td></tr>
   <tr><td>Net turn-latency win (eager on, <code>EagerSttDelay</code> ≈ <code>StopDuration</code> − 300&nbsp;ms)</td><td>Measurable reduction in VRT-001 voice-to-voice / TTFT for the <b>pause-handling</b> + <b>smooth turn-taking</b> categories.</td></tr>
-  <tr><td>Speculative work wasted on resume</td><td>Bounded to one in-flight STT pass per utterance; cancelled via the per-frame token. Measure the waste rate via VRT-001.</td></tr>
+  <tr><td>Speculative work wasted on resume</td><td>Bounded to one in-flight STT pass per utterance; its result is <em>suppressed by utterance id</em> at the processor (and the flush is best-effort cancelled where the engine can). Measure the waste rate via VRT-001.</td></tr>
   <tr><td><code>Voxa.Core</code> dependency surface</td><td><b>0</b> new dependencies (NUlid only); new frame/flag in <code>Voxa.Core</code> stays zero-dep.</td></tr>
   <tr><td>Allocation on the VAD hot path</td><td>No per-window allocation added at steady state; the eager dispatch is one signal per hangover, not per window.</td></tr>
 </table>
@@ -222,7 +226,8 @@ keep today's behaviour byte-for-byte.</div>
 <table>
   <tr><th>File</th><th>Change</th></tr>
   <tr><td><code>src/Voxa.Audio.SileroVad/SileroVadOptions.cs</code></td><td>WS1 — add <code>EagerSttDelay</code>. WS2 — add <code>MinInterruptionDuration</code>, <code>InterruptionRecoveryTimeout</code>, <code>MaxUtteranceDuration</code>. (All <code>TimeSpan?</code> / opt-in; <code>null</code> ⇒ today's behaviour.)</td></tr>
-  <tr><td><code>src/Voxa.Audio.SileroVad/SileroVadProcessor.cs</code></td><td>WS1 — eager-dispatch state in the unvoiced hangover; mark + cancel-on-resume; precedence vs <code>ConfirmTurnEnd</code>. WS2 — force-split timer; interruption-debounce gate on speech-during-playback.</td></tr>
+  <tr><td><code>src/Voxa.Audio.SileroVad/SileroVadProcessor.cs</code></td><td>WS1 — eager-dispatch state in the unvoiced hangover; emit the marked speculative signal carrying an <em>utterance id</em>; mark the id <em>superseded</em> on resume-within-window and on <code>ConfirmTurnEnd → false</code>; precedence vs <code>ConfirmTurnEnd</code>. WS2 — force-split timer; interruption-debounce gate on speech-during-playback.</td></tr>
+  <tr><td><code>src/Voxa.Speech.Abstractions/ISpeechToTextEngine.cs</code> + <code>SpeechToTextProcessor.cs</code></td><td>WS1 — <b>contract change</b>. <code>FlushAsync</code> today takes <em>no</em> <code>CancellationToken</code> and (for batch engines) runs on the engine-lifetime token, so the per-frame token can't stop it. Carry an utterance id from the flush through to the emitted <code>TranscriptionResult</code> (flush signature + a stamped id), and add <em>utterance-id suppression</em> to <code>ReadLoopAsync</code>: drop any result whose id is superseded <em>before</em> it becomes a <code>TranscriptionFrame</code>. Optionally a best-effort <code>CancelPending(utteranceId)</code> the flush can map to <code>cancel_stream</code> / dropping a not-yet-started queued transcription.</td></tr>
   <tr><td><code>src/Voxa.Core/Frames/SystemFrames.cs</code> (or a sibling in <code>Voxa.Core/Frames</code>)</td><td>WS1 — the eager marker: either an <code>Eager</code> flag on a new lifecycle frame or a dedicated <code>SpeculativeUtteranceFrame : SystemFrame</code>. Stays zero-dep.</td></tr>
   <tr><td><code>src/Voxa.Core/Processors/AgentLoopProcessor.cs</code></td><td>WS2 — empty / low-confidence STT recovery (reset turn + bot-speaking state); <code>MaxResponseDuration</code> cap on the turn worker's driver enumeration.</td></tr>
   <tr><td><code>src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs</code></td><td>WS2 — interruption-recovery interplay with the existing epoch purge: a recovered (cancelled-in-window) barge-in must not leave queued bot audio stranded behind a bumped epoch.</td></tr>
@@ -239,17 +244,25 @@ extend it to assert the defaults path is unchanged.</div>
 <div class="callout warn"><b>Forward the lifecycle frames.</b> The eager marker is a <code>SystemFrame</code> and
 must be forwarded downstream like every other system frame (and never swallow <code>StartFrame</code> /
 <code>EndFrame</code>, or the sink never completes). The marker is <em>not</em> <code>IUninterruptible</code> — a
-speculative utterance is exactly the thing that <em>should</em> be cancellable on resume.</div>
+speculative utterance is exactly the thing that <em>should</em> be superseded on resume (its result dropped at the
+STT processor; see §5).</div>
 
 <!-- ============================================================ -->
 <h2 id="s5"><span class="secno">5.</span>WS1 — Eager / speculative STT</h2>
 
 <div class="ws-head">
-  <span><b>Package</b> Voxa.Audio.SileroVad + Voxa.Core</span>
-  <span><b>Risk</b> <span class="sev-med">Medium</span> (precedence / correctness)</span>
+  <span><b>Package</b> Voxa.Audio.SileroVad + Voxa.Core + Voxa.Speech.Abstractions</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (precedence / correctness; STT-contract change)</span>
   <span><b>Default</b> off (<code>EagerSttDelay = null</code>)</span>
   <span><b>Model</b> speech-core <code>eager_stt</code> / <code>eager_stt_delay</code></span>
 </div>
+
+<div class="callout warn"><b>Scope note — this is not "VAD additions only".</b> Discarding a speculative transcription
+correctly requires a small <em>contract change in <code>Voxa.Speech.Abstractions</code></em> (an utterance id on the
+flush + emitted result, and suppression logic in <code>SpeechToTextProcessor</code>) — see
+<a href="#s5disc">"Discarding a speculative transcription — the real mechanism"</a>. The per-frame
+<code>CancellationToken</code> that powers LLM/TTS interruption does <em>not</em> reach STT flush/inference for batch
+engines, so it cannot be the discard mechanism.</div>
 
 <h3>The window we're recovering</h3>
 <p>Today the gate, once <code>_isSpeaking</code>, only emits <code>UserStoppedSpeakingFrame</code> after a full
@@ -270,25 +283,91 @@ discard-on-resume behaviour.</p>
     hangover), emit the eager marker + a speculative <code>UserStoppedSpeakingFrame</code> equivalent so STT
     flushes. Keep <code>_isSpeaking = true</code> — the gate has <em>not</em> closed.</li>
   <li><b>Resume ⇒ discard.</b> If a voiced window arrives before the hangover completes, the user resumed within
-    the window. Cancel the in-flight speculative STT via the existing per-frame <code>CancellationToken</code>
-    (the same machinery an interruption uses), clear the eager-dispatched flag, and — because the utterance was
-    <b>marked</b> — do <em>not</em> raise an <code>InterruptionFrame</code>: resumed speech inside an eager window
-    is a continuation, not a barge-in.</li>
+    the window. Mark the speculative utterance id <b>superseded</b> (the guarantee:
+    <code>SpeechToTextProcessor</code> will drop a final tagged with that id before it becomes a
+    <code>TranscriptionFrame</code> — even if whisper.cpp already ran the inference on its lifetime token);
+    best-effort cancel the pending flush where the engine can; clear the eager-dispatched flag; and — because the
+    utterance was <b>marked</b> — do <em>not</em> raise an <code>InterruptionFrame</code>: resumed speech inside an
+    eager window is a continuation, not a barge-in. (Do <em>not</em> rely on the per-frame
+    <code>CancellationToken</code> here — it governs LLM/TTS data work, not STT flush/inference; see
+    <a href="#s5disc">§5 "the real mechanism"</a>.)</li>
   <li><b>Confirm ⇒ promote.</b> If the hangover completes (and <code>ConfirmTurnEnd</code>, if wired, returns
     <code>true</code>), the turn is genuinely over: the already-running speculative transcription <em>is</em> the
     turn's transcription. Close the gate as today. No second STT pass.</li>
   <li><b>Smart-turn override.</b> If <code>ConfirmTurnEnd</code> returns <code>false</code> at
-    <code>StopDuration</code> (mid-sentence pause), it <b>overrides and cancels</b> the pending eager dispatch —
-    same cancellation path as resume — and the gate stays open for another <code>StopDuration</code>. Precedence
+    <code>StopDuration</code> (mid-sentence pause), it <b>overrides and supersedes</b> the pending eager dispatch —
+    the same suppression path as resume (mark the utterance id superseded so its final is dropped at the processor;
+    best-effort cancel the flush) — and the gate stays open for another <code>StopDuration</code>. Precedence
     is explicit and one-directional: <em>smart-turn&nbsp;false&nbsp;&gt;&nbsp;eager&nbsp;dispatch</em>.</li>
 </ol>
 
 <div class="callout danger"><b>Precedence is the load-bearing correctness rule.</b> Eager dispatch is a
 <em>bet</em> that the turn ended; smart-turn is the <em>authority</em> on whether it did. Therefore: (a) eager may
 only fire when <code>EagerSttDelay &lt; StopDuration</code> (validate this — a misconfiguration where eager ≥ stop
-is meaningless and must be rejected or clamped); (b) a <code>ConfirmTurnEnd → false</code> always cancels a pending
-eager pass; (c) a resumed voiced window always cancels a pending eager pass. The eager transcription is only ever
-<em>promoted</em> to the real turn when end-of-turn is confirmed.</div>
+is meaningless and must be rejected or clamped); (b) a <code>ConfirmTurnEnd → false</code> always supersedes a
+pending eager pass; (c) a resumed voiced window always supersedes a pending eager pass. "Supersedes" is the
+<b>guarantee</b> — the pass's utterance id is marked superseded and <code>SpeechToTextProcessor</code> drops its
+final before it can become a turn; aborting the flush mid-flight is a best-effort optimization on top (a native
+inference already running may not stop). The eager transcription is only ever <em>promoted</em> to the real turn
+when end-of-turn is confirmed.</div>
+
+<h3 id="s5disc">Discarding a speculative transcription — the real mechanism</h3>
+<p>The naïve reading is "cancel the speculative STT with the per-frame <code>CancellationToken</code>, the same
+machinery that aborts an interrupted LLM/TTS call." <b>That does not work</b>, and the ground truth in the codebase
+is specific:</p>
+<ul>
+  <li><code>ISpeechToTextEngine.FlushAsync()</code> takes <em>no</em> <code>CancellationToken</code>
+    (<code>Task FlushAsync() =&gt; Task.CompletedTask;</code>) — there is nothing for the per-frame token to bind to.</li>
+  <li><code>WhisperCppSttEngine.FlushAsync()</code> only calls <code>QueueTranscriptionLocked()</code> and returns
+    <em>immediately</em> — it does not await inference. <code>QueueTranscriptionLocked()</code> chains the
+    transcription <code>Task.Run</code> on <code>var ct = _lifetime.Token;</code> — the <em>engine-lifetime</em>
+    token, <b>not</b> any per-frame / interruption token. The result is written to an unbounded channel and
+    surfaced by <code>ReadTranscriptsAsync</code> as a <code>TranscriptionResult(IsFinal:true)</code>. (whisper.cpp
+    inference is a CPU-bound native call — not reliably cancellable mid-flight anyway.)</li>
+  <li><code>SpeechToTextProcessor.ReadLoopAsync</code> forwards <em>every</em> <code>TranscriptionResult</code> as a
+    <code>TranscriptionFrame</code> unconditionally — it has no notion of <em>which</em> utterance a result belongs
+    to, so as written it cannot drop a superseded speculative result.</li>
+</ul>
+<p><b>Net:</b> the per-frame <code>CancellationToken</code> (the interruption machinery for LLM/TTS) does not govern
+STT flush/transcription. Relying on it to discard a speculative transcription is architecturally wrong for batch
+engines (WhisperCpp). The correct design has two parts — and only the first is a guarantee:</p>
+
+<h4>1 — Result suppression via an utterance id / epoch (the guarantee)</h4>
+<p>Each speculative flush is tagged with an <em>utterance id</em> (or a monotonically increasing epoch). An eager
+coordinator in/around <code>SpeechToTextProcessor</code> tracks the currently-valid utterance id. On
+resume-within-window <em>or</em> <code>ConfirmTurnEnd → false</code>, the speculative id is marked
+<b>superseded</b>. The processor's read loop drops any <code>TranscriptionResult</code> whose utterance id is
+superseded <em>before</em> it becomes a <code>TranscriptionFrame</code> — so a stale speculative final never reaches
+the agent, even though whisper.cpp ran the inference to completion on its lifetime token. This is a
+<em>contract-level</em> change: an utterance id is carried from the flush through to the emitted result (or,
+equivalently, the processor stamps each in-flight flush with the active id and validates results against it) — it
+is <b>not</b> a VAD-only tweak.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/SpeechToTextProcessor.cs (read-loop suppression — intent)</span>
+<pre><code><span class="cm">// The processor tracks the active/valid utterance id; a superseded speculative flush is recorded.</span>
+<span class="cm">// long _activeUtteranceId;  HashSet&lt;long&gt; _superseded;   // updated when VAD marks a spec id stale</span>
+
+await foreach (var t in _engine.ReadTranscriptsAsync(ct).ConfigureAwait(false))
+{
+    <span class="cm">// Drop a stale speculative final BEFORE it becomes a TranscriptionFrame / starts a turn.</span>
+    <span class="cm">// t.UtteranceId is the id stamped at FlushAsync time (new TranscriptionResult field).</span>
+    if (t.IsFinal &amp;&amp; t.UtteranceId is { } id &amp;&amp; _superseded.Contains(id))
+        continue; <span class="cm">// suppressed: the user resumed, or ConfirmTurnEnd returned false</span>
+
+    await PushFrameAsync(new TranscriptionFrame(t.Text, t.IsFinal, t.Language), ct).ConfigureAwait(false);
+}</code></pre>
+
+<h4>2 — Cancellable / identified flush (best-effort optimization)</h4>
+<p>Extend the flush contract so engines that <em>can</em> abort cheaply do so and avoid wasted compute — e.g.
+<code>FlushAsync(CancellationToken)</code> or <code>FlushAsync(utteranceId)</code> plus a
+<code>CancelPending(utteranceId)</code>. Streaming engines map it to <code>cancel_stream</code>; WhisperCpp can
+drop a queued-but-not-yet-started transcription. This is explicitly <b>best-effort</b> — a native inference already
+running may not stop — which is exactly why suppression (#1), not cancellation, is the guarantee.</p>
+
+<div class="callout warn"><b>Contract change in <code>Voxa.Speech.Abstractions</code>.</b> This subsection is the
+reason WS1 touches <code>ISpeechToTextEngine</code> (flush signature + an utterance id on the flush/result) and
+<code>SpeechToTextProcessor</code> (the suppression logic), not just the VAD. Keep the change minimal: one id field
+threaded flush → result, one drop-if-superseded check in the read loop, an optional best-effort cancel hook.</div>
 
 <h3>Marking the speculative utterance</h3>
 <p>The downstream sink (<code>WebSocketAudioSink</code>) treats a <code>UserStartedSpeakingFrame</code> arriving as
@@ -298,25 +377,28 @@ window is recognised as continuation:</p>
 
 <span class="filelabel">src/Voxa.Core/Frames/SystemFrames.cs (one of the two — pick at implementation)</span>
 <pre><code><span class="cm">// Option A — a dedicated marker frame (preferred: explicit, no field churn on existing frames).</span>
-<span class="cm">// Emitted by the VAD at EagerSttDelay; tells STT to flush speculatively and tells the sink</span>
+<span class="cm">// Emitted by the VAD at EagerSttDelay; carries the utterance id used to flush + (later) suppress;</span>
+<span class="cm">// tells STT to flush speculatively and tells the sink</span>
 <span class="cm">// "a UserStarted following this is a continuation, not a barge-in".</span>
-public sealed record SpeculativeUtteranceFrame : SystemFrame;
+public sealed record SpeculativeUtteranceFrame(long UtteranceId) : SystemFrame;
 
-<span class="cm">// Option B — a flag on the stop frame. UserStoppedSpeakingFrame is a record, so this is additive</span>
+<span class="cm">// Option B — a flag + id on the stop frame. UserStoppedSpeakingFrame is a record, so this is additive</span>
 <span class="cm">// and defaults to the non-speculative case (Eager == false ⇒ today's behaviour).</span>
-<span class="cm">// public sealed record UserStoppedSpeakingFrame(bool Eager = false) : SystemFrame;</span></code></pre>
+<span class="cm">// public sealed record UserStoppedSpeakingFrame(bool Eager = false, long UtteranceId = 0) : SystemFrame;</span></code></pre>
 
 <h3>VAD option + state change (sketch)</h3>
 <span class="filelabel">src/Voxa.Audio.SileroVad/SileroVadOptions.cs (addition)</span>
 <pre><code><span class="cm">/// Speculative ("eager") STT trigger. When set and strictly less than StopDuration, the gate</span>
 <span class="cm">/// emits a marked speculative end-of-utterance once unvoiced silence reaches this delay — so STT</span>
 <span class="cm">/// starts on the buffered utterance BEFORE StopDuration / ConfirmTurnEnd confirm end-of-turn.</span>
-<span class="cm">/// Discarded if the user resumes within the window, or if ConfirmTurnEnd returns false (both</span>
-<span class="cm">/// cancel via the per-frame CancellationToken). Default null = no eager dispatch (unchanged).</span>
+<span class="cm">/// Discarded if the user resumes within the window, or if ConfirmTurnEnd returns false: both mark</span>
+<span class="cm">/// the speculative utterance id superseded so SpeechToTextProcessor drops its final before it</span>
+<span class="cm">/// becomes a TranscriptionFrame (the per-frame CancellationToken does NOT reach STT flush/inference;</span>
+<span class="cm">/// aborting the flush is best-effort only). Default null = no eager dispatch (unchanged).</span>
 public TimeSpan? EagerSttDelay { get; init; }</code></pre>
 
 <span class="filelabel">src/Voxa.Audio.SileroVad/SileroVadProcessor.cs (additions inside the hangover branch — intent, not final code)</span>
-<pre><code><span class="cm">// Fields: bool _eagerDispatched; CancellationTokenSource? _eagerCts;</span>
+<pre><code><span class="cm">// Fields: bool _eagerDispatched; long _eagerUtteranceId;</span>
 
 <span class="cm">// While speaking and unvoiced is accumulating, BEFORE the StopDuration branch:</span>
 if (_isSpeaking &amp;&amp; !voiced
@@ -326,27 +408,33 @@ if (_isSpeaking &amp;&amp; !voiced
     &amp;&amp; _unvoicedAccum &gt;= eager)
 {
     _eagerDispatched = true;
-    <span class="cm">// Marked, speculative: STT flushes; the sink reads the marker and will NOT treat a</span>
-    <span class="cm">// following UserStarted as a barge-in. Gate stays OPEN (_isSpeaking unchanged).</span>
-    await PushFrameAsync(new SpeculativeUtteranceFrame(), ct).ConfigureAwait(false);
+    _eagerUtteranceId = NextUtteranceId();
+    <span class="cm">// Marked, speculative: STT flushes for THIS utterance id; the sink reads the marker and will</span>
+    <span class="cm">// NOT treat a following UserStarted as a barge-in. Gate stays OPEN (_isSpeaking unchanged).</span>
+    await PushFrameAsync(new SpeculativeUtteranceFrame(_eagerUtteranceId), ct).ConfigureAwait(false);
 }
 
 <span class="cm">// On the next VOICED window while a speculative pass is pending → resume ⇒ discard:</span>
 if (voiced &amp;&amp; _eagerDispatched)
 {
     _eagerDispatched = false;
-    <span class="cm">// Cancel the in-flight speculative STT exactly like an interruption cancels data work.</span>
+    <span class="cm">// SUPPRESS (the guarantee): mark _eagerUtteranceId superseded so SpeechToTextProcessor drops</span>
+    <span class="cm">// its final before it becomes a TranscriptionFrame — even though whisper.cpp ran on its lifetime</span>
+    <span class="cm">// token. Best-effort cancel the flush where the engine can. NOT the per-frame CancellationToken.</span>
     <span class="cm">// No InterruptionFrame: the marker said "continuation, not barge-in".</span>
 }
 
 <span class="cm">// In the existing StopDuration branch, when ConfirmTurnEnd returns FALSE:</span>
-<span class="cm">//   smart-turn overrides eager → cancel the pending speculative pass, reset _eagerDispatched,</span>
-<span class="cm">//   keep the gate open (mid-sentence pause), as today.</span>
-<span class="cm">// When the gate genuinely closes (confirmed=true): the speculative transcription IS the turn;</span>
-<span class="cm">//   clear _eagerDispatched, emit the normal UserStoppedSpeakingFrame, do not re-run STT.</span></code></pre>
+<span class="cm">//   smart-turn overrides eager → mark _eagerUtteranceId superseded (same suppression path as resume),</span>
+<span class="cm">//   reset _eagerDispatched, keep the gate open (mid-sentence pause), as today.</span>
+<span class="cm">// When the gate genuinely closes (confirmed=true): the speculative transcription IS the turn — its</span>
+<span class="cm">//   id stays valid (never superseded); clear _eagerDispatched, emit the normal UserStoppedSpeakingFrame,</span>
+<span class="cm">//   do not re-run STT.</span></code></pre>
 
-<div class="callout"><b>Why this is safe against the existing machinery.</b> Cancellation reuses the per-frame
-<code>CancellationToken</code> Voxa already replaces only after an interruption — no new cancellation model. The
+<div class="callout"><b>Why this is safe against the existing machinery.</b> Discard is decided by utterance-id
+suppression at <code>SpeechToTextProcessor</code> (the guarantee), not by the per-frame
+<code>CancellationToken</code> — that token drives LLM/TTS data work and does <em>not</em> reach STT flush/inference,
+so it is deliberately <em>not</em> the discard path here (best-effort flush-cancel is layered on top). The
 gate-open invariant during the eager window means pre-roll and the smart-turn recent-speech tail
 (<code>SnapshotRecentSpeech</code>) keep accumulating exactly as before; eager does not touch either.</div>
 
@@ -477,10 +565,13 @@ smart-turn make the unhurried-but-correct call); <code>LowLatency</code> / <code
 One logical change per PR (per CONTRIBUTING); every PR adds an <code>[Unreleased]</code> CHANGELOG entry, stays
 warnings-as-errors clean, and follows the spec (this document) which lands first.</p>
 <ol>
-  <li><b>Phase A — WS1 eager STT.</b> Marker frame + <code>EagerSttDelay</code> option + VAD state machine
-    (arm / resume-discard / confirm-promote / smart-turn-override) + tuning wiring. Lands with its synthetic-VAD
-    tests <em>and</em> a VRT-001 before/after delta in the PR description. Single PR (the eager mechanism is one
-    indivisible behaviour).</li>
+  <li><b>Phase A — WS1 eager STT.</b> Marker frame (carrying an utterance id) + <code>EagerSttDelay</code> option +
+    VAD state machine (arm / resume-supersede / confirm-promote / smart-turn-override) + the
+    <code>Voxa.Speech.Abstractions</code> contract change (utterance id on flush/result +
+    <code>SpeechToTextProcessor</code> suppression, optional best-effort flush-cancel) + tuning wiring. Lands with its
+    synthetic-VAD tests, the suppression test (T1.5), <em>and</em> a VRT-001 before/after delta in the PR
+    description. Single PR (the eager mechanism is one indivisible behaviour — the suppression contract is what makes
+    it correct, so it ships together).</li>
   <li><b>Phase B1 — <code>MinInterruptionDuration</code>.</b> Barge-in debounce on the VAD. One PR.</li>
   <li><b>Phase B2 — <code>InterruptionRecoveryTimeout</code> + sink interplay.</b> Provisional-epoch recovery in
     <code>WebSocketAudioSink</code>. One PR (highest sink risk — keep it isolated).</li>
@@ -490,25 +581,31 @@ warnings-as-errors clean, and follows the spec (this document) which lands first
   <li><b>Phase B5 — <code>MaxResponseDuration</code> cap.</b> Turn-worker output bound. One PR.</li>
 </ol>
 <p>Phases B1–B5 are mutually independent and may be parallelised or reordered; only Phase A must precede them (it
-introduces the marker frame and establishes the VRT-001 measurement habit).</p>
+introduces the marker frame + the STT-abstractions suppression contract and establishes the VRT-001 measurement
+habit).</p>
 
 <!-- ============================================================ -->
 <h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
 <ul class="cl">
   <li><span class="tid">T1.1</span> Add the eager marker (<code>SpeculativeUtteranceFrame</code> or
-    <code>UserStoppedSpeakingFrame.Eager</code>) in <code>Voxa.Core/Frames</code>; forwarded downstream; not
-    <code>IUninterruptible</code>.
+    <code>UserStoppedSpeakingFrame.Eager</code>) <em>carrying an utterance id</em> in <code>Voxa.Core/Frames</code>;
+    forwarded downstream; not <code>IUninterruptible</code>.
     <span class="ac">AC: zero new <code>Voxa.Core</code> dependencies; frame round-trips through a test pipeline.</span></li>
   <li><span class="tid">T1.2</span> Add <code>EagerSttDelay</code> to <code>SileroVadOptions</code>; thread through
     <code>VoxaVadSettings</code> → <code>SileroVadDescriptors</code> → composer → resolver/profiles.
     <span class="ac">AC: config <code>EagerSttDelayMs</code> reaches the processor; <code>null</code> ⇒ no dispatch.</span></li>
   <li><span class="tid">T1.3</span> Implement the VAD eager state machine: arm at <code>EagerSttDelay</code>,
-    discard-on-resume, promote-on-confirm.
-    <span class="ac">AC: speculative STT flushes early; gate stays open until confirmed.</span></li>
-  <li><span class="tid">T1.4</span> Precedence: <code>ConfirmTurnEnd → false</code> cancels a pending eager
-    dispatch; validate / clamp <code>EagerSttDelay &lt; StopDuration</code>.
+    mark-superseded-on-resume, promote-on-confirm.
+    <span class="ac">AC: speculative STT flushes early; gate stays open until confirmed; resume marks the utterance id superseded.</span></li>
+  <li><span class="tid">T1.4</span> Precedence: <code>ConfirmTurnEnd → false</code> supersedes a pending eager
+    dispatch (marks its utterance id stale); validate / clamp <code>EagerSttDelay &lt; StopDuration</code>.
     <span class="ac">AC: smart-turn false never lets a speculative turn promote; misconfig is rejected or clamped with a warning.</span></li>
-  <li><span class="tid">T1.5</span> VRT-001 before/after delta captured in the PR.
+  <li><span class="tid">T1.5</span> <b>STT-contract change + suppression.</b> Carry an utterance id from
+    <code>ISpeechToTextEngine</code> flush through to the emitted <code>TranscriptionResult</code>; add the
+    drop-if-superseded check to <code>SpeechToTextProcessor.ReadLoopAsync</code>; optional best-effort
+    <code>CancelPending(utteranceId)</code>.
+    <span class="ac">AC: a <code>TranscriptionResult</code> whose utterance id is superseded is dropped before becoming a <code>TranscriptionFrame</code>; non-superseded results pass through unchanged. <code>Voxa.Speech.Abstractions</code> stays dependency-clean.</span></li>
+  <li><span class="tid">T1.6</span> VRT-001 before/after delta captured in the PR.
     <span class="ac">AC: pause-handling + smooth-turn-taking latency drops; waste-on-resume rate reported.</span></li>
   <li><span class="tid">T2.1</span> <code>MinInterruptionDuration</code> debounce on the barge-in path.
     <span class="ac">AC: a sub-threshold blip during playback does not emit <code>InterruptionFrame</code>; sustained speech does.</span></li>
@@ -538,8 +635,9 @@ PCM windows, assert on the captured frames). No model download — these run in 
 <table>
   <tr><th>Knob / behaviour</th><th>Synthetic sequence → assertion</th></tr>
   <tr><td><b>Eager dispatch</b> (T1.3)</td><td>speech → silence past <code>EagerSttDelay</code> but before <code>StopDuration</code> ⇒ a <code>SpeculativeUtteranceFrame</code> (or eager-marked stop) is captured <em>before</em> the gate closes; the gate stays open.</td></tr>
-  <tr><td><b>Discard on resume</b> (T1.3)</td><td>speech → short silence past <code>EagerSttDelay</code> → speech again ⇒ no <code>InterruptionFrame</code>; the eager pass is cancelled; one continuous utterance.</td></tr>
-  <tr><td><b>Smart-turn override</b> (T1.4)</td><td><code>ConfirmTurnEnd</code> stubbed to return <code>false</code>; speech → silence past <code>EagerSttDelay</code> and <code>StopDuration</code> ⇒ eager dispatch cancelled, gate stays open, no <code>UserStoppedSpeakingFrame</code> until a later confirm.</td></tr>
+  <tr><td><b>Discard on resume</b> (T1.3)</td><td>speech → short silence past <code>EagerSttDelay</code> → speech again ⇒ no <code>InterruptionFrame</code>; the eager utterance id is marked superseded; one continuous utterance.</td></tr>
+  <tr><td><b>Suppressed result never starts a turn</b> (T1.5)</td><td><code>SpeechToTextProcessor</code> with a fake STT engine that emits a <em>late</em> <code>TranscriptionResult(IsFinal:true)</code> for a <em>superseded</em> utterance id (modelling whisper.cpp finishing on its lifetime token after the user resumed) ⇒ the result is dropped in the read loop, <b>no</b> <code>TranscriptionFrame</code> is pushed, and a downstream fake agent never fires a turn. A non-superseded final pushes a frame normally.</td></tr>
+  <tr><td><b>Smart-turn override</b> (T1.4)</td><td><code>ConfirmTurnEnd</code> stubbed to return <code>false</code>; speech → silence past <code>EagerSttDelay</code> and <code>StopDuration</code> ⇒ eager utterance id marked superseded, gate stays open, no <code>UserStoppedSpeakingFrame</code> until a later confirm.</td></tr>
   <tr><td><b>Eager &lt; Stop validation</b> (T1.4)</td><td><code>EagerSttDelay ≥ StopDuration</code> ⇒ rejected at construction/validation or clamped with a warning (assert the chosen policy).</td></tr>
   <tr><td><b>Interruption debounce</b> (T2.1)</td><td>bot-speaking; inject &lt; <code>MinInterruptionDuration</code> of voiced ⇒ no <code>InterruptionFrame</code>; inject ≥ it ⇒ exactly one.</td></tr>
   <tr><td><b>Interruption recovery</b> (T2.2)</td><td>headless <code>WebSocketAudioSink</code> over a fake socket: barge-in then stop within window ⇒ queued audio not stranded / playback resumes; barge-in then continue ⇒ epoch committed, stale audio purged (existing behaviour preserved).</td></tr>
@@ -560,12 +658,13 @@ fake transports — no network, no model, fully in the default (offline) lane. O
   <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
   <tr><td>R1</td><td>Eager ↔ smart-turn precedence wrong: a speculative turn promotes despite <code>ConfirmTurnEnd → false</code>, so the bot answers a mid-sentence pause.</td><td class="sev-high">High</td><td>Explicit one-directional precedence (smart-turn false &gt; eager); eager only ever <em>promotes</em> on confirmed end-of-turn; dedicated override test (T1.4). Eager off in the <code>Quality</code> profile.</td></tr>
   <tr><td>R2</td><td>Resumed speech inside the eager window is mistaken for a barge-in (epoch bump / interruption), cutting the user off.</td><td class="sev-high">High</td><td>The eager utterance is <b>marked</b>; the sink and interruption path treat post-marker resume as continuation, not <code>InterruptionFrame</code>. Discard-on-resume test (T1.3).</td></tr>
-  <tr><td>R3</td><td>Speculative STT work wasted on resume (CPU / cloud quota burned for nothing).</td><td class="sev-med">Med</td><td>Bounded to one in-flight pass per utterance, cancelled via the existing per-frame token; waste-on-resume rate measured via VRT-001 and tuned through <code>EagerSttDelay</code>.</td></tr>
+  <tr><td>R3</td><td>Speculative STT work wasted on resume (CPU / cloud quota burned for nothing).</td><td class="sev-med">Med</td><td>Bounded to one in-flight pass per utterance; result suppressed by utterance id and (where the engine supports it) best-effort flush-cancelled; waste-on-resume rate measured via VRT-001 and tuned through <code>EagerSttDelay</code>.</td></tr>
   <tr><td>R4</td><td><code>InterruptionRecoveryTimeout</code> re-delivers audio the client already purged (epoch mishandling) → garbled playback.</td><td class="sev-high">High</td><td>Provisional-epoch design: defer/commit the purge over the recovery window; never re-deliver discarded audio; both-direction sink tests (T2.2). Isolated in its own PR.</td></tr>
   <tr><td>R5</td><td>Over-aggressive force-split chops natural sentences into half-utterances the agent must stitch.</td><td class="sev-med">Med</td><td>Default off; generous profile values; validate cap ≫ <code>StartDuration</code> + a sentence; force-split yields an <em>intermediate</em> transcription, not a hard turn boundary the agent can't recover.</td></tr>
   <tr><td>R6</td><td>Empty-STT recovery resets state mid-turn and drops a legitimately-in-flight turn.</td><td class="sev-low">Low</td><td>Reset only fires on an <em>empty / sub-threshold</em> final result (the no-turn case); a non-empty final still enqueues a turn. No-op when STT returns text.</td></tr>
   <tr><td>R7</td><td>A new knob silently changes default behaviour (breaks the golden).</td><td class="sev-med">Med</td><td>Every knob is nullable / defaults to today's value; defaults-byte-identity golden (T3.1) is the gate.</td></tr>
   <tr><td>R8</td><td>Debounce alone is trusted as echo defence on open speakers and still lets the bot self-interrupt.</td><td class="sev-low">Low</td><td>Documented as heuristic; real barge-in robustness on speakers is <b>VRT-003</b> (<code>IEchoCanceller</code>). The two compose.</td></tr>
+  <tr><td>R9</td><td>A stale <em>speculative final</em> reaches the agent after the user resumed and starts an unwanted turn — because the per-frame <code>CancellationToken</code> does <em>not</em> stop a batch engine's flush/inference (<code>FlushAsync</code> has no token; <code>WhisperCppSttEngine</code> transcribes on <code>_lifetime.Token</code>; <code>SpeechToTextProcessor</code> forwards every result).</td><td class="sev-high">High</td><td><b>Guarantee:</b> utterance-id suppression in <code>SpeechToTextProcessor.ReadLoopAsync</code> drops a superseded result before it becomes a <code>TranscriptionFrame</code> (independent of whether inference was cancelled). <b>Optimization:</b> best-effort flush-cancel where the engine can abort cheaply. Test (T1.5): a fake engine emits a late final for a superseded utterance id ⇒ assert no <code>TranscriptionFrame</code> and the agent never fires.</td></tr>
 </table>
 
 <!-- ============================================================ -->
