@@ -1,0 +1,33 @@
+using System.Text.Json.Serialization;
+
+namespace Voxa.TurnTaking;
+
+/// <summary>Provenance of a run — which engine backed each stage (mock by default).</summary>
+public sealed record EngineNames(
+    [property: JsonPropertyName("stt")] string Stt,
+    [property: JsonPropertyName("llm")] string Llm,
+    [property: JsonPropertyName("tts")] string Tts);
+
+/// <summary>Per-sample timings in milliseconds, reduced from the diagnostics hub. <c>null</c> when the
+/// stage didn't occur (e.g. the bot correctly stayed silent through a pause).</summary>
+public sealed record SampleTimings(
+    [property: JsonPropertyName("stt")] double? Stt,
+    [property: JsonPropertyName("llm")] double? Llm,
+    [property: JsonPropertyName("tts")] double? Tts,
+    [property: JsonPropertyName("ttft_first_audio_from_speech_end")] double? TtftFirstAudioFromSpeechEnd,
+    [property: JsonPropertyName("total_wall")] double? TotalWall);
+
+/// <summary>Reference (from sample metadata) vs the STT hypothesis transcript.</summary>
+public sealed record SampleTranscripts(
+    [property: JsonPropertyName("reference")] string? Reference,
+    [property: JsonPropertyName("hypothesis")] string? Hypothesis);
+
+/// <summary>One per-sample record, serialized to <c>&lt;category&gt;__&lt;sample-id&gt;.json</c> (the FDB convention).</summary>
+public sealed record SampleRecord(
+    [property: JsonPropertyName("sample_id")] string SampleId,
+    [property: JsonPropertyName("category")] string Category,
+    [property: JsonPropertyName("engines")] EngineNames Engines,
+    [property: JsonPropertyName("timings_ms")] SampleTimings TimingsMs,
+    [property: JsonPropertyName("transcripts")] SampleTranscripts Transcripts,
+    [property: JsonPropertyName("response_wav")] string? ResponseWav,
+    [property: JsonPropertyName("error")] string? Error);

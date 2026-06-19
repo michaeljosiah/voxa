@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Turn-taking quality benchmark (VRT-001, Phase A).** A new `bench/Voxa.TurnTaking` harness drives the
+  **real composed pipeline** (`DefaultVoicePipelineComposer.Compose`) through a Full-Duplex-Bench-layout
+  corpus and reduces the existing `VoxaDiagnosticsHub` stage timings to a per-sample JSON record + response
+  WAV — no new runtime instrumentation, no parallel pipeline. It scores the three cascade-fair categories
+  (`pause_handling` / `smooth_turn_taking` / `user_interruption`) and discovers + skips `backchannel`
+  (N/A for a half-duplex cascade). The default lane is offline and deterministic — mock STT/TTS + the
+  keyless Echo agent over a tiny checked-in mini fixture (real audio derived from `jfk.wav`) — and an xUnit
+  smoke test gates it in CI. This is the measurement foundation the rest of the VRT line is gated against;
+  real local engines, the summary roll-up, and the `baseline.json` regression gate follow (Phases B–D).
 - **Smart turn detection (P0 latency).** A within-sentence pause no longer has to end the turn. A new
   `ISmartTurnClassifier` seam (in `Voxa.Speech.Abstractions`) is wired through the VAD
   (`VoxaVadSettings.ConfirmTurnEnd` → `SileroVadOptions`) and the `DefaultVoicePipelineComposer`, which

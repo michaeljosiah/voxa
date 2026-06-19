@@ -1,0 +1,4 @@
+{
+  "reference": "Clean end-of-turn: speech then a clear pause the bot should respond into.",
+  "source": "derived from jfk.wav (public-domain JFK address); silence-padded to shape the turn"
+}
