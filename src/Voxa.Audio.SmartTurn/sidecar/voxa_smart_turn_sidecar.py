@@ -116,9 +116,9 @@ def main():
             else:
                 import numpy as np
 
-                if sample_rate != 16000:
-                    log(f"expected 16 kHz audio, got {sample_rate} — feeding as-is")
                 audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                if sample_rate != 16000:
+                    audio = resample_to_16k(audio, sample_rate)
                 response = {"probability": predict(extractor, session, input_name, audio)}
         except Exception as exc:  # noqa: BLE001 — never crash the loop; fail "complete"
             log("request failed:", exc)

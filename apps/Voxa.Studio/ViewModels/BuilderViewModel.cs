@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
+using Voxa.Audio.SmartTurn;
 using Voxa.Diagnostics;
 using Voxa.Speech;
 using Voxa.Speech.Kokoro;
@@ -977,6 +978,7 @@ public sealed partial class BuilderViewModel : ObservableObject
             services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Information));
             services.AddSingleton<IConfiguration>(config);
             services.AddVoxa(config);
+            services.AddVoxaSmartTurn(config); // honor the Smart turn toggle on canvas runs too (like Talk)
             _runProvider = services.BuildServiceProvider();
 
             // Validation + compile BEFORE any download or audio start — fail fast, in words.

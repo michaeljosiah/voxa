@@ -139,7 +139,7 @@ internal static class BuilderChainCompiler
                     if (string.Equals(node.Provider, "SilenceGate", StringComparison.OrdinalIgnoreCase))
                         parts.Add(new(node.Id, _ => new SilenceGateProcessor(settings.MinRms, settings.StopDuration)));
                     else if (registry.TryGetVad(node.Provider ?? "", out var vadDesc))
-                        parts.Add(new(node.Id, sp => vadDesc.CreateProcessor(sp, WithObserver(sp, settings))));
+                        parts.Add(new(node.Id, sp => vadDesc.CreateProcessor(sp, WithSmartTurn(sp, WithObserver(sp, settings)))));
                     else
                         throw new InvalidOperationException($"VAD engine '{node.Provider}' is not registered.");
                     break;
@@ -204,6 +204,19 @@ internal static class BuilderChainCompiler
         foreach (var (index, scope) in taps.OrderByDescending(t => t.Index))
             parts.Insert(index, new(null, sp => new DiagnosticsTapProcessor(
                 sp.GetRequiredService<VoxaDiagnosticsHub>(), scope)));
+    }
+
+    // Mirror DefaultVoicePipelineComposer.WithSmartTurn for the canvas-run path (which builds the VAD
+    // directly rather than via the composer): wire a registered classifier into the silence timeout so a
+    // graph run honors the same Smart turn toggle as a Talk session. No classifier registered → unchanged.
+    internal static VoxaVadSettings WithSmartTurn(IServiceProvider sp, VoxaVadSettings settings)
+    {
+        var classifier = sp.GetService<ISmartTurnClassifier>();
+        if (classifier is null) return settings;
+        return settings with
+        {
+            ConfirmTurnEnd = (pcm, ct) => classifier.IsTurnCompleteAsync(pcm, settings.SampleRate, ct),
+        };
     }
 
     private static VoxaVadSettings WithObserver(IServiceProvider sp, VoxaVadSettings settings)
