@@ -16,10 +16,15 @@ public static class SmartTurnServiceCollectionExtensions
     private const string VoxaSectionName = "Voxa";
 
     /// <summary>
-    /// Register the configured smart-turn classifier from <c>Voxa:SmartTurn</c>. With
-    /// <c>Provider: "Http"</c> + an <c>Endpoint</c>, registers <see cref="HttpSmartTurnClassifier"/> as the
-    /// <see cref="ISmartTurnClassifier"/> the composer picks up. Throws if <c>Http</c> is selected without an
-    /// endpoint (fail fast); a missing/"None" provider registers nothing (classic silence behavior).
+    /// Register the configured smart-turn classifier from <c>Voxa:SmartTurn</c> as the
+    /// <see cref="ISmartTurnClassifier"/> the composer picks up:
+    /// <list type="bullet">
+    /// <item><c>Provider: "Sidecar"</c> + a <c>PythonScript</c>/<c>ExecutablePath</c> → a Voxa-managed
+    /// Python process running the real model (<see cref="SidecarSmartTurnClassifier"/>).</item>
+    /// <item><c>Provider: "Http"</c> + an <c>Endpoint</c> → <see cref="HttpSmartTurnClassifier"/>.</item>
+    /// </list>
+    /// Throws if a provider is selected without its required setting (fail fast); a missing/"None"
+    /// provider registers nothing (classic silence-only behavior).
     /// </summary>
     public static IServiceCollection AddVoxaSmartTurn(this IServiceCollection services, IConfiguration configuration)
     {
@@ -29,7 +34,18 @@ public static class SmartTurnServiceCollectionExtensions
         var voxa = configuration.GetSection(VoxaSectionName);
         var provider = voxa.GetSection(SmartTurnOptions.SectionName)["Provider"];
 
-        if (string.Equals(provider, "Http", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(provider, "Sidecar", StringComparison.OrdinalIgnoreCase))
+        {
+            var options = SmartTurnOptions.FromConfiguration(voxa);
+            if (string.IsNullOrWhiteSpace(options.PythonScript) && string.IsNullOrWhiteSpace(options.ExecutablePath))
+                throw new InvalidOperationException(
+                    "Voxa:SmartTurn:Provider is 'Sidecar' but neither Voxa:SmartTurn:PythonScript nor " +
+                    "Voxa:SmartTurn:ExecutablePath is set.");
+
+            services.AddSingleton<ISmartTurnClassifier>(sp => new SidecarSmartTurnClassifier(
+                options, sp.GetService<ILoggerFactory>()?.CreateLogger("Voxa.Audio.SmartTurn")));
+        }
+        else if (string.Equals(provider, "Http", StringComparison.OrdinalIgnoreCase))
         {
             var options = SmartTurnOptions.FromConfiguration(voxa);
             if (string.IsNullOrWhiteSpace(options.Endpoint))

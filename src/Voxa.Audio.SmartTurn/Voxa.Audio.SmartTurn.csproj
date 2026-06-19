@@ -22,6 +22,8 @@
 
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Ship the Python sidecar source so users (and a future PyInstaller freeze) have it. -->
+    <None Include="sidecar\**" Pack="true" PackagePath="sidecar\" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

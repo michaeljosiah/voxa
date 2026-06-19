@@ -12,10 +12,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ISmartTurnClassifier` seam (in `Voxa.Speech.Abstractions`) is wired through the VAD
   (`VoxaVadSettings.ConfirmTurnEnd` → `SileroVadOptions`) and the `DefaultVoicePipelineComposer`, which
   auto-wires any registered classifier (zero-cost when none is). A new opt-in **`Voxa.Audio.SmartTurn`**
-  package ships `HttpSmartTurnClassifier` + `AddVoxaSmartTurn(configuration)` — point `Voxa:SmartTurn` at a
-  smart-turn endpoint and the VAD asks it "is the user actually done?" at the silence timeout, so
-  `Voxa:Vad:StopDuration` can drop to ~200 ms without clipping speakers who pause to think. The on-device
-  ONNX classifier (no network on the turn path) is the documented next step. See the package README.
+  package ships `AddVoxaSmartTurn(configuration)` and two classifiers, so the VAD asks "is the user
+  actually done?" at the silence timeout and `Voxa:Vad:StopDuration` can drop to ~200 ms without clipping
+  speakers who pause to think:
+  - `Provider: "Http"` (`HttpSmartTurnClassifier`) — POST the recent speech to any smart-turn endpoint.
+  - `Provider: "Sidecar"` (`SidecarSmartTurnClassifier`) — run the real `pipecat-ai/smart-turn-v3` model
+    in a Voxa-managed **Python sidecar** (bundled `sidecar/voxa_smart_turn_sidecar.py`), so the model's
+    Whisper feature extraction runs natively rather than as a fragile C# port. Lazy launch, serialized
+    stdio protocol, stderr→log, auto-relaunch; fails "complete" on any error.
+
+  Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
+  the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
+  ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
 - **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
   (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
   plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.

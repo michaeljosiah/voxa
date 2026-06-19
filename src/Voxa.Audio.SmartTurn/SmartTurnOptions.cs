@@ -23,6 +23,20 @@ public sealed record SmartTurnOptions
     /// <summary>Per-request timeout in milliseconds — kept short, it sits on the turn-taking path. Default 300.</summary>
     public int TimeoutMs { get; init; } = 300;
 
+    // ── Sidecar provider (a Voxa-managed Python process running the real model) ──
+
+    /// <summary>Python interpreter for the sidecar provider. Default <c>python</c>.</summary>
+    public string PythonExe { get; init; } = "python";
+
+    /// <summary>Path to the sidecar script (dev mode) — <c>sidecar/voxa_smart_turn_sidecar.py</c>.</summary>
+    public string? PythonScript { get; init; }
+
+    /// <summary>Path to a frozen sidecar binary (production), used instead of PythonExe + PythonScript.</summary>
+    public string? ExecutablePath { get; init; }
+
+    /// <summary>The Hugging Face model id the sidecar loads. Default the v3 turn-detection model.</summary>
+    public string Model { get; init; } = "pipecat-ai/smart-turn-v3";
+
     /// <summary>Bind from the <c>Voxa</c> configuration section (reads its <c>SmartTurn</c> child).</summary>
     public static SmartTurnOptions FromConfiguration(IConfigurationSection voxaRoot)
     {
@@ -33,6 +47,10 @@ public sealed record SmartTurnOptions
             ApiKey = s["ApiKey"],
             Threshold = double.TryParse(s["Threshold"], NumberStyles.Float, CultureInfo.InvariantCulture, out var t) ? t : 0.5,
             TimeoutMs = int.TryParse(s["TimeoutMs"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms) ? ms : 300,
+            PythonExe = s["PythonExe"] is { Length: > 0 } py ? py : "python",
+            PythonScript = s["PythonScript"],
+            ExecutablePath = s["ExecutablePath"],
+            Model = s["Model"] is { Length: > 0 } m ? m : "pipecat-ai/smart-turn-v3",
         };
     }
 }
