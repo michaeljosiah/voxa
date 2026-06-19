@@ -16,6 +16,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Voxa:Sidecar:PythonScript` (dev). Ships the runnable Python sidecar source; the pinned per-platform
   frozen binaries + cache catalog, the XTTS-v2-vs-OpenVoice spike, and local cloning (same transport)
   are the documented next steps — no binary is bundled or SHA-pinned yet. See the package README.
+- **Local LLM brain: first-class Ollama agent provider (VLS-003).** Set `Voxa:Agent:Provider` to
+  `Ollama` for a fully-local, keyless conversation loop (Whisper STT → Ollama → Piper/Kokoro). It
+  reuses the OpenAI-compatible client pointed at the local daemon (`Voxa:Agent:BaseUrl`, default
+  `http://localhost:11434/v1`); `Voxa:Agent:Model` names the pulled model (default `llama3.2`). No API
+  key and no new dependency; validation checks the endpoint shape without probing the daemon, so boot
+  never depends on `ollama serve` already running.
+- **`voxa` command-line interface (VDX-003).** A new `Voxa.Cli` dotnet tool — Core's headless entry
+  point (the CLI half of "Core = SDK + CLI"). `voxa transcribe <wav>` (whisper.cpp STT to stdout),
+  `voxa say "<text>" [--out f.wav]` (Piper/Kokoro TTS to a WAV), `voxa models [list | purge]` (inspect
+  or clear the SHA-256-pinned model cache), and `voxa check <appsettings.json>` (validate a pipeline
+  config — providers, models, credentials — without downloading). Install with
+  `dotnet tool install -g Voxa.Cli`.
+- **MCP server: give your agent a voice and ears (VDX-002).** A new `Voxa.Mcp` dotnet tool runs a
+  Model Context Protocol server over stdio (built on the official `ModelContextProtocol` SDK),
+  exposing `voxa_speak` (text → WAV via Piper/Kokoro), `voxa_transcribe` (WAV → text via whisper.cpp)
+  and `voxa_list_voices` — all backed by the keyless local tier, so any MCP-aware agent (Claude Code,
+  Cursor, …) gets a voice you own with no API key. Install with `dotnet tool install -g Voxa.Mcp` and
+  register the `voxa-mcp` command as an MCP server.
 - **Local STT: bigger Whisper models + opt-in GPU (VLS-002).** The `WhisperCpp` catalog gains the
   `medium`, `large-v3` and `large-v3-turbo` families (each with a `-q5_0` quantization), SHA-256-pinned
   like the rest. A new `Voxa:WhisperCpp:Device` key (`cpu` default, plus `auto` / `cuda` / `vulkan` /
