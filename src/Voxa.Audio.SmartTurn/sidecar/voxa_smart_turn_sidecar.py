@@ -67,19 +67,22 @@ def resample_to_16k(audio_f32, src_rate):
 
 
 def predict(extractor, session, input_name, audio_f32):
-    """Match smart-turn-v3 inference: last 8 s, Whisper features (1, 80, 800), sigmoid probability."""
+    """Match smart-turn-v3 inference: the last 8 s with the speech LEFT-padded to the end of the window,
+    Whisper features (1, 80, 800), sigmoid probability."""
     import numpy as np
 
     n = 8 * 16000
     if len(audio_f32) > n:
         audio_f32 = audio_f32[-n:]
+    elif len(audio_f32) < n:
+        # smart-turn-v3's reference pads zeros at the BEGINNING so speech sits at the end of the 8 s window;
+        # WhisperFeatureExtractor would otherwise right-pad, shifting short clips to positions the model
+        # was not trained on. Pad to exactly n samples here so the extractor doesn't pad at all.
+        audio_f32 = np.pad(audio_f32, (n - len(audio_f32), 0))
     features = extractor(
         audio_f32,
         sampling_rate=16000,
         return_tensors="np",
-        padding="max_length",
-        max_length=n,
-        truncation=True,
         do_normalize=True,
     )
     outputs = session.run(None, {input_name: features["input_features"].astype(np.float32)})

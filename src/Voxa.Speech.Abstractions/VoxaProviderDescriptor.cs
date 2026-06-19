@@ -123,7 +123,7 @@ public sealed record VoxaVadSettings(
     /// Optional smart-turn confirmation (P0): when set, the VAD's silence timeout asks this callback
     /// whether the turn is really over (<c>true</c>) or just a mid-sentence pause (<c>false</c>), so
     /// <see cref="StopDuration"/> can be aggressive (~200 ms) without clipping a speaker who pauses to
-    /// think. The buffer is the recent speech PCM (16-bit mono at <see cref="SampleRate"/>, up to ~1 s).
+    /// think. The buffer is the current turn's speech PCM (16-bit mono at <see cref="SampleRate"/>, up to ~8 s).
     /// Wired by the composer to a registered <see cref="ISmartTurnClassifier"/>; null otherwise
     /// (classic silence-only behavior — byte-for-byte unchanged).
     /// </summary>

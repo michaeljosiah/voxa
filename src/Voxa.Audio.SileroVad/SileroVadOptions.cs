@@ -62,8 +62,8 @@ public sealed record SileroVadOptions
     /// off speakers who pause to think — a smart-turn classifier plugs in here.
     ///
     /// <para>
-    /// The <see cref="ReadOnlyMemory{T}"/> is a snapshot of the most recent speech audio leading up
-    /// to the silence (up to ~1 s, 16-bit PCM at <see cref="SampleRate"/>). Default <c>null</c>
+    /// The <see cref="ReadOnlyMemory{T}"/> is a snapshot of the current turn's speech audio leading up
+    /// to the silence (up to ~8 s, 16-bit PCM at <see cref="SampleRate"/>). Default <c>null</c>
     /// (classic silence-only behavior — byte-for-byte unchanged).
     /// </para>
     /// </summary>

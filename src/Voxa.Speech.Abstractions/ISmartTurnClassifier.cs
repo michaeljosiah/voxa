@@ -15,10 +15,10 @@ namespace Voxa.Speech;
 public interface ISmartTurnClassifier
 {
     /// <summary>
-    /// True when the recent speech — 16-bit PCM mono at <paramref name="sampleRate"/>, the audio (up to
-    /// ~1 s) leading into the silence — sounds like a completed turn; false to treat the silence as a
-    /// mid-sentence pause and keep the gate open. Must be fast (it sits on the turn-taking path) and
-    /// should fail "complete" so a classifier error never strands the conversation.
+    /// True when the recent speech — 16-bit PCM mono at <paramref name="sampleRate"/>, the current turn's
+    /// audio (up to ~8 s) leading into the silence — sounds like a completed turn; false to treat the
+    /// silence as a mid-sentence pause and keep the gate open. Must be fast (it sits on the turn-taking
+    /// path) and should fail "complete" so a classifier error never strands the conversation.
     /// </summary>
     ValueTask<bool> IsTurnCompleteAsync(ReadOnlyMemory<byte> recentSpeechPcm, int sampleRate, CancellationToken ct);
 }

@@ -56,7 +56,7 @@ services.AddVoxaSmartTurn(configuration);   // reads Voxa:SmartTurn
 }
 ```
 
-`HttpSmartTurnClassifier` POSTs the recent speech (≈ up to 1 s, 16-bit mono WAV) to `Endpoint` and reads
+`HttpSmartTurnClassifier` POSTs the recent speech (the current turn, up to ~8 s, 16-bit mono WAV) to `Endpoint` and reads
 a completion verdict from the JSON response. The contract is lenient — any of:
 
 - `{ "complete": true }` (or `is_complete` / `completed`)
