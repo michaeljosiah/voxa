@@ -46,6 +46,9 @@ public sealed class StudioServices : IAsyncDisposable
     /// <summary>Activation + credentials facade the Settings dialog and the Config filter share.</summary>
     public ProviderSecretsService Secrets { get; }
 
+    /// <summary>Named pipeline profiles + the active one — the app-wide "which pipeline am I running".</summary>
+    public PipelineProfileStore Profiles { get; }
+
     public VoxaProviderRegistry Registry => Provider.GetRequiredService<VoxaProviderRegistry>();
 
     /// <summary>Raised after the container is swapped (Reconfigure / ApplySecrets) — views refresh from it.</summary>
@@ -55,7 +58,8 @@ public sealed class StudioServices : IAsyncDisposable
         IConfiguration? configuration = null,
         IStudioAudioDevice? audioDevice = null,
         ISecretsStore? secretsStore = null,
-        ProviderActivationStore? activationStore = null)
+        ProviderActivationStore? activationStore = null,
+        PipelineProfileStore? pipelineProfiles = null)
     {
         _baseConfiguration = configuration ?? new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -70,10 +74,13 @@ public sealed class StudioServices : IAsyncDisposable
         // rule). Tests inject a MemorySecretsStore + temp activation path for isolation.
         SecretsStore = secretsStore ?? CreateDefaultSecretsStore();
         Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
+        Profiles = pipelineProfiles ?? new PipelineProfileStore();
 
-        // Fold the stored secrets into the FIRST build so a returning user's providers are live from
-        // the first session — no post-construction Reconfigure, no double build.
+        // Fold the stored secrets AND the saved active profile into the FIRST build, so a returning user
+        // reopens on the pipeline they left — live from the first session, no post-construction rebuild.
         _secrets = Secrets.BuildConfigPairs();
+        if (Profiles.TryGetActive(out var activePairs))
+            _overrides = new Dictionary<string, string?>(activePairs);
         (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
     }
 
@@ -103,6 +110,19 @@ public sealed class StudioServices : IAsyncDisposable
         old.Dispose();
 
         Reconfigured?.Invoke();
+    }
+
+    /// <summary>
+    /// Make <paramref name="name"/> the active pipeline app-wide: persist the choice and rebuild the
+    /// container from its pairs (or back to the base config when null). Like <see cref="Reconfigure"/>,
+    /// the caller must ensure no live session is running; fires <see cref="Reconfigured"/> so views refresh.
+    /// </summary>
+    public void ActivateProfile(string? name)
+    {
+        Profiles.SetActive(name);
+        Reconfigure(name is not null && Profiles.TryGet(name, out var pairs)
+            ? pairs
+            : new Dictionary<string, string?>());
     }
 
     /// <summary>

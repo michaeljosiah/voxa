@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: named pipeline profiles, app-wide (Builder Phase 2).** Save a pipeline you've built as
+  a named **profile** and switch the whole app to it from one place. A new **Pipeline Profile** bar sits
+  above every view: pick a profile and it's applied everywhere at once — Talk, the Playgrounds, the lot —
+  via the same live-reconfigure the Config Apply uses; the choice persists, so Studio reopens on the
+  pipeline you left. Save one from the **Builder** ("Save as profile", for default-shape chains) — it
+  appears in the bar and becomes active. Profiles store only the provider/model selection, **never API
+  keys** (those stay in the encrypted secrets layer), so the `~/voxa-pipelines.json` file is safe to
+  share. A raw Config **Apply** still works and simply shows the bar as "Custom".
 - **Voxa Studio: Talk feels alive — pipeline state, warm-up, smoother render.** Talk used to look
   frozen while it worked. A prominent **status pill** now shows the live pipeline state — Warming up →
   Listening → Hearing you → Transcribing → Thinking → Speaking — derived from the diagnostics hub, so
