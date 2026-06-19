@@ -1,0 +1,4 @@
+{
+  "reference": "Barge-in onset: the user starts speaking; the bot should yield quickly.",
+  "source": "derived from jfk.wav (public-domain JFK address); silence-padded to shape the turn"
+}

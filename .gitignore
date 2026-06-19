@@ -3,6 +3,7 @@ bin/
 obj/
 out/
 artifacts/
+fdb-out/
 
 # IDE
 .vs/

@@ -1,0 +1,23 @@
+{
+  "fixture": "fdb-mini",
+  "engines": "mock",
+  "tolerance": {
+    "tor": 0.05,
+    "latency_ms_pct": 0.2,
+    "latency_ms_abs": 50
+  },
+  "categories": {
+    "pause_handling": {
+      "tor": 0
+    },
+    "smooth_turn_taking": {
+      "ttfb_p50_ms": 0.26
+    },
+    "user_interruption": {
+      "note": "not exercised offline: barge-in yield needs a real-time/duplex source"
+    },
+    "backchannel": {
+      "skipped": true
+    }
+  }
+}

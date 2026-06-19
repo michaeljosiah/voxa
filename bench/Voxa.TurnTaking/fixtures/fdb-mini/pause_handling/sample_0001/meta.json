@@ -1,0 +1,4 @@
+{
+  "reference": "Within-turn pause: the bot should wait through the mid-thought gap, not barge in.",
+  "source": "derived from jfk.wav (public-domain JFK address); silence-padded to shape the turn"
+}

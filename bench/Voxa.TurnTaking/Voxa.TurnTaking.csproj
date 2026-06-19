@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <!-- A benchmark harness, not shipped code: keep it out of warnings-as-errors churn (like Voxa.Benchmarks). -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <AssemblyName>Voxa.TurnTaking</AssemblyName>
+    <RootNamespace>Voxa.TurnTaking</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The meta-package (AddVoxa + the keyless Echo agent + every provider, incl. the bundled
+         Silero VAD), the composer that drives the real pipeline, and the WAV test helpers. -->
+    <ProjectReference Include="..\..\src\Voxa\Voxa.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Voxa.Testing\Voxa.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The checked-in mini fixture (real audio derived from jfk.wav) — the offline smoke corpus.
+         Copied next to the output so the zero-argument run and the smoke test find it. -->
+    <Content Include="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The checked-in regression baseline (mock engines, mini fixture). -->
+    <Content Include="baseline.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

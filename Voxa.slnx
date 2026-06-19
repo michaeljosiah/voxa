@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/bench/">
     <Project Path="bench/Voxa.Benchmarks/Voxa.Benchmarks.csproj" />
+    <Project Path="bench/Voxa.TurnTaking/Voxa.TurnTaking.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Voxa.Samples.AspNetServer/Voxa.Samples.AspNetServer.csproj" />
@@ -56,5 +57,6 @@
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
     <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />
+    <Project Path="tests/Voxa.TurnTaking.Tests/Voxa.TurnTaking.Tests.csproj" />
   </Folder>
 </Solution>
