@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Local voice cloning for the sidecar TTS provider (VVL-002).** `Voxa:Tts: "Sidecar"` now exposes
+  `IVoiceCloneProvider` via `ResolveCloner`: cloning persists a reference clip and returns its path as
+  the voice, which the engine passes to the sidecar as the speaker reference (zero-shot — XTTS-v2 /
+  OpenVoice). Keyless and fully local, with the consent gate in the host; fills VVL-001's deferred
+  local-cloning slot, so Studio's clone wizard can target the local engine. Clips live under
+  `Voxa:Sidecar:VoicesPath` (default: a subdirectory of the model cache).
 - **Expressive / cloning TTS via an out-of-process sidecar (VVL-002, foundation).** A new
   `Voxa.Speech.Sidecar` package runs heavy PyTorch voices (XTTS-v2 / OpenVoice) in a separate process
   — the same isolation Piper uses for espeak-ng — exposed as an ordinary `ITextToSpeechEngine` over a

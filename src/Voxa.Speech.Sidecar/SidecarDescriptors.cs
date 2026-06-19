@@ -30,7 +30,15 @@ public static class SidecarDescriptors
         })
     {
         ResolveOutputSampleRate = root => SidecarOptions.FromConfiguration(root).OutputSampleRate,
+        // Local voice cloning (VVL-001's deferred slot): persist reference clips and feed them to the
+        // sidecar as the speaker reference (zero-shot). Keyless; the host owns the consent gate.
+        ResolveCloner = (sp, root) => new SidecarVoiceCloneProvider(VoicesDirectory(root), LoggerFor(sp)),
     };
+
+    // Where cloned reference clips live: Voxa:Sidecar:VoicesPath, else a subdir of the model cache root.
+    private static string VoicesDirectory(IConfigurationSection root)
+        => root.GetSection(ConfigSectionName)["VoicesPath"]
+           ?? Path.Combine(VoxaModelCacheOptions.FromConfiguration(root).CacheRoot, "sidecar-voices");
 
     private static IReadOnlyList<string> Validate(IConfigurationSection root)
     {
