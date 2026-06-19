@@ -27,17 +27,28 @@ def log(*args):
 def load_model(model_id):
     """Return (feature_extractor, onnx_session, input_name) or (None, None, None) if anything is unavailable."""
     try:
+        import glob
+        import os
+
         import numpy as np  # noqa: F401
         import onnxruntime as ort
-        from huggingface_hub import hf_hub_download, list_repo_files
+        from huggingface_hub import snapshot_download
         from transformers import WhisperFeatureExtractor
 
-        onnx_files = [f for f in list_repo_files(model_id) if f.endswith(".onnx")]
+        # Fetch only the ONNX weights. Online first (downloads on first run); fall back to the local cache
+        # WITHOUT any repo listing, so an offline-but-already-cached box still works — a bare
+        # list_repo_files would hit the network and, on failure, silently disable smart turn.
+        try:
+            onnx_dir = snapshot_download(model_id, allow_patterns=["*.onnx"])
+        except Exception:  # noqa: BLE001 — offline: use whatever is already cached
+            onnx_dir = snapshot_download(model_id, allow_patterns=["*.onnx"], local_files_only=True)
+        onnx_files = sorted(
+            glob.glob(os.path.join(onnx_dir, "**", "*.onnx"), recursive=True),
+            key=lambda f: ("int8" not in os.path.basename(f).lower(), f),  # prefer a quantized export
+        )
         if not onnx_files:
-            raise RuntimeError(f"no .onnx file in {model_id}")
-        # Prefer a quantized (int8) export for fast CPU inference if one is published.
-        onnx_files.sort(key=lambda f: ("int8" not in f.lower(), f))
-        onnx_path = hf_hub_download(model_id, onnx_files[0])
+            raise RuntimeError(f"no .onnx file for {model_id}")
+        onnx_path = onnx_files[0]
 
         # Build the Whisper log-mel extractor LOCALLY: the smart-turn weights repo ships only the ONNX
         # (no preprocessor_config), so from_pretrained(model_id) would raise. smart-turn-v3 uses Whisper
@@ -45,7 +56,7 @@ def load_model(model_id):
         extractor = WhisperFeatureExtractor(chunk_length=8)
         session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
         input_name = session.get_inputs()[0].name
-        log(f"loaded {model_id} ({onnx_files[0]}); input {input_name} {session.get_inputs()[0].shape}")
+        log(f"loaded {model_id} ({os.path.basename(onnx_path)}); input {input_name} {session.get_inputs()[0].shape}")
         return extractor, session, input_name
     except Exception as exc:  # noqa: BLE001 — degrade gracefully on any load failure
         log("model unavailable, degrading to always-complete:", exc)

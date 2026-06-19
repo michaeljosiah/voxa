@@ -143,4 +143,27 @@ public class HttpSmartTurnClassifierTests
 
         Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddVoxaSmartTurn(config));
     }
+
+    [Fact] // Codex P2: a typo'd provider must fail fast, not silently run silence-only.
+    public void AddVoxaSmartTurn_Throws_On_An_Unknown_Provider()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Voxa:SmartTurn:Provider"] = "Htp",
+        }).Build();
+
+        Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddVoxaSmartTurn(config));
+    }
+
+    [Fact] // "None" is the explicit opt-out (Studio's off-override) — a no-op, never a throw.
+    public void AddVoxaSmartTurn_Ignores_A_None_Provider()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Voxa:SmartTurn:Provider"] = "None",
+        }).Build();
+
+        using var sp = new ServiceCollection().AddVoxaSmartTurn(config).BuildServiceProvider();
+        Assert.Null(sp.GetService<ISmartTurnClassifier>());
+    }
 }

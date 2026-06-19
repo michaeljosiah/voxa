@@ -60,6 +60,13 @@ public static class SmartTurnServiceCollectionExtensions
                 (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve() ?? VoxaHttp.Shared,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Voxa.Audio.SmartTurn")));
         }
+        else if (!string.IsNullOrWhiteSpace(provider) && !string.Equals(provider, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            // A non-empty, unrecognized provider (e.g. a typo like "Htp") must fail fast rather than
+            // silently running classic silence-only VAD — only an absent/"None" provider is a no-op.
+            throw new InvalidOperationException(
+                $"Voxa:SmartTurn:Provider '{provider}' is not recognized. Use 'Sidecar', 'Http', or 'None' (or omit it).");
+        }
 
         return services;
     }
