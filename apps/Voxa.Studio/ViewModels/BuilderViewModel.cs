@@ -138,6 +138,9 @@ public sealed partial class BuilderNodeVm : ObservableObject
     /// <summary>Pulsed true→false by the view for the refused-wire shake.</summary>
     [ObservableProperty] private bool _isRefused;
 
+    /// <summary>The node is part of why the chain is invalid (dangling port / duplicate endpoint) — red ring.</summary>
+    [ObservableProperty] private bool _hasError;
+
     // live instrument state (real hub data only — blank while idle, per P4)
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private string? _latencyText;
@@ -210,6 +213,10 @@ public sealed partial class BuilderViewModel : ObservableObject
     public ObservableCollection<BuilderNodeVm> Nodes { get; } = new();
     public ObservableCollection<BuilderEdgeVm> Edges { get; } = new();
     public ObservableCollection<BuilderOptionVm> InspectorOptions { get; } = new();
+
+    /// <summary>Every reason the chain is invalid (empty when valid) — the view lists them in red.</summary>
+    public ObservableCollection<string> ValidationErrors { get; } = new();
+
     public IReadOnlyList<string> Profiles { get; } = ["Default", "LowLatency", "Quality", "Cheap"];
 
     [ObservableProperty] private string _selectedProfile = "Default";
@@ -457,27 +464,48 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     internal void Revalidate()
     {
-        if (_graph.TryOrder(out var chain, out var errors))
-        {
-            IsChainValid = true;
-            IsDefaultShape = BuilderGraph.IsDefaultShape(chain);
-            ChainText = string.Join(" → ", chain.Select(BuilderGraph.NodeLabel));
-            StatusText = IsDefaultShape
+        var valid = _graph.TryOrder(out var chain, out var errors);
+        IsChainValid = valid;
+        IsDefaultShape = valid && BuilderGraph.IsDefaultShape(chain);
+        ChainText = valid ? string.Join(" → ", chain.Select(BuilderGraph.NodeLabel)) : "";
+        StatusText = valid
+            ? (IsDefaultShape
                 ? "Valid chain — matches UseDefaults(); exports as appsettings."
-                : "Valid chain — custom shape; exports as C# composition code.";
-        }
-        else
-        {
-            IsChainValid = false;
-            IsDefaultShape = false;
-            ChainText = "";
-            StatusText = errors[0];
-        }
+                : "Valid chain — custom shape; exports as C# composition code.")
+            : $"Incomplete chain — {errors.Count} issue(s) to resolve before it can run or save.";
+
+        // Surface EVERY reason (not just the first) and flag the nodes a reader should look at.
+        ValidationErrors.Clear();
+        if (!valid) foreach (var error in errors) ValidationErrors.Add(error);
+        MarkErrorNodes(valid);
+
         foreach (var node in Nodes) node.ShowPlus = node.HasOut && Edges.All(e => e.From != node);
         RefreshPlusChoices();
         RunCommand.NotifyCanExecuteChanged();
+        SaveGraphCommand.NotifyCanExecuteChanged();
         ExportAppSettingsCommand.NotifyCanExecuteChanged();
         ExportCSharpCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Red-ring the nodes that explain an invalid chain: a dangling in/out port, or a
+    /// duplicate Source/Sink. (Type-mismatched wires are refused at draw time, so they can't occur live.)</summary>
+    private void MarkErrorNodes(bool valid)
+    {
+        if (valid)
+        {
+            foreach (var node in Nodes) node.HasError = false;
+            return;
+        }
+        var sources = Nodes.Count(n => n.Kind == BuilderNodeKind.Source);
+        var sinks = Nodes.Count(n => n.Kind == BuilderNodeKind.Sink);
+        foreach (var node in Nodes)
+        {
+            var missingIn = node.HasIn && Edges.All(e => e.To != node);
+            var missingOut = node.HasOut && Edges.All(e => e.From != node);
+            var dupeEndpoint = (node.Kind == BuilderNodeKind.Source && sources > 1)
+                            || (node.Kind == BuilderNodeKind.Sink && sinks > 1);
+            node.HasError = missingIn || missingOut || dupeEndpoint;
+        }
     }
 
     private void RefreshPlusChoices()
@@ -667,7 +695,7 @@ public sealed partial class BuilderViewModel : ObservableObject
     /// Build the default-shape graph from flat config pairs — the initial canvas (the active
     /// config as a graph) and the Config view's "Open in Builder" both land here.
     /// </summary>
-    public void SeedFromPairs(IReadOnlyDictionary<string, string?> pairs)
+    public void SeedFromPairs(IReadOnlyDictionary<string, string?> pairs, bool clearHistory = true)
     {
         string Get(string key, string fallback) =>
             pairs.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v) ? v : fallback;
@@ -726,8 +754,32 @@ public sealed partial class BuilderViewModel : ObservableObject
         chain[^1].Y = TidyY;
 
         Restore(graph);
-        _undo.Clear();
-        _redo.Clear();
+        if (clearHistory)
+        {
+            _undo.Clear();
+            _redo.Clear();
+        }
+    }
+
+    /// <summary>The shipped local default pipeline — what "Reset" returns the canvas to.</summary>
+    private static readonly Dictionary<string, string?> DefaultPipelinePairs = new()
+    {
+        ["Voxa:Profile"] = "Default",
+        ["Voxa:Vad:Engine"] = "Silero",
+        ["Voxa:Stt"] = "WhisperCpp",
+        ["Voxa:WhisperCpp:Model"] = "tiny.en",
+        ["Voxa:Agent:Provider"] = "Echo",
+        ["Voxa:Tts"] = "Piper",
+        ["Voxa:Piper:Voice"] = "en_US-amy-low",
+    };
+
+    /// <summary>Reset the canvas to the default pipeline — undoable (one Ctrl+Z restores the prior graph).</summary>
+    [RelayCommand]
+    private void ResetToDefault()
+    {
+        PushUndo();
+        SeedFromPairs(DefaultPipelinePairs, clearHistory: false);
+        StatusText = "Reset to the default pipeline.";
     }
 
     /// <summary>Replace the document and rebuild every VM from it (undo, load, seed).</summary>
@@ -763,7 +815,9 @@ public sealed partial class BuilderViewModel : ObservableObject
     private string GraphPath => GraphPathOverride
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "voxa-graph.json");
 
-    [RelayCommand]
+    private bool CanSaveGraph() => IsChainValid;
+
+    [RelayCommand(CanExecute = nameof(CanSaveGraph))]
     private async Task SaveGraphAsync()
     {
         try

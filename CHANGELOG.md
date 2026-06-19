@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: Builder reliability + validation (Phase 1).** The Pipeline Builder canvas was flaky
+  and easy to leave in a broken state. Node dragging now captures the pointer, so a fast drag no longer
+  stalls or strands the gesture (it matched wire-dragging's behavior, which already captured). A new
+  **Reset** button returns the canvas to the default pipeline (undoable). Validation is now visual and
+  enforced: the status strip shows a green/red state dot and lists **every** reason a chain is invalid
+  (not just the first), the offending nodes ring **red** on the canvas, and **Save is disabled until the
+  chain is valid** — you can no longer save an incomplete pipeline. (Named, app-wide pipeline profiles —
+  save/load and per-page selection — are the planned Phase 2.)
 - **Voxa Studio: half-duplex echo suppression + local-provider config (VST-004 polish).** Talk now
   gates the mic while the bot is speaking (plus a short hangover), so a user on **speakers** no longer
   loops the bot's own output back through VAD → STT → agent — the "it keeps repeating what I said"

@@ -15,6 +15,10 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <!-- invalid node: a thicker ring (red, from the NodeRing converter) so it reads at a glance -->
+    <Style Selector="Border.vx-bnode.error">
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
     <!-- refused wire: a short, single shake — feedback motion with a job, then stillness -->
     <Style Selector="Border.vx-bnode.refuse">
       <Style.Animations>
@@ -68,8 +72,10 @@
                     SelectedItem="{Binding SelectedProfile}"
                     ToolTip.Tip="Latency profile — tunes VAD and aggregation" />
           <Button Classes="vx-ghost" Content="Tidy" Command="{Binding TidyCommand}" />
+          <Button Classes="vx-ghost" Content="Reset" Command="{Binding ResetToDefaultCommand}"
+                  ToolTip.Tip="Reset the canvas to the default pipeline (undoable)" />
           <Button Classes="vx-ghost" Content="Save" Command="{Binding SaveGraphCommand}"
-                  ToolTip.Tip="Save the graph as JSON in your user profile" />
+                  ToolTip.Tip="Save the graph as JSON — enabled only when the chain is valid" />
           <Button Classes="vx-ghost" Content="Load" Command="{Binding LoadGraphCommand}" />
           <Button Classes="vx-ghost" Content="appsettings" Command="{Binding ExportAppSettingsCommand}"
                   ToolTip.Tip="Export as config — enabled when the chain matches UseDefaults()" />
@@ -147,13 +153,14 @@
                   <DataTemplate x:DataType="vm:BuilderNodeVm">
                     <Panel Width="132" Height="60">
                       <Border Classes="vx-bnode" Classes.refuse="{Binding IsRefused}"
-                              PointerPressed="OnNodePressed" PointerMoved="OnNodeMoved"
-                              PointerReleased="OnNodeReleased">
+                              Classes.error="{Binding HasError}"
+                              PointerPressed="OnNodePressed">
                         <Border.RenderTransform><TranslateTransform /></Border.RenderTransform>
                         <Border.BorderBrush>
                           <MultiBinding Converter="{x:Static views:Converters.NodeRing}">
                             <Binding Path="IsSelected" />
                             <Binding Path="StageKey" />
+                            <Binding Path="HasError" />
                           </MultiBinding>
                         </Border.BorderBrush>
                         <Border.BoxShadow>
@@ -244,14 +251,34 @@
           </Grid>
         </Border>
 
-        <!-- status strip -->
+        <!-- status strip + validation (a clear valid/invalid dot, then every reason in red) -->
         <Border Grid.Row="1" Background="{StaticResource VxPanelBrush}" Padding="14,8"
                 BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,1,0,0">
-          <StackPanel Spacing="2">
-            <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
+          <StackPanel Spacing="4">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                       Fill="{StaticResource VxGoodBrush}" IsVisible="{Binding IsChainValid}" />
+              <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                       Fill="{StaticResource VxBadBrush}" IsVisible="{Binding !IsChainValid}" />
+              <TextBlock Classes="vx-sub" VerticalAlignment="Center" Text="{Binding StatusText}" />
+            </StackPanel>
             <TextBlock Classes="vx-mono" FontSize="10.5" Foreground="{StaticResource VxMutedBrush}"
                        Text="{Binding ChainText}"
                        IsVisible="{Binding ChainText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <ItemsControl ItemsSource="{Binding ValidationErrors}" Margin="17,0,0,0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Spacing="2" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="11" Text="•" />
+                    <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="11"
+                               TextWrapping="Wrap" Text="{Binding}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <TextBlock FontSize="11" Foreground="{StaticResource VxBadBrush}" TextWrapping="Wrap"
                        Text="{Binding ErrorText}"
                        IsVisible="{Binding ErrorText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
