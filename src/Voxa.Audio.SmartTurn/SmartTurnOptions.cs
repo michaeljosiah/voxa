@@ -37,6 +37,20 @@ public sealed record SmartTurnOptions
     /// <summary>The Hugging Face model id the sidecar loads. Default the v3 turn-detection model.</summary>
     public string Model { get; init; } = "pipecat-ai/smart-turn-v3";
 
+    /// <summary>
+    /// Sidecar: budget for the first launch + model load (a one-time first-run download), in milliseconds.
+    /// Generous because it is paid once; exceeding it fails the turn "complete" and relaunches next turn
+    /// (a partial Hugging Face download resumes from cache). Default 60000.
+    /// </summary>
+    public int SidecarReadyTimeoutMs { get; init; } = 60000;
+
+    /// <summary>
+    /// Sidecar: per-turn inference timeout in milliseconds — separate from <see cref="TimeoutMs"/> (the HTTP
+    /// budget) since local CPU inference + stdio is slower than a warmed server. Bounds a mid-session hang
+    /// so it fails "complete" instead of stalling the conversation. Default 2000.
+    /// </summary>
+    public int SidecarTimeoutMs { get; init; } = 2000;
+
     /// <summary>Bind from the <c>Voxa</c> configuration section (reads its <c>SmartTurn</c> child).</summary>
     public static SmartTurnOptions FromConfiguration(IConfigurationSection voxaRoot)
     {
@@ -51,6 +65,8 @@ public sealed record SmartTurnOptions
             PythonScript = s["PythonScript"],
             ExecutablePath = s["ExecutablePath"],
             Model = s["Model"] is { Length: > 0 } m ? m : "pipecat-ai/smart-turn-v3",
+            SidecarReadyTimeoutMs = int.TryParse(s["SidecarReadyTimeoutMs"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var rt) ? rt : 60000,
+            SidecarTimeoutMs = int.TryParse(s["SidecarTimeoutMs"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var st) ? st : 2000,
         };
     }
 }

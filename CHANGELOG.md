@@ -18,8 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - `Provider: "Http"` (`HttpSmartTurnClassifier`) — POST the recent speech to any smart-turn endpoint.
   - `Provider: "Sidecar"` (`SidecarSmartTurnClassifier`) — run the real `pipecat-ai/smart-turn-v3` model
     in a Voxa-managed **Python sidecar** (bundled `sidecar/voxa_smart_turn_sidecar.py`), so the model's
-    Whisper feature extraction runs natively rather than as a fragile C# port. Lazy launch, serialized
-    stdio protocol, stderr→log, auto-relaunch; fails "complete" on any error.
+    Whisper feature extraction runs natively rather than as a fragile C# port. Lazy launch, a readiness
+    handshake with bounded startup + per-turn timeouts (so a loading/hung sidecar never stalls the turn),
+    stderr→log, auto-relaunch; fails "complete" on any error.
 
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process

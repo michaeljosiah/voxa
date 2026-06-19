@@ -95,10 +95,12 @@ pip install onnxruntime transformers huggingface_hub numpy
 
 Voxa launches the process lazily on the first turn, serializes requests over a tiny stdio protocol
 (JSON header + 16-bit mono PCM → `{"probability": x}`), drains its stderr to the log, and relaunches it
-if it dies. Like the HTTP path it **fails "complete"** on any error — and the script itself degrades to
-always-complete (logging why) if the model or its deps are missing, so a bad Python environment never
-strands a turn. Set `ExecutablePath` instead of `PythonExe`/`PythonScript` to point at a frozen
-(PyInstaller) binary with no interpreter on the box.
+if it dies. It waits for the model to load (bounded by `SidecarReadyTimeoutMs`, default 60 s — the first
+run downloads the model) before the first prediction, then bounds each prediction by `SidecarTimeoutMs`
+(default 2 s). Like the HTTP path it **fails "complete"** on any error or timeout — and the script itself
+degrades to always-complete (logging why) if the model or its deps are missing, so a bad Python
+environment never strands a turn. Set `ExecutablePath` instead of `PythonExe`/`PythonScript` to point at a
+frozen (PyInstaller) binary with no interpreter on the box.
 
 ## Deferred — the in-process ONNX classifier
 

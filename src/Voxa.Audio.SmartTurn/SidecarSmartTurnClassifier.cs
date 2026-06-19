@@ -8,7 +8,7 @@ using Voxa.Speech;
 namespace Voxa.Audio.SmartTurn;
 
 /// <summary>The smart-turn sidecar transport seam — a Python process in production, a fake in tests.</summary>
-internal interface ISmartTurnSidecar : IAsyncDisposable
+internal interface ISmartTurnSidecar : IAsyncDisposable, IDisposable
 {
     Task StartAsync(CancellationToken ct);
     Task<double> PredictAsync(ReadOnlyMemory<byte> pcm, int sampleRate, CancellationToken ct);
@@ -22,13 +22,14 @@ internal interface ISmartTurnSidecar : IAsyncDisposable
 /// protocol to it. Requests are serialized (turn detection is sequential), and any failure fails
 /// "complete" so a sidecar problem degrades to classic silence behavior rather than stranding the turn.
 /// </summary>
-public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier
+public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier, IDisposable, IAsyncDisposable
 {
     private readonly SmartTurnOptions _options;
     private readonly ISmartTurnSidecar _sidecar;
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _started;
+    private bool _disposed;
 
     /// <summary>Create a classifier that launches the sidecar process described by <paramref name="options"/>.</summary>
     public SidecarSmartTurnClassifier(SmartTurnOptions options, ILogger? logger = null)
@@ -52,20 +53,28 @@ public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Two budgets: a generous one for the first launch + model load (paid once), a tight one for
+            // steady-state inference — so a hung/loading sidecar fails "complete" rather than stalling the
+            // turn while the VAD waits on it. A timeout cancels a LINKED token, not the pipeline ct, so the
+            // catch below treats it as a failure (fail-safe) and not a user interruption.
             if (!_started)
             {
-                await _sidecar.StartAsync(ct).ConfigureAwait(false);
+                using var startCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                startCts.CancelAfter(_options.SidecarReadyTimeoutMs);
+                await _sidecar.StartAsync(startCts.Token).ConfigureAwait(false);
                 _started = true;
             }
-            var probability = await _sidecar.PredictAsync(recentSpeechPcm, sampleRate, ct).ConfigureAwait(false);
+            using var predictCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            predictCts.CancelAfter(_options.SidecarTimeoutMs);
+            var probability = await _sidecar.PredictAsync(recentSpeechPcm, sampleRate, predictCts.Token).ConfigureAwait(false);
             return probability >= _options.Threshold;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            // A crashed/erroring sidecar must never hold the turn open — fail to "complete" and let the
-            // next turn relaunch it (ProcessSmartTurnSidecar.StartAsync relaunches a dead process).
+            // A crashed / erroring / timed-out sidecar must never hold the turn open — fail to "complete"
+            // and let the next turn relaunch it (ProcessSmartTurnSidecar.StartAsync relaunches a dead process).
             _started = false;
-            _logger.LogDebug(ex, "Smart-turn sidecar failed; defaulting to turn-complete.");
+            _logger.LogDebug(ex, "Smart-turn sidecar failed or timed out; defaulting to turn-complete.");
             return true;
         }
         finally
@@ -74,8 +83,21 @@ public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier
         }
     }
 
+    // Both disposal paths: a host container may tear this singleton down synchronously
+    // (StudioServices.Reconfigure → ServiceProvider.Dispose) or asynchronously, and an
+    // IAsyncDisposable-only service throws on the synchronous path.
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _sidecar.Dispose();
+        _gate.Dispose();
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
         await _sidecar.DisposeAsync().ConfigureAwait(false);
         _gate.Dispose();
     }
@@ -94,9 +116,9 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
         _logger = logger;
     }
 
-    public Task StartAsync(CancellationToken ct)
+    public async Task StartAsync(CancellationToken ct)
     {
-        if (_process is { HasExited: false }) return Task.CompletedTask; // already running
+        if (_process is { HasExited: false }) return; // already running & ready
         DisposeProcess(); // a dead process — relaunch
 
         var (fileName, args) = ResolveLaunch(_options);
@@ -133,7 +155,18 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
             catch { /* best-effort diagnostics drain */ }
         }, CancellationToken.None);
 
-        return Task.CompletedTask;
+        // Wait for the model to finish loading before the first prediction, so a slow first-run download is
+        // a (caller-bounded) startup wait rather than silent latency folded into the first turn. A failure
+        // here disposes the half-loaded process so the next turn relaunches cleanly.
+        try
+        {
+            await SmartTurnSidecarProtocol.ReadReadyAsync(process.StandardOutput.BaseStream, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            DisposeProcess();
+            throw;
+        }
     }
 
     public async Task<double> PredictAsync(ReadOnlyMemory<byte> pcm, int sampleRate, CancellationToken ct)
@@ -181,6 +214,8 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
         _process = null;
     }
 
+    public void Dispose() => DisposeProcess();
+
     public async ValueTask DisposeAsync()
     {
         var process = _process;
@@ -202,6 +237,23 @@ internal static class SmartTurnSidecarProtocol
 {
     public static byte[] EncodeRequestHeader(int sampleRate, int byteCount)
         => Encoding.UTF8.GetBytes($"{{\"sample_rate\":{sampleRate},\"bytes\":{byteCount}}}\n");
+
+    public static async Task ReadReadyAsync(Stream stdout, CancellationToken ct)
+    {
+        var line = await ReadLineAsync(stdout, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Voxa smart-turn sidecar exited before signaling readiness.");
+
+        using var doc = JsonDocument.Parse(line);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            if (root.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                throw new InvalidOperationException($"Voxa smart-turn sidecar failed to start: {err.GetString()}");
+            if (root.TryGetProperty("ready", out var r) && r.ValueKind == JsonValueKind.True)
+                return;
+        }
+        throw new InvalidOperationException($"Voxa smart-turn sidecar sent an unexpected readiness line: {line}");
+    }
 
     public static async Task<double> ReadProbabilityAsync(Stream stdout, CancellationToken ct)
     {

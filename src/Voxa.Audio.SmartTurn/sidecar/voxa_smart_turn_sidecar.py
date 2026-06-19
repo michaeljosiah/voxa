@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Voxa smart-turn sidecar.
 
-Runs the real Pipecat smart-turn model (default pipecat-ai/smart-turn-v3) so the turn-end
-preprocessing — Whisper feature extraction — happens natively in Python, with no fragile C#
-reimplementation. Speaks the tiny Voxa smart-turn stdio protocol:
+Runs the real smart-turn ONNX model (default pipecat-ai/smart-turn-v3) so the turn-end preprocessing —
+Whisper log-mel feature extraction — happens natively in Python, with no fragile C# reimplementation.
+Speaks the tiny Voxa smart-turn stdio protocol over stdout (binary); all logging goes to stderr:
 
-    Request : one JSON header line  {"sample_rate": N, "bytes": M}\n   then M bytes of 16-bit mono PCM
-    Response: one JSON line         {"probability": x}                 (0..1)  — or {"error": "..."}
+    Startup : one JSON line        {"ready": true}                              (after the model loads)
+    Request : one JSON header line {"sample_rate": N, "bytes": M}\n  then M bytes of 16-bit mono PCM
+    Response: one JSON line        {"probability": x}              (0..1)  — or {"error": "..."}
 
-stdout is the protocol channel (binary); all logging goes to stderr. If the model or its deps
-(transformers, onnxruntime, huggingface_hub) are unavailable, every request answers
-{"probability": 1.0} (always "complete" = classic silence behavior) and the reason is logged once,
-so a missing dependency degrades gracefully instead of stranding turns.
+If the model or its deps (transformers, onnxruntime, huggingface_hub) are unavailable, the sidecar still
+signals ready and answers {"probability": 1.0} (always "complete" = classic silence behavior), logging the
+reason — so a missing dependency degrades gracefully instead of stranding turns.
 
 Install:  pip install onnxruntime transformers huggingface_hub numpy
 """
@@ -25,7 +25,7 @@ def log(*args):
 
 
 def load_model(model_id):
-    """Return (feature_extractor, onnx_session) or (None, None) if anything is unavailable."""
+    """Return (feature_extractor, onnx_session, input_name) or (None, None, None) if anything is unavailable."""
     try:
         import numpy as np  # noqa: F401
         import onnxruntime as ort
@@ -38,17 +38,22 @@ def load_model(model_id):
         # Prefer a quantized (int8) export for fast CPU inference if one is published.
         onnx_files.sort(key=lambda f: ("int8" not in f.lower(), f))
         onnx_path = hf_hub_download(model_id, onnx_files[0])
-        extractor = WhisperFeatureExtractor.from_pretrained(model_id)
+
+        # Build the Whisper log-mel extractor LOCALLY: the smart-turn weights repo ships only the ONNX
+        # (no preprocessor_config), so from_pretrained(model_id) would raise. smart-turn-v3 uses Whisper
+        # features over an 8-second context.
+        extractor = WhisperFeatureExtractor(chunk_length=8)
         session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
-        log(f"loaded {model_id} ({onnx_files[0]})")
-        return extractor, session
+        input_name = session.get_inputs()[0].name
+        log(f"loaded {model_id} ({onnx_files[0]}); input {input_name} {session.get_inputs()[0].shape}")
+        return extractor, session, input_name
     except Exception as exc:  # noqa: BLE001 — degrade gracefully on any load failure
         log("model unavailable, degrading to always-complete:", exc)
-        return None, None
+        return None, None, None
 
 
-def predict(extractor, session, audio_f32):
-    """Match pipecat smart-turn-v3 inference: last 8 s, Whisper features (1,80,3000), sigmoid prob."""
+def predict(extractor, session, input_name, audio_f32):
+    """Match smart-turn-v3 inference: last 8 s, Whisper features (1, 80, 800), sigmoid probability."""
     import numpy as np
 
     n = 8 * 16000
@@ -60,10 +65,10 @@ def predict(extractor, session, audio_f32):
         return_tensors="np",
         padding="max_length",
         max_length=n,
+        truncation=True,
         do_normalize=True,
     )
-    inputs = {"input_features": features["input_features"].astype(np.float32)}
-    outputs = session.run(None, inputs)
+    outputs = session.run(None, {input_name: features["input_features"].astype(np.float32)})
     return float(np.asarray(outputs[0]).reshape(-1)[0])
 
 
@@ -72,8 +77,13 @@ def main():
     parser.add_argument("--model", default="pipecat-ai/smart-turn-v3")
     args = parser.parse_args()
 
-    extractor, session = load_model(args.model)
+    extractor, session, input_name = load_model(args.model)
     stdin, stdout = sys.stdin.buffer, sys.stdout.buffer
+
+    # Signal readiness once the (slow, one-time) model load is done, so the host can bound startup
+    # separately from per-turn inference.
+    stdout.write(b'{"ready": true}\n')
+    stdout.flush()
 
     while True:
         header = stdin.readline()
@@ -95,7 +105,7 @@ def main():
                 if sample_rate != 16000:
                     log(f"expected 16 kHz audio, got {sample_rate} — feeding as-is")
                 audio = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
-                response = {"probability": predict(extractor, session, audio)}
+                response = {"probability": predict(extractor, session, input_name, audio)}
         except Exception as exc:  # noqa: BLE001 — never crash the loop; fail "complete"
             log("request failed:", exc)
             response = {"probability": 1.0}
