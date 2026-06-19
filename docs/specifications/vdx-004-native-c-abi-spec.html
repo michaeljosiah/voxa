@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VDX-004 — Native C ABI / FFI for Non-.NET Embedding (Exploratory)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .badge.spike { background: #3a2414; color: #ffb74d; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-004 — Native C ABI / FFI for Non-.NET Embedding (Exploratory)</h1>
+  <div class="sub">A feasibility frame for a flat <b>C ABI</b> that would let non-.NET hosts (C, Swift, Kotlin)
+    embed the Voxa pipeline — the reach <a href="https://github.com/soniqo/speech-core">speech-core</a> gets
+    from its vtable C ABI. The deliverable here is a <b>spike</b>, not committed work: the central unknown is
+    whether the orchestration core's dependency graph is NativeAOT-clean. The first viable surface is therefore
+    <b>Core-only</b> — the host supplies STT/TTS/VAD/LLM as C function-pointer vtables, exactly like speech-core's
+    <code>sc_stt_vtable_t</code> family — so the AOT image is just the pipeline core plus a thin C bridge. The
+    managed SDK and CLI are untouched.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-004 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — exploratory / spike-gated</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>) NativeAOT</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> Strategic / interop</div>
+    <div><b>Depends on</b> a NativeAOT-clean Core subset; gated on mobile/native being a goal</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M8</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — the boundary</a></li>
+    <li><a href="#s5">WS1 — the C ABI surface</a></li>
+    <li><a href="#s6">WS2 — the bring-your-own-engine vtable approach</a></li>
+    <li><a href="#s7">WS3 — the feasibility spike (the gate)</a></li>
+    <li><a href="#s8">Plan of action — phases</a></li>
+    <li><a href="#s9">Progress checklist (spike tasks)</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What would VDX-004 add, in one sentence?</b>
+    <p>A small <em>C-callable</em> shared library (<code>.so</code>/<code>.dll</code>/<code>.dylib</code>) that lets a
+    program written in C — or Swift, or Kotlin — create a Voxa pipeline, push microphone audio into it, and receive
+    transcripts and synthesized audio back through a callback, <em>without hosting a .NET runtime itself</em>.</p>
+  </div>
+  <div class="qa">
+    <b>Why might we want it?</b>
+    <p>speech-core (the C++17 engine this parity program studies) embeds into Android (via JNI) and Apple (via a Swift
+    package) precisely because it exposes a flat C ABI — a handful of <code>sc_pipeline_*</code> functions and a couple of
+    callback typedefs. Voxa is <em>.NET-only</em>. Today its only cross-language surfaces are the
+    <b>MCP server (VDX-002)</b> and the <b>CLI (VDX-003)</b> — both out-of-process, both coarse-grained. A C ABI would be
+    the in-process, real-time embedding path Voxa lacks.</p>
+  </div>
+  <div class="qa">
+    <b>Why "<em>maybe</em>", and why is it sequenced last?</b>
+    <p>Because Voxa is a predominantly-.NET project and <em>nobody has asked for native embedding yet</em>. This item is
+    the program's only <em>exploratory</em> entry: it sits at milestone <b>M8</b>, after every measured turn-taking and
+    model-breadth item, and the program's <b>Open Decision #4</b> states it plainly — "is non-.NET embedding actually a
+    goal? If not, <b>do not start</b>." The honest unknown underneath is technical: NativeAOT must statically compile the
+    pipeline's <em>entire</em> dependency graph, and the meta-package pulls in Microsoft.Extensions.AI plus provider SDKs
+    that may not be AOT-clean. We do not know if that compiles until we try.</p>
+  </div>
+  <div class="callout warn"><b>This is exploratory and gated — read this first.</b> Nothing in this spec is committed
+  work. The deliverable is a <b>feasibility spike</b> that answers one question: <em>is NativeAOT viable across the
+  dependency graph the embedded pipeline actually needs?</em> Implementation MUST NOT begin before (a) a concrete
+  mobile/native consumer is an actual product goal, and (b) the spike in §7 has returned a green answer. Until then this
+  document is a placeholder that frames the work, not a build ticket.</div>
+  <div class="qa">
+    <b>What does it explicitly <em>not</em> change?</b>
+    <p>The managed SDK (NuGet packages), the <code>AddVoxa</code> / composer layer, the CLI, and the MCP server are all
+    untouched. <code>Voxa.Core</code> stays zero-dependency. The C bridge lives in a <em>separate</em> new project
+    (<code>Voxa.Native</code>) that references Core; it never modifies it. Mobile bindings (an Android <code>.aar</code>,
+    a Swift package) are <em>consumers</em> of this ABI and live in their own repos — exactly as speech-core's mobile
+    bindings are siblings of the core engine.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<div class="callout warn"><b>This is a feasibility frame plus a placeholder, not committed work.</b> The single
+deliverable that matters is a <b>spike</b> answering "<em>is NativeAOT viable across the needed dependency graph?</em>"
+Everything past the spike is conditional on both a real consumer and a green spike result. Do not treat the ABI sketch
+below as a contract to build to on sight — treat it as the shape the spike validates.</div>
+
+<p>VDX-004 explores giving Voxa the cross-language reach speech-core has. Conceptually it is three workstreams, only the
+last of which is unconditional:</p>
+
+<ul>
+  <li><b>WS1 — the C ABI surface <span class="badge p2">design</span>.</b> A flat, C-callable contract over the existing
+    <code>PipelineRunner</code> lifecycle: <code>voxa_pipeline_create</code> / <code>start</code> /
+    <code>push_audio</code> / <code>stop</code> / <code>destroy</code>, plus a single event-callback typedef that surfaces
+    transcripts, output PCM, errors and state, with an opaque user-context pointer — mirroring speech-core's
+    <code>sc_pipeline_create</code> / <code>sc_pipeline_push_audio</code> / <code>sc_event_fn</code> so the contract is
+    immediately familiar to anyone who has integrated speech-core.</li>
+  <li><b>WS2 — bring-your-own-engine vtables <span class="badge additive">core-only</span>.</b> The load-bearing
+    reconciliation. Rather than AOT-compile the full meta-package, the <em>first</em> viable image is the orchestration
+    core only; the host supplies STT/TTS/VAD/LLM as C function-pointer <em>vtables</em> — exactly speech-core's
+    <code>sc_stt_vtable_t</code> / <code>sc_tts_vtable_t</code> / <code>sc_vad_vtable_t</code> /
+    <code>sc_llm_vtable_t</code> design. This keeps the AOT surface small and avoids dragging provider SDKs into the
+    image at all.</li>
+  <li><b>WS3 — the feasibility spike <span class="badge spike">the gate</span>.</b> The actual work: determine which
+    assemblies are AOT-clean, how audio buffers marshal across the boundary, callback re-entrancy and threading, binary
+    size, and per-platform build/CI. <b>This gates everything else.</b></li>
+</ul>
+
+<div class="callout"><b>Net position.</b> If the spike says "the core subset is AOT-clean and the vtable bridge marshals
+cleanly," Voxa gains a credible native-embedding story with a small, defensible surface. If it says "the dependency graph
+won't AOT," we have an evidence-backed answer to Open Decision #4 and we stop — at the cost of a spike, not a shipped
+feature.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals (of the exploration)</h3>
+<ul>
+  <li>Answer, with evidence, whether a NativeAOT-compiled subset of Voxa can be driven from C — the prerequisite for any
+    mobile/native embedding.</li>
+  <li>Define a flat C ABI that maps onto the existing <code>PipelineRunner</code> lifecycle and surfaces the frames a host
+    actually needs (transcripts, output audio, errors, state) via one callback.</li>
+  <li>Establish that the first viable image is <em>Core-only</em> with bring-your-own-engine vtables — keeping the AOT
+    surface small and matching speech-core's own seam discipline.</li>
+  <li>Prove the round-trip end-to-end with a tiny C smoke consumer using fake / bring-your-own engines (no models, no
+    network).</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>Mobile bindings.</b> An Android <code>.aar</code> (JNI) or a Swift package are <em>consumers</em> of this ABI and
+    belong in <em>separate</em> repos — the same way speech-core's Android/Apple bindings are siblings of the engine, not
+    part of it.</li>
+  <li><b>Bringing local models into the AOT image.</b> whisper.cpp / Piper / Kokoro stay external and SHA-256-pinned via
+    <code>VoxaModelCache</code>; nothing about this item pulls model weights or their native runtimes into the shared
+    library.</li>
+  <li><b>AOT-compiling the full meta-package.</b> If the provider SDKs (Microsoft.Extensions.AI, OpenAI/Azure) are not
+    AOT-clean, the answer is the Core-only vtable surface, <em>not</em> a campaign to make every dependency AOT-clean.</li>
+  <li><b>Any committed delivery before a real consumer exists.</b> Per Open Decision #4, absent a mobile/native goal this
+    stays a specced placeholder.</li>
+</ul>
+
+<h3>Budgets &amp; invariants</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Change to the managed packages (Core, AspNetCore, Speech.*, CLI)</td><td><b>0</b> — the C bridge is a new, separate <code>Voxa.Native</code> project; existing packages are untouched.</td></tr>
+  <tr><td><code>Voxa.Core</code> dependencies</td><td>Unchanged (NUlid only). The <code>[UnmanagedCallersOnly]</code> bridge lives in <code>Voxa.Native</code>, never in Core.</td></tr>
+  <tr><td>Default CI lanes</td><td>Unaffected. The native smoke consumer is an <em>added</em> lane; no models, no network — fake / bring-your-own engines only.</td></tr>
+  <tr><td>AOT image scope (first viable surface)</td><td>Orchestration core + C bridge + fake/vtable engine shims. No provider SDKs.</td></tr>
+  <tr><td>Binary size</td><td>To be <em>measured</em> by the spike, not asserted here.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — the boundary</h2>
+
+<p>The shape is a single new NativeAOT shared library, <code>Voxa.Native</code>, that exposes a flat C ABI via
+<code>[UnmanagedCallersOnly]</code> exports and drives the existing managed pipeline behind them. The non-.NET host links
+the library and calls it like speech-core's <code>sc_pipeline_*</code> surface — create a pipeline, push audio, receive a
+stream of events, destroy. Internally those exports translate directly onto the <code>PipelineRunner</code> lifecycle that
+the CLI (VDX-003) already drives in-process:</p>
+
+<pre><code><span class="cm">  C / Swift / Kotlin host</span>
+<span class="cm">        |  (links the shared library; calls flat C functions)</span>
+<span class="cm">        v</span>
+  voxa_pipeline_*  ............  [UnmanagedCallersOnly] exports  (Voxa.Native, NativeAOT)
+        |
+        v
+  PipelineRunner.StartAsync / Source.IngestAsync(AudioRawFrame) / StopAsync   (Voxa.Core — unchanged)
+        |                                                   ^
+        |  downstream frames                                |  host-supplied engine vtables (WS2)
+        v                                                   |
+  PipelineSink  -->  marshal TranscriptionFrame / output PCM / ErrorFrame / state  -->  voxa_event_fn callback</code></pre>
+
+<p>The managed analogue already exists: <code>VoxaCliRunner</code> (<code>src/Voxa.Cli/</code>) starts engines, writes
+audio, and reads results headlessly in-process. VDX-004 is the same headless drive, but the <em>caller</em> is across an
+FFI boundary and the <em>results</em> arrive via a C callback instead of an <code>IAsyncEnumerable</code>.</p>
+
+<h3>Mapping speech-core's surface to the proposed Voxa C ABI</h3>
+<p>The point of the table is fidelity: a developer who has embedded speech-core should recognise every row.</p>
+<table>
+  <tr><th>speech-core (<code>sc_*</code>)</th><th>Proposed Voxa C ABI</th><th>Maps onto (managed)</th></tr>
+  <tr><td><code>sc_pipeline_create(cfg)</code></td><td><code>voxa_pipeline_create(cfg, ev, user)</code></td><td>Build the composed <code>Pipeline</code> + <code>PipelineRunner</code></td></tr>
+  <tr><td><code>sc_pipeline_start()</code></td><td><code>voxa_pipeline_start(h)</code></td><td><code>PipelineRunner.StartAsync(StartFrame)</code></td></tr>
+  <tr><td><code>sc_pipeline_push_audio(pcm, n)</code></td><td><code>voxa_pipeline_push_audio(h, pcm, n)</code></td><td><code>Source.IngestAsync(new AudioRawFrame(...))</code></td></tr>
+  <tr><td><code>sc_pipeline_stop()</code></td><td><code>voxa_pipeline_stop(h)</code></td><td><code>PipelineRunner.StopAsync(grace)</code></td></tr>
+  <tr><td><code>sc_pipeline_destroy()</code></td><td><code>voxa_pipeline_destroy(h)</code></td><td><code>PipelineRunner.DisposeAsync()</code></td></tr>
+  <tr><td><code>sc_event_fn</code> (callback)</td><td><code>voxa_event_fn</code> (callback)</td><td>Sink taps: <code>TranscriptionFrame</code>, output <code>AudioRawFrame</code>, <code>ErrorFrame</code>, speaking-state <code>SystemFrame</code>s</td></tr>
+  <tr><td><code>sc_stt_vtable_t</code> et al.</td><td><code>voxa_stt_vtable_t</code> et al. (WS2)</td><td>Adapter that implements <code>ISpeechToTextEngine</code> by calling back through the vtable</td></tr>
+</table>
+
+<div class="callout"><b>Invariant.</b> The frame/processor contract is unchanged. The C ABI is a <em>new front door</em>
+onto the same <code>PipelineRunner</code> the CLI uses; it adds no frame types, no cancellation model, and no processor
+behaviour. Audio in is still an <code>AudioRawFrame</code> with an explicit sample rate / channel count fixed by the
+<code>StartFrame</code> at session start.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the C ABI surface</h2>
+
+<div class="ws-head">
+  <span><b>Project</b> Voxa.Native (new)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (marshalling)</span>
+  <span><b>Surface</b> flat C, opaque handle</span>
+  <span><b>Models</b> none (engines are external)</span>
+</div>
+
+<p>A flat C header, hand-written (or generated and checked in), with an <em>opaque</em> pipeline handle and a single event
+callback. It is deliberately a near-transliteration of speech-core's surface so the mental model carries over. Everything
+below is the shape the spike validates — exact field layout and threading guarantees are pinned <em>by</em> the spike, not
+ahead of it.</p>
+
+<span class="filelabel">include/voxa.h (sketch — validated and finalized by the WS3 spike)</span>
+<pre><code><span class="cm">/* Opaque handle. One per session. Created/destroyed on the host thread. */</span>
+typedef struct voxa_pipeline voxa_pipeline;
+
+<span class="cm">/* Result codes. 0 == ok; negative == error. Mirrors speech-core's int-return convention. */</span>
+typedef enum {
+    VOXA_OK              =  0,
+    VOXA_ERR_INVALID_ARG = -1,   <span class="cm">/* null handle / null buffer / bad config */</span>
+    VOXA_ERR_STATE       = -2,   <span class="cm">/* start/stop called out of order */</span>
+    VOXA_ERR_AOT         = -3,   <span class="cm">/* a managed feature unavailable in the AOT image */</span>
+    VOXA_ERR_INTERNAL    = -4    <span class="cm">/* unexpected managed exception (also surfaced as an event) */</span>
+} voxa_status;
+
+<span class="cm">/* Event kinds delivered to the host callback. */</span>
+typedef enum {
+    VOXA_EV_TRANSCRIPT      = 1,  <span class="cm">/* TranscriptionFrame  -&gt; data.transcript      */</span>
+    VOXA_EV_AUDIO_OUT       = 2,  <span class="cm">/* output AudioRawFrame (bot PCM) -&gt; data.audio */</span>
+    VOXA_EV_STATE           = 3,  <span class="cm">/* Bot/User Started/Stopped speaking -&gt; data.state */</span>
+    VOXA_EV_ERROR           = 4   <span class="cm">/* ErrorFrame -&gt; data.error (UTF-8, NUL-terminated) */</span>
+} voxa_event_kind;
+
+<span class="cm">/* Borrowed, callback-lifetime views. Pointers are INVALID after the callback returns;</span>
+<span class="cm">   the host must copy anything it needs to keep. This is the speech-core convention. */</span>
+typedef struct { const char* text; int   is_final; const char* language; } voxa_transcript_evt;
+typedef struct { const float* pcm;  int   frame_count; int sample_rate; int channels; } voxa_audio_evt;
+typedef struct { int          speaking; int is_user; } voxa_state_evt;   <span class="cm">/* speaking=1 start, 0 stop */</span>
+typedef struct { const char*  message; } voxa_error_evt;
+
+typedef struct {
+    voxa_event_kind kind;
+    union {
+        voxa_transcript_evt transcript;
+        voxa_audio_evt      audio;
+        voxa_state_evt      state;
+        voxa_error_evt      error;
+    } data;
+} voxa_event;
+
+<span class="cm">/* The single callback. `user` is the opaque context passed to voxa_pipeline_create.</span>
+<span class="cm">   Re-entrancy &amp; threading guarantees are defined by the spike (see WS3). */</span>
+typedef void (*voxa_event_fn)(const voxa_event* ev, void* user);
+
+<span class="cm">/* Session config. POD only — no managed types cross the boundary.</span>
+<span class="cm">   input_* describe the PCM the host will push; the C ABI fixes the StartFrame from these. */</span>
+typedef struct {
+    int   input_sample_rate;   <span class="cm">/* e.g. 16000 */</span>
+    int   input_channels;      <span class="cm">/* e.g. 1 */</span>
+    int   abi_version;         <span class="cm">/* set to VOXA_ABI_VERSION; rejected if it doesn't match */</span>
+} voxa_config;
+
+#define VOXA_ABI_VERSION 1
+
+<span class="cm">/* ---- lifecycle: maps 1:1 onto PipelineRunner ---- */</span>
+voxa_status voxa_pipeline_create(const voxa_config* cfg, voxa_event_fn ev, void* user, voxa_pipeline** out);
+voxa_status voxa_pipeline_start(voxa_pipeline* h);
+voxa_status voxa_pipeline_push_audio(voxa_pipeline* h, const float* pcm, int frame_count);  <span class="cm">/* -&gt; AudioRawFrame */</span>
+voxa_status voxa_pipeline_stop(voxa_pipeline* h);            <span class="cm">/* injects EndFrame, drains within grace */</span>
+voxa_status voxa_pipeline_destroy(voxa_pipeline* h);         <span class="cm">/* DisposeAsync; idempotent; null-safe */</span>
+
+<span class="cm">/* Static, no handle: a version string for diagnostics. */</span>
+const char* voxa_version(void);</code></pre>
+
+<p>On the managed side these are thin <code>[UnmanagedCallersOnly]</code> wrappers. Each one: validates pointers (null →
+<code>VOXA_ERR_INVALID_ARG</code>, never a crash), translates to the corresponding <code>PipelineRunner</code> /
+<code>PipelineSource</code> call, and bridges the async lifecycle to the synchronous C contract (the spike decides whether
+that is a blocking wait or a dedicated pump thread — see WS3). Managed exceptions never cross the boundary: they are
+caught at the wrapper, returned as a <code>voxa_status</code>, and additionally surfaced as a <code>VOXA_EV_ERROR</code>.</p>
+
+<div class="callout warn"><b>Null-safety convention.</b> Every entry point is null-tolerant: a null handle or buffer
+returns <code>VOXA_ERR_INVALID_ARG</code>; <code>destroy(NULL)</code> is a no-op. Callback-delivered pointers are
+<em>borrowed</em> and valid only for the duration of the callback — the host copies what it keeps. This matches
+speech-core's borrowed-view discipline and keeps ownership unambiguous across the FFI line.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the bring-your-own-engine vtable approach</h2>
+
+<div class="ws-head">
+  <span><b>Project</b> Voxa.Native (new)</span>
+  <span><b>Risk</b> <span class="sev-high">High</span> (the central unknown)</span>
+  <span><b>Why</b> keeps the AOT image small</span>
+  <span><b>Pattern</b> speech-core <code>sc_*_vtable_t</code></span>
+</div>
+
+<p>This is the workstream that makes the whole item tractable. The naive design — AOT-compile the full meta-package so
+the C side gets "real" Whisper / OpenAI / Kokoro for free — is exactly the part most likely to fail: Microsoft.Extensions.AI
+and the provider SDKs use reflection, dynamic code, and source-generated serialization patterns that NativeAOT may reject
+or trim incorrectly. So the <em>first viable surface is Core-only</em>: the AOT image contains the orchestration core and
+the C bridge, and <b>the host supplies the engines</b> as C function-pointer vtables — precisely speech-core's design,
+where <code>sc_stt_vtable_t</code>, <code>sc_tts_vtable_t</code>, <code>sc_vad_vtable_t</code> and
+<code>sc_llm_vtable_t</code> are how the C++ core stays a pure orchestrator while the embedder plugs in backends.</p>
+
+<p>On the managed side, each vtable is wrapped by a small adapter that implements the existing engine interface
+(<code>ISpeechToTextEngine</code>, <code>ITextToSpeechEngine</code>, …) by marshalling calls out to the host's function
+pointers. The composer wires those adapters into the chain exactly as it wires native engines today — the pipeline does
+not know the difference.</p>
+
+<span class="filelabel">include/voxa_engines.h (sketch — the BYO-engine seam, mirrors sc_*_vtable_t)</span>
+<pre><code><span class="cm">/* The host implements these and hands the struct to voxa at create-time.</span>
+<span class="cm">   `ctx` is the host's own per-engine state. Buffers are borrowed for the call. */</span>
+
+typedef struct {
+    void* ctx;
+    <span class="cm">/* feed mic PCM; return 0 on success. Mirrors ISpeechToTextEngine.WriteAudioAsync. */</span>
+    int  (*write_audio)(void* ctx, const float* pcm, int frame_count);
+    <span class="cm">/* drain a final/interim transcript; out_text is host-owned, freed by free_text. */</span>
+    int  (*read_transcript)(void* ctx, char** out_text, int* out_is_final);
+    void (*free_text)(void* ctx, char* text);
+    void (*reset)(void* ctx);
+} voxa_stt_vtable_t;
+
+typedef struct {
+    void* ctx;
+    <span class="cm">/* synthesize `text`; the host invokes `sink` zero+ times with PCM chunks. */</span>
+    int  (*synthesize)(void* ctx, const char* text,
+                       void (*sink)(const float* pcm, int frame_count, void* sink_user),
+                       void* sink_user);
+    int  sample_rate;     <span class="cm">/* output rate the host will produce */</span>
+} voxa_tts_vtable_t;
+
+typedef struct {
+    void* ctx;
+    <span class="cm">/* return speech probability [0,1] for a frame; the VAD processor thresholds it. */</span>
+    float (*score)(void* ctx, const float* pcm, int frame_count);
+} voxa_vad_vtable_t;
+
+typedef struct {
+    void* ctx;
+    <span class="cm">/* stream the assistant turn; host pushes token chunks via `emit`. */</span>
+    int  (*run_turn)(void* ctx, const char* user_text,
+                     void (*emit)(const char* token, void* emit_user),
+                     void* emit_user);
+} voxa_llm_vtable_t;
+
+<span class="cm">/* Extended create that takes the engine vtables. Any field NULL =&gt; that stage is omitted</span>
+<span class="cm">   (e.g. STT+LLM+TTS but no separate VAD). This is the Core-only entry point. */</span>
+voxa_status voxa_pipeline_create_with_engines(
+    const voxa_config*        cfg,
+    const voxa_stt_vtable_t*  stt,
+    const voxa_tts_vtable_t*  tts,
+    const voxa_vad_vtable_t*  vad,
+    const voxa_llm_vtable_t*  llm,
+    voxa_event_fn             ev,
+    void*                     user,
+    voxa_pipeline**           out);</code></pre>
+
+<div class="callout good"><b>Why this is the right first surface.</b> It keeps the AOT image to the orchestration core
+plus a thin bridge — the smallest possible thing to prove AOT-viable — and it is <em>architecturally identical</em> to how
+speech-core ships. A later, fatter image that AOT-compiles selected managed engines (if any prove AOT-clean) is a strict
+superset; the vtable surface remains the floor that always works.</div>
+
+<div class="callout"><b>Relationship to <code>voxa_pipeline_create</code> (WS1).</b> The simple
+<code>voxa_pipeline_create</code> is the "batteries-included" aspiration; <code>voxa_pipeline_create_with_engines</code> is
+the surface the spike actually targets first. If the spike finds <em>no</em> managed engine AOT-compiles, the plain
+create may be deferred entirely and the vtable create becomes the only constructor.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — the feasibility spike (the gate)</h2>
+
+<div class="ws-head">
+  <span><b>Type</b> spike / investigation</span>
+  <span><b>Risk</b> <span class="sev-high">High</span> — answer unknown</span>
+  <span><b>Output</b> a go / no-go memo + a smoke binary</span>
+  <span><b>Gates</b> all committed work</span>
+</div>
+
+<p>The spike is the actual content of VDX-004 today. It is a time-boxed investigation whose output is an evidence-backed
+<em>go / no-go</em> on native embedding, plus the minimal artifacts that prove (or disprove) the round-trip. It must
+answer, concretely:</p>
+
+<table>
+  <tr><th>Question</th><th>What "answered" looks like</th></tr>
+  <tr><td><b>Which assemblies are AOT-clean?</b></td><td>A published NativeAOT build of <code>Voxa.Core</code> + the bridge, with the trim/AOT analyzer warnings triaged. A list of any Core constructs that need adjustment (reflection, dynamic) — Core is small and zero-dep, so this is the most likely-to-pass piece.</td></tr>
+  <tr><td><b>Do provider SDKs AOT-compile?</b></td><td>A yes/no per candidate (Microsoft.Extensions.AI, OpenAI, Azure, the local speech engines). The expected answer is "not all of them" — which is <em>why</em> WS2 exists. The spike confirms the vtable surface is the fallback, not a guess.</td></tr>
+  <tr><td><b>How do audio buffers marshal?</b></td><td>A measured decision: pin-and-pass vs copy for the mic-in <code>float*</code> and the audio-out callback. Confirms no GC hole (pinned spans for the call duration; copies for anything retained past the callback).</td></tr>
+  <tr><td><b>Callback re-entrancy / threading.</b></td><td>A defined contract: on which thread the callback fires, whether the host may call <code>voxa_pipeline_*</code> from inside it, and how the async <code>PipelineRunner</code> bridges to synchronous C (blocking wait vs a dedicated pump thread + queue).</td></tr>
+  <tr><td><b>Binary size.</b></td><td>A number for the published shared library per platform — input to the "is this worth it?" decision.</td></tr>
+  <tr><td><b>Per-platform build &amp; CI.</b></td><td>A working <code>linux-x64</code> publish at minimum, plus the cost estimate for <code>win-x64</code> / <code>osx-arm64</code> (NativeAOT cross-compilation constraints; each target generally needs its own runner).</td></tr>
+</table>
+
+<div class="callout danger"><b>This is the gate.</b> No committed WS1/WS2 work begins until the spike returns green
+<em>and</em> a real mobile/native consumer is an actual goal. A red spike ("the needed dependency graph won't AOT") is a
+<em>successful</em> outcome — it resolves Open Decision #4 with evidence and the item is closed as "not pursued," not left
+ambiguous.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases</h2>
+<ol>
+  <li><b>Phase 0 — Gate check (no code).</b> Confirm a concrete mobile/native consumer is an actual product goal. If not,
+    stop here: the item stays a specced placeholder (Open Decision #4). This phase is a decision, not a branch.</li>
+  <li><b>Phase 1 — The feasibility spike (WS3).</b> Time-boxed. Publish a NativeAOT build of <code>Voxa.Core</code> + a
+    throwaway bridge; triage AOT/trim warnings; settle buffer marshalling and callback threading; measure binary size;
+    get one platform building in CI. Output: a go / no-go memo. <b>Everything below is conditional on a green memo
+    here.</b></li>
+  <li><b>Phase 2 — Core-only ABI + C smoke consumer (WS1 + WS2).</b> Only on green. A real <code>src/Voxa.Native</code>
+    project: the flat C ABI (WS1) over <code>voxa_pipeline_create_with_engines</code> (WS2), driving the composed pipeline
+    with fake / bring-your-own engines, plus the checked-in C smoke consumer and its CI lane.</li>
+  <li><b>Phase 3 — Widen the surface (only if a consumer exists and asks).</b> Optionally AOT-compile selected managed
+    engines that proved AOT-clean (the "batteries-included" <code>voxa_pipeline_create</code>); harden additional
+    platforms. <b>Do not proceed past Phase 2 without a real consumer driving the requirement.</b></li>
+</ol>
+
+<div class="callout warn"><b>Per-PR discipline still applies.</b> Even exploratory, each landed change is one logical
+change, branches from <code>main</code>, carries an <code>[Unreleased]</code> CHANGELOG entry, and is warnings-as-errors
+clean. This spec is the spec-before-code artifact for the item; the spike's memo is recorded alongside it before any
+Phase 2 code lands.</div>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist (spike tasks)</h2>
+<p>Framed as <em>spike</em> tasks — the deliverable is knowledge plus a smoke binary, not a shipped feature.</p>
+<ul class="cl">
+  <li><span class="tid">S0.1</span> Confirm (and record) that a concrete mobile/native consumer is an actual goal — the Open Decision #4 gate.
+    <span class="ac">AC: a written yes with the consumer named, or the item is parked as a placeholder.</span></li>
+  <li><span class="tid">S1.1</span> Publish a NativeAOT build of <code>Voxa.Core</code> + a throwaway bridge; capture AOT/trim analyzer warnings.
+    <span class="ac">AC: a triaged warning list; any Core construct needing adjustment is named.</span></li>
+  <li><span class="tid">S1.2</span> Per-candidate AOT verdict for the provider SDKs (Microsoft.Extensions.AI, OpenAI, Azure, local speech engines).
+    <span class="ac">AC: a yes/no table; confirms whether any managed engine can ride the image or BYO-vtables are mandatory.</span></li>
+  <li><span class="tid">S1.3</span> Decide audio-buffer marshalling (pin vs copy) for mic-in and audio-out; verify no GC hole.
+    <span class="ac">AC: a documented decision with a rationale; borrowed pointers never outlive the callback.</span></li>
+  <li><span class="tid">S1.4</span> Define the callback threading / re-entrancy contract and the async→sync bridge for <code>PipelineRunner</code>.
+    <span class="ac">AC: written contract: callback thread, re-entrancy rules, blocking-wait vs pump-thread choice.</span></li>
+  <li><span class="tid">S1.5</span> Measure published shared-library size per attempted platform; build one platform (<code>linux-x64</code>) in CI.
+    <span class="ac">AC: a size number + a green CI publish for at least one target.</span></li>
+  <li><span class="tid">S1.6</span> Write the go / no-go memo against the WS3 question table.
+    <span class="ac">AC: an explicit recommendation; a red result closes the item with evidence (Open Decision #4).</span></li>
+  <li><span class="tid">S2.1</span> <i>(green only)</i> Stand up <code>src/Voxa.Native</code> with the WS1 C ABI over <code>voxa_pipeline_create_with_engines</code> (WS2 vtables).
+    <span class="ac">AC: exports resolve from C; null-safety convention holds for every entry point.</span></li>
+  <li><span class="tid">S2.2</span> <i>(green only)</i> Add the C smoke consumer + CI lane (create → push WAV → transcript via callback → destroy), fake engines, no models/network.
+    <span class="ac">AC: the smoke binary passes in CI on the one supported platform.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+
+<p>The verification artifact is a <em>tiny C smoke consumer</em> in CI — the same round-trip speech-core's own tests use,
+and the one the program names for this item. It exercises the full ABI without any model or network: a fake
+(bring-your-own) STT vtable returns a canned transcript for the pushed audio.</p>
+
+<span class="filelabel">tests/native/smoke.c (intent — the CI round-trip)</span>
+<pre><code><span class="cm">/* fake STT: ignores audio, yields one final transcript on read. */</span>
+static int fake_read_transcript(void* ctx, char** out, int* is_final) {
+    *out = strdup("hello voxa");   *is_final = 1;   return 0;
+}
+static void on_event(const voxa_event* ev, void* user) {
+    if (ev-&gt;kind == VOXA_EV_TRANSCRIPT &amp;&amp; ev-&gt;data.transcript.is_final)
+        *(int*)user = 1;                       <span class="cm">/* mark: we got the final transcript */</span>
+}
+
+int main(void) {
+    voxa_config cfg = { .input_sample_rate = 16000, .input_channels = 1, .abi_version = VOXA_ABI_VERSION };
+    voxa_stt_vtable_t stt = { .ctx = NULL, .read_transcript = fake_read_transcript, /* ... */ };
+    int got = 0;
+    voxa_pipeline* h = NULL;
+    if (voxa_pipeline_create_with_engines(&amp;cfg, &amp;stt, NULL, NULL, NULL, on_event, &amp;got, &amp;h) != VOXA_OK) return 2;
+    voxa_pipeline_start(h);
+    float pcm[160] = {0};                        <span class="cm">/* 10 ms of silence @ 16 kHz */</span>
+    voxa_pipeline_push_audio(h, pcm, 160);
+    voxa_pipeline_stop(h);                        <span class="cm">/* drains; on_event fires with the transcript */</span>
+    voxa_pipeline_destroy(h);
+    return got ? 0 : 1;                           <span class="cm">/* 0 == round-trip proven */</span>
+}</code></pre>
+
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Spike (manual)</b></td><td>The WS3 question table: AOT publish, warning triage, marshalling/threading decisions, size, one-platform CI publish. Output is the go / no-go memo, not a pass/fail test.</td></tr>
+  <tr><td><b>Native smoke (CI, green-only)</b></td><td>Compile and run <code>smoke.c</code> against the published <code>Voxa.Native</code> on the one supported platform: create → push silence → receive the fake transcript via callback → destroy. No models, no network. Also asserts the null-safety convention (e.g. <code>voxa_pipeline_destroy(NULL)</code> is a no-op).</td></tr>
+  <tr><td><b>Managed lanes</b></td><td><b>Unchanged.</b> Adding <code>Voxa.Native</code> must not alter the existing default or <code>LocalModels</code> lanes — it is an additive project, not a modification to Core or the SDK.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>The dependency graph isn't NativeAOT-clean</b> — Microsoft.Extensions.AI / provider SDKs use reflection / dynamic code that AOT rejects or mis-trims. This is the central unknown of the whole item.</td><td class="sev-high">High</td><td>The spike (WS3) answers it before any commitment. The Core-only BYO-vtable surface (WS2) sidesteps it by keeping provider SDKs out of the image. A red answer closes the item with evidence (Open Decision #4) — a valid outcome, not a failure.</td></tr>
+  <tr><td>R2</td><td>Audio-buffer marshalling across the boundary introduces a GC hole or a per-frame copy that hurts the hot path.</td><td class="sev-med">Med</td><td>Spike decides pin-vs-copy explicitly (S1.3); borrowed pointers are valid only for the callback; anything retained is copied by the host. Measured, not assumed.</td></tr>
+  <tr><td>R3</td><td>Callback re-entrancy / threading: host calls back into <code>voxa_pipeline_*</code> from inside the event callback and deadlocks the async bridge.</td><td class="sev-med">Med</td><td>Defined contract (S1.4): callback thread, re-entrancy rules, and a pump-thread + queue if needed so the sync C surface never blocks the managed loop.</td></tr>
+  <tr><td>R4</td><td>Per-platform NativeAOT CI cost — each target (<code>linux-x64</code> / <code>win-x64</code> / <code>osx-arm64</code>) generally needs its own runner and toolchain.</td><td class="sev-med">Med</td><td>Spike targets <em>one</em> platform; additional platforms are Phase 3, only on a real consumer's demand. CI cost is an explicit input to the go/no-go.</td></tr>
+  <tr><td>R5</td><td>Scope creep into mobile bindings — the JNI/Swift glue starts leaking into this repo.</td><td class="sev-med">Med</td><td>Hard non-goal (§3, §12): mobile bindings are <em>consumer</em> repos, siblings of the ABI, exactly like speech-core's. This item ships the C ABI + a C smoke consumer only.</td></tr>
+  <tr><td>R6</td><td>Building it at all when there is no demand — speculative effort on a .NET-only project.</td><td class="sev-low">Low</td><td>Open Decision #4 gate (Phase 0 / S0.1): do not start before a real mobile/native consumer is a goal. Sequenced last (M8) for this reason.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Mobile bindings (Android <code>.aar</code> / Swift package).</b> These are <em>consumers</em> of the C ABI and
+    belong in separate repos — the same relationship speech-core's mobile bindings have to its core engine. Not built
+    here.</li>
+  <li><b>AOT-imaging local models.</b> whisper.cpp / Piper / Kokoro stay external, out-of-process where required, and
+    SHA-256-pinned via <code>VoxaModelCache</code>. No model weights or native runtimes enter the shared library.</li>
+  <li><b>The "batteries-included" <code>voxa_pipeline_create</code> with managed engines baked in.</b> Deferred to Phase 3
+    and only for whichever managed engines the spike proves AOT-clean; the BYO-vtable surface is the floor.</li>
+  <li><b>Anything before the spike + a real consumer.</b> Per Open Decision #4, absent a mobile/native goal this item
+    stays a specced placeholder. The MCP server (<b>VDX-002</b>) and the CLI (<b>VDX-003</b>) remain Voxa's cross-language
+    surfaces in the meantime.</li>
+  <li><b>Cross-language surfaces other than the C ABI</b> (e.g. a gRPC or WASM front end). Out of scope for this item;
+    they would be their own exploration if demand appears.</li>
+</ul>
+
+</div>
+</body>
+</html>

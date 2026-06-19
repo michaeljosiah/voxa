@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT-005 — Local Full-Duplex Speech-to-Speech Seam (ISpeechToSpeechSession)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .badge.deferred { background: #3a1c1c; color: #ef9a9a; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-005 — Local Full-Duplex Speech-to-Speech Seam (ISpeechToSpeechSession)</h1>
+  <div class="sub">A strategic, exploratory seam that positions Voxa for the frontier: a single <em>local</em>
+    speech-to-speech model that listens and speaks at once (Moshi / PersonaPlex-class). It ships as a
+    <b>third member of the existing composite family</b> — a <code>SpeechToSpeechProcessor</code> that
+    slots in exactly where <code>OpenAIRealtimeProcessor</code> and <code>AzureVoiceLiveProcessor</code> do.
+    <b>Ship the seam; defer the model.</b> The interface and composite land now; the GB-scale, often
+    GPU-only model is a separate, spike-gated effort.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-005 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — exploratory / strategic</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability / strategic</div>
+    <div><b>Depends on</b> The existing composite processors (<code>OpenAIRealtime</code> / <code>AzureVoiceLive</code>) as the shape to mirror</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M7</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — composite vs granular, where this slots</a></li>
+    <li><a href="#s5">WS1 — the <code>ISpeechToSpeechSession</code> seam</a></li>
+    <li><a href="#s6">WS2 — the <code>SpeechToSpeechProcessor</code> composite</a></li>
+    <li><a href="#s7">WS3 — the deferred model &amp; host</a></li>
+    <li><a href="#s8">Configuration reference</a></li>
+    <li><a href="#s9">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VRT-005 add, in one sentence?</b>
+    <p>A <em>seam</em> (<code>ISpeechToSpeechSession</code>) plus a composite processor for a single
+    <em>local</em> model that takes the user's audio and directly produces the agent's audio (and text)
+    — listening and speaking at the same time — in the <em>same family</em> as Voxa's existing cloud
+    realtime composites (<code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>).</p>
+  </div>
+  <div class="qa">
+    <b>Why now, when the model isn't here yet?</b>
+    <p>Strategic positioning. Open speech-to-speech (S2S) models — Moshi, PersonaPlex-class — are
+    maturing fast. Voxa already has the <em>composite</em> shape proven against two cloud realtime
+    APIs. Defining the seam now, against that proven shape, means that when an on-device S2S model
+    becomes viable on commodity hardware it drops in as a third composite by config, with no
+    architectural scramble. We are laying the rail, not driving the train.</p>
+  </div>
+  <div class="qa">
+    <b>What does this <em>not</em> change?</b>
+    <p>Nothing existing. The vendor-neutral <em>granular</em> chain (VAD&nbsp;&rarr;&nbsp;STT&nbsp;&rarr;&nbsp;agent&nbsp;&rarr;&nbsp;aggregation&nbsp;&rarr;&nbsp;TTS)
+    is untouched. The two cloud composites are untouched. This is purely additive: a new abstraction
+    and a new processor in a new package, both inert until a host opts in.</p>
+  </div>
+  <div class="qa">
+    <b>Where's the honest boundary?</b>
+    <p>The <b>seam ships</b>; the <b>model is deferred</b>. A PersonaPlex / Moshi-class model is
+    gigabytes and frequently CUDA-only — that is a separate quality/feasibility spike with its own
+    host (out-of-process or GPU, reusing VLS-002 / sidecar patterns). To prove the seam <em>before</em>
+    the local model exists, a <em>cloud</em> S2S provider could be the first concrete
+    <code>ISpeechToSpeechSession</code>. This spec is deliberately scoped to the contract and the
+    composite, not the weights.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VRT-005 imports speech-core's <code>FullDuplexSpeechInterface</code> idea onto Voxa's frame model,
+expressed as a genuine third member of the existing realtime-composite family. It is two small,
+shippable workstreams plus one explicitly deferred one:</p>
+
+<ul>
+  <li><b>WS1 — the <code>ISpeechToSpeechSession</code> seam <span class="badge additive">additive</span>.</b>
+    A streaming abstraction (user audio in &rarr; an async stream of agent-audio chunks + text out),
+    with <code>SetVoice</code> / <code>SetSystemPrompt</code> / <code>ResetSession</code> / <code>Cancel</code>
+    and an output-sample-rate property — modelled on <em>both</em> speech-core's
+    <code>FullDuplexSpeechInterface</code> and the surface the cloud realtime processors already expose.
+    Lives in <code>Voxa.Speech.Abstractions</code> (never <code>Voxa.Core</code>).</li>
+  <li><b>WS2 — the <code>SpeechToSpeechProcessor</code> composite <span class="badge p1">strategic</span>.</b>
+    A <code>FrameProcessor</code> peer to <code>OpenAIRealtimeProcessor</code> that drives an
+    <code>ISpeechToSpeechSession</code>, owns its own VAD / turn-taking (full-duplex), bypasses the
+    granular chain, and emits the <em>same</em> lifecycle + diagnostics frames as the cloud composites
+    so Studio and the diagnostics hub treat it identically. New package <code>Voxa.Services.SpeechToSpeech</code>.</li>
+  <li><b>WS3 — the model &amp; host <span class="badge deferred">deferred</span>.</b> The concrete
+    session implementation. Spike-gated; the first concrete impl may be a cloud S2S provider (to
+    validate the seam) and the local model rides VLS-002 GPU / sidecar patterns. <b>Out of scope for
+    code in this spec.</b></li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> Once a concrete <code>ISpeechToSpeechSession</code>
+exists, a developer sets <code>"Mode": "SpeechToSpeech"</code> (or a provider name) and the pipeline
+swaps from the granular chain to a single full-duplex composite — emitting the same
+<code>BotStartedSpeakingFrame</code> / <code>UserStartedSpeakingFrame</code> / <code>InterruptionFrame</code>
+/ audio-out frames as OpenAI Realtime, so every downstream consumer (Studio's Talk view, the
+diagnostics waterfall) works with zero changes.</div>
+
+<div class="callout warn"><b>This is exploratory and strategic.</b> VRT-005 ships an <em>interface and a
+processor that drives it</em>. It does <b>not</b> ship a speech-to-speech model, weights, or a runtime
+for one. Every claim about a "local model" in this document refers to deferred, spike-gated WS3 work.
+The seam is the deliverable; do not overclaim a model that does not yet exist.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Define <code>ISpeechToSpeechSession</code> as a true peer of the cloud realtime processors' surface
+    — a full-duplex, streaming contract Voxa can target as open S2S models mature.</li>
+  <li>Ship <code>SpeechToSpeechProcessor</code>: a composite that drives the seam, owns its own
+    VAD / turn-taking, and emits <em>byte-for-byte the same lifecycle/diagnostics frames</em> as the
+    cloud composites — a third member, not a parallel design.</li>
+  <li>Wire config / registration so <code>Voxa:Mode=SpeechToSpeech</code> (or a provider name) selects
+    the composite instead of the granular VAD&rarr;STT&rarr;&hellip;&rarr;TTS chain — the same way the
+    cloud composites are mapped today.</li>
+  <li>Prove the whole path against a <b>fake session</b> (no model) so the seam and the composite are
+    fully testable offline.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>The local S2S model / weights.</b> A PersonaPlex / Moshi-class model is a separate spike —
+    GB-scale, frequently GPU / out-of-process, delivered via the VLS-002 GPU patterns or the
+    sidecar / child-process pattern. Not in this spec.</li>
+  <li><b>The first concrete <code>ISpeechToSpeechSession</code> implementation.</b> Could be a cloud S2S
+    provider (validates the seam first) or the local model — both are spike-gated follow-ups (§7).</li>
+  <li>Any change to the granular chain, the cloud composites, or their transports.</li>
+  <li>Voice cloning <em>within</em> the S2S model (frontier; rides VVL-002 if ever in scope) — see §13.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Impact on existing composites &amp; granular chain</td><td><b>0</b> — additive seam + new package; no edits to <code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>, or <code>DefaultVoicePipelineComposer</code>'s chain shape</td></tr>
+  <tr><td>New dependencies in <code>Voxa.Core</code></td><td><b>0</b> — seam goes in <code>Voxa.Speech.Abstractions</code>; the processor in a new <code>Voxa.Services.*</code> package</td></tr>
+  <tr><td>Default test lane</td><td>No network, no model; the seam + composite are exercised against a fake in-process session</td></tr>
+  <tr><td>Diagnostics overhead when off</td><td>Zero — every publish behind a <code>HasListeners</code> guard, matching the cloud composites</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — composite vs granular, where this slots</h2>
+
+<p>Voxa has two pipeline shapes (CLAUDE.md). VRT-005 is firmly in the first:</p>
+<ul>
+  <li><b>Composite</b> — one processor wraps STT + LLM + TTS + VAD and runs full-duplex with its own
+    turn-taking. Today: <code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>. The
+    composite <em>bypasses</em> the granular chain entirely — it does not sit in a VAD&rarr;STT&rarr;&hellip;
+    arrangement; it <em>is</em> the whole middle of the pipeline.</li>
+  <li><b>Granular</b> — the vendor-neutral chain (VAD&rarr;STT&rarr;agent&rarr;<code>SentenceAggregator</code>&rarr;TTS)
+    assembled by <code>DefaultVoicePipelineComposer</code>. Untouched here.</li>
+</ul>
+
+<p>The <code>SpeechToSpeechProcessor</code> is a third composite. Like the cloud ones, it accepts
+<code>AudioRawFrame</code> (and <code>ToolCallResultFrame</code>) inbound, runs the model's full-duplex
+loop, and pushes the agent's audio + text + lifecycle frames downstream. The pipeline around it is just
+<code>Source &rarr; SpeechToSpeechProcessor &rarr; Sink</code>.</p>
+
+<h4>How a composite is mapped (vs the granular composer)</h4>
+<p>This is the load-bearing wiring difference. The granular path uses
+<code>app.MapVoxaVoice("/voice").UseDefaults()</code>, which calls
+<code>DefaultVoicePipelineComposer.Compose(...)</code> to build the chain. A composite instead uses the
+explicit-builder overload and registers a <em>single</em> processor — exactly how the cloud composites
+are mapped in <code>samples/Voxa.Samples.AspNetServer/Program.cs</code>:</p>
+
+<span class="filelabel">samples — how a cloud composite is mapped today (the pattern VRT-005 mirrors)</span>
+<pre><code><span class="cm">// granular chain — UseDefaults() runs DefaultVoicePipelineComposer</span>
+app.MapVoxaVoice("/voice").UseDefaults();
+
+<span class="cm">// composite — a single processor IS the pipeline middle (bypasses the granular chain)</span>
+app.MapVoxaVoice("/voice/realtime", voice =&gt;
+    voice.UseProcessor(() =&gt; new OpenAIRealtimeProcessor(options)));
+
+<span class="cm">// VRT-005 adds a third member with the same mapping shape:</span>
+app.MapVoxaVoice("/voice/s2s", voice =&gt;
+    voice.UseProcessor(sp =&gt; new SpeechToSpeechProcessor(sessionFactory, options)));</code></pre>
+
+<div class="callout"><b>The model we are importing.</b> speech-core's <code>FullDuplexSpeechInterface</code>
+exposes a <em>respond-stream</em> that yields interleaved audio + text at the model's frame rate, plus
+<code>set_voice</code>, <code>set_system_prompt</code>, a KV-cache-backed session, and
+<code>reset_session</code>. Its per-chunk payload (<code>FullDuplexChunk</code>: agent audio, decoded
+text, an is-final marker) is the template for our chunk type. We map that surface onto Voxa idioms
+(<code>IAsyncEnumerable</code>, PCM <code>ReadOnlyMemory&lt;byte&gt;</code>, per-frame
+<code>CancellationToken</code>) and keep it shaped like the cloud realtime processors so it is a true
+third member.</div>
+
+<h4>File / surface table</h4>
+<table>
+  <tr><th>File / surface</th><th>Role</th><th>State</th></tr>
+  <tr><td><code>Voxa.Speech.Abstractions/ISpeechToSpeechSession.cs</code></td><td>WS1 — the seam + chunk type</td><td><b>New</b></td></tr>
+  <tr><td><code>Voxa.Services.SpeechToSpeech/SpeechToSpeechProcessor.cs</code></td><td>WS2 — composite peer to <code>OpenAIRealtimeProcessor</code></td><td><b>New package</b></td></tr>
+  <tr><td><code>Voxa.Services.SpeechToSpeech/SpeechToSpeechOptions.cs</code></td><td>WS2 — voice, system prompt, sample rates (mirrors <code>OpenAIRealtimeOptions</code>)</td><td><b>New</b></td></tr>
+  <tr><td>A concrete <code>ISpeechToSpeechSession</code> (cloud or local)</td><td>WS3 — drives a real model</td><td><b>Deferred (spike)</b></td></tr>
+  <tr><td>Registration / config selection (<code>Voxa:Mode</code> or provider name)</td><td>WS2 — select the composite over the granular chain</td><td><b>New (small)</b></td></tr>
+  <tr><td><code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>, <code>DefaultVoicePipelineComposer</code> chain</td><td>The shape mirrored</td><td><b>Unchanged</b></td></tr>
+  <tr><td><code>Voxa.Core</code> frames (<code>BotStartedSpeakingFrame</code>, <code>AudioRawFrame</code>, &hellip;)</td><td>Reused verbatim — no new core frames</td><td><b>Unchanged</b></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the <code>ISpeechToSpeechSession</code> seam</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.Abstractions</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (contract drift)</span>
+  <span><b>Network</b> none</span>
+  <span><b>Surface</b> additive (new abstraction)</span>
+</div>
+
+<p>The seam captures speech-core's <code>FullDuplexSpeechInterface</code> in Voxa idioms, kept
+deliberately parallel to what the cloud realtime processors already do internally (send user PCM, read
+back assistant audio + text + speaking events). It is <b>session-scoped</b> (one per connection / turn
+context, like a KV-cache session) and <b>streaming</b>.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/ISpeechToSpeechSession.cs (sketch — exact shape pinned at implementation)</span>
+<pre><code><span class="cm">// A single local (or cloud) full-duplex speech-to-speech session: user audio in,</span>
+<span class="cm">// agent audio + text out, at the model's own frame rate. Models speech-core's</span>
+<span class="cm">// FullDuplexSpeechInterface; shaped to match the cloud realtime processors so the</span>
+<span class="cm">// driving composite is a genuine third member of that family.</span>
+public interface ISpeechToSpeechSession : IAsyncDisposable
+{
+    <span class="cm">// Sample rate of the agent audio this session emits (e.g. 24000). The composite</span>
+    <span class="cm">// advertises this on the session envelope, exactly like OutputSampleRate today.</span>
+    int OutputSampleRate { get; }
+
+    <span class="cm">// Push a chunk of user PCM into the model's full-duplex loop. Non-blocking;</span>
+    <span class="cm">// agent output arrives out-of-band via RespondAsync. (Full-duplex: the user may</span>
+    <span class="cm">// speak while the agent is speaking — the model handles overlap / barge-in.)</span>
+    ValueTask AppendUserAudioAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct);
+
+    <span class="cm">// The agent's output stream: interleaved audio + text tokens at the model's frame</span>
+    <span class="cm">// rate, mirroring FullDuplexChunk. Yields for the lifetime of the session; honours</span>
+    <span class="cm">// the per-frame CancellationToken so an interruption aborts in-flight synthesis.</span>
+    IAsyncEnumerable&lt;SpeechToSpeechChunk&gt; RespondAsync(CancellationToken ct);
+
+    <span class="cm">// Preset selection (FullDuplexSpeechInterface.set_voice).</span>
+    ValueTask SetVoiceAsync(string voiceId, CancellationToken ct);
+
+    <span class="cm">// System prompt / persona (FullDuplexSpeechInterface.set_system_prompt).</span>
+    ValueTask SetSystemPromptAsync(string systemPrompt, CancellationToken ct);
+
+    <span class="cm">// Clear conversational state / KV-cache for a fresh turn (reset_session).</span>
+    ValueTask ResetSessionAsync(CancellationToken ct);
+
+    <span class="cm">// Abort the in-flight response (barge-in / interruption) without tearing down</span>
+    <span class="cm">// the session. The composite calls this when it emits an InterruptionFrame.</span>
+    ValueTask CancelAsync(CancellationToken ct);
+}
+
+<span class="cm">// One unit of agent output. Mirrors speech-core's FullDuplexChunk: agent audio PCM,</span>
+<span class="cm">// optional decoded text token(s), and an is-final marker for the turn. Audio uses the</span>
+<span class="cm">// session's OutputSampleRate; either field may be empty in a given chunk.</span>
+public readonly record struct SpeechToSpeechChunk(
+    ReadOnlyMemory&lt;byte&gt; AudioPcm,
+    string? Text,
+    bool IsFinal);</code></pre>
+
+<div class="callout warn"><b>Keep the seam shaped like the cloud composites.</b> The single most important
+constraint on WS1 is that this contract reads as a <em>third member</em> of the realtime-composite
+family, not a parallel universe. Every method here has a counterpart in what
+<code>OpenAIRealtimeProcessor</code> does over its transport (append user audio, read assistant
+audio/text/events, cancel on barge-in). If the seam drifts — e.g. a callback model instead of an
+async stream, or a different cancellation story — the composite stops being a true peer. Pin the exact
+signatures against the cloud processors at implementation time.</div>
+
+<div class="callout"><b>Tools (deferred detail).</b> The cloud composites round-trip tool calls as
+<code>ToolCallRequestFrame</code> / <code>ToolCallResultFrame</code>. Whether a given S2S model supports
+function-calling is model-specific; WS1 leaves a documented extension point (an optional tool channel
+on the session) but does not require it. The fake session used for tests does not exercise tools.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the <code>SpeechToSpeechProcessor</code> composite</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Services.SpeechToSpeech (new)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span></span>
+  <span><b>Peer of</b> OpenAIRealtimeProcessor</span>
+  <span><b>Frames</b> identical to the cloud composites</span>
+</div>
+
+<p>A <code>FrameProcessor</code> built to the same blueprint as <code>OpenAIRealtimeProcessor</code>: a
+bounded <code>DropOldest</code> channel (256), a session created on <code>OnStartAsync</code>, a read
+loop draining the session's <code>RespondAsync</code> stream and pushing frames, and graceful teardown
+on <code>OnEndAsync</code>. The <em>only</em> substantive difference from the cloud composites is that
+the wire transport is replaced by an in-process (or sidecar) <code>ISpeechToSpeechSession</code>.</p>
+
+<span class="filelabel">src/Voxa.Services.SpeechToSpeech/SpeechToSpeechProcessor.cs (sketch — mirrors OpenAIRealtimeProcessor)</span>
+<pre><code>public sealed class SpeechToSpeechProcessor : FrameProcessor
+{
+    private readonly Func&lt;ISpeechToSpeechSession&gt; _sessionFactory;
+    private readonly SpeechToSpeechOptions _options;
+    private ISpeechToSpeechSession? _session;
+    private Task? _readLoop;
+    private volatile bool _botSpeaking;
+
+    public SpeechToSpeechProcessor(
+        Func&lt;ISpeechToSpeechSession&gt; sessionFactory,
+        SpeechToSpeechOptions options,
+        ILogger&lt;SpeechToSpeechProcessor&gt;? logger = null)
+        : base("SpeechToSpeech", new BoundedChannelOptions(256)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true,
+        })
+    { <span class="cm">/* store fields, default logger to NullLogger */</span> }
+
+    protected override async ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
+    {
+        _session = _sessionFactory();
+        await _session.SetVoiceAsync(_options.Voice, ct).ConfigureAwait(false);
+        if (_options.SystemPrompt is { } sys)
+            await _session.SetSystemPromptAsync(sys, ct).ConfigureAwait(false);
+        _readLoop = Task.Run(() =&gt; ReadResponseLoopAsync(ct));
+    }
+
+    protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+    {
+        if (_session is not null &amp;&amp; frame is AudioRawFrame audio)
+        {
+            await _session.AppendUserAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
+            return; <span class="cm">// consumed; agent audio returns via the read loop</span>
+        }
+        <span class="cm">// Forward everything else (StartFrame, EndFrame, …) downstream so the sink completes.</span>
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);
+    }
+
+    private async Task ReadResponseLoopAsync(CancellationToken ct)
+    {
+        var session = _session;
+        if (session is null) return;
+        try
+        {
+            await foreach (var chunk in session.RespondAsync(ct).ConfigureAwait(false))
+            {
+                <span class="cm">// Emit the SAME lifecycle frames as the cloud composites so Studio /</span>
+                <span class="cm">// diagnostics treat this identically. Speaking edges flip _botSpeaking.</span>
+                if (!_botSpeaking &amp;&amp; !chunk.AudioPcm.IsEmpty)
+                {
+                    _botSpeaking = true;
+                    await PushFrameAsync(new BotStartedSpeakingFrame(), ct).ConfigureAwait(false);
+                }
+                if (chunk.Text is { Length: &gt; 0 } text)
+                    await PushFrameAsync(new LlmTextChunkFrame(text), ct).ConfigureAwait(false);
+                if (!chunk.AudioPcm.IsEmpty)
+                    await PushFrameAsync(new AudioRawFrame(chunk.AudioPcm, session.OutputSampleRate), ct).ConfigureAwait(false);
+                if (chunk.IsFinal &amp;&amp; _botSpeaking)
+                {
+                    _botSpeaking = false;
+                    await PushFrameAsync(new BotStoppedSpeakingFrame(), ct).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException) { <span class="cm">/* shutdown */</span> }
+        catch (Exception ex)
+        {
+            await PushErrorAsync($"SpeechToSpeech read loop failed: {ex.Message}", ex, ct).ConfigureAwait(false);
+        }
+    }
+
+    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    { <span class="cm">/* DisposeAsync the session; await the read loop, swallowing on teardown */</span> }
+}</code></pre>
+
+<h4>Frame parity — the hard requirement</h4>
+<p>The composite MUST emit the same frame vocabulary the cloud composites do, so anything observing the
+pipeline (Studio's Talk view, the diagnostics hub, a custom sink) cannot tell a third-party realtime
+API from a local S2S model:</p>
+<table>
+  <tr><th>Frame</th><th>When</th><th>Parity source</th></tr>
+  <tr><td><code>UserStartedSpeakingFrame</code> / <code>UserStoppedSpeakingFrame</code></td><td>The session's VAD / turn-taker confirms user speech edges (full-duplex, owned by the model)</td><td>Both cloud composites</td></tr>
+  <tr><td><code>BotStartedSpeakingFrame</code> / <code>BotStoppedSpeakingFrame</code></td><td>Agent audio starts / the turn goes final</td><td>Both cloud composites (drives <code>_botSpeaking</code>)</td></tr>
+  <tr><td><code>AudioRawFrame</code> (out)</td><td>Each agent audio chunk, tagged with <code>OutputSampleRate</code></td><td>Both cloud composites</td></tr>
+  <tr><td><code>LlmTextChunkFrame</code> / <code>TranscriptionFrame</code></td><td>Decoded agent text tokens / user transcript, if the model surfaces them</td><td><code>OpenAIRealtimeProcessor</code></td></tr>
+  <tr><td><code>InterruptionFrame</code></td><td>Barge-in confirmed — the composite also calls <code>session.CancelAsync</code></td><td>Both cloud composites</td></tr>
+  <tr><td><code>ToolCallRequestFrame</code> / <code>ToolCallResultFrame</code></td><td>Only if the model supports tools (optional; see §5)</td><td>Both cloud composites</td></tr>
+  <tr><td><code>ErrorFrame</code> (upstream)</td><td>Read-loop failure, via <code>PushErrorAsync</code></td><td>Both cloud composites</td></tr>
+</table>
+
+<div class="callout"><b>Invariants honoured.</b> Forward unhandled frames downstream (notably
+<code>StartFrame</code> / <code>EndFrame</code>, or the sink never completes); accept the per-frame
+<code>CancellationToken</code> on the append + read-loop work so an interruption aborts in-flight
+synthesis; bounded <code>DropOldest</code> on the audio path, matching the backpressure convention. Any
+diagnostics tap added later sits behind a <code>HasListeners</code> guard so an unobserved pipeline is
+byte-identical — exactly as the granular composer and cloud composites do.</div>
+
+<h4>Selection / registration</h4>
+<p>Config selects the composite over the granular chain. Two equivalent routes, matching how the cloud
+composites are reached today:</p>
+<ul>
+  <li><b>Explicit map (available immediately):</b> <code>MapVoxaVoice("/voice/s2s", voice =&gt; voice.UseProcessor(...))</code>
+    — a single processor, bypassing <code>UseDefaults()</code> / the granular composer.</li>
+  <li><b>Config-driven (small addition):</b> a <code>Voxa:Mode</code> key (default <code>Granular</code>;
+    <code>SpeechToSpeech</code> selects the composite) <em>or</em> a registered provider name, so
+    <code>UseDefaults()</code> can short-circuit to the composite when configured. The session factory
+    is resolved from a descriptor in the new package, registered the same self-describing way as VAD /
+    STT / TTS providers. <b>Config-capture rule:</b> the descriptor captures the <code>IConfiguration</code>
+    passed to <code>AddVoxa</code> — it never calls <code>GetRequiredService&lt;IConfiguration&gt;()</code>
+    (that breaks the plain-<code>ServiceCollection</code> hosts: Studio, tests, CLI).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — the deferred model &amp; host <span class="badge deferred">deferred / spike</span></h2>
+
+<div class="callout danger"><b>This section is deferred and exploratory.</b> Nothing here is in scope
+for VRT-005's code. It records the intended path so the seam in WS1/WS2 is designed to accommodate it —
+not so it ships now.</div>
+
+<p>A concrete <code>ISpeechToSpeechSession</code> is the moment a real model enters the picture. Two
+plausible first implementations, in order of likely sequencing:</p>
+
+<h4>Option A — a cloud S2S provider validates the seam first</h4>
+<p>The cheapest way to prove <code>ISpeechToSpeechSession</code> + <code>SpeechToSpeechProcessor</code>
+end-to-end <em>before</em> any local model exists is to back the session with a cloud S2S endpoint.
+This exercises the full streaming contract (append audio &rarr; receive audio + text &rarr; barge-in
+cancel) against a real model with none of the GPU / hosting burden — and confirms the frame parity the
+composite promises. It is the recommended first concrete impl.</p>
+
+<h4>Option B — the local PersonaPlex / Moshi-class model</h4>
+<p>The strategic target, and the reason the seam exists. Honest constraints:</p>
+<ul>
+  <li><b>GB-scale, often CUDA-only.</b> A PersonaPlex / Moshi-class model is gigabytes and typically
+    needs a GPU. It does not fit the in-process, CPU-default posture of the local speech tier.</li>
+  <li><b>Host out-of-process or on GPU.</b> Reuse the <b>VLS-002</b> GPU patterns (opt-in runtime,
+    user-supplied natives, fail-loud when the device is unavailable) and/or the
+    <code>PiperProcessHost</code>-style sidecar / child-process pattern for an isolated, possibly
+    Python, runtime. The session abstraction is host-agnostic: in-process, sidecar, and GPU all sit
+    behind the same <code>ISpeechToSpeechSession</code>.</li>
+  <li><b>SHA-256-pinned, cached, offline.</b> Whatever the weights are, they are pinned via
+    <code>VoxaModelArtifact</code> and resolved through <code>VoxaModelCache</code>; downloads are
+    trait-gated <code>LocalModels</code> tests, never the default lane. GPL / heavy / native deps stay
+    behind a process boundary with a license-closure gate test (mirror the Kokoro one).</li>
+  <li><b>Spike-gated on feasibility.</b> Whether such a model is viable in real time on commodity
+    hardware is an open question (§12, R1). The spike answers that before any host code is written.</li>
+</ul>
+
+<div class="callout"><b>Sequencing.</b> WS1 + WS2 (this spec) land first against a fake session. WS3 is
+a separate, later effort — Option A (cloud) to validate, then Option B (local) when a model proves
+viable. Treat the local model as unbudgeted and exploratory.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration reference</h2>
+
+<p>Until a concrete session ships (WS3), these keys describe how the composite would be selected and
+tuned. The shape mirrors <code>OpenAIRealtimeOptions</code> (voice, system prompt, sample rates).</p>
+
+<span class="filelabel">appsettings.json — selecting the S2S composite (illustrative; concrete provider deferred)</span>
+<pre><code>{
+  "Voxa": {
+    <span class="cm">// NEW (small). "Granular" (default) | "SpeechToSpeech".</span>
+    <span class="cm">// SpeechToSpeech swaps the VAD→STT→…→TTS chain for the single composite.</span>
+    "Mode": "SpeechToSpeech",
+
+    "SpeechToSpeech": {
+      "Provider": "&lt;cloud-or-local-session-name&gt;",  <span class="cm">// deferred — resolved from a descriptor (WS3)</span>
+      "Voice": "default",                            <span class="cm">// → ISpeechToSpeechSession.SetVoiceAsync</span>
+      "SystemPrompt": "You are a helpful voice assistant.", <span class="cm">// → SetSystemPromptAsync</span>
+      "OutputSampleRate": 24000                      <span class="cm">// advertised on the session envelope</span>
+    }
+  }
+}</code></pre>
+
+<p>When <code>Mode</code> is absent or <code>Granular</code>, behaviour is exactly as today — the
+granular composer runs and these keys are inert. The cloud composites remain reachable via their own
+explicit <code>MapVoxaVoice</code> routes regardless of <code>Mode</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — WS1 seam.</b> <code>ISpeechToSpeechSession</code> + <code>SpeechToSpeechChunk</code>
+    in <code>Voxa.Speech.Abstractions</code>, pinned against the cloud processors' surface. No behaviour;
+    independently mergeable.</li>
+  <li><b>Phase B — WS2 composite + fake session.</b> The new <code>Voxa.Services.SpeechToSpeech</code>
+    package: <code>SpeechToSpeechProcessor</code>, <code>SpeechToSpeechOptions</code>, a
+    <code>FakeSpeechToSpeechSession</code> (test double), and the lifecycle / frame-parity tests.
+    Selection wiring (<code>Voxa:Mode</code> + descriptor). Depends on Phase A.</li>
+  <li><b>Phase C — WS3 concrete session.</b> <span class="badge deferred">deferred / spike</span>
+    Option A (cloud S2S) to validate the seam, then Option B (local model + GPU / sidecar host). A
+    separate, spike-gated effort with its own spec(s); <b>not</b> part of VRT-005's code.</li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING) — Phase A and Phase B are separate PRs. Each adds an
+<code>[Unreleased]</code> CHANGELOG entry; the spec is authored before the code (this document). Phase C
+gates on the feasibility spike and is sequenced independently.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Add <code>ISpeechToSpeechSession</code> + <code>SpeechToSpeechChunk</code> to <code>Voxa.Speech.Abstractions</code>.
+    <span class="ac">AC: signatures reviewed against <code>OpenAIRealtimeProcessor</code> / <code>AzureVoiceLiveProcessor</code> — every method has a cloud-composite counterpart.</span></li>
+  <li><span class="tid">T1.2</span> Doc-comment the seam as a third member of the realtime-composite family and cite speech-core's <code>FullDuplexSpeechInterface</code> as the model.</li>
+  <li><span class="tid">T2.1</span> New <code>Voxa.Services.SpeechToSpeech</code> package + <code>SpeechToSpeechOptions</code> (voice, system prompt, output sample rate), mirroring <code>OpenAIRealtimeOptions</code>.</li>
+  <li><span class="tid">T2.2</span> <code>SpeechToSpeechProcessor</code> built to the <code>OpenAIRealtimeProcessor</code> blueprint (bounded <code>DropOldest</code> channel, session on start, read loop, graceful end).
+    <span class="ac">AC: forwards <code>StartFrame</code>/<code>EndFrame</code>; accepts the per-frame <code>CancellationToken</code>.</span></li>
+  <li><span class="tid">T2.3</span> Emit the full lifecycle / diagnostics frame set with the same semantics as the cloud composites (speaking edges, audio-out, text, interruption + <code>CancelAsync</code>, upstream errors).</li>
+  <li><span class="tid">T2.4</span> <code>FakeSpeechToSpeechSession</code> test double (scripted chunks, no model) for offline lifecycle + parity tests.</li>
+  <li><span class="tid">T2.5</span> Selection wiring: <code>Voxa:Mode=SpeechToSpeech</code> (or provider name) selects the composite; descriptor captures the injected <code>IConfiguration</code> (no <code>GetRequiredService&lt;IConfiguration&gt;()</code>).</li>
+  <li><span class="tid">T2.6</span> Frame-parity test: a golden comparison asserting the composite's emitted frame vocabulary matches the cloud composites' against an equivalent scripted session.</li>
+  <li><span class="tid">T3.1</span> <span class="badge deferred">deferred</span> Feasibility spike: is a local PersonaPlex / Moshi-class model viable in real time on commodity hardware? Document findings; pick a host (GPU vs sidecar).</li>
+  <li><span class="tid">T3.2</span> <span class="badge deferred">deferred</span> First concrete <code>ISpeechToSpeechSession</code> — cloud S2S (Option A) to validate the seam end-to-end.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td>Seam compiles; <code>SpeechToSpeechProcessor</code> lifecycle against a <b>fake session</b> (no model): start &rarr; append user audio &rarr; receive scripted chunks &rarr; end. Asserts <code>StartFrame</code>/<code>EndFrame</code> forwarding, per-frame cancellation on interruption, and <b>diagnostics-frame parity</b> with the cloud composites (same speaking edges, audio-out, error frames for the same scripted input). No network, no GPU, no weights.</td></tr>
+  <tr><td><b>Config / selection</b></td><td><code>Voxa:Mode=SpeechToSpeech</code> selects the composite; <code>Granular</code> / absent leaves the chain byte-identical. Descriptor resolves under a plain <code>ServiceCollection</code> (no implicit <code>IConfiguration</code>).</td></tr>
+  <tr><td><b>Manual / spike <span class="badge deferred">deferred</span></b></td><td>The real model path (WS3). Manual, hardware-dependent, and spike-gated — a cloud S2S session first (Option A), then a GPU / sidecar-hosted local model (Option B). Trait-gated <code>LocalModels</code> where weights are involved; never in the default lane.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>Speculative capability.</b> No open local S2S model may be viable in real time on commodity hardware in the relevant window — the strategic premise could simply not land.</td><td class="sev-high">High</td><td>Ship only the seam + composite (cheap, ~1 wk); gate the model behind an explicit feasibility spike (T3.1). The seam has standalone value (a cloud S2S could use it) even if the local model never arrives.</td></tr>
+  <tr><td>R2</td><td><b>Seam drift from the cloud-composite contract</b> — the abstraction diverges and stops being a true third member, fragmenting the realtime family.</td><td class="sev-high">High</td><td>Pin every signature against <code>OpenAIRealtimeProcessor</code> / <code>AzureVoiceLiveProcessor</code> at implementation; the frame-parity golden (T2.6) enforces identical downstream behaviour.</td></tr>
+  <tr><td>R3</td><td><b>Diagnostics / Studio divergence</b> — the composite emits a different frame set, so Studio's Talk view or the latency waterfall misbehaves for S2S.</td><td class="sev-med">Med</td><td>Frame-parity table (§6) + golden test; reuse the cloud composites' exact emission semantics and <code>_botSpeaking</code> flip.</td></tr>
+  <tr><td>R4</td><td><b>GPU / host complexity</b> (WS3) — GB weights, CUDA-only runtime, out-of-process marshalling of audio buffers.</td><td class="sev-med">Med</td><td>Deferred; reuse VLS-002 GPU patterns + the <code>PiperProcessHost</code> sidecar pattern; pin weights via <code>VoxaModelCache</code>; license-closure gate test for any native / GPL runtime.</td></tr>
+  <tr><td>R5</td><td><b>Tool-calling mismatch</b> — some S2S models can't do function-calling, so a tool-dependent agent silently degrades.</td><td class="sev-low">Low</td><td>Tools are an optional, documented extension point on the seam (§5), not a requirement; the composite advertises capability rather than assuming it.</td></tr>
+  <tr><td>R6</td><td><b>Scope creep into the model.</b> Pressure to "just add the model" pulls GB-scale, GPU work into a seam PR.</td><td class="sev-low">Low</td><td>This spec hard-scopes WS3 out; the model is its own spec(s) and PR(s). Reviewers reject weight / runtime code in VRT-005 PRs.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>The S2S model weights + host <span class="badge deferred">deferred</span>.</b> A PersonaPlex / Moshi-class model is GB-scale and often GPU-only; it is a separate, spike-gated effort with its own spec(s), riding VLS-002 GPU / sidecar patterns. Not in VRT-005's code.</li>
+  <li><b>The first concrete <code>ISpeechToSpeechSession</code>.</b> Cloud (Option A) or local (Option B) — both follow-ups; VRT-005 ships the seam + composite + a fake session only.</li>
+  <li><b>Voice cloning <em>within</em> the S2S model.</b> A frontier capability; if ever in scope it rides VVL-002 (Voicebox-Parity), not this seam.</li>
+  <li><b>Changes to the granular chain or the cloud composites.</b> Explicitly untouched.</li>
+  <li><b>Anything that requires the model to exist.</b> Latency budgets, GPU matrices, streaming-quality tuning — all belong to the deferred WS3 spike, not here.</li>
+</ul>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-008 — ONNX Speech Restoration (Sidon)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-008 — ONNX Speech Restoration (Sidon)</h1>
+  <div class="sub">An <b>offline</b> denoise + dereverb restorer that turns a noisy, reverberant clip into clean
+    48&nbsp;kHz mono audio. It runs on the VLS-006 shared ONNX host as a two-graph pipeline (a w2v-BERT predictor
+    feeding a DAC vocoder) behind a SeamlessM4T-style log-mel front-end. Its first concrete consumer is a
+    <code>voxa restore &lt;in.wav&gt; &lt;out.wav&gt;</code> CLI verb; the strategic consumer is the
+    voice-cloning wizard (<b>VVL-002</b> / Studio), which cleans a reference clip before cloning. This is
+    <em>not</em> a live-pipeline processor — that boundary belongs to VLS-004's denoiser.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-008 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability (offline restoration)</div>
+    <div><b>Depends on</b> VLS-006 ONNX host; <code>Voxa.Cli</code>; consumer VVL-002 / Studio</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M6</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — Sidon on the VLS-006 host</a></li>
+    <li><a href="#s5">WS1 — the restorer on the VLS-006 host</a></li>
+    <li><a href="#s6">WS2 — the <code>voxa restore</code> CLI verb</a></li>
+    <li><a href="#s7">WS3 — consumer wiring (VVL-002 / Studio)</a></li>
+    <li><a href="#s8">Configuration / CLI reference</a></li>
+    <li><a href="#s9">Plan of action — phases</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-008 add, in one sentence?</b>
+    <p>An <em>offline</em> "clean this clip" tool: hand it a noisy or echoey WAV and it returns clean
+    48&nbsp;kHz mono audio, denoised and de-reverberated by the Sidon model.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>It is the natural pre-step for voice cloning. Cloning a voice from a reference clip works far better when
+    the reference is clean, so before VVL-002 / Studio hand a reference to the cloner, Sidon cleans it first.
+    Shipping the restorer plus a <code>voxa restore</code> verb now makes the model testable on its own, ahead
+    of the cloning UI.</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The live pipeline. Sidon is <b>whole-clip and offline</b> — it is <em>not</em> inserted into the
+    <code>mic&nbsp;→&nbsp;VAD&nbsp;→&nbsp;STT</code> chain. It changes both sample rate (any-rate in →
+    48&nbsp;kHz out) and length, so it cannot be a fixed-rate, equal-length live processor. Nothing about
+    real-time turn-taking, VAD, or the composed pipeline moves.</p>
+  </div>
+  <div class="qa">
+    <b>How is this different from VLS-004?</b>
+    <p>VLS-004 is the <em>live</em> denoiser — an <code>IAudioEnhancer</code> placed before the VAD that cleans
+    mic audio frame-by-frame in real time (DeepFilterNet3). VLS-008 is <em>offline</em> restoration of
+    artifacts: a whole clip in, a whole clip out, off the hot path. Same family (ONNX on the VLS-006 host),
+    opposite use: VLS-004 cleans a <i>live stream</i>; VLS-008 cleans a <i>file</i>.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-008 ports speech-core's <code>OnnxSidonRestorer</code> onto Voxa's VLS-006 ONNX host and exposes it through
+the existing <code>voxa</code> CLI:</p>
+
+<ul>
+  <li><b>WS1 — the restorer <span class="badge p2">P6</span>.</b> A <code>SidonRestorer</code> on the VLS-006
+    host: a SeamlessM4T-style log-mel front-end → a w2v-BERT predictor graph → a DAC vocoder graph, taking
+    any-rate mono PCM and returning 48&nbsp;kHz mono PCM. Two ONNX artifacts (predictor + vocoder) and any
+    config sidecar are SHA-256-pinned in a catalog and resolved through <code>VoxaModelCache</code>.</li>
+  <li><b>WS2 — the <code>voxa restore</code> verb <span class="badge additive">additive</span>.</b> Mirrors the
+    existing <code>voxa transcribe</code> / <code>voxa say</code> verbs: <code>voxa restore &lt;in.wav&gt;
+    &lt;out.wav&gt;</code> reads any-rate PCM WAV and writes 48&nbsp;kHz mono — cross-platform, file-in/file-out,
+    no audio device. The first concrete consumer, which makes the model testable without VVL-002.</li>
+  <li><b>WS3 — consumer wiring (deferred).</b> The cloning wizard (VVL-002 / Studio) calls the restorer to clean
+    a reference clip before cloning; an optional <code>IAudioRestorer</code> seam others can call. Specced here
+    as a note, <b>built with VVL-002</b>.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A developer can run <code>voxa restore noisy.wav clean.wav</code> and
+get a 48&nbsp;kHz cleaned-up WAV; VVL-002 / Studio reuse the same restorer to clean a clone reference before
+handing it to the voice-cloner — all offline, all on the shared ONNX host, with nothing touching the live
+pipeline.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>An offline Sidon restorer on the VLS-006 host: any-rate mono PCM in → clean 48&nbsp;kHz mono PCM out.</li>
+  <li>Both ONNX graphs (predictor + vocoder) and any sidecar config SHA-256-pinned in a catalog, resolved via
+    <code>VoxaModelCache</code> the standard way.</li>
+  <li>A <code>voxa restore</code> CLI verb as the first concrete consumer — file-in/file-out, cross-platform, no
+    audio device, unit-testable arg-parsing.</li>
+  <li>An optional <code>IAudioRestorer</code> seam shape so VVL-002 / Studio can call the restorer without a CLI
+    round-trip (the seam is defined here; the consumer is wired in VVL-002).</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>Real-time / live-pipeline restoration.</b> Sidon is whole-clip and offline; it does <b>not</b> enter the
+    <code>mic&nbsp;→&nbsp;…&nbsp;→&nbsp;VAD</code> chain. The live denoiser is VLS-004.</li>
+  <li>The Studio cloning-wizard <em>UI</em> hook — that rides VVL-002 (§7, §13).</li>
+  <li>Batch / folder restoration (one file per invocation; §13).</li>
+  <li>A LiteRT / non-ONNX backend — the DAC vocoder does not legalise to TFLite (it is ONNX-only upstream).</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default-package size delta</td><td><b>0</b> — Sidon is an <i>opt-in heavy tier</i>; the models are pinned
+    and downloaded on first use, never bundled.</td></tr>
+  <tr><td>Default test lane</td><td>No new network — CLI arg-parse + a synthetic shape/rate check only; the real
+    restore round-trip is <code>Category=LocalModels</code>.</td></tr>
+  <tr><td>Output contract</td><td>Always 48&nbsp;kHz mono 16-bit PCM regardless of input rate (model constant; the
+    DAC vocoder's fixed output rate).</td></tr>
+  <tr><td><code>Voxa.Core</code> dependency footprint</td><td><b>0</b> — no Core change. New code lands in
+    <code>Voxa.Audio.Onnx</code> (or its Sidon sub-package) and <code>Voxa.Cli</code> only.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — Sidon on the VLS-006 host</h2>
+
+<p>Sidon is two ONNX graphs orchestrated around a DSP front-end, exactly as modelled by speech-core's
+<code>OnnxSidonRestorer</code> (header: <code>speech_core/models/onnx_sidon_restorer.h</code>) and its
+<code>speech_sidon_restore</code> CLI. Both graphs run through the <b>VLS-006</b> shared ONNX-Runtime host
+(<code>Voxa.Audio.Onnx</code>), inheriting its session caching and CPU-default / opt-in-EP device seam. The data
+flow:</p>
+
+<pre><code>audio (any rate, mono) ──[resample to 16 kHz]──►
+  ──[SeamlessM4T log-mel front-end (managed DSP)]──► input_features [1, T, 160]
+    ──► predictor graph  (w2v-BERT 2.0, 8 layers + merged LoRA)
+       ──► features [1, T, 1024]
+          ──► vocoder graph (DAC decoder, ×960 upsample)
+             ──► audio (48 kHz, mono) [1, M]</code></pre>
+
+<p>The predictor's 8-layer <code>last_hidden_state</code> <em>is</em> the cleansed feature (there is no separate
+head); the DAC vocoder reconstructs 48&nbsp;kHz audio from it. The whole operation changes both sample rate
+(16&nbsp;kHz internal → 48&nbsp;kHz out) and length, which is precisely why it cannot be a fixed-rate,
+equal-length live enhancer (VLS-004's contract) and is exposed as a <code>Restore(...)</code> that returns a
+freshly-sized 48&nbsp;kHz buffer.</p>
+
+<h3>Files &amp; packages</h3>
+<table>
+  <tr><th>File / package</th><th>Role</th></tr>
+  <tr><td><code>Voxa.Audio.Onnx</code> (VLS-006)</td><td><b>Reused.</b> The shared ORT session host + device seam
+    + <code>VoxaModelCache</code> integration. Sidon does not create its own <code>InferenceSession</code> — it
+    asks the host for cached sessions, mirroring how Kokoro caches sessions today but via the shared host.</td></tr>
+  <tr><td><code>SidonRestorer.cs</code> (new, on the host)</td><td>WS1 — loads the two pinned graphs via the host,
+    runs the log-mel front-end + predictor + vocoder, returns 48&nbsp;kHz mono PCM. Whole-clip; offline.</td></tr>
+  <tr><td><code>SidonCatalog.cs</code> (new)</td><td>WS1 — pinned <code>VoxaModelArtifact</code> entries: predictor
+    graph, vocoder graph, any front-end config sidecar. SHA-256 from the Hugging Face LFS pointers.</td></tr>
+  <tr><td><code>SidonMelFrontEnd.cs</code> (new)</td><td>WS1 — the managed SeamlessM4T-style stacked log-mel
+    front-end producing <code>[1, T, 160]</code>; the careful port (§12 R1).</td></tr>
+  <tr><td><code>VoxaCliRunner.cs</code> (<code>Voxa.Cli</code>)</td><td>WS2 — a <code>restore</code> case in the
+    command switch + a <code>RestoreAsync</code> handler, alongside <code>TranscribeAsync</code> /
+    <code>SayAsync</code>.</td></tr>
+  <tr><td><code>WavIO.cs</code> (<code>Voxa.Cli</code>)</td><td>WS2 — <b>reused.</b> <code>ReadPcm</code> for any-rate
+    input, <code>WritePcm16Async</code> for the 48&nbsp;kHz output.</td></tr>
+  <tr><td><code>IAudioRestorer</code> (seam, deferred)</td><td>WS3 — an optional abstraction VVL-002 / Studio call
+    instead of shelling out to the CLI. Defined here; consumer wired in VVL-002.</td></tr>
+  <tr><td><code>Voxa.Core</code>, the composer, the VAD chain</td><td><b>Unchanged.</b> Sidon is offline; it never
+    enters the live pipeline.</td></tr>
+</table>
+
+<div class="callout"><b>Reference model.</b> The contract is taken directly from speech-core's
+<code>OnnxSidonRestorer</code> — input PCM Float32 mono, internal resample to 16&nbsp;kHz, two graphs, a managed
+DSP front-end, and an <code>output_sample_rate()</code> of 48&nbsp;kHz. Voxa's <code>SidonRestorer</code> is the
+managed peer of that class; its CLI verb is the peer of <code>speech_sidon_restore</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the restorer on the VLS-006 host</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Onnx (Sidon)</span>
+  <span><b>Host</b> VLS-006 shared ONNX host</span>
+  <span><b>Mode</b> offline / whole-clip</span>
+  <span><b>Output</b> 48 kHz mono (model constant)</span>
+</div>
+
+<p>The restorer loads two pinned ONNX graphs through the VLS-006 host, runs the managed log-mel front-end, then
+the predictor, then the vocoder, and returns 48&nbsp;kHz mono PCM. Inference is CPU-bound native work, so it runs
+off any caller's loop (the Kokoro precedent: <code>Task.Run</code>, a session gate) — though for an offline,
+non-pipeline operation the latency budget is generous.</p>
+
+<span class="filelabel">src/Voxa.Audio.Onnx/Sidon/SidonRestorer.cs (sketch — pin exact host/ORT API at implementation)</span>
+<pre><code><span class="cm">// Offline denoise + dereverb. Whole-clip; NOT a live processor. Two graphs on the VLS-006 host.</span>
+public sealed class SidonRestorer : IAsyncDisposable
+{
+    public const int InputSampleRate  = 16000;  <span class="cm">// w2v-BERT front-end requires 16 kHz</span>
+    public const int OutputSampleRate = 48000;  <span class="cm">// DAC vocoder constant — always 48 kHz mono</span>
+
+    private const int InputFeatDim = 160;        <span class="cm">// SeamlessM4T stacked log-mel</span>
+    private const int HiddenDim    = 1024;       <span class="cm">// w2v-BERT last_hidden_state</span>
+
+    private readonly SidonOptions _options;
+    private readonly VoxaModelCache _cache;
+    private readonly IOnnxModelHost _host;       <span class="cm">// VLS-006</span>
+
+    public SidonRestorer(SidonOptions options, VoxaModelCache cache, IOnnxModelHost host) { <span class="cm">/* ... */</span> }
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        <span class="cm">// Resolve + verify both pinned graphs (and any sidecar config) via VoxaModelCache,</span>
+        <span class="cm">// then ask the VLS-006 host for cached sessions on the configured device.</span>
+        var predictor = await _cache.ResolveAsync(SidonCatalog.Predictor, ct).ConfigureAwait(false);
+        var vocoder   = await _cache.ResolveAsync(SidonCatalog.Vocoder,   ct).ConfigureAwait(false);
+        _predictor = _host.GetSession(predictor, _options.Device);
+        _vocoder   = _host.GetSession(vocoder,   _options.Device);
+    }
+
+    <span class="cm">/// Restore a whole clip: any-rate mono Float32 in [-1,1] -&gt; 48 kHz mono PCM16 out.</span>
+    <span class="cm">/// Returns empty if the clip is too short to yield a single frame.</span>
+    public async Task&lt;byte[]&gt; RestoreAsync(ReadOnlyMemory&lt;float&gt; audio, int sampleRate, CancellationToken ct)
+    {
+        var mono16k  = Resample(audio, sampleRate, InputSampleRate);     <span class="cm">// any rate -&gt; 16 kHz</span>
+        var features = SidonMelFrontEnd.LogMel(mono16k);                 <span class="cm">// -&gt; [1, T, 160]</span>
+        var hidden   = await RunAsync(_predictor, features, ct);         <span class="cm">// -&gt; [1, T, 1024]</span>
+        var wave48k  = await RunAsync(_vocoder,   hidden,   ct);         <span class="cm">// -&gt; [1, M] @ 48 kHz</span>
+        return ToPcm16(wave48k);
+    }
+}</code></pre>
+
+<h3>Pinned catalog</h3>
+<p>The catalog follows the Kokoro pattern exactly: a compiled-in dictionary of
+<code>VoxaModelArtifact</code>(<code>Id</code>, <code>DownloadUrl</code>, <code>Sha256</code>,
+<code>SizeBytes</code>), one entry per file, resolved/verified/extracted by <code>VoxaModelCache</code>.</p>
+
+<table>
+  <tr><th>Catalog id</th><th>File</th><th>Role</th></tr>
+  <tr><td><code>sidon/sidon-predictor.onnx</code></td><td><code>sidon-predictor.onnx</code></td><td>w2v-BERT predictor (cleansed features)</td></tr>
+  <tr><td><code>sidon/sidon-vocoder.onnx</code></td><td><code>sidon-vocoder.onnx</code></td><td>DAC decoder (→ 48 kHz)</td></tr>
+  <tr><td><code>sidon/config.json</code> <i>(if required)</i></td><td><code>config.json</code></td><td>front-end / model config sidecar</td></tr>
+</table>
+
+<span class="filelabel">src/Voxa.Audio.Onnx/Sidon/SidonCatalog.cs (sketch)</span>
+<pre><code><span class="cm">// &lt;-- sha256 + sizeBytes from each file's HF LFS pointer; never hand-written --&gt;</span>
+public static readonly VoxaModelArtifact Predictor = new(
+    "sidon/sidon-predictor.onnx", new Uri(BaseUrl + "sidon-predictor.onnx"), "&lt;sha256&gt;", &lt;bytes&gt;);
+public static readonly VoxaModelArtifact Vocoder = new(
+    "sidon/sidon-vocoder.onnx",   new Uri(BaseUrl + "sidon-vocoder.onnx"),   "&lt;sha256&gt;", &lt;bytes&gt;);</code></pre>
+
+<div class="callout danger"><b>Do not fabricate hashes; verify the licence.</b> Every <code>Sha256</code> and
+<code>SizeBytes</code> <b>must</b> be read at implementation time from each file's Hugging Face LFS pointer
+(<code>GET huggingface.co/&lt;repo&gt;/raw/main/&lt;file&gt;</code> → <code>oid sha256:&lt;hash&gt;</code> +
+<code>size&nbsp;&lt;bytes&gt;</code>) — a guessed hash is a bug, not a placeholder. And before any Sidon code
+merges, the licences of <b>both</b> the Sidon weights <b>and</b> the DAC vocoder must be cleared and recorded —
+the same license-closure gate Kokoro / GPL artifacts pass. No model ships whose licence isn't closed.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the <code>voxa restore</code> CLI verb</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Cli (<code>dotnet tool</code>)</span>
+  <span><b>Shape</b> file-in / file-out</span>
+  <span><b>Device</b> none (no mic/speakers)</span>
+  <span><b>Pattern</b> mirrors <code>transcribe</code> / <code>say</code></span>
+</div>
+
+<p>The verb is a direct peer of the existing <code>voxa transcribe</code> and <code>voxa say</code> verbs in
+<code>VoxaCliRunner</code>: a new <code>restore</code> case in the command switch, a <code>RestoreAsync</code>
+handler, the shared <code>Parse</code> / <code>VoxaRoot</code> / <code>CacheFor</code> helpers, and
+<code>WavIO</code> for I/O. It reads <em>any-rate</em> mono PCM WAV (the front-end resamples internally) and writes
+48&nbsp;kHz mono via <code>WavIO.WritePcm16Async</code>. Being file-in/file-out with no audio device, it is fully
+cross-platform and unit-testable.</p>
+
+<span class="filelabel">src/Voxa.Cli/VoxaCliRunner.cs (additions — mirrors TranscribeAsync / SayAsync)</span>
+<pre><code><span class="cm">// in the command switch, alongside "transcribe" / "say":</span>
+"restore" =&gt; await RestoreAsync(rest, output, error, ct).ConfigureAwait(false),
+
+private static async Task&lt;int&gt; RestoreAsync(string[] args, TextWriter output, TextWriter error, CancellationToken ct)
+{
+    var (positional, options) = Parse(args);
+    if (positional.Count &lt; 2)
+    {
+        error.WriteLine("usage: voxa restore &lt;in.wav&gt; &lt;out.wav&gt; [--device cpu|cuda|directml]");
+        return 1;
+    }
+
+    var inPath  = positional[0];
+    var outPath = positional[1];
+    if (!File.Exists(inPath))
+    {
+        error.WriteLine($"voxa: file not found: {inPath}");
+        return 1;
+    }
+
+    var wav = WavIO.ReadPcm(inPath);
+    if (wav.Format != 1 || wav.Channels != 1 || wav.Bits != 16)
+    {
+        <span class="cm">// any sample RATE is fine (Sidon resamples to 16 kHz internally); require mono 16-bit PCM</span>
+        error.WriteLine("voxa: restore needs mono 16-bit PCM WAV (any sample rate). " +
+            "Convert first, e.g.: ffmpeg -i input -ac 1 -c:a pcm_s16le out.wav");
+        return 1;
+    }
+
+    var root = options.TryGetValue("device", out var dev)
+        ? VoxaRoot(("Sidon:Device", dev))
+        : VoxaRoot();
+
+    await using var restorer = new SidonRestorer(SidonOptions.FromConfiguration(root), CacheFor(root), HostFor(root));
+    await restorer.StartAsync(ct).ConfigureAwait(false);
+
+    var samples = PcmToFloat(wav.Pcm);                                  <span class="cm">// PCM16 -&gt; Float32 [-1,1]</span>
+    var pcm48   = await restorer.RestoreAsync(samples, wav.SampleRate, ct).ConfigureAwait(false);
+    if (pcm48.Length == 0)
+    {
+        error.WriteLine("voxa: clip too short to restore.");
+        return 1;
+    }
+
+    await WavIO.WritePcm16Async(outPath, pcm48, SidonRestorer.OutputSampleRate, ct).ConfigureAwait(false);
+    output.WriteLine($"Wrote {outPath} (sidon, {SidonRestorer.OutputSampleRate} Hz mono, " +
+        $"{new FileInfo(outPath).Length} bytes).");
+    return 0;
+}</code></pre>
+
+<p>The top-level <code>Usage</code> string gains one block, matching the existing entries:</p>
+<pre><code>  voxa restore &lt;in.wav&gt; &lt;out.wav&gt; [--device cpu|cuda|directml]
+      Offline denoise + dereverb (Sidon) — any-rate mono WAV in, 48 kHz mono WAV out.</code></pre>
+
+<div class="callout"><b>Why the CLI is the first consumer.</b> It makes the model exercisable end-to-end —
+download, resolve, run both graphs, write a WAV — <em>without</em> waiting for VVL-002's cloning wizard. That is
+what lets the <code>Category=LocalModels</code> round-trip test (§11) exist now.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — consumer wiring (VVL-002 / Studio)</h2>
+
+<div class="ws-head">
+  <span><b>Status</b> deferred to VVL-002</span>
+  <span><b>Built here?</b> no — note + seam shape only</span>
+  <span><b>Consumer</b> cloning wizard (Studio)</span>
+</div>
+
+<p>This workstream is documented, <b>not built</b>, in VLS-008. The intended shape:</p>
+
+<ul>
+  <li><b>The cloning pre-step.</b> When VVL-002's voice-cloning wizard takes a reference clip, it calls the Sidon
+    restorer to clean it (denoise + dereverb) before handing it to the cloner — exactly speech-core's stated
+    "clean a reverberant clone reference" use case. The reference is whole-clip, so the offline restorer fits
+    naturally; nothing about cloning touches the live pipeline.</li>
+  <li><b>An optional <code>IAudioRestorer</code> seam.</b> So in-process callers (Studio) don't shell out to the
+    CLI: <code>Task&lt;RestoredClip&gt; RestoreAsync(ReadOnlyMemory&lt;float&gt; audio, int sampleRate, CancellationToken ct)</code>
+    returning 48&nbsp;kHz mono. <code>SidonRestorer</code> is the reference implementation. The seam <i>shape</i>
+    is defined here; the interface and its Studio wiring land with VVL-002 so the consumer and the contract ship
+    together.</li>
+</ul>
+
+<div class="callout warn"><b>Deferred — VVL-002 owns delivery.</b> VLS-008 ships the restorer and the CLI verb;
+VVL-002 (Voicebox-Parity program) owns on-device cloning and the wizard UI, and is the natural home for the
+"clean reference" step and any Studio surface. Building the wizard hook here would duplicate VVL-002 scope and
+couple this offline utility to UI work. See §13.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration / CLI reference</h2>
+
+<h3>CLI verb</h3>
+<table>
+  <tr><th>Form</th><th>Meaning</th></tr>
+  <tr><td><code>voxa restore &lt;in.wav&gt; &lt;out.wav&gt;</code></td><td>Restore any-rate mono WAV → 48&nbsp;kHz mono WAV (CPU).</td></tr>
+  <tr><td><code>voxa restore &lt;in.wav&gt; &lt;out.wav&gt; --device cuda</code></td><td>Run both graphs on a GPU EP (opt-in, per VLS-006 / VLS-002).</td></tr>
+</table>
+
+<h3>Config keys (<code>Voxa:Sidon</code>)</h3>
+<span class="filelabel">appsettings.json — Sidon keys (also settable inline by the CLI)</span>
+<pre><code>{
+  "Voxa": {
+    "Sidon": {
+      "Model": "default",     <span class="cm">// pinned catalog selector (predictor + vocoder pair)</span>
+      "Device": "cpu"         <span class="cm">// cpu (default) | cuda | directml — per the VLS-006 device seam</span>
+    }
+  }
+}</code></pre>
+<p><code>Device</code> reuses the VLS-006 / VLS-002 device contract verbatim (CPU default; GPU EPs opt-in, the
+natives user-added and never bundled). There is no live-pipeline config — Sidon is invoked explicitly (CLI today,
+VVL-002 later), never wired into the composer.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases</h2>
+<ol>
+  <li><b>Phase A — the restorer + pinned model.</b> <code>SidonRestorer</code> on the VLS-006 host, the log-mel
+    front-end, <code>SidonCatalog</code> with real LFS hashes + a licence-closure record, and a
+    <code>Category=LocalModels</code> round-trip test (any-rate in → 48&nbsp;kHz mono out). Depends on VLS-006
+    being merged.</li>
+  <li><b>Phase B — the <code>voxa restore</code> verb.</b> The <code>restore</code> case + <code>RestoreAsync</code>
+    in <code>VoxaCliRunner</code>, the <code>Usage</code> block, and a default-lane arg-parse / synthetic
+    shape test. The first concrete consumer.</li>
+  <li><b>Phase C — (later, with VVL-002) the consumer hook.</b> The <code>IAudioRestorer</code> seam + the cloning
+    wizard's "clean reference" step. <b>Not in this spec's PRs</b> — sequenced under VVL-002 (§7, §13).</li>
+</ol>
+<p>One logical change per PR (per CONTRIBUTING): Phase A and Phase B are two PRs, each with an
+<code>[Unreleased]</code> CHANGELOG entry; this spec is authored <b>before</b> either lands.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> <code>SidonCatalog</code> — pin predictor + vocoder (+ any config) with LFS-sourced sha256 + size; record both licences.
+    <span class="ac">AC: artifacts resolve via <code>VoxaModelCache</code>; licence-closure note checked in.</span></li>
+  <li><span class="tid">T1.2</span> <code>SidonMelFrontEnd</code> — managed SeamlessM4T-style stacked log-mel → <code>[1, T, 160]</code>.
+    <span class="ac">AC: front-end output shape/range matches the reference on a fixed input vector.</span></li>
+  <li><span class="tid">T1.3</span> <code>SidonRestorer</code> — load both graphs via the VLS-006 host; run front-end → predictor → vocoder; return 48&nbsp;kHz mono PCM.
+    <span class="ac">AC: any-rate Float32 in → 48&nbsp;kHz mono out; empty result for a too-short clip.</span></li>
+  <li><span class="tid">T1.4</span> <code>Category=LocalModels</code> round-trip test on a short noisy clip.
+    <span class="ac">AC: output is 48&nbsp;kHz mono and longer-than-empty; runs only in the gated lane.</span></li>
+  <li><span class="tid">T2.1</span> <code>SidonOptions.FromConfiguration</code> + the VLS-006 device key.
+    <span class="ac">AC: parses <code>Voxa:Sidon:Device</code>; defaults to <code>cpu</code>.</span></li>
+  <li><span class="tid">T2.2</span> <code>restore</code> case + <code>RestoreAsync</code> in <code>VoxaCliRunner</code>; any-rate read, 48&nbsp;kHz write.
+    <span class="ac">AC: rejects non-mono / non-16-bit with an ffmpeg hint; writes a 48&nbsp;kHz WAV.</span></li>
+  <li><span class="tid">T2.3</span> <code>Usage</code> block + unknown-arg handling for <code>restore</code>.</li>
+  <li><span class="tid">T2.4</span> Default-lane test: arg-parse + a synthetic shape/rate check (no download, no GPU).
+    <span class="ac">AC: runs in the default offline lane.</span></li>
+  <li><span class="tid">T3.1</span> <i>(deferred — VVL-002)</i> <code>IAudioRestorer</code> seam + cloning-wizard "clean reference" step.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td><code>voxa restore</code> arg-parsing (missing args, missing file,
+    non-mono/non-16-bit rejection) and a <i>synthetic</i> shape/rate check — feed the restorer (or its front-end)
+    a known buffer and assert the front-end shape and the declared 48&nbsp;kHz output contract. No download, no
+    GPU, no real model.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>A real restore round-trip: download + SHA-256-verify both
+    graphs, run a short noisy clip through <code>voxa restore</code> (or <code>SidonRestorer</code> directly) at an
+    arbitrary input rate, and assert the output is <b>48&nbsp;kHz mono</b> and non-empty. Gated; runs against the
+    pre-seeded, network-blocked model cache.</td></tr>
+  <tr><td><b>Manual / spot-check</b></td><td>Run <code>voxa restore noisy.wav clean.wav</code> on a genuinely
+    reverberant clip; confirm audible denoise + dereverb and a 48&nbsp;kHz mono output file. Compare against
+    speech-core's <code>speech_sidon_restore</code> on the same input if parity is in question.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Two-graph pipeline + a custom log-mel front-end — port-fidelity drift vs the PyTorch / speech-core reference (the front-end and the graph chaining are the fiddly parts).</td><td class="sev-high">High</td><td>Port the SeamlessM4T log-mel carefully; validate front-end shape/range and end-to-end output against speech-core's reference on fixed inputs (NOTES: ONNX FP32 is bit-exact vs PyTorch).</td></tr>
+  <tr><td>R2</td><td>Licence on the Sidon weights and the DAC vocoder unclear or restrictive → cannot ship.</td><td class="sev-high">High</td><td>Licence-closure gate <b>before</b> code merges (mirror the Kokoro gate); clear and record <i>both</i> weights' licences; no pin lands until closed.</td></tr>
+  <tr><td>R3</td><td>Incorrect / fabricated SHA-256 → silent wrong file or perpetual verify failure.</td><td class="sev-high">High</td><td>Source every hash from the HF LFS pointer; the <code>LocalModels</code> round-trip verifies the downloaded files against the pins.</td></tr>
+  <tr><td>R4</td><td>Model size (two graphs, w2v-BERT + DAC) inflates the cache / first-run download.</td><td class="sev-med">Med</td><td>Opt-in heavy tier; pinned + downloaded on first use, never bundled; the default lane never downloads.</td></tr>
+  <tr><td>R5</td><td>Scope creep — someone wires Sidon into the live <code>mic → VAD</code> chain as a "denoiser".</td><td class="sev-med">Med</td><td>It is offline / whole-clip by contract (changes rate <i>and</i> length); the live denoiser is VLS-004. The spec, the API surface (<code>RestoreAsync</code> returning a fresh 48&nbsp;kHz buffer), and the absence of any composer wiring all enforce the boundary.</td></tr>
+  <tr><td>R6</td><td>VLS-006 host API still in flux when VLS-008 starts.</td><td class="sev-low">Low</td><td>VLS-008 is sequenced after VLS-006 (M6 after M4); the sketches pin the exact host call at implementation.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Live / real-time restoration.</b> Sidon is whole-clip and offline; it does <b>not</b> enter the
+    <code>mic&nbsp;→&nbsp;…&nbsp;→&nbsp;VAD</code> chain. Live denoise is VLS-004's <code>IAudioEnhancer</code>.</li>
+  <li><b>The Studio cloning-wizard UI hook.</b> Rides VVL-002 — the restorer and CLI verb ship here; the wizard
+    "clean reference" step and any Studio surface land with VVL-002 (§7).</li>
+  <li><b>Batch / folder restoration.</b> One file per <code>voxa restore</code> invocation; bulk processing is a
+    follow-up if demand appears.</li>
+  <li><b>A LiteRT / non-ONNX backend.</b> The DAC vocoder's <code>ConvTranspose1d</code> does not legalise to
+    TFLite (per speech-core's export notes) — ONNX Runtime only.</li>
+  <li><b>The <code>IAudioRestorer</code> seam as a shipped interface.</b> Its shape is sketched here; the interface
+    + its consumer land together with VVL-002 so the contract and its caller ship as one change.</li>
+</ul>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-005 — Speaker Diarization (Voxa.Audio.Diarization)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-005 — Speaker Diarization (Voxa.Audio.Diarization)</h1>
+  <div class="sub">A new capability category: batch/offline <b>"who spoke when"</b> labelling for multi-speaker
+    and meeting audio. It composes two opt-in model seams (<code>ISpeakerSegmentation</code> + <code>ISpeakerEmbedding</code>)
+    through a <b>pure-C# <code>DiarizationPipeline</code></b> (constrained agglomerative clustering, no ML runtime of its
+    own) and fills the <em>already-present, always-null</em> <code>TranscriptionFrame.SpeakerId</code>. The orchestration
+    package carries no ONNX dependency; the reference models live in a separate <code>.Onnx</code> sub-package.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-005 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability (new category)</div>
+    <div><b>Depends on</b> <code>TranscriptionFrame.SpeakerId</code> (exists); <code>VoxaModelCache</code>; <code>Voxa.Cli</code> transcribe verb</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M5</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — composition &amp; package layout</a></li>
+    <li><a href="#s5">WS1 — the diarization seams + pure-C# pipeline</a></li>
+    <li><a href="#s6">WS2 — the reference ONNX implementations</a></li>
+    <li><a href="#s7">WS3 — consumer wiring (<code>voxa transcribe --diarize</code>)</a></li>
+    <li><a href="#s8">Configuration / CLI reference</a></li>
+    <li><a href="#s9">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-005 add, in one sentence?</b>
+    <p>It tells Voxa <em>who</em> spoke each part of a multi-speaker recording — putting a <code>speaker 0</code> /
+    <code>speaker 1</code> label on every segment of a meeting clip — by filling the <code>SpeakerId</code> field that
+    <code>TranscriptionFrame</code> has always carried but never populated.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>This is a whole capability category Voxa simply lacks. The STT contract already exposes
+    <code>TranscriptionFrame.SpeakerId</code> (see <code>src/Voxa.Core/Frames/DataFrames.cs</code>), but nothing ever
+    sets it — it is null on every frame today. Diarization is the missing producer. speech-core demonstrates the value
+    on-device, and its design ports cleanly (see the next answer).</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The real-time pipeline. Diarization here is <b>batch / offline</b> and <b>opt-in</b>: it runs over a complete
+    recording (the <code>voxa transcribe --diarize</code> path), not the live <code>VAD → STT → agent → TTS</code> loop.
+    Live/streaming diarization is out of scope (§13). With <code>--diarize</code> absent, behaviour is identical to today.</p>
+  </div>
+  <div class="qa">
+    <b>What is the design key?</b>
+    <p>The <em>orchestration</em> — windowing, embedding extraction, clustering, label assignment — is <b>pure C# with no
+    ML-runtime dependency</b>, exactly mirroring speech-core's core-pure <code>DiarizationPipeline</code> (its
+    <code>SegmentationInterface</code> / <code>EmbeddingInterface</code> / <code>DiarizerInterface</code> sit in front of
+    swappable backends). That lets the new <code>Voxa.Audio.Diarization</code> package stay dependency-light and
+    unit-testable on synthetic embeddings, while ONNX lives only in an opt-in <code>.Onnx</code> sub-package — the same
+    discipline that keeps <code>Voxa.Core</code> at zero external dependencies.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-005 introduces one new package family and one new CLI flag:</p>
+
+<ul>
+  <li><b>WS1 — Seams + pure-C# pipeline <span class="badge additive">additive</span>.</b> A new
+    <code>Voxa.Audio.Diarization</code> package defining <code>ISpeakerSegmentation</code>, <code>ISpeakerEmbedding</code>,
+    <code>IDiarizer</code>, a <code>DiarizerConfig</code> record, a <code>DiarizedSegment</code> result, and a pure-C#
+    <code>DiarizationPipeline</code> that composes a segmenter + embedder + constrained agglomerative clustering.
+    <b>Zero ML-runtime dependency.</b></li>
+  <li><b>WS2 — Reference ONNX impls <span class="badge p2">opt-in</span>.</b> A sibling
+    <code>Voxa.Audio.Diarization.Onnx</code> package shipping a Pyannote-Segmentation-3.0 segmenter and a
+    WeSpeaker-ResNet34 embedder, run in-process via ONNX Runtime (the Kokoro / Silero precedent), with weights
+    SHA-256-pinned through <code>VoxaModelCache</code>.</li>
+  <li><b>WS3 — Consumer wiring <span class="badge additive">additive</span>.</b> A <code>--diarize</code> flag on the
+    existing <code>voxa transcribe</code> verb that runs the pipeline over the input WAV and emits a speaker-labelled
+    transcript, populating <code>TranscriptionFrame.SpeakerId</code> for the batch path.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> <code>voxa transcribe --diarize meeting.wav</code> produces a
+speaker-labelled transcript (<code>[speaker 0] …</code> / <code>[speaker 1] …</code>) from a single multi-speaker
+recording — entirely offline once the (opt-in) models are cached. The default build and the live pipeline are
+unchanged.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Fill the existing <code>TranscriptionFrame.SpeakerId</code> on the batch transcription path with diarized speaker labels.</li>
+  <li>Define vendor-neutral seams (<code>ISpeakerSegmentation</code>, <code>ISpeakerEmbedding</code>, <code>IDiarizer</code>) so any backend can plug in.</li>
+  <li>Keep the clustering <b>orchestration ML-runtime-free</b> and deterministic, so it is fully unit-testable offline on synthetic embeddings.</li>
+  <li>Ship a reference ONNX backend (Pyannote + WeSpeaker) as an <b>opt-in</b> sub-package, weights SHA-256-pinned via <code>VoxaModelCache</code>.</li>
+  <li>Expose a first consumer (<code>voxa transcribe --diarize</code>) that proves the end-to-end path.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>Real-time / streaming diarization.</b> This is batch/offline over a complete recording; the live pipeline is untouched.</li>
+  <li><b>Speaker <em>identification</em> / enrollment</b> against known voices (mapping <code>speaker 0</code> → "Alice"). A follow-up once embeddings exist (§13).</li>
+  <li>Diarization-aware turn-taking, or feeding speaker labels into the agent loop.</li>
+  <li>Studio speaker-label UI — Studio <em>could</em> later render the labels Core produces; that is its own item (§13).</li>
+  <li>Any ONNX / ML-runtime dependency in the orchestration package (it lives only in <code>.Onnx</code>).</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td><code>Voxa.Audio.Diarization</code> dependencies</td><td><b>No ML runtime.</b> Orchestration + clustering only — same discipline as speech-core's core-pure <code>DiarizationPipeline</code>.</td></tr>
+  <tr><td><code>Voxa.Core</code> dependencies</td><td><b>Unchanged</b> (NUlid only). Nothing here touches Core's reference set.</td></tr>
+  <tr><td>Default test lane</td><td>No new network. Clustering covered by <b>synthetic-embedding</b> unit tests — deterministic, no models.</td></tr>
+  <tr><td>Default-build size delta</td><td><b>0</b> — the ONNX models and runtime are opt-in (separate package + pinned, downloaded artifacts).</td></tr>
+  <tr><td>Live-pipeline behaviour</td><td><b>Byte-identical</b> — diarization is reachable only via the explicit batch/CLI path.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — composition &amp; package layout</h2>
+
+<p>Diarization is a <b>composition</b> of two model-backed steps and one pure-orchestration step, mirroring
+speech-core's <code>DiarizationPipeline</code> (which composes <code>SegmentationInterface</code> +
+<code>EmbeddingInterface</code> + agglomerative clustering, with the orchestration itself ML-runtime-free):</p>
+
+<pre><code>full recording (16 kHz mono PCM)
+        │
+        ▼
+ISpeakerSegmentation   <span class="cm">// per-window speaker-activity (e.g. Pyannote Segmentation 3.0)</span>
+        │  SegmentationWindow[]   (active speech regions + local speaker tracks)
+        ▼
+ISpeakerEmbedding      <span class="cm">// fixed-dim speaker vector per region (e.g. WeSpeaker ResNet34)</span>
+        │  float[] per region    (EmbeddingDim wide)
+        ▼
+DiarizationPipeline    <span class="cm">// PURE C# — constrained agglomerative clustering, NO ONNX</span>
+        │  DiarizedSegment[] { start, end, speaker }
+        ▼
+TranscriptionFrame.SpeakerId   <span class="cm">// the existing, previously-null field is now filled</span></code></pre>
+
+<p>The split keeps the heavy, license-bound model code isolated behind seams and out of the dependency-light core package:</p>
+
+<table>
+  <tr><th>Package</th><th>Contents</th><th>Dependencies</th></tr>
+  <tr><td><code>Voxa.Audio.Diarization</code></td><td>The seams (<code>ISpeakerSegmentation</code>, <code>ISpeakerEmbedding</code>, <code>IDiarizer</code>), <code>DiarizerConfig</code>, <code>DiarizedSegment</code>, <code>SegmentationWindow</code>, and the pure-C# <code>DiarizationPipeline</code> (clustering + label assignment).</td><td><b>No ML runtime.</b> Plain BCL math; may reference <code>Voxa.Speech.Abstractions</code> for <code>VoxaModelCache</code> types if the seams expose cache-relative ids (kept minimal).</td></tr>
+  <tr><td><code>Voxa.Audio.Diarization.Onnx</code></td><td>The reference <code>PyannoteSegmentation</code> (<code>ISpeakerSegmentation</code>) + <code>WeSpeakerEmbedding</code> (<code>ISpeakerEmbedding</code>) impls, their descriptors, and a pinned <code>DiarizationCatalog</code>.</td><td>ONNX Runtime, in-process — coexists with Kokoro / Silero (already present).</td></tr>
+</table>
+
+<div class="callout"><b>Through-line.</b> This is the program's "<i>define the seam, ship a default backend, keep the
+orchestration pure</i>" pattern (§ "seams over engines" in the program doc). The pure pipeline is what makes the whole
+feature testable offline; the ONNX package is what makes it useful on real audio. Per the program doc, VLS-005 is
+<b>independent of the VRT items</b> and parallelizable.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the diarization seams + pure-C# pipeline</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Diarization (new)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (clustering correctness)</span>
+  <span><b>Network</b> none</span>
+  <span><b>Surface</b> additive (new package)</span>
+</div>
+
+<h3>The seams</h3>
+<p>Two model-backed seams and one orchestrating seam. The segmenter and embedder are the only members an ONNX backend
+implements; the <code>DiarizationPipeline</code> is the concrete pure-C# <code>IDiarizer</code>.</p>
+
+<span class="filelabel">src/Voxa.Audio.Diarization/Seams.cs (sketch)</span>
+<pre><code><span class="cm">// Per-window speaker activity over the whole recording. Mirrors speech-core's SegmentationInterface.</span>
+<span class="cm">// Implementations are model-backed (e.g. Pyannote) and live in the .Onnx package.</span>
+public interface ISpeakerSegmentation
+{
+    IReadOnlyList&lt;SegmentationWindow&gt; Segment(ReadOnlySpan&lt;float&gt; audio, int sampleRate);
+}
+
+<span class="cm">// One model-window's speech activity: absolute time span + local per-track activity.</span>
+public sealed record SegmentationWindow(double Start, double End, IReadOnlyList&lt;SpeechRegion&gt; Regions);
+public sealed record SpeechRegion(double Start, double End);
+
+<span class="cm">// A fixed-dimension speaker embedding for a span of audio. Mirrors EmbeddingInterface.</span>
+public interface ISpeakerEmbedding
+{
+    int EmbeddingDim { get; }
+    float[] Embed(ReadOnlySpan&lt;float&gt; audio, int sampleRate);
+}
+
+<span class="cm">// The orchestrator. The pure-C# DiarizationPipeline is the reference implementation.</span>
+public interface IDiarizer
+{
+    IReadOnlyList&lt;DiarizedSegment&gt; Diarize(ReadOnlySpan&lt;float&gt; audio, int sampleRate, DiarizerConfig config);
+}
+
+<span class="cm">// Result: a contiguous span attributed to one clustered speaker (0-based, stable per run).</span>
+public sealed record DiarizedSegment(double Start, double End, int Speaker);</code></pre>
+
+<h3>The config — defaults from speech-core</h3>
+<p>Tunables are gathered into a record so the threshold (the one knob that materially changes results) is exposed rather
+than buried. Defaults track speech-core's <code>DiarizationPipeline</code> values.</p>
+
+<span class="filelabel">src/Voxa.Audio.Diarization/DiarizerConfig.cs (sketch)</span>
+<pre><code>public sealed record DiarizerConfig
+{
+    public double Onset               { get; init; } = 0.5;   <span class="cm">// speech-activity onset threshold</span>
+    public double Offset              { get; init; } = 0.3;   <span class="cm">// speech-activity offset threshold</span>
+    public double MinSpeechDuration   { get; init; } = 0.3;   <span class="cm">// seconds; drop sub-threshold blips</span>
+    public double ClusteringThreshold { get; init; } = 0.715; <span class="cm">// agglomerative merge distance (speech-core default)</span>
+    public int    MinSpeakers         { get; init; } = 0;     <span class="cm">// 0 = auto (let clustering decide)</span>
+    public int    MaxSpeakers         { get; init; } = 0;     <span class="cm">// 0 = auto (unbounded)</span>
+}</code></pre>
+
+<h3>The pipeline — pure C#, no ONNX</h3>
+<p><code>DiarizationPipeline</code> takes an <code>ISpeakerSegmentation</code> and an <code>ISpeakerEmbedding</code> and
+does everything else itself (see the four steps below). <b>No model runtime is referenced</b> — clustering is plain
+vector math, which is what makes WS1 testable on synthetic embeddings in the default lane.</p>
+
+<span class="filelabel">src/Voxa.Audio.Diarization/DiarizationPipeline.cs (sketch)</span>
+<pre><code>public sealed class DiarizationPipeline : IDiarizer
+{
+    private readonly ISpeakerSegmentation _segmentation;
+    private readonly ISpeakerEmbedding _embedding;
+
+    public DiarizationPipeline(ISpeakerSegmentation segmentation, ISpeakerEmbedding embedding)
+    {
+        _segmentation = segmentation;
+        _embedding = embedding;
+    }
+
+    public IReadOnlyList&lt;DiarizedSegment&gt; Diarize(
+        ReadOnlySpan&lt;float&gt; audio, int sampleRate, DiarizerConfig config)
+    {
+        <span class="cm">// 1. segment → speech regions (onset/offset, MinSpeechDuration)</span>
+        <span class="cm">// 2. embed each region → float[] (EmbeddingDim wide)</span>
+        <span class="cm">// 3. constrained agglomerative clustering by cosine distance,</span>
+        <span class="cm">//    stop at ClusteringThreshold, honour Min/MaxSpeakers when &gt; 0</span>
+        <span class="cm">// 4. assign stable speaker ids, merge adjacent same-speaker regions</span>
+        <span class="cm">// → DiarizedSegment[]   (ALL of this is plain C#; no ONNX here)</span>
+    }
+}</code></pre>
+
+<div class="callout good"><b>Why this matters.</b> Because steps 3–4 take <code>float[]</code> embeddings and emit
+<code>DiarizedSegment[]</code> with no I/O and no model, the clustering can be exercised by handing it
+hand-constructed embedding clusters (e.g. two tight groups → two speakers). That is the default-lane test surface — no
+download, fully deterministic — and the reason the orchestration must stay ML-runtime-free.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the reference ONNX implementations</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Diarization.Onnx (new)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (models, license)</span>
+  <span><b>Network</b> first-run download only</span>
+  <span><b>Default</b> opt-in (not in default build)</span>
+</div>
+
+<p>Two ONNX models behind the WS1 seams, run in-process via ONNX Runtime — the same pattern Kokoro and Silero already
+use (<code>KokoroTtsEngine</code> + <code>KokoroCatalog</code>; the descriptor/catalog shape is the precedent to copy):</p>
+
+<table>
+  <tr><th>Seam</th><th>Reference model</th><th>Role</th></tr>
+  <tr><td><code>ISpeakerSegmentation</code></td><td><code>PyannoteSegmentation</code> — Pyannote Segmentation 3.0 (ONNX export)</td><td>Per-window speech-activity / local speaker tracks.</td></tr>
+  <tr><td><code>ISpeakerEmbedding</code></td><td><code>WeSpeakerEmbedding</code> — WeSpeaker ResNet34 (ONNX export)</td><td>Fixed-dimension speaker vector per speech region.</td></tr>
+</table>
+
+<p>Each model is one entry in a pinned <code>DiarizationCatalog</code>, resolved/verified/cached by
+<code>VoxaModelCache</code> exactly like the Kokoro catalog — <code>VoxaModelArtifact(Id, DownloadUrl, Sha256, SizeBytes)</code>,
+forward-slash cache ids, hashes compiled in as constants. Descriptors validate config (engine names, config values) and
+register the impls the self-describing way the program doc prescribes for new audio processors.</p>
+
+<span class="filelabel">src/Voxa.Audio.Diarization.Onnx/DiarizationCatalog.cs (sketch)</span>
+<pre><code><span class="cm">// &lt;-- sha256 + sizeBytes from each model's upstream LFS pointer; never hand-written --&gt;</span>
+private static readonly Dictionary&lt;string, VoxaModelArtifact&gt; Models = new(StringComparer.OrdinalIgnoreCase)
+{
+    ["pyannote-seg-3.0"] = new("diarization/pyannote-segmentation-3.0.onnx",
+        new Uri("&lt;pinned-url&gt;"), "&lt;sha256&gt;", &lt;bytes&gt;),
+    ["wespeaker-resnet34"] = new("diarization/wespeaker-resnet34.onnx",
+        new Uri("&lt;pinned-url&gt;"), "&lt;sha256&gt;", &lt;bytes&gt;),
+};</code></pre>
+
+<div class="callout danger"><b>Do not fabricate hashes.</b> The <code>SHA-256</code> and exact byte length for each
+model <b>must</b> be read at implementation time from the chosen upstream's LFS pointer (the
+<code>raw/main/&lt;file&gt;</code> pointer carrying <code>oid sha256:&lt;hash&gt;</code> and <code>size&nbsp;&lt;bytes&gt;</code>),
+exactly as the VLS-001 / Kokoro entries were sourced. A guessed or hand-written hash is a bug, not a placeholder.</div>
+
+<div class="callout warn"><b>License-closure gate.</b> Before pinning, confirm the redistribution license of <em>each</em>
+model's weights and the chosen ONNX export, and record it in the catalog doc-comment (as <code>KokoroCatalog</code> notes
+Apache-2.0 for the model and GPL-isolation for espeak). If a chosen weight is not redistribution-clean, select a
+permissive alternative or gate it behind a process/consent boundary — mirror the Kokoro license-closure discipline. This
+is a merge gate, not a follow-up.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — consumer wiring (<code>voxa transcribe --diarize</code>)</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Cli</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span></span>
+  <span><b>Surface</b> additive (new flag)</span>
+  <span><b>Default</b> off (flag absent ⇒ today's behaviour)</span>
+</div>
+
+<p>The existing <code>TranscribeAsync</code> verb (<code>src/Voxa.Cli/VoxaCliRunner.cs</code>) reads a 16&nbsp;kHz mono
+16-bit WAV and streams whisper transcripts. VLS-005 adds a <code>--diarize</code> flag (parsed by the verb's existing
+<code>Parse(args)</code> option splitter). When present, the verb resolves the diarization models (via the pinned
+catalog), runs the <code>DiarizationPipeline</code> over the same PCM, and attributes each transcript to the diarized
+segment whose time span it overlaps — setting <code>TranscriptionFrame.SpeakerId</code> on the batch path and prefixing
+each output line with the speaker label.</p>
+
+<span class="filelabel">src/Voxa.Cli/VoxaCliRunner.cs (TranscribeAsync — added branch, sketch)</span>
+<pre><code>var diarize = options.ContainsKey("diarize");   <span class="cm">// `--diarize` is a flag, no value</span>
+<span class="cm">// ... existing WAV read + format guard (16 kHz mono 16-bit) ...</span>
+
+if (diarize)
+{
+    <span class="cm">// PCM16 → float[]; resolve pinned Pyannote + WeSpeaker via VoxaModelCache;</span>
+    <span class="cm">// build DiarizationPipeline(segmentation, embedding) and run it once.</span>
+    IReadOnlyList&lt;DiarizedSegment&gt; segments =
+        pipeline.Diarize(samples, wav.SampleRate, DiarizerConfig); <span class="cm">// pure-C# orchestration</span>
+
+    <span class="cm">// each whisper transcript is attributed to the overlapping DiarizedSegment.Speaker:</span>
+    <span class="cm">//   new TranscriptionFrame(text, IsFinal: true, SpeakerId: $"speaker {seg.Speaker}")</span>
+    output.WriteLine($"[speaker {speaker}] {result.Text}");
+}
+else
+{
+    output.WriteLine(result.Text);   <span class="cm">// unchanged path</span>
+}</code></pre>
+
+<div class="callout"><b>Output format.</b> With <code>--diarize</code>, each line is prefixed
+<code>[speaker N]</code> (0-based, stable within a run). Without it, output is byte-identical to today. The
+<code>SpeakerId</code> string is <code>"speaker N"</code> for the batch frame, matching the printed label.</div>
+
+<div class="callout"><b>Studio (out of scope here).</b> Because Core now <em>produces</em> populated
+<code>SpeakerId</code> values, Studio could later colour/label speakers in a transcript view. Per the program's
+Core-vs-Studio boundary, Studio only <i>surfaces</i> Core signals; the Studio UI is a separate item (§13) and not built
+in VLS-005.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration / CLI reference</h2>
+
+<h3>CLI</h3>
+<span class="filelabel">voxa transcribe — affected usage</span>
+<pre><code>voxa transcribe &lt;file.wav&gt; [--model &lt;name&gt;] [--language &lt;lang&gt;] [--diarize]
+
+  <span class="cm">--diarize    NEW. Run batch speaker diarization over the recording and prefix each</span>
+  <span class="cm">             line with [speaker N]; populates TranscriptionFrame.SpeakerId. Requires</span>
+  <span class="cm">             the diarization models (resolved/cached on first use). Absent ⇒ unchanged.</span></code></pre>
+
+<h3>Config (optional overrides)</h3>
+<p>The CLI uses sensible defaults; a host (or the CLI via config) may override the engine choice and
+<code>DiarizerConfig</code> knobs under a <code>Voxa:Diarization</code> section. Providers that read this section
+<b>capture the <code>IConfiguration</code> passed to <code>AddVoxa</code></b> — they must not call
+<code>GetRequiredService&lt;IConfiguration&gt;()</code> (breaks the plain-<code>ServiceCollection</code> hosts: Studio,
+tests, CLI), per the program's config-capture invariant.</p>
+
+<span class="filelabel">appsettings.json — Voxa:Diarization (all optional)</span>
+<pre><code>{
+  "Voxa": {
+    "Diarization": {
+      "Segmentation": "pyannote-seg-3.0",    <span class="cm">// segmentation engine / catalog id</span>
+      "Embedding": "wespeaker-resnet34",      <span class="cm">// embedding engine / catalog id</span>
+      "ClusteringThreshold": 0.715,           <span class="cm">// DiarizerConfig override (merge distance)</span>
+      "MinSpeakers": 0,                        <span class="cm">// 0 = auto</span>
+      "MaxSpeakers": 0                         <span class="cm">// 0 = auto</span>
+    }
+  }
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — Seams + pure-C# pipeline + synthetic tests (ships alone).</b> Create
+    <code>Voxa.Audio.Diarization</code> with the seams, <code>DiarizerConfig</code>, <code>DiarizedSegment</code>, and the
+    <code>DiarizationPipeline</code> clustering. Cover clustering with <b>synthetic-embedding</b> unit tests (deterministic,
+    offline, no models). Independently mergeable — it is pure orchestration with no ONNX.</li>
+  <li><b>Phase B — Reference ONNX impls + pinned models.</b> Create <code>Voxa.Audio.Diarization.Onnx</code> with the
+    Pyannote + WeSpeaker impls, descriptors, and a pinned <code>DiarizationCatalog</code> (real LFS-sourced hashes,
+    license-closure recorded). A <code>Category=LocalModels</code> test downloads + verifies the models against the pins.</li>
+  <li><b>Phase C — CLI verb.</b> Add <code>--diarize</code> to <code>transcribe</code>: resolve models, run the pipeline,
+    attribute transcripts to segments, populate <code>SpeakerId</code>, print <code>[speaker N]</code>.</li>
+</ol>
+<p>One logical change per PR (per CONTRIBUTING) — Phases A / B / C are three PRs. Each adds a <code>[Unreleased]</code>
+CHANGELOG entry; the spec lands before any code; warnings-as-errors stays clean.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Create <code>Voxa.Audio.Diarization</code> project (no ML-runtime reference) + the seams (<code>ISpeakerSegmentation</code>, <code>ISpeakerEmbedding</code>, <code>IDiarizer</code>) and records (<code>SegmentationWindow</code>, <code>SpeechRegion</code>, <code>DiarizedSegment</code>).
+    <span class="ac">AC: package builds with no ONNX/ML dependency.</span></li>
+  <li><span class="tid">T1.2</span> Add <code>DiarizerConfig</code> with speech-core defaults (onset 0.5, offset 0.3, minSpeechDuration 0.3, clusteringThreshold 0.715, min/maxSpeakers 0).</li>
+  <li><span class="tid">T1.3</span> Implement <code>DiarizationPipeline</code>: windowing, region forming, constrained agglomerative clustering, stable label assignment, adjacent-segment merge — pure C#.</li>
+  <li><span class="tid">T1.4</span> Unit tests on <b>synthetic embeddings</b>: N tight clusters ⇒ N speakers; threshold sensitivity; <code>MaxSpeakers</code> cap honoured; determinism (same input ⇒ same labels).
+    <span class="ac">AC: runs in the default (offline) lane, no models, no download.</span></li>
+  <li><span class="tid">T2.1</span> Create <code>Voxa.Audio.Diarization.Onnx</code>; implement <code>PyannoteSegmentation</code> (in-process ONNX-RT, Kokoro/Silero precedent).</li>
+  <li><span class="tid">T2.2</span> Implement <code>WeSpeakerEmbedding</code> (<code>EmbeddingDim</code> from the model) + descriptors.</li>
+  <li><span class="tid">T2.3</span> Pinned <code>DiarizationCatalog</code> with <b>real LFS-sourced</b> sha256 + size; license-closure recorded in the catalog doc-comment.</li>
+  <li><span class="tid">T2.4</span> <code>Category=LocalModels</code> test: download + SHA-256 verify both models; end-to-end on a real 2-speaker WAV yields ≥ 2 speakers.</li>
+  <li><span class="tid">T3.1</span> Add <code>--diarize</code> to <code>transcribe</code>: resolve models, run <code>DiarizationPipeline</code>, attribute transcripts, set <code>TranscriptionFrame.SpeakerId</code>, print <code>[speaker N]</code>.</li>
+  <li><span class="tid">T3.2</span> <code>Voxa:Diarization</code> config (engine names + <code>DiarizerConfig</code> overrides), config-captured (no <code>GetRequiredService&lt;IConfiguration&gt;()</code>).</li>
+  <li><span class="tid">T3.3</span> Docs: <code>docs/local-speech.md</code> diarization section (models, license, how to enable, offline note).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td>Clustering unit tests on <b>synthetic embeddings</b> — deterministic, no models, no download: cluster-count correctness, threshold sensitivity, <code>MaxSpeakers</code> cap, label stability. Catalog resolve/offline-miss text for the <code>.Onnx</code> package. <code>--diarize</code> flag parsing.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>Download + SHA-256 verify both pinned models; run the full pipeline end-to-end on a <b>real two-speaker WAV</b> and assert ≥ 2 distinct speakers with plausible segment boundaries. (Trait-gated — kept out of the default lane per the program invariant.)</td></tr>
+  <tr><td><b>Manual</b></td><td><code>voxa transcribe --diarize meeting.wav</code> on a longer multi-speaker meeting clip; confirm the <code>[speaker N]</code> labels track turn changes and that omitting <code>--diarize</code> is byte-identical to today.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Clustering threshold mis-tuned ⇒ speakers split or merged.</td><td class="sev-med">Med</td><td>Expose <code>ClusteringThreshold</code> via <code>DiarizerConfig</code> (default to speech-core's 0.715); synthetic-embedding tests pin the sensitivity behaviour.</td></tr>
+  <tr><td>R2</td><td>An ML-runtime dependency creeps into the orchestration package, breaking the discipline.</td><td class="sev-high">High</td><td><code>Voxa.Audio.Diarization</code> references no ONNX/ML package; clustering is plain BCL math; a build/dependency assertion keeps it pure (mirrors speech-core's core-pure <code>DiarizationPipeline</code>). <code>Voxa.Core</code> is never touched.</td></tr>
+  <tr><td>R3</td><td>Incorrect / fabricated SHA-256 ⇒ silent wrong file or perpetual verify failure.</td><td class="sev-high">High</td><td>Source every hash from the upstream LFS pointer; the <code>LocalModels</code> test verifies a downloaded file against the pin.</td></tr>
+  <tr><td>R4</td><td>Model weights are large and/or not redistribution-clean.</td><td class="sev-med">Med</td><td>Models are opt-in (separate <code>.Onnx</code> package, pinned + downloaded, not in the default build); license-closure recorded before pinning, permissive alternative or process boundary if not clean (Kokoro precedent).</td></tr>
+  <tr><td>R5</td><td>ONNX-RT EP conflict with Kokoro / Silero already in-process.</td><td class="sev-low">Low</td><td>Reuse the existing in-process ORT pattern (Kokoro/Silero coexist today); confirm no execution-provider conflict in the <code>LocalModels</code> end-to-end test.</td></tr>
+  <tr><td>R6</td><td>Transcript-to-segment attribution is ambiguous at speaker-change boundaries.</td><td class="sev-low">Low</td><td>Attribute each transcript to the <code>DiarizedSegment</code> with the greatest time overlap; document the rule; refine against the manual meeting clip.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Real-time / streaming diarization.</b> VLS-005 is batch/offline over a complete recording; live labelling in the <code>VAD → STT → agent → TTS</code> loop is a separate effort.</li>
+  <li><b>Speaker identification / enrollment.</b> Mapping <code>speaker 0</code> to a named, known voice is a follow-up once embeddings exist (the program calls this out explicitly).</li>
+  <li><b>Studio speaker-label UI.</b> Core now produces populated <code>SpeakerId</code>; rendering speaker colours/labels in Studio is its own item under the Core-vs-Studio boundary.</li>
+  <li><b>Diarization-aware turn-taking / agent context.</b> Feeding speaker labels into the agent loop is not part of this capability.</li>
+  <li><b>Alternative diarization backends</b> (other segmentation/embedding models) — the seams allow them; only the Pyannote + WeSpeaker reference pair is pinned here.</li>
+</ul>
+
+</div>
+</body>
+</html>

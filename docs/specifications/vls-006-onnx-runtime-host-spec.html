@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-006 — Shared ONNX Runtime Model Host</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-006 — Shared ONNX Runtime Model Host</h1>
+  <div class="sub">One reusable, device-aware ONNX-Runtime host (<code>Voxa.Audio.Onnx</code>) so any
+    HuggingFace ONNX model plugs into Voxa with uniform session management, execution-provider/device
+    selection, and pinned-catalog resolution. The .NET analogue of speech-core's <code>OnnxEngine</code>:
+    today Voxa runs ONNX in one-offs (<code>SileroVadEngine</code>, <code>KokoroTtsEngine</code> each roll
+    their own <code>InferenceSession</code>), so every new model re-derives the plumbing. The default
+    package stays <b>CPU-only and byte-identical</b>; GPU is opt-in per <b>VLS-002</b>'s "natives are
+    user-added, never bundled" rule.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-006 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability (ONNX-tier foundation)</div>
+    <div><b>Depends on</b> VLS-002 device seam; <code>VoxaModelCache</code> / <code>VoxaModelArtifact</code>; the in-process ONNX precedent (SileroVad / Kokoro)</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M4</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this sits</a></li>
+    <li><a href="#s5">WS1 — the session host</a></li>
+    <li><a href="#s6">WS2 — the device / execution-provider seam</a></li>
+    <li><a href="#s7">WS3 — pinned-model + descriptor integration</a></li>
+    <li><a href="#s8">Configuration reference</a></li>
+    <li><a href="#s9">Plan of action — phases</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-006 add, in one sentence?</b>
+    <p>One shared, device-aware ONNX-Runtime host so any HuggingFace ONNX model plugs into Voxa with the
+    same session, device, and model-cache plumbing — instead of every model re-inventing it.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>Voxa already runs ONNX models in-process, but as <em>one-offs</em>: <code>SileroVadEngine</code> and
+    <code>KokoroTtsEngine</code> each construct and manage their own <code>InferenceSession</code>, pick
+    their own <code>SessionOptions</code>, and wire their own caching. There is no shared host and no uniform
+    device/EP selection. The moment we want to add a HuggingFace ONNX model (Parakeet, Nemotron,
+    DeepFilterNet3, Sidon, Pyannote, WeSpeaker…), we re-derive all of that plumbing again. VLS-006 writes it
+    once — the foundation the whole ONNX tier builds on.</p>
+  </div>
+  <div class="qa">
+    <b>What does this <em>not</em> change?</b>
+    <p>The existing engines keep working exactly as they do today. Adopting the host is an <em>additive
+    follow-up</em>, never forced — <code>SileroVadEngine</code> and <code>KokoroTtsEngine</code> are not
+    rewritten by this item. VLS-006 ships a host plus a tiny proof model; the real models are VLS-004 / 005 /
+    007 / 008.</p>
+  </div>
+  <div class="qa">
+    <b>Does it require a GPU or make the package heavier?</b>
+    <p>No. Exactly like VLS-002's Whisper GPU seam, the host defaults to <code>Device&nbsp;=&nbsp;cpu</code>
+    and the base package references only the CPU ONNX-Runtime. GPU is opt-in: a user who wants CUDA / DirectML
+    adds the matching runtime package to their own app and sets <code>Device&nbsp;=&nbsp;cuda</code>. The
+    default build stays byte-identical; CI stays CPU-deterministic.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-006 introduces a new <code>Voxa.Audio.Onnx</code> package — three workstreams, all foundation:</p>
+
+<ul>
+  <li><b>WS1 — the session host <span class="badge p2">P6</span>.</b> An <code>OnnxModelHost</code> /
+    <code>IOnnxSession</code> that owns a <em>process-wide cached</em> ORT <code>InferenceSession</code> (keyed
+    by model path + device, exactly how Kokoro caches today), exposes a <code>SessionOptions</code> hook (the
+    <code>SessionOptionsHook</code> analogue) for custom providers, and provides tensor-buffer / run helpers.
+    Thread-safe construction, explicit disposal semantics.</li>
+  <li><b>WS2 — the device / EP seam <span class="badge p1">P1</span>.</b> A <code>Device</code> enum
+    (<code>Cpu</code> default | <code>Cuda</code> | <code>DirectML</code> | <code>CoreML</code> |
+    <code>Auto</code>) reusing VLS-002's pattern; the chosen execution provider is appended to
+    <code>SessionOptions</code> before session creation. GPU natives are user-added, never bundled.</li>
+  <li><b>WS3 — pinned-model + descriptor integration <span class="badge additive">additive</span>.</b> A model
+    is one <code>VoxaModelArtifact</code> (+ sidecar files — vocab / tokenizer / config) resolved, verified,
+    and extracted by <code>VoxaModelCache</code>; an <code>OnnxModelDescriptor</code> shape so an ONNX model
+    self-describes (id, files, EP support) like the existing provider descriptors.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> Adding a HuggingFace ONNX model becomes <em>pin it + a thin
+wrapper</em>, not bespoke runtime code. VLS-007 (Parakeet / Nemotron ASR) and VLS-008 (Sidon) build directly
+on this host; VLS-004 (DeepFilterNet3), VLS-005 (Pyannote / WeSpeaker), and VRT-005 (PersonaPlex) adopt it as
+they land. One pinned ORT version, CPU default, GPU opt-in.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>One reusable ONNX-Runtime host any ONNX engine can build on — uniform session creation, device/EP
+    selection, and cache resolution.</li>
+  <li>A process-wide session cache (model weights load once per host, shared across every connection) — the
+    behaviour Kokoro already proves.</li>
+  <li>A device seam (<code>Cpu</code> default; <code>Cuda</code> / <code>DirectML</code> / <code>CoreML</code> /
+    <code>Auto</code> opt-in) generalising VLS-002 beyond Whisper.</li>
+  <li>A <code>SessionOptions</code> hook so a model (or a host) can install a custom EP / tune options without
+    forking the host.</li>
+  <li>Pinned-catalog (<code>VoxaModelArtifact</code> + <code>VoxaModelCache</code>) integration, including
+    sidecar files (vocab / tokenizer / config).</li>
+  <li>A descriptor shape so an ONNX model self-describes (id, files, EP support).</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>Rewriting <code>SileroVadEngine</code> / <code>KokoroTtsEngine</code> onto the host now — additive
+    follow-up, see §13.</li>
+  <li>Any specific model — Parakeet / Nemotron (VLS-007), DeepFilterNet3 (VLS-004), Sidon (VLS-008),
+    Pyannote / WeSpeaker (VLS-005), PersonaPlex (VRT-005) are their own items.</li>
+  <li>Mel front-ends, tokenizers, RNNT/TDT decoders — model-specific pre/post-processing belongs to the
+    consuming engine.</li>
+  <li>Bundling GPU runtime natives — opt-in via NuGet reference, by design (VLS-002 rule).</li>
+  <li>A LiteRT / non-ORT backend; NNAPI / QNN mobile EPs (those ride VDX-004's native story).</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default-package native footprint</td><td><b>One</b> onnxruntime native — the CPU package, same version (<code>1.26.0</code>) the meta-package already carries. No new bundled natives.</td></tr>
+  <tr><td>Effect on existing engines</td><td><b>Zero</b> — SileroVad / Kokoro untouched; composed pipeline byte-identical with diagnostics off (golden-tested).</td></tr>
+  <tr><td>Default test lane</td><td>No new network for the host's own tests beyond a tiny pinned proof model (MIT, if one is available); otherwise the real-model load is <code>Category=LocalModels</code>.</td></tr>
+  <tr><td>Session cache</td><td>Model weights load once per process per (path, device); a second consumer of the same model pays no second load.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this sits</h2>
+
+<p>VLS-006 is a <b>new package</b> — <code>Voxa.Audio.Onnx</code> — that ONNX engines (current and future)
+depend on. It never goes in <code>Voxa.Core</code> (zero-dependency). It references
+<code>Microsoft.ML.OnnxRuntime</code> (the CPU package, pinned at the <em>same</em> <code>1.26.0</code> as
+<code>Voxa.Audio.SileroVad</code> and <code>Voxa.Speech.Kokoro</code> — the comment in those csproj files,
+"Same version … so the meta-package carries ONE onnxruntime native," is now an invariant this host enforces)
+and <code>Voxa.Speech.Abstractions</code> (for <code>VoxaModelArtifact</code> / <code>VoxaModelCache</code>).</p>
+
+<p>It is the .NET analogue of speech-core's <code>OnnxEngine</code> — an ORT singleton with EP selection
+(NNAPI / QNN / CPU fallback) and a <code>SessionOptionsHook</code>, shared by every model in that engine.
+Voxa instead re-implements session setup per engine today; this host ends that.</p>
+
+<table>
+  <tr><th>Consumer</th><th>Item</th><th>Relationship to the host</th></tr>
+  <tr><td><code>SileroVadEngine</code></td><td>shipped (VLS-001)</td><td><b>Could adopt</b> — currently its own embedded-resource session. Additive refactor, §13.</td></tr>
+  <tr><td><code>KokoroTtsEngine</code></td><td>shipped (VLS-001)</td><td><b>Could adopt</b> — currently its own <code>ConcurrentDictionary&lt;string, Lazy&lt;SharedSession&gt;&gt;</code> cache. Additive refactor, §13.</td></tr>
+  <tr><td>DeepFilterNet3 enhancer</td><td>VLS-004</td><td><b>Consumer</b> — the model "moves onto the shared host" once it lands.</td></tr>
+  <tr><td>Pyannote segmentation + WeSpeaker embedding</td><td>VLS-005</td><td><b>Consumer</b> — the opt-in <code>.Onnx</code> impl sub-package builds on the host.</td></tr>
+  <tr><td>Parakeet TDT v3 + Nemotron streaming ×2</td><td>VLS-007</td><td><b>Consumer / blocked-on</b> — the local ASR tier is implemented directly on this host.</td></tr>
+  <tr><td>Sidon restorer (predictor + DAC vocoder)</td><td>VLS-008</td><td><b>Consumer</b> — two-graph pipeline on the host.</td></tr>
+  <tr><td>PersonaPlex 7B speech-to-speech</td><td>VRT-005</td><td><b>Consumer</b> — host + VLS-002 GPU; the GB-scale model is deferred / spike-gated.</td></tr>
+</table>
+
+<div class="callout"><b>Through-line.</b> This is the program's "define the seam, ship a default, defer the
+heavy model" discipline applied to the runtime itself: ship the host + a CPU path + a tiny proof model now;
+the six requested HuggingFace models (see the program's <i>ONNX model coverage</i> table) plug in as thin
+engines afterward.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the session host</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Onnx</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (foundation)</span>
+  <span><b>Session cache</b> process-wide, keyed (path, device)</span>
+  <span><b>Default</b> CPU, unchanged ORT version</span>
+</div>
+
+<p>The host owns the ORT <code>InferenceSession</code> lifecycle so consuming engines never construct one
+directly. Two pieces: <code>OnnxModelHost</code> (the factory + cache) and <code>IOnnxSession</code> (a thin,
+test-fakeable handle over a loaded session). The cache is process-wide and keyed by <em>resolved model path +
+device</em> — mirroring Kokoro's <code>ConcurrentDictionary&lt;string, Lazy&lt;SharedSession&gt;&gt;</code> and
+whisper.cpp's factory cache: weights load once and are shared by every connection on the host.</p>
+
+<span class="filelabel">src/Voxa.Audio.Onnx/OnnxModelHost.cs (sketch — pin exact ORT API to the referenced Microsoft.ML.OnnxRuntime version)</span>
+<pre><code><span class="cm">// One loaded ONNX model. Construction is the only allocation hot-path; inference is on the</span>
+<span class="cm">// caller's thread (engines own their own buffer-reuse, as SileroVadEngine does today).</span>
+public interface IOnnxSession
+{
+    InferenceSession Session { get; }            <span class="cm">// for engines that bind OrtValues directly (Silero pattern)</span>
+    IReadOnlyList&lt;string&gt; InputNames { get; }
+    IReadOnlyList&lt;string&gt; OutputNames { get; }
+    OnnxDevice ActiveDevice { get; }             <span class="cm">// the EP that actually loaded (may differ from requested under Auto)</span>
+}
+
+public sealed class OnnxModelHost
+{
+    <span class="cm">// Process-wide: model weights load once per (path, device), shared across connections.</span>
+    <span class="cm">// Same shape as KokoroTtsEngine.Sessions — deliberately NOT a per-engine field.</span>
+    private static readonly ConcurrentDictionary&lt;(string Path, OnnxDevice Device), Lazy&lt;IOnnxSession&gt;&gt;
+        Sessions = new();
+
+    private readonly ILogger _logger;
+
+    public OnnxModelHost(ILogger? logger = null) =&gt; _logger = logger ?? NullLogger.Instance;
+
+    <span class="cm">// modelPath is already resolved+verified by VoxaModelCache (WS3). options lets a model</span>
+    <span class="cm">// tune graph-optimization / threads; hook lets it (or a host) install a custom EP (WS2).</span>
+    public IOnnxSession Load(
+        string modelPath,
+        OnnxDevice device = OnnxDevice.Cpu,
+        OnnxSessionOptionsHook? hook = null)
+        =&gt; Sessions.GetOrAdd(
+               (Path.GetFullPath(modelPath), device),
+               key =&gt; new Lazy&lt;IOnnxSession&gt;(() =&gt; CreateSession(key.Path, key.Device, hook))).Value;
+
+    private IOnnxSession CreateSession(string path, OnnxDevice device, OnnxSessionOptionsHook? hook)
+    {
+        var opts = new SessionOptions
+        {
+            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,  <span class="cm">// matches Kokoro today</span>
+        };
+        <span class="cm">// WS2: append the execution provider for `device` BEFORE building the session,</span>
+        <span class="cm">// then give the model/host the last word via the hook (the SessionOptionsHook analogue).</span>
+        var active = OnnxExecutionProvider.Apply(opts, device, _logger);
+        hook?.Invoke(opts, path, device);
+
+        var session = new InferenceSession(path, opts);
+        _logger.LogInformation("Onnx host: loaded '{Model}' on {Device}",
+            Path.GetFileName(path), active);
+        return new LoadedOnnxSession(session, active);
+    }
+}
+
+<span class="cm">// The SessionOptions customization callback — the .NET twin of speech-core's</span>
+<span class="cm">// SessionOptionsHook. Runs once per session, before CreateSession. A model installs a</span>
+<span class="cm">// custom EP or tunes options here without the host needing to know about it.</span>
+public delegate void OnnxSessionOptionsHook(SessionOptions options, string modelPath, OnnxDevice device);</code></pre>
+
+<h4>Tensor-buffer / run helpers</h4>
+<p>Two access tiers, because the existing engines already span both:</p>
+<ul>
+  <li><b>Direct (zero-alloc):</b> expose <code>Session</code> so an engine can pre-bind <code>OrtValue</code>s
+    over reused managed buffers and call the no-allocation
+    <code>Run(RunOptions, names, inputs, names, outputs)</code> overload — the
+    <code>SileroVadEngine</code> steady-state pattern. The host does not get in the way of this.</li>
+  <li><b>Convenience:</b> a small <code>OnnxTensors</code> helper for the common case (wrap a
+    <code>ReadOnlySpan&lt;float&gt;</code> + shape into an <code>OrtValue</code>, run a named-input dictionary,
+    copy the output span out) — the <code>KokoroTtsEngine.RunInferenceAsync</code> shape, lifted so each new
+    model does not re-write it.</li>
+</ul>
+
+<h4>Thread-safety &amp; disposal</h4>
+<div class="callout"><b>Construction is thread-safe; inference is the caller's contract.</b> The
+<code>Lazy&lt;IOnnxSession&gt;</code> guarantees a model loads exactly once even under concurrent
+<code>Load</code> calls. <code>InferenceSession.Run</code> is itself thread-safe, but a model with reused
+per-instance buffers (Silero's LSTM state) is <em>not</em> — that constraint stays with the engine, exactly as
+today. <b>Disposal:</b> cached sessions are process-lifetime by design (they hold weights shared across
+connections — Kokoro's <code>DisposeAsync</code> deliberately leaves the session in the cache). The host
+exposes an explicit <code>EvictAll()</code> for tests / Studio's "unload models," but a per-connection dispose
+must <em>not</em> tear down a shared session.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the device / execution-provider seam</h2>
+
+<div class="ws-head">
+  <span><b>Reuses</b> VLS-002's Device pattern</span>
+  <span><b>Default</b> cpu (unchanged)</span>
+  <span><b>Natives</b> user-supplied, never bundled</span>
+  <span><b>Explicit-GPU-unavailable</b> fail at start</span>
+</div>
+
+<h3>The <code>OnnxDevice</code> enum</h3>
+<p>Generalises VLS-002's <code>WhisperDevice</code> beyond Whisper. Parsed from a config string (WS3 / §8):</p>
+<table>
+  <tr><th>Value</th><th>Meaning</th></tr>
+  <tr><td><code>cpu</code> <i>(default)</i></td><td>CPU EP, as the existing engines run today. Deterministic; what CI uses.</td></tr>
+  <tr><td><code>auto</code></td><td>Prefer the best available GPU EP, fall back to CPU with a <b>warning log</b> (never a hard failure).</td></tr>
+  <tr><td><code>cuda</code></td><td>Require the CUDA EP. Unavailable → <b>fail at <code>StartAsync</code></b> with remediation (don't silently run slow on CPU).</td></tr>
+  <tr><td><code>directml</code></td><td>Require the DirectML EP (cross-vendor on Windows: NVIDIA / AMD / Intel).</td></tr>
+  <tr><td><code>coreml</code></td><td>Apple Silicon — require the CoreML EP. Best-effort; see note.</td></tr>
+</table>
+
+<h3>How the EP is selected</h3>
+<p>ONNX-Runtime appends execution providers to a <code>SessionOptions</code> in priority order before the
+session is built; the first EP that can claim a node runs it, the rest fall through to CPU. The host applies
+the EP for the requested <code>OnnxDevice</code> via <code>SessionOptionsAppendExecutionProvider_*</code>
+<em>before</em> constructing the (cached) session, then logs which EP actually loaded so the choice is
+observable — the same "log the loaded backend" discipline VLS-002 mandates and speech-core's
+<code>has_gpu_provider()</code> exposes.</p>
+
+<span class="filelabel">src/Voxa.Audio.Onnx/OnnxExecutionProvider.cs (sketch — exact EP-append API per ORT version)</span>
+<pre><code><span class="cm">// Applied to a fresh SessionOptions before InferenceSession construction. The CUDA/DirectML/</span>
+<span class="cm">// CoreML appenders are extension methods provided by the matching Microsoft.ML.OnnxRuntime.*</span>
+<span class="cm">// package the USER added — they are not compiled into the base host (see "Packaging" below).</span>
+static OnnxDevice Apply(SessionOptions opts, OnnxDevice device, ILogger log)
+{
+    switch (device)
+    {
+        case OnnxDevice.Cpu:
+            return OnnxDevice.Cpu;                      <span class="cm">// CPU EP is implicit; nothing to append</span>
+
+        case OnnxDevice.Cuda:
+            opts.AppendExecutionProvider_CUDA();        <span class="cm">// throws if the CUDA runtime isn't present</span>
+            return OnnxDevice.Cuda;
+
+        case OnnxDevice.DirectML:
+            opts.AppendExecutionProvider_DML();
+            return OnnxDevice.DirectML;
+
+        case OnnxDevice.CoreML:
+            opts.AppendExecutionProvider_CoreML();
+            return OnnxDevice.CoreML;
+
+        case OnnxDevice.Auto:
+            <span class="cm">// Try GPU EPs in turn; swallow "provider unavailable" and fall back to CPU + warn.</span>
+            foreach (var ep in new[] { OnnxDevice.Cuda, OnnxDevice.DirectML, OnnxDevice.CoreML })
+                if (TryAppend(opts, ep)) return ep;
+            log.LogWarning("Onnx host: Device=auto found no GPU execution provider; using CPU.");
+            return OnnxDevice.Cpu;
+
+        default:
+            return OnnxDevice.Cpu;
+    }
+}
+<span class="cm">// On an explicit (non-auto, non-cpu) device whose append/CreateSession fails, the engine's</span>
+<span class="cm">// StartAsync surfaces a VoxaModelUnavailable-style error:</span>
+<span class="cm">//   "Voxa:&lt;Section&gt;:Device=cuda but no CUDA execution provider loaded. Add the</span>
+<span class="cm">//    Microsoft.ML.OnnxRuntime.Gpu (CUDA) package to your app and ensure the CUDA toolkit/driver</span>
+<span class="cm">//    is installed, or use Device=cpu."</span></code></pre>
+
+<h3>Packaging — the load-bearing decision (the VLS-002 / <code>d2a11ae</code> rule, generalised)</h3>
+<div class="callout warn"><b>GPU natives are opt-in and never bundled by Voxa.</b> The base
+<code>Voxa.Audio.Onnx</code> references only the <b>CPU</b> <code>Microsoft.ML.OnnxRuntime</code> package
+(version <code>1.26.0</code>, pinned identically to SileroVad / Kokoro), with <code>PrivateAssets</code> so it
+is not re-flowed onto consumers — the exact concern behind commit <code>d2a11ae</code> that VLS-002 codified
+for Whisper. To enable GPU, the consuming app adds the matching ORT package itself:
+<pre><code>&lt;PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.26.0" /&gt;   <span class="cm">&lt;!-- in the app, not in Voxa --&gt;</span></code></pre>
+This keeps the default build byte-identical, sidesteps multi-GB GPU natives in our package, and makes the GPU
+matrix the user's (and ORT's) concern, not ours.</div>
+
+<div class="callout danger"><b>The ORT CPU/GPU in-process conflict is real and must stay opt-in.</b> This is the
+exact issue VLS-002 flagged when it <em>deferred</em> Kokoro GPU: the ORT CPU and GPU NuGet packages provide
+the same managed assembly and native entry points, so referencing both in one process conflicts.
+<b>Consequently: one pinned ORT version across every Voxa ONNX model</b> (Silero, Kokoro, and every VLS-006
+consumer), and GPU is enabled by the user <em>replacing</em> the runtime package in their app — never by Voxa
+shipping a second ORT. The host does not try to load two runtimes; a wrong/missing runtime surfaces as the
+clear <code>StartAsync</code> error above.</div>
+
+<h3>CoreML / Auto notes</h3>
+<div class="callout"><b>CoreML is best-effort, like VLS-002's.</b> Some models need extra provisioning or only
+partially offload to the CoreML EP; <code>coreml</code> is wired as a value, but per-model CoreML caveats ride
+the consuming engine. <b>Validation</b> rejects an <em>unknown</em> <code>Device</code> string at startup
+(keyless, no side effects — the same shape as Whisper's <code>Device</code> / Kokoro's
+<code>OutputSampleRate</code> checks); it does <b>not</b> probe for runtime-package presence (unreliable
+pre-load).</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — pinned-model + descriptor integration</h2>
+
+<div class="ws-head">
+  <span><b>Reuses</b> VoxaModelArtifact + VoxaModelCache</span>
+  <span><b>Sidecars</b> vocab / tokenizer / config</span>
+  <span><b>Surface</b> additive (self-describing descriptor)</span>
+</div>
+
+<p>A model resolves through the <em>unchanged</em> <code>VoxaModelCache</code> path: each file is one
+<code>VoxaModelArtifact(Id, DownloadUrl, Sha256, SizeBytes)</code>, resolved / verified (SHA-256, atomic
+rename, cross-process lock) / extracted exactly as Kokoro and whisper.cpp do. The only new wrinkle is that an
+ONNX model is frequently <em>more than one file</em>: the graph plus sidecars (a tokenizer JSON, a vocab file,
+a model config, sometimes a separate encoder/decoder graph). So an ONNX model self-describes as a small bundle
+of pinned artifacts.</p>
+
+<span class="filelabel">src/Voxa.Audio.Onnx/OnnxModelDescriptor.cs (sketch)</span>
+<pre><code><span class="cm">// An ONNX model self-describes like the existing provider descriptors (VoxaSttDescriptor etc.):</span>
+<span class="cm">// a stable id, the pinned files it needs, and which execution providers it supports.</span>
+public sealed record OnnxModelDescriptor(
+    string Id,                                   <span class="cm">// e.g. "parakeet-tdt-v3-0.6b"</span>
+    VoxaModelArtifact Graph,                     <span class="cm">// the .onnx graph (or the first of several)</span>
+    IReadOnlyList&lt;VoxaModelArtifact&gt; Sidecars,    <span class="cm">// tokenizer / vocab / config / extra graphs — each SHA-256-pinned</span>
+    IReadOnlyList&lt;OnnxDevice&gt; SupportedDevices);  <span class="cm">// e.g. [Cpu, Cuda] — drives validation + the Auto fallback</span>
+
+<span class="cm">// Resolution is just VoxaModelCache, file by file — no new download machinery.</span>
+public static async Task&lt;ResolvedOnnxModel&gt; ResolveAsync(
+    this OnnxModelDescriptor model, VoxaModelCache cache, CancellationToken ct)
+{
+    var graphPath = await cache.ResolveAsync(model.Graph, ct).ConfigureAwait(false);
+    var sidecars = new Dictionary&lt;string, string&gt;();
+    foreach (var s in model.Sidecars)
+        sidecars[s.Id] = await cache.ResolveAsync(s, ct).ConfigureAwait(false);
+    return new ResolvedOnnxModel(graphPath, sidecars);
+}</code></pre>
+
+<p>Per-family catalogs live in the <em>consuming</em> package (a <code>ParakeetCatalog</code>, a
+<code>SidonCatalog</code>) following the <code>KokoroCatalog</code> / <code>WhisperCppModelCatalog</code>
+pattern — VLS-006 provides the <em>shape</em> (<code>OnnxModelDescriptor</code> + the resolve helper), not the
+model entries. Each consuming engine wires a normal <code>VoxaSttDescriptor</code> /
+<code>VoxaTtsDescriptor</code> / VAD descriptor (with <code>Validate</code> + <code>WarmUpAsync</code>) on top,
+capturing the same <code>IConfiguration</code> root that was passed to <code>AddVoxa</code> — never
+service-locating config (the config-capture invariant; <code>CacheFor(sp, root)</code> in
+<code>KokoroDescriptors</code> is the template).</p>
+
+<div class="callout danger"><b>Never fabricate a model hash.</b> Every <code>Sha256</code> in a consuming
+catalog <b>must</b> be sourced from the real artifact's HuggingFace LFS pointer
+(<code>…/raw/main/&lt;file&gt;</code> → <code>oid sha256:&lt;hash&gt;</code> + <code>size &lt;bytes&gt;</code>),
+exactly as the VLS-001 / VLS-002 entries were and as Kokoro's voice pins were re-sourced on 2026-06-12. A
+hand-written or guessed hash is a bug, not a placeholder. And — mirroring the Kokoro / GPL license-closure
+gate — <b>never ship a model whose licence isn't cleared and recorded</b>. VLS-006 itself ships no model
+catalog, so this rule binds every consumer (VLS-004 / 005 / 007 / 008, VRT-005).</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration reference</h2>
+
+<p>VLS-006 defines a <em>convention</em>, not a config section of its own (it has no model to configure). Each
+consuming engine exposes a <code>Device</code> key under its own section, parsed into <code>OnnxDevice</code>
+by a shared helper the host provides — so every ONNX model reads its device the same way:</p>
+
+<span class="filelabel">appsettings.json — the shared Device convention (illustrated on a hypothetical VLS-007 consumer)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "OnnxAsr",
+    "OnnxAsr": {
+      "Model": "parakeet-tdt-v3",   <span class="cm">// per-model key; resolved via the consumer's pinned catalog</span>
+      "ModelPath": "",              <span class="cm">// optional explicit-path override → bypasses the cache (descriptor concern)</span>
+      "Device": "cpu"               <span class="cm">// shared convention: cpu (default) | auto | cuda | directml | coreml</span>
+    }
+  }
+}</code></pre>
+
+<p>The <code>Device</code> string parses through one host-provided helper
+(<code>OnnxDevice.Parse(string)</code>), so the value set is uniform across every ONNX engine. Unknown values
+fail validation at startup with the known set listed — the same keyless, side-effect-free validation shape the
+existing descriptors use. <code>ModelPath</code> (explicit override) keeps the established semantics: a set
+path bypasses <code>VoxaModelCache</code> entirely.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases</h2>
+<ol>
+  <li><b>Phase A — host + CPU path + a tiny proof model.</b> <code>OnnxModelHost</code> /
+    <code>IOnnxSession</code>, the process-wide session cache, the convenience tensor helpers, CPU-only EP
+    handling, and a single tiny pinned ONNX model (MIT, if a small one is available) that the host loads and
+    runs one inference against. Independently mergeable; proves the host end-to-end on CPU.</li>
+  <li><b>Phase B — the device seam.</b> <code>OnnxDevice</code> enum, <code>OnnxExecutionProvider.Apply</code>
+    (CUDA / DirectML / CoreML / Auto), the explicit-unavailable error + auto-fallback warning, the
+    <code>SessionOptionsHook</code>, <code>Device</code>-string parse/validate, and the packaging
+    docs/<code>PrivateAssets</code> wiring. Depends on nothing in Phase A's runtime but lands second.</li>
+  <li><b>Phase C — descriptor + cache integration.</b> <code>OnnxModelDescriptor</code> (graph + sidecars +
+    supported devices) and the <code>ResolveAsync</code> helper over <code>VoxaModelCache</code>; the
+    documented descriptor/config convention the consuming engines (VLS-007 first) build on.</li>
+</ol>
+<p>One logical change per PR (per CONTRIBUTING) — the three phases are three PRs. Each adds a
+<code>[Unreleased]</code> CHANGELOG entry and (Phase B/C) a <code>docs/local-speech.md</code> ONNX-host section.
+The spec lands before the code (spec-before-code invariant).</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> New <code>Voxa.Audio.Onnx</code> package; reference CPU <code>Microsoft.ML.OnnxRuntime</code> <code>1.26.0</code> (matching SileroVad/Kokoro) + <code>Voxa.Speech.Abstractions</code>.
+    <span class="ac">AC: builds warnings-as-errors clean; no dependency flows onto <code>Voxa.Core</code>.</span></li>
+  <li><span class="tid">T1.2</span> <code>OnnxModelHost.Load</code> + <code>IOnnxSession</code> with the process-wide <code>(path, device)</code> session cache (Kokoro <code>Lazy&lt;SharedSession&gt;</code> shape).
+    <span class="ac">AC: loading the same (path, device) twice constructs one <code>InferenceSession</code>.</span></li>
+  <li><span class="tid">T1.3</span> <code>OnnxTensors</code> convenience helpers (wrap span+shape, run named dictionary, copy output) + direct <code>Session</code> access for the zero-alloc path.</li>
+  <li><span class="tid">T1.4</span> Disposal semantics: per-connection dispose does not evict a shared session; explicit <code>EvictAll()</code> for tests/Studio.</li>
+  <li><span class="tid">T2.1</span> <code>OnnxDevice</code> enum + <code>OnnxDevice.Parse</code> + the unknown-value validation error text.</li>
+  <li><span class="tid">T2.2</span> <code>OnnxExecutionProvider.Apply</code>: append CUDA/DirectML/CoreML EP before session creation; <code>Auto</code> tries GPU then CPU; log the loaded EP.</li>
+  <li><span class="tid">T2.3</span> Explicit-GPU-unavailable → actionable <code>StartAsync</code>-style error naming the runtime package; <code>auto</code> → CPU fallback + warning.</li>
+  <li><span class="tid">T2.4</span> <code>OnnxSessionOptionsHook</code> wired into <code>Load</code> (runs after the EP append, before <code>CreateSession</code>).</li>
+  <li><span class="tid">T2.5</span> Packaging: CPU ORT referenced with <code>PrivateAssets</code> (no re-flow, per <code>d2a11ae</code>); docs show the app-side GPU package add.</li>
+  <li><span class="tid">T3.1</span> <code>OnnxModelDescriptor</code> (graph + sidecars + supported devices) + the <code>ResolveAsync</code> helper over <code>VoxaModelCache</code>.</li>
+  <li><span class="tid">T3.2</span> Document the descriptor/config convention (shared <code>Device</code> key; per-model <code>Model</code>/<code>ModelPath</code> keys) so VLS-007 can build on it.</li>
+  <li><span class="tid">T3.3</span> Unit test: a multi-file descriptor resolves graph + sidecars; offline-miss names the missing file (default lane, no download).</li>
+  <li><span class="tid">T3.4</span> Docs: <code>docs/local-speech.md</code> ONNX-host section (the host, the device matrix, the "natives are opt-in" rule, how a new model plugs in).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td>Host constructs; session cache de-dupes a (path, device) load; <code>OnnxDevice.Parse</code> + unknown-value validation; descriptor resolves a multi-file model from a <em>pre-seeded</em> cache; offline-miss error text. <b>If a tiny MIT ONNX model is available</b>, the host loads it and runs one inference here; otherwise that load is <code>LocalModels</code> and the default lane stays to device-string parse/validate + cache resolution only. No download, no GPU.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>The host downloads (SHA-256-verified) and loads one real pinned ONNX model and runs a single inference, proving the end-to-end host + cache path on CPU. Keep the proof model <em>small</em> to protect the lane's time/bandwidth budget — the big consumer models are exercised by VLS-004 / 007 / 008's own <code>LocalModels</code> tests, not here.</td></tr>
+  <tr><td><b>Manual / hardware</b></td><td>On a CUDA box (with the app-side <code>Microsoft.ML.OnnxRuntime.Gpu</code> package): <code>Device=cuda</code> → the loaded-EP log says CUDA. <code>Device=cuda</code> with no GPU runtime → the remediation error fires. <code>Device=auto</code> with no GPU → CPU-fallback warning. (DirectML on Windows / CoreML on Apple Silicon analogously.)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>ORT CPU and GPU packages provide the same assembly/natives and conflict in-process (the exact issue VLS-002 deferred Kokoro GPU over).</td><td class="sev-high">High</td><td>One pinned ORT version across every Voxa ONNX model; GPU enabled by the user <em>replacing</em> the runtime package in their app, never by Voxa shipping a second ORT. Host never loads two runtimes.</td></tr>
+  <tr><td>R2</td><td>GPU natives get bundled or re-flowed onto consumers (cf. <code>d2a11ae</code>), bloating the default package.</td><td class="sev-high">High</td><td>Base package references only the CPU ORT with <code>PrivateAssets</code>; GPU is user-added. Pack-output stays byte-identical; golden check green.</td></tr>
+  <tr><td>R3</td><td>Adopting the host regresses <code>SileroVadEngine</code> / <code>KokoroTtsEngine</code> (e.g. loses the Silero zero-alloc path or Kokoro's shared session).</td><td class="sev-high">High</td><td>VLS-006 is purely additive — it does <em>not</em> touch those engines. The host exposes the direct <code>Session</code> (zero-alloc) <em>and</em> the convenience path so any future adoption is behaviour-preserving; the composed pipeline stays golden-tested byte-identical.</td></tr>
+  <tr><td>R4</td><td>Explicit <code>cuda</code>/<code>directml</code> but no runtime/driver → confusing failure.</td><td class="sev-med">Med</td><td>Clear <code>StartAsync</code> error naming the exact package + driver remediation; <code>auto</code> falls back to CPU with a warning.</td></tr>
+  <tr><td>R5</td><td>ORT EP-append / session API differs across versions, so the sketch drifts.</td><td class="sev-low">Low</td><td>Pin the exact calls to the referenced <code>Microsoft.ML.OnnxRuntime</code> version at implementation; the sketches here are intent, not a contract.</td></tr>
+  <tr><td>R6</td><td>A consumer ships a fabricated or unlicensed model hash.</td><td class="sev-med">Med</td><td>WS3 rule: every hash sourced from the HF LFS pointer; <code>LocalModels</code> verifies a downloaded file against the pin; license-closure gate test mirrors Kokoro's. VLS-006 ships no model catalog, so the rule binds every consumer.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Refactoring <code>SileroVadEngine</code> / <code>KokoroTtsEngine</code> onto the host.</b> An additive
+    follow-up once the host has proven itself on a new consumer (VLS-007) — never a prerequisite, and only if
+    behaviour-preserving (Silero's zero-alloc inference, Kokoro's shared session and 24 kHz contract must be
+    held exactly).</li>
+  <li><b>Any specific model.</b> Parakeet / Nemotron (VLS-007), DeepFilterNet3 (VLS-004), Sidon (VLS-008),
+    Pyannote / WeSpeaker (VLS-005), PersonaPlex (VRT-005) — each owns its catalog, pre/post-processing, and
+    license closure.</li>
+  <li><b>A LiteRT / non-ORT backend.</b> The host is ORT-specific; an alternative runtime is a separate item if
+    ever needed.</li>
+  <li><b>NNAPI / QNN mobile EPs.</b> speech-core's <code>OnnxEngine</code> selects these for Android; in Voxa
+    they ride VDX-004's native/mobile story, not this host.</li>
+  <li><b>Multi-session arena sharing / advanced ORT memory tuning</b> (speech-core's
+    <code>use_env_allocators</code>, device-allocator-for-initializers, BF16/INT8 optimizer gating). The
+    <code>SessionOptionsHook</code> leaves the door open for a consumer that needs it; the base host does not
+    prescribe it.</li>
+</ul>
+
+</div>
+</body>
+</html>

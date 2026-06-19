@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-004 — Local Speech Enhancement / Denoise Processor (IAudioEnhancer)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-004 — Local Speech Enhancement / Denoise Processor (IAudioEnhancer)</h1>
+  <div class="sub">An <b>opt-in spectral-denoise stage</b> that cleans the microphone signal <em>before</em> the VAD and
+    STT see it, so on-device transcription holds up in noisy or reverberant rooms. Ships as a vendor-neutral
+    <code>IAudioEnhancer</code> seam plus a null/passthrough default, with one reference ONNX engine
+    (<code>Voxa.Audio.Enhance</code>, SHA-256-pinned via <code>VoxaModelCache</code>). With enhancement off the composed
+    pipeline is <b>byte-identical</b> to today.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-004 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability (local STT accuracy)</div>
+    <div><b>Depends on</b> <code>DefaultVoicePipelineComposer</code> chain; <code>VoxaModelCache</code>/<code>VoxaModelArtifact</code>; the in-process ONNX precedent (SileroVad / Kokoro)</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M3</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">WS1 — the <code>IAudioEnhancer</code> seam</a></li>
+    <li><a href="#s6">WS2 — the reference ONNX implementation</a></li>
+    <li><a href="#s7">Configuration reference</a></li>
+    <li><a href="#s8">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-004 add, in one sentence?</b>
+    <p>An optional "clean up the mic" step that runs a small neural denoiser over the incoming audio <em>before</em>
+    voice-activity detection and speech-to-text, so a noisy fan, a busy café, or a reverberant room doesn't wreck the
+    transcript — without changing anything for users who don't turn it on.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>The local / edge tier is exactly where Voxa has been investing (whisper.cpp, Piper, Kokoro all run on-device), and
+    it's exactly where there is <em>no</em> enhancement at all. Today the only signal conditioning is an RMS floor in the
+    VAD — a crude gate, not noise reduction. Cloud STT vendors denoise server-side; the on-device path is on its own.
+    speech-core wires DeepFilterNet3 as an <code>EnhancerInterface</code> for this; Voxa already runs ONNX models
+    in-process (Silero VAD, Kokoro), so the same move ports cleanly.</p>
+  </div>
+  <div class="qa">
+    <b>Does this slow everyone down or change the default pipeline?</b>
+    <p>No. The seam ships with a <em>null/passthrough</em> default, so with enhancement off the composed pipeline is
+    byte-identical to today (golden-tested). Turning it on adds a per-frame denoise pass — real CPU, real latency — which
+    is why it is <em>opt-in</em> and its cost shows up directly in Studio's latency waterfall. You pay for it only when
+    you ask for it.</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The frame contract (<code>AudioRawFrame</code> in, same length / sample-rate / channel layout out), the VAD and STT
+    engines, the model cache, the offline/air-gap behaviour, and the descriptor wiring. The enhancer is a new stage
+    inserted into the existing chain, not a rewrite of any existing stage. And <code>Voxa.Core</code> stays zero-dependency
+    — the seam and the ONNX engine live in <code>Voxa.Audio.*</code> packages.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-004 is two workstreams that mirror the rest of the Speech-Core Parity program's "<i>define the seam, ship a
+default, defer/opt-in the heavy model</i>" discipline:</p>
+
+<ul>
+  <li><b>WS1 — the <code>IAudioEnhancer</code> seam <span class="badge additive">additive</span>.</b> A vendor-neutral
+    interface (<code>Enhance(pcm) → pcm</code>, input-sample-rate contract, <code>Reset</code>) in a new
+    <code>Voxa.Audio.Abstractions</code>, an <code>AudioEnhancerProcessor</code> that runs it per
+    <code>AudioRawFrame</code>, a <b>null/passthrough default</b>, and a descriptor + registry slot
+    (<code>TryGetEnhancer</code>) so an implementation drops in by config. The composer inserts the stage
+    <b>before the VAD, after the AEC stage (VRT-003)</b>. Off ⇒ byte-identical.</li>
+  <li><b>WS2 — the reference ONNX engine <span class="badge p1">P1</span>.</b> A DeepFilterNet3 (license to be verified
+    — see §6) denoiser in a new <code>Voxa.Audio.Enhance</code> package, running in-process on ONNX Runtime exactly the
+    way <code>SileroVadEngine</code> and <code>KokoroTtsEngine</code> already do, with the model file SHA-256-pinned in a
+    catalog and resolved through <code>VoxaModelCache</code>. <b>Opt-in</b>; the default reference set and pack output are
+    unchanged.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A developer running the local STT tier in a noisy room can set
+<code>"Enhance": { "Engine": "DeepFilterNet3" }</code> and recover transcription accuracy that a fan or a reverberant
+office was eating. Clean-room and cloud-STT users set nothing, get nothing extra, and CI stays offline and deterministic.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Give Voxa a first-class, vendor-neutral enhancement seam (<code>IAudioEnhancer</code>) the same way VRT-003 gives
+    it an AEC seam — interface + null default + chain wiring, no DSP/model commitment in the seam itself.</li>
+  <li>Ship one working reference ONNX denoiser (DeepFilterNet3, pending license closure) in an opt-in
+    <code>Voxa.Audio.Enhance</code> package, SHA-256-pinned like every other artifact.</li>
+  <li>Keep the default composed pipeline byte-identical to today (passthrough default, golden-tested) and the default
+    reference set unchanged (no new bundled natives beyond what the opt-in package pulls in).</li>
+  <li>Make the added per-frame cost <em>visible</em> — it lands as a stage in the diagnostics latency waterfall, measured
+    against VRT-001's timings.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>Sidon-style <b>offline restoration of voice-clone reference audio</b> — that belongs with VVL-002 / Studio
+    artifacts, not the live mic path. See §12.</li>
+  <li><b>GPU enhancement</b> — if a model needs it, it rides the VLS-002 ONNX-Runtime/Whisper.net GPU patterns; not
+    re-specced here.</li>
+  <li>Acoustic <b>echo</b> cancellation — that is VRT-003 (<code>IEchoCanceller</code>), the stage immediately upstream of
+    this one. Enhancement cleans <i>noise</i>, not the bot's own voice fed back through the speakers.</li>
+  <li>Replacing the VAD's RMS floor or its pre-roll (VLS-001) — both stay; enhancement runs ahead of them.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default-pipeline equivalence</td><td><b>Byte-identical</b> with <code>Engine=None</code> — golden test, same guarantee diagnostics-off already holds.</td></tr>
+  <tr><td>Default reference-set / pack delta</td><td><b>0</b> — the seam adds no runtime deps to the meta-package; the ONNX engine is a separate opt-in package.</td></tr>
+  <tr><td>Default test lane</td><td>No new network; passthrough golden + catalog resolve/offline-miss are pure offline unit tests.</td></tr>
+  <tr><td>Added per-frame latency (enhancement on)</td><td>Tracked via <code>StageLatencyTracker</code> / Studio waterfall; target small relative to STT, but the spec's job is to <i>measure</i> it (VRT-001), not pre-promise a number.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>The full on-device capture chain, with the two Speech-Core Parity audio stages added, is:</p>
+
+<pre><code>mic → [AEC (VRT-003)] → [enhance (VLS-004)] → VAD → STT → TranscriptionFilter → agent → …</code></pre>
+
+<p>Both bracketed stages are <b>opt-in and null-by-default</b>. <code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code>
+is the single insertion point (the program doc names it the one place the AEC and enhancement stages go). In the current
+tree the VAD is composed first (step&nbsp;1 — the <code>o.Vad.Engine</code> branch) and STT second; this spec inserts the
+enhancer <b>immediately before that VAD block, after the AEC block VRT-003 introduces</b>. It runs on raw
+<code>AudioRawFrame</code>s, which is exactly what the VAD and <code>SpeechToTextProcessor</code> consume next — so order
+is: AEC removes the bot's echo, enhancement removes ambient noise, then a cleaner signal reaches detection and
+recognition.</p>
+
+<div class="callout"><b>Why before the VAD, not after.</b> Denoising ahead of detection means the VAD's probability and
+RMS floor judge the <i>cleaned</i> signal — fewer noise-triggered false starts and fewer missed quiet onsets — and STT
+transcribes cleaned audio. Placing it after the VAD would denoise only what the VAD already (mis)gated. speech-core makes
+the same ordering choice (<code>mic → AEC → enhance → VAD → STT</code>).</div>
+
+<h4>File-change table</h4>
+<table>
+  <tr><th>File / package</th><th>Change</th></tr>
+  <tr><td><code>Voxa.Audio.Abstractions</code> (new, or reuse the new abstractions package VRT-003 introduces for <code>IEchoCanceller</code>)</td><td>WS1 — <code>IAudioEnhancer</code> seam + <code>NullAudioEnhancer</code> passthrough + <code>VoxaEnhancerDescriptor</code>.</td></tr>
+  <tr><td><code>AudioEnhancerProcessor</code> (new, alongside the seam)</td><td>WS1 — per-<code>AudioRawFrame</code> processor; forwards all other frames unchanged.</td></tr>
+  <tr><td><code>src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs</code></td><td>WS1 — insert the enhancer stage before the VAD block / after the AEC block, gated on <code>Voxa:Enhance:Engine != None</code>. With <code>None</code>, no stage is added (byte-identical).</td></tr>
+  <tr><td><code>src/Voxa.AspNetCore/VoxaProviderRegistry.cs</code></td><td>WS1 — add <code>TryGetEnhancer</code> / <code>Add(VoxaEnhancerDescriptor)</code>, same shape as <code>TryGetVad</code>.</td></tr>
+  <tr><td><code>Voxa.Audio.Enhance</code> (new package)</td><td>WS2 — <code>DeepFilterNetEnhancer</code> (in-process ONNX), <code>DeepFilterNetCatalog</code> (pinned artifact), <code>DeepFilterNetDescriptor</code> (validate + <code>CreateProcessor</code> + <code>WarmUpAsync</code>).</td></tr>
+  <tr><td><code>VoxaModelCache</code>, <code>VoxaModelArtifact</code>, the VAD/STT engines</td><td><b>Unchanged.</b> The cache resolves one more pinned file; nothing in its contract moves.</td></tr>
+  <tr><td><code>Voxa.Core</code></td><td><b>Untouched.</b> Per the cross-cutting invariant, no ONNX / audio-DSP dependency ever enters Core.</td></tr>
+</table>
+
+<p>The model speech-core uses — <code>EnhancerInterface</code> with DeepFilterNet3 (denoise) and Sidon (restore) as ONNX
+backends — is cited as the template; Voxa imports the <i>denoise</i> half here and leaves restore to VVL-002 (§12).</p>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the <code>IAudioEnhancer</code> seam</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Abstractions (seam) + composer wiring</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span></span>
+  <span><b>Network</b> none</span>
+  <span><b>Default</b> NullAudioEnhancer (passthrough)</span>
+</div>
+
+<p>The seam is deliberately the same shape as VRT-003's <code>IEchoCanceller</code> and Voxa's existing engine interfaces:
+a small, single-thread-per-session contract that an ONNX or DSP backend can satisfy. It lives in
+<code>Voxa.Audio.Abstractions</code> (a new audio-abstractions package, or the one VRT-003 lands for <code>IEchoCanceller</code>
+— they should share it) so no provider package, and certainly not <code>Voxa.Core</code>, takes a dependency on a model
+runtime.</p>
+
+<span class="filelabel">src/Voxa.Audio.Abstractions/IAudioEnhancer.cs (seam sketch)</span>
+<pre><code><span class="cm">// Vendor-neutral spectral-enhancement seam (VLS-004). Mirrors speech-core's EnhancerInterface;</span>
+<span class="cm">// satisfied by an in-process ONNX engine (Voxa.Audio.Enhance) or any future DSP. Per-session,</span>
+<span class="cm">// single-threaded — the processor's data loop calls Enhance from one thread, like the VAD engine.</span>
+public interface IAudioEnhancer : IDisposable
+{
+    <span class="cm">// The sample rate the model/DSP expects. The processor asserts inbound AudioRawFrame.SampleRate</span>
+    <span class="cm">// matches this and throws a clear error at session start on a mismatch (no silent resample).</span>
+    int SampleRate { get; }
+
+    <span class="cm">// Clean one chunk of 16-bit mono PCM. MUST return the SAME byte length / sample rate / channel</span>
+    <span class="cm">// layout it was given — this is signal conditioning, not a format change. May be called many</span>
+    <span class="cm">// times per second on the audio hot path; keep it allocation-light (reuse buffers like Silero).</span>
+    ReadOnlyMemory&lt;byte&gt; Enhance(ReadOnlyMemory&lt;byte&gt; pcm);
+
+    <span class="cm">// Drop any internal/recurrent state between sessions (cf. SileroVadEngine.Reset()).</span>
+    void Reset();
+}
+
+<span class="cm">// The default. Off == today: returns the buffer unchanged, holds no state. The composer adds</span>
+<span class="cm">// NO processor at all when Engine=None, so this exists mainly for tests and explicit wiring.</span>
+public sealed class NullAudioEnhancer : IAudioEnhancer
+{
+    public int SampleRate { get; }
+    public NullAudioEnhancer(int sampleRate) =&gt; SampleRate = sampleRate;
+    public ReadOnlyMemory&lt;byte&gt; Enhance(ReadOnlyMemory&lt;byte&gt; pcm) =&gt; pcm;
+    public void Reset() { }
+    public void Dispose() { }
+}</code></pre>
+
+<p>The processor is a thin <code>FrameProcessor</code>: it intercepts <code>AudioRawFrame</code>, replaces the PCM with the
+enhanced PCM (same envelope), and <b>forwards every other frame downstream unchanged</b> — including
+<code>StartFrame</code>/<code>EndFrame</code>, per the cross-cutting invariant (or the sink never completes). Long-running
+work honours the per-frame <code>CancellationToken</code>; enhancement is interruptible like any data-path stage.</p>
+
+<span class="filelabel">src/Voxa.Audio.Abstractions/AudioEnhancerProcessor.cs (sketch)</span>
+<pre><code>protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+{
+    if (frame is AudioRawFrame audio)
+    {
+        <span class="cm">// Same length / rate / channels out — verified by the seam contract.</span>
+        var cleaned = _enhancer.Enhance(audio.Pcm);
+        await PushFrameAsync(audio with { Pcm = cleaned }, ct).ConfigureAwait(false);
+        return;
+    }
+    await PushFrameAsync(frame, ct).ConfigureAwait(false); <span class="cm">// forward control + everything else</span>
+}</code></pre>
+
+<p>Registration follows the <code>VoxaVadDescriptor</code> pattern exactly — a self-describing record with a
+config-keyless <code>Validate</code> and a <code>CreateProcessor(sp, root)</code> factory — and the registry grows a
+<code>TryGetEnhancer</code> twin of <code>TryGetVad</code>. The composer's insertion is gated on the config name:</p>
+
+<span class="filelabel">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs (insertion — before the VAD block, after VRT-003's AEC block)</span>
+<pre><code><span class="cm">// 0.6  Enhancement (VLS-004) — after AEC (VRT-003, step 0.5), before VAD (step 1).</span>
+<span class="cm">// Engine=None (default) adds NOTHING, so the pipeline stays byte-identical to pre-VLS-004.</span>
+if (!string.Equals(o.Enhance.Engine, "None", StringComparison.OrdinalIgnoreCase)
+    &amp;&amp; _registry.TryGetEnhancer(o.Enhance.Engine, out var enhDesc))
+{
+    parts.Add(sp =&gt; enhDesc.CreateProcessor(sp, root)); <span class="cm">// runs at inputSampleRate, like the VAD</span>
+}
+<span class="cm">// (an unknown non-None name fails fast in the options validator, like every other provider name)</span></code></pre>
+
+<div class="callout"><b>Config-capture rule.</b> The descriptor factory and <code>WarmUpAsync</code> receive the captured
+<code>"Voxa"</code> root section (the same one the composer already threads to STT/TTS) and must <b>never</b>
+<code>GetRequiredService&lt;IConfiguration&gt;()</code> — that breaks the plain-<code>ServiceCollection</code> hosts (Studio,
+tests, CLI). This is the identical rule the Kokoro descriptor follows.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the reference ONNX implementation</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Enhance (new, opt-in)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (model license + ORT coexistence)</span>
+  <span><b>Runtime</b> ONNX Runtime, in-process</span>
+  <span><b>Model</b> SHA-256-pinned via VoxaModelCache</span>
+</div>
+
+<p>The reference engine is DeepFilterNet3, run <em>in-process</em> on ONNX Runtime — the precedent is already in the tree
+twice. <code>SileroVadEngine</code> runs a small ONNX model with reused <code>OrtValue</code>s and a single-thread session;
+<code>KokoroTtsEngine</code> runs a larger ONNX model resolved from the pinned catalog through <code>VoxaModelCache</code>,
+caching the <code>InferenceSession</code> process-wide. <code>DeepFilterNetEnhancer</code> combines both: catalog-resolved
+weights, a process-wide cached session, allocation-light per-frame inference.</p>
+
+<div class="callout danger"><b>Verify the license before writing a single line.</b> This spec assumes
+<b>DeepFilterNet3</b>, but its weight/license terms <b>must be confirmed permissive at implementation time</b> (the
+DeepFilterNet code is dual MIT/Apache-2.0, but pre-trained-weight redistribution terms are the gating question — confirm
+the exact model artifact you pin is redistributable). <b>If the weights are not cleanly permissive, do not ship them:</b>
+substitute a permissively-licensed alternative — an MIT/Apache RNNoise or an NSNet2 ONNX export — and update this section.
+The chosen model and its license must pass the same <b>license-closure gate test</b> the Kokoro package already enforces
+(<code>DependencyGraphGateTests</code>: assembly-reference scan + output-file scan; see below).</div>
+
+<h3>In-process ONNX engine</h3>
+<p>The engine mirrors the existing two ONNX engines so it inherits their hard-won behaviour (process-wide weight sharing,
+off-the-data-loop inference, deterministic teardown):</p>
+
+<span class="filelabel">src/Voxa.Audio.Enhance/DeepFilterNetEnhancer.cs (sketch — pin exact I/O names to the real ONNX export)</span>
+<pre><code><span class="cm">// In-process denoise on ONNX Runtime. Weights load once per process and are shared by every</span>
+<span class="cm">// connection — same ConcurrentDictionary&lt;string, Lazy&lt;...&gt;&gt; session cache as KokoroTtsEngine.</span>
+public sealed class DeepFilterNetEnhancer : IAudioEnhancer
+{
+    private static readonly ConcurrentDictionary&lt;string, Lazy&lt;InferenceSession&gt;&gt; Sessions = new();
+
+    public int SampleRate { get; } = 48000; <span class="cm">// DeepFilterNet3 operates at 48 kHz — see the rate note</span>
+
+    public DeepFilterNetEnhancer(EnhanceOptions options, VoxaModelCache cache, ILogger? logger = null) { <span class="cm">/* … */</span> }
+
+    <span class="cm">// StartAsync-equivalent: resolve the pinned model (downloads on cold cache), build/fetch the</span>
+    <span class="cm">// shared InferenceSession. Same shape as KokoroTtsEngine.StartAsync.</span>
+    public async Task StartAsync(CancellationToken ct) { <span class="cm">/* cache.ResolveAsync(model, ct); GetOrAdd(...) */</span> }
+
+    public ReadOnlyMemory&lt;byte&gt; Enhance(ReadOnlyMemory&lt;byte&gt; pcm)
+    {
+        <span class="cm">// PCM16 → float, run the model, float → PCM16. SAME sample count out as in.</span>
+        <span class="cm">// Reuse buffers on the hot path (cf. SileroVadEngine's pinned OrtValues).</span>
+    }
+
+    public void Reset() { <span class="cm">/* clear any recurrent/overlap state between sessions */</span> }
+    public void Dispose() { <span class="cm">/* session stays in the process-wide cache, like Kokoro */</span> }
+}</code></pre>
+
+<div class="callout warn"><b>Sample-rate reality.</b> DeepFilterNet3 runs at 48&nbsp;kHz, while the local STT tier
+(whisper.cpp) runs at 16&nbsp;kHz. The seam's <code>SampleRate</code> contract forces this to be explicit: either (a) the
+engine resamples 16&nbsp;kHz↔48&nbsp;kHz internally and still returns a 16&nbsp;kHz buffer of the same length to the
+processor, or (b) the composer runs enhancement at the model's native rate and a converter bridges to the VAD's rate.
+Pick one in implementation and document it; the seam itself stays rate-honest (it throws on an unannounced mismatch rather
+than denoising at the wrong rate). A permissively-licensed 16&nbsp;kHz model (e.g. an NSNet2 export) would sidestep the
+conversion entirely — a point in its favour if the DeepFilterNet license check fails.</div>
+
+<h3>Pinned catalog</h3>
+<p>The model file is one <code>VoxaModelArtifact</code> in a tiny catalog, resolved through <code>VoxaModelCache</code>
+just like the Kokoro and whisper.cpp catalogs — the same <code>(Id, DownloadUrl, Sha256, SizeBytes)</code> record, the
+same offline-miss behaviour (a copy-pasteable provisioning message), the same first-run-download-then-offline lifecycle.</p>
+
+<span class="filelabel">src/Voxa.Audio.Enhance/DeepFilterNetCatalog.cs (sketch)</span>
+<pre><code><span class="cm">// &lt;-- Sha256 + SizeBytes from the REAL artifact's metadata at implementation time; NEVER hand-written. --&gt;</span>
+private static readonly VoxaModelArtifact Model = new(
+    Id:          "deepfilternet/deepfilternet3.onnx",
+    DownloadUrl: new Uri("&lt;pinned model URL&gt;"),
+    Sha256:      "&lt;sha256&gt;",      <span class="cm">// from the file's published checksum / LFS pointer</span>
+    SizeBytes:   &lt;bytes&gt;);</code></pre>
+
+<div class="callout danger"><b>Do not fabricate the model hash.</b> The <code>SHA-256</code> and exact byte length
+<b>must</b> be read from the real artifact at implementation time — its repository checksum, release asset, or LFS pointer
+(<code>oid sha256:</code> / <code>size</code>) — exactly as the VLS-001 and VLS-002 entries were sourced. A hand-written or
+guessed hash is a bug, not a placeholder: it makes the cache either fetch the wrong file silently or fail verification
+forever.</div>
+
+<h3>License-closure gate (mirror the Kokoro one)</h3>
+<p>The Kokoro package already enforces its GPL boundary mechanically with <code>DependencyGraphGateTests</code> — one test
+asserts the engine assembly references nothing forbidden, another scans the build output for forbidden native files.
+<code>Voxa.Audio.Enhance</code> ships the equivalent: a test asserting the package's closure contains only
+permissively-licensed dependencies (no GPL/AGPL transitive, no native it isn't entitled to redistribute), so a license
+regression fails CI rather than shipping.</p>
+
+<span class="filelabel">tests/Voxa.Audio.Enhance.Tests/DependencyGraphGateTests.cs (mirror of the Kokoro gate)</span>
+<pre><code>[Fact]
+public void Enhance_Package_Closure_Is_Permissively_Licensed()
+{
+    <span class="cm">// Same two-pronged check as KokoroDescriptorTests.DependencyGraphGateTests:</span>
+    <span class="cm">//   (1) referenced assemblies contain no forbidden (GPL/AGPL) names;</span>
+    <span class="cm">//   (2) the build output drops no native the package may not redistribute.</span>
+    <span class="cm">// Concrete forbidden list is set once the model + its tooling are chosen.</span>
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Configuration reference</h2>
+
+<span class="filelabel">appsettings.json — new keys (all under Voxa:Enhance)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "WhisperCpp",
+    "Enhance": {
+      "Engine": "DeepFilterNet3",   <span class="cm">// NEW. None (default) | DeepFilterNet3</span>
+      "Model":  "deepfilternet3",    <span class="cm">// catalog name; or set ModelPath to your own ONNX file</span>
+      "Device": "cpu"                <span class="cm">// cpu (default); GPU rides VLS-002 patterns if added (§12)</span>
+    }
+  }
+}</code></pre>
+<p>With <code>Engine</code> absent or <code>None</code> (the default), the composer adds no enhancement stage and the
+pipeline is byte-identical to today. <code>Model</code> resolves through the pinned catalog; an explicit
+<code>ModelPath</code> bypasses the cache (the descriptor concern, exactly like <code>Voxa:Kokoro:ModelPath</code>). All
+keys are parsed from the captured root section in <code>EnhanceOptions.FromConfiguration</code>, never service-located.</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — the seam + null default + processor + composer wiring (ships alone).</b> Land
+    <code>IAudioEnhancer</code>, <code>NullAudioEnhancer</code>, <code>AudioEnhancerProcessor</code>,
+    <code>VoxaEnhancerDescriptor</code>, the <code>TryGetEnhancer</code> registry slot, and the gated composer insertion.
+    Default <code>Engine=None</code> ⇒ passthrough golden proves byte-identical. <b>No model, no network.</b> Independently
+    mergeable; this is the contract every implementation targets.</li>
+  <li><b>Phase B — the reference ONNX engine + pinned catalog.</b> Once the model + license are settled, add
+    <code>Voxa.Audio.Enhance</code> (<code>DeepFilterNetEnhancer</code>, <code>DeepFilterNetCatalog</code> with the
+    <b>real</b> hash, descriptor with <code>WarmUpAsync</code>, the license-closure gate test, and the
+    <code>Category=LocalModels</code> round-trip test). Depends on Phase A's seam.</li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING). Phase A and Phase B are two PRs; each adds a <code>[Unreleased]</code>
+CHANGELOG entry and updates <code>docs/local-speech.md</code>. This spec is authored before either lands — the
+program's spec-before-code rule.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> <code>IAudioEnhancer</code> seam (<code>Enhance</code>/<code>SampleRate</code>/<code>Reset</code>) + <code>NullAudioEnhancer</code> in <code>Voxa.Audio.Abstractions</code>.
+    <span class="ac">AC: lives in an audio-abstractions package, not <code>Voxa.Core</code>; null engine returns its input unchanged.</span></li>
+  <li><span class="tid">T1.2</span> <code>AudioEnhancerProcessor</code> — enhances <code>AudioRawFrame</code>, forwards all other frames (incl. <code>StartFrame</code>/<code>EndFrame</code>); honours the per-frame <code>CancellationToken</code>.</li>
+  <li><span class="tid">T1.3</span> <code>VoxaEnhancerDescriptor</code> + registry <code>TryGetEnhancer</code>/<code>Add</code>, mirroring <code>VoxaVadDescriptor</code>/<code>TryGetVad</code>.</li>
+  <li><span class="tid">T1.4</span> Composer insertion before the VAD block / after the AEC block, gated on <code>Voxa:Enhance:Engine != None</code>.
+    <span class="ac">AC: <b>passthrough-off golden</b> — composed pipeline with <code>Engine=None</code> is byte-identical to pre-VLS-004.</span></li>
+  <li><span class="tid">T1.5</span> <code>EnhanceOptions.FromConfiguration</code> (captured root section) + fail-fast validation of an unknown <code>Engine</code> name.
+    <span class="ac">AC: parse/validate covered in the default (offline) lane, no model needed.</span></li>
+  <li><span class="tid">T2.1</span> <b>Confirm the model license is permissive</b> (DeepFilterNet3 weights, or substitute RNNoise/NSNet2) before any WS2 code.</li>
+  <li><span class="tid">T2.2</span> <code>Voxa.Audio.Enhance</code> package: <code>DeepFilterNetEnhancer</code> (in-process ONNX, process-wide session cache, buffer-reuse hot path).</li>
+  <li><span class="tid">T2.3</span> <code>DeepFilterNetCatalog</code> with the <b>real</b> SHA-256 + size from the artifact; resolves via <code>VoxaModelCache</code>; offline-miss names the model.</li>
+  <li><span class="tid">T2.4</span> <code>DeepFilterNetDescriptor</code> with <code>Validate</code> + <code>CreateProcessor</code> + <code>WarmUpAsync</code> (resolve + load on startup so the first caller pays no download).</li>
+  <li><span class="tid">T2.5</span> Resolve the 48&nbsp;kHz↔16&nbsp;kHz rate question explicitly (internal resample vs. native-rate stage) and document it.</li>
+  <li><span class="tid">T2.6</span> <b>License-closure gate test</b> — mirror Kokoro's <code>DependencyGraphGateTests</code> (assembly-ref scan + output-file scan).</li>
+  <li><span class="tid">T2.7</span> <code>Category=LocalModels</code> test: download + SHA-256 verify the pinned model; enhance round-trip preserves length / rate / channels.</li>
+  <li><span class="tid">T2.8</span> Docs: <code>docs/local-speech.md</code> enhancement section (when to enable, the latency cost, the noisy-room A/B).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td><b>Passthrough-off golden</b> (<code>Engine=None</code> ⇒ composed pipeline byte-identical to pre-VLS-004); <code>Engine</code> parse/validate; catalog <b>resolve / offline-miss</b> (offline cache miss throws with the provisioning message — pure probe, no download). No network, no model.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>Download + <b>SHA-256 verify</b> the pinned enhancement model, then an <b>enhance round-trip</b>: feed a known PCM buffer through <code>DeepFilterNetEnhancer.Enhance</code> and assert the output has the <b>same length, sample rate, and channel count</b> (signal conditioning, not a format change). Trait-gated — never runs in the default lane.</td></tr>
+  <tr><td><b>License gate (default lane)</b></td><td>The <code>DependencyGraphGateTests</code> mirror — the package closure references no forbidden (GPL/AGPL) assembly and drops no native it may not redistribute. Runs offline, every build.</td></tr>
+  <tr><td><b>Manual / quality</b></td><td>A/B on a deliberately noisy clip: run the same utterance through the local STT tier with <code>Engine=None</code> vs. <code>Engine=DeepFilterNet3</code> and compare transcripts (WER) — and confirm the enhancement stage appears in Studio's latency waterfall with a measured per-frame cost (VRT-001 timings).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>Model-weight license</b> not cleanly permissive (DeepFilterNet3 weight redistribution is the open question).</td><td class="sev-high">High</td><td>Confirm before any WS2 code; if not clean, substitute an MIT/Apache RNNoise/NSNet2 export. License-closure gate test fails CI on a regression. The seam (WS1) ships regardless.</td></tr>
+  <tr><td>R2</td><td><b>Incorrect / fabricated SHA-256</b> → silent wrong file or perpetual verify failure.</td><td class="sev-high">High</td><td>Source the hash from the real artifact's checksum / LFS pointer; the <code>LocalModels</code> test verifies a downloaded file against the pin.</td></tr>
+  <tr><td>R3</td><td><b>ONNX-Runtime in-process coexistence</b> — a third ORT consumer alongside Silero VAD and Kokoro; execution-provider / native-library conflict.</td><td class="sev-med">Med</td><td>Confirm no EP conflict on the default CPU ORT (the two existing engines already share it in-process without issue); keep the engine CPU-only here, defer GPU (§12). Each engine owns its own <code>SessionOptions</code>, as today.</td></tr>
+  <tr><td>R4</td><td><b>Added per-frame latency</b> regresses real-time turn latency on weaker hardware.</td><td class="sev-med">Med</td><td>Opt-in (off by default); cost is visible in the diagnostics waterfall and measured by VRT-001; document the CPU caveat.</td></tr>
+  <tr><td>R5</td><td><b>Sample-rate mismatch</b> (48 kHz model vs. 16 kHz STT) handled wrongly → distorted audio reaching STT.</td><td class="sev-med">Med</td><td>Seam asserts the announced <code>SampleRate</code> and throws on a mismatch at session start; the resample/native-rate decision is explicit and documented (T2.5), never silent.</td></tr>
+  <tr><td>R6</td><td><b>Default pipeline drift</b> — the new stage subtly changes byte output even when off.</td><td class="sev-low">Low</td><td><code>Engine=None</code> adds <i>no</i> processor at all (not a null one); the passthrough-off golden test guards byte-equivalence, same as diagnostics-off.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Offline restoration of voice-clone reference audio (Sidon-style).</b> Cleaning up a recorded sample to improve a
+    cloned voice is an <i>artifact-processing</i> concern that belongs with <b>VVL-002</b> / Studio, not the live mic path.
+    speech-core pairs DeepFilterNet3 (denoise, imported here) with Sidon (restore, deferred there).</li>
+  <li><b>GPU enhancement.</b> If a heavier enhancement model needs it, it rides the <b>VLS-002</b> ONNX-Runtime / Whisper.net
+    GPU patterns (opt-in runtime package, device key) rather than re-inventing them — and only on demand.</li>
+  <li><b>Streaming / lookahead-free variants.</b> The reference engine processes buffered chunks; a low-latency streaming
+    enhancer (sub-frame lookahead) is a follow-up once the seam and a baseline model are proven.</li>
+  <li><b>Acoustic echo cancellation</b> is <b>VRT-003</b> (<code>IEchoCanceller</code>), the upstream stage — not this item.</li>
+  <li><b>A second enhancement backend</b> (e.g. a classic noise-suppression DSP via P/Invoke) — the seam supports it, but
+    one reference engine is the scope here.</li>
+</ul>
+
+</div>
+</body>
+</html>
