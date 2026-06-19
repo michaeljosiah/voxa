@@ -22,6 +22,17 @@ public sealed partial class ModelRow : ObservableObject
         ? $"{Entry.SizeBytes / (1024.0 * 1024):F0} MB"
         : $"{Entry.SizeBytes / 1024.0:F0} KB";
     public string KindText => Entry.IsExtractedArchive ? "archive" : "file";
+
+    /// <summary>Provider/engine this row belongs to ("Whisper" / "Piper" / "Kokoro" / "—").</summary>
+    public string Provider => EngineLabel;
+
+    /// <summary>Pipeline category for the tab grouping.</summary>
+    public string Category => EngineLabel switch
+    {
+        "Whisper" => "STT",
+        "Piper" or "Kokoro" => "TTS",
+        _ => "Other",
+    };
 }
 
 /// <summary>
@@ -47,6 +58,19 @@ public sealed partial class ModelsViewModel : ObservableObject
     }
 
     public ObservableCollection<ModelRow> Rows { get; } = new();
+
+    private const string AllProviders = "All providers";
+
+    /// <summary>Logical tabs: All, then the pipeline stages, then foreign files.</summary>
+    public IReadOnlyList<string> Tabs { get; } = ["All", "STT", "TTS", "Other"];
+    [ObservableProperty] private string _selectedTab = "All";
+
+    /// <summary>Provider options for the current tab (always begins with "All providers").</summary>
+    public ObservableCollection<string> ProviderFilters { get; } = new();
+    [ObservableProperty] private string _selectedProvider = AllProviders;
+
+    /// <summary>Rows after the tab + provider filter — the list the view binds to.</summary>
+    public ObservableCollection<ModelRow> VisibleRows { get; } = new();
 
     public string CacheRoot { get; }
     public string CacheRootSource { get; }
@@ -85,6 +109,38 @@ public sealed partial class ModelsViewModel : ObservableObject
         StatusText = Rows.Count == 0
             ? "Cache is empty — models download on first use, or prefetch the full catalog below."
             : $"{Rows.Count} entries.";
+
+        RebuildProviderFilters();
+        ApplyFilter();
+    }
+
+    partial void OnSelectedTabChanged(string value)
+    {
+        RebuildProviderFilters();
+        ApplyFilter();
+    }
+
+    partial void OnSelectedProviderChanged(string value) => ApplyFilter();
+
+    private bool InTab(ModelRow r) => SelectedTab == "All" || r.Category == SelectedTab;
+
+    /// <summary>The providers present in the current tab, so the filter only offers real choices.</summary>
+    private void RebuildProviderFilters()
+    {
+        var providers = Rows.Where(InTab).Select(r => r.Provider)
+            .Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
+        ProviderFilters.Clear();
+        ProviderFilters.Add(AllProviders);
+        foreach (var p in providers) ProviderFilters.Add(p);
+        if (!ProviderFilters.Contains(SelectedProvider)) SelectedProvider = AllProviders;
+    }
+
+    private void ApplyFilter()
+    {
+        VisibleRows.Clear();
+        foreach (var r in Rows.Where(r =>
+            InTab(r) && (SelectedProvider == AllProviders || r.Provider == SelectedProvider)))
+            VisibleRows.Add(r);
     }
 
     /// <summary>The inventory id an artifact appears under (extracted archives get the .extracted suffix).</summary>

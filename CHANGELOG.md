@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
+  (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
+  plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.
+- **Voxa Studio: Models tabs + provider filters (Models & Voices).** The **Models** page now groups the
+  cache into tabs — **All / STT / TTS / Other** — and each tab has a **provider** dropdown (Whisper /
+  Piper / Kokoro, scoped to what's in that tab) to narrow the list. The **Voices** library gains the same
+  **provider** filter in its header, so you can focus on one provider's voices. Both filter live and reset
+  sensibly when the tab/library changes.
 - **Voxa Studio: app icon.** The Windows executable and taskbar/title-bar now show the VOXA mark instead
   of a blank default icon — a multi-resolution `voxa.ico` (16–256 px) generated from the brand geometry
   (`tools/voxa-icon-gen.cs`), wired via `ApplicationIcon` and the windows' `Icon`.

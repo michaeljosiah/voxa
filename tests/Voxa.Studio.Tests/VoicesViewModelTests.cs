@@ -152,4 +152,32 @@ public class VoicesViewModelTests
         Assert.Equal(1, shell.Playgrounds.SelectedLab);      // TTS lab
         Assert.Equal("en_US-amy-low", shell.Playgrounds.Tts.SelectedVoice?.Name);   // preselected for real
     }
+
+    [Fact] // provider filter narrows the library to one provider
+    public async Task Provider_Filter_Narrows_The_Library_To_One_Provider()
+    {
+        var store = new VoiceStore(TestSupport.TempDir());
+        await using var services = TestSupport.Services();
+        var vm = new VoicesViewModel(services, store);
+        vm.Catalog.CatalogOverride = name => name == "ElevenLabs"
+            ? new FakeCatalog(new ProviderVoice("stock-1", "Rachel", "ElevenLabs", VoiceKind.Standard))
+            : null;
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        // Every provider present in the library is offered (plus the "All" sentinel); unfiltered shows all.
+        Assert.Equal("All providers", vm.SelectedProviderFilter);
+        Assert.Contains("ElevenLabs", vm.ProviderFilters);
+        Assert.Contains("Piper", vm.ProviderFilters);   // local catalog voices
+        Assert.Equal(vm.Voices.Count, vm.VisibleVoices.Count);
+
+        // Filter to one provider → only its voices.
+        vm.SelectedProviderFilter = "ElevenLabs";
+        Assert.NotEmpty(vm.VisibleVoices);
+        Assert.All(vm.VisibleVoices, v => Assert.Equal("ElevenLabs", v.Voice.ProviderName));
+
+        // Back to "All providers" → the whole library again.
+        vm.SelectedProviderFilter = "All providers";
+        Assert.Equal(vm.Voices.Count, vm.VisibleVoices.Count);
+    }
 }

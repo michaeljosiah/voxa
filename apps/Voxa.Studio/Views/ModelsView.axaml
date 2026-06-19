@@ -4,7 +4,7 @@
              x:Class="Voxa.Studio.Views.ModelsView"
              x:DataType="vm:ModelsViewModel">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
 
     <Border Grid.Row="0" Classes="vx-viewbar">
       <Grid ColumnDefinitions="Auto,*,Auto">
@@ -39,9 +39,19 @@
                  Foreground="{StaticResource VxAccentBrush}"
                  IsVisible="{Binding IsPrefetching}" />
 
-    <Border Grid.Row="2" Classes="vx-card-flush" Margin="20,12,20,0">
+    <!-- ── logical tabs (All / STT / TTS / Other) + per-tab provider filter ── -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="20,12,20,0">
+      <TabStrip Grid.Column="0" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Classes="vx-sub" Text="Provider" VerticalAlignment="Center" />
+        <ComboBox MinWidth="150" ItemsSource="{Binding ProviderFilters}"
+                  SelectedItem="{Binding SelectedProvider}" />
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="3" Classes="vx-card-flush" Margin="20,12,20,0">
       <ScrollViewer>
-        <ItemsControl ItemsSource="{Binding Rows}" Margin="8">
+        <ItemsControl ItemsSource="{Binding VisibleRows}" Margin="8">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:ModelRow">
               <Border BorderBrush="{StaticResource VxBorderBrush}" BorderThickness="0,0,0,1"
@@ -75,7 +85,7 @@
       </ScrollViewer>
     </Border>
 
-    <StackPanel Grid.Row="3" Spacing="4" Margin="20,10,20,14">
+    <StackPanel Grid.Row="4" Spacing="4" Margin="20,10,20,14">
       <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
       <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
                  Text="{Binding ErrorText}"
