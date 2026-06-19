@@ -50,9 +50,13 @@ internal sealed class SidecarVoiceCloneProvider : IVoiceCloneProvider
         ArgumentException.ThrowIfNullOrEmpty(voiceId);
 
         // voiceId is a caller-supplied path — only ever delete inside the managed voices directory.
+        // GetRelativePath normalizes a trailing separator (and, on Windows, case) in the configured root,
+        // so a root like "…/voices/" can't break containment and refuse a valid cloned voice (Codex P2).
+        // The first-segment check distinguishes an escaping ".." from a clip merely named "..foo.wav".
         var target = Path.GetFullPath(voiceId);
-        var root = Path.GetFullPath(_voicesDirectory) + Path.DirectorySeparatorChar;
-        if (!target.StartsWith(root, StringComparison.Ordinal))
+        var relative = Path.GetRelativePath(Path.GetFullPath(_voicesDirectory), target);
+        var firstSegment = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        if (relative is "." || firstSegment is ".." || Path.IsPathRooted(relative))
             throw new VoiceProviderException($"Refusing to delete '{voiceId}': it is outside the sidecar voices directory.");
 
         if (File.Exists(target)) File.Delete(target);

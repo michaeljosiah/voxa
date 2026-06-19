@@ -68,6 +68,25 @@ public class SidecarCloneTests
     }
 
     [Fact]
+    public async Task Delete_Works_When_The_Voices_Root_Has_A_Trailing_Separator()
+    {
+        // Regression (Codex P2): a configured root ending in a separator must still delete the provider's
+        // own returned voice id — the containment check must normalize the root, not reject a valid clip.
+        var dir = TempDir() + Path.DirectorySeparatorChar;
+        var provider = new SidecarVoiceCloneProvider(dir);
+        try
+        {
+            var voice = await provider.CreateVoiceAsync(
+                new VoiceCloneRequest("v", [new VoiceSample("r.wav", new byte[] { 7 })]), CancellationToken.None);
+            Assert.True(File.Exists(voice.Id));
+
+            await provider.DeleteVoiceAsync(voice.Id, CancellationToken.None);
+            Assert.False(File.Exists(voice.Id));
+        }
+        finally { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
     public void Descriptor_Exposes_The_Cloner()
     {
         Assert.NotNull(SidecarDescriptors.Tts.ResolveCloner);
