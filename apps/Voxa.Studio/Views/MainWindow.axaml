@@ -118,16 +118,40 @@
       </DockPanel>
     </Border>
 
-    <!-- ── content host: code-behind swaps the active view ── -->
-    <Panel Grid.Row="1" Grid.Column="1">
-      <views:TalkView x:Name="TalkHost" DataContext="{Binding Talk}" />
-      <views:PlaygroundsView x:Name="PlaygroundsHost" DataContext="{Binding Playgrounds}" IsVisible="False" />
-      <views:VoicesView x:Name="VoicesHost" DataContext="{Binding Voices}" IsVisible="False" />
-      <views:BuilderView x:Name="BuilderHost" DataContext="{Binding Builder}" IsVisible="False" />
-      <views:MetricsView x:Name="MetricsHost" DataContext="{Binding Metrics}" IsVisible="False" />
-      <views:ModelsView x:Name="ModelsHost" DataContext="{Binding Models}" IsVisible="False" />
-      <views:ConfigView x:Name="ConfigHost" DataContext="{Binding Config}" IsVisible="False" />
-    </Panel>
+    <!-- ── content area: app-wide pipeline-profile bar + the swappable view host ── -->
+    <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="Auto,*">
+
+      <!-- pipeline profile bar — on every page; switching the active profile applies it everywhere.
+           Disabled while a session is live (a container rebuild can't run under it, like Config Apply). -->
+      <Border Grid.Row="0" Background="{StaticResource VxPanelBrush}"
+              BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,0,0,1"
+              Padding="20,7" IsEnabled="{Binding !IsLive}">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Classes="vx-label vx-accent" Text="PIPELINE PROFILE" VerticalAlignment="Center" />
+          <ComboBox MinWidth="200" ItemsSource="{Binding PipelineProfiles}"
+                    SelectedItem="{Binding SelectedPipelineProfile}"
+                    ToolTip.Tip="The active pipeline — switching applies it everywhere (Talk, Playgrounds, …)" />
+          <Button Classes="vx-ghost" Content="Delete" Command="{Binding DeleteProfileCommand}"
+                  ToolTip.Tip="Delete the selected profile"
+                  IsVisible="{Binding HasPipelineProfiles}" />
+          <TextBlock Classes="vx-sub" FontSize="11" VerticalAlignment="Center"
+                     Foreground="{StaticResource VxMutedBrush}"
+                     Text="Build a pipeline in Builder, then “Save as profile” to add one here."
+                     IsVisible="{Binding !HasPipelineProfiles}" />
+        </StackPanel>
+      </Border>
+
+      <!-- content host: code-behind swaps the active view -->
+      <Panel Grid.Row="1">
+        <views:TalkView x:Name="TalkHost" DataContext="{Binding Talk}" />
+        <views:PlaygroundsView x:Name="PlaygroundsHost" DataContext="{Binding Playgrounds}" IsVisible="False" />
+        <views:VoicesView x:Name="VoicesHost" DataContext="{Binding Voices}" IsVisible="False" />
+        <views:BuilderView x:Name="BuilderHost" DataContext="{Binding Builder}" IsVisible="False" />
+        <views:MetricsView x:Name="MetricsHost" DataContext="{Binding Metrics}" IsVisible="False" />
+        <views:ModelsView x:Name="ModelsHost" DataContext="{Binding Models}" IsVisible="False" />
+        <views:ConfigView x:Name="ConfigHost" DataContext="{Binding Config}" IsVisible="False" />
+      </Panel>
+    </Grid>
 
   </Grid>
 </Window>

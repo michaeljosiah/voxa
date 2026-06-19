@@ -221,16 +221,21 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     [ObservableProperty] private string _selectedProfile = "Default";
     [ObservableProperty] private BuilderNodeVm? _selectedNode;
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(SaveAsProfileCommand))]
     private bool _isRunning;
     /// <summary>True while a Talk session owns the audio device — Run disables.</summary>
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand))]
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(SaveAsProfileCommand))]
     private bool _runBlocked;
     [ObservableProperty] private string _statusText = "Wire the chain — ports only accept matching frame types.";
     [ObservableProperty] private string? _errorText;
     [ObservableProperty] private bool _isChainValid;
     [ObservableProperty] private string _chainText = "";
     [ObservableProperty] private bool _isDefaultShape;
+
+    /// <summary>Name to save the current (default-shape) pipeline under as an app-wide profile.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAsProfileCommand))]
+    private string _profileName = "";
 
     // export pane (progressive disclosure: hidden until an export button is pressed)
     [ObservableProperty] private bool _isExportOpen;
@@ -483,6 +488,7 @@ public sealed partial class BuilderViewModel : ObservableObject
         RefreshPlusChoices();
         RunCommand.NotifyCanExecuteChanged();
         SaveGraphCommand.NotifyCanExecuteChanged();
+        SaveAsProfileCommand.NotifyCanExecuteChanged();
         ExportAppSettingsCommand.NotifyCanExecuteChanged();
         ExportCSharpCommand.NotifyCanExecuteChanged();
     }
@@ -873,6 +879,30 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     [RelayCommand]
     private void CloseExport() => IsExportOpen = false;
+
+    // ── save as an app-wide pipeline profile (Phase 2) ───────────────────────
+
+    // Only default-shape chains can be a profile: the app-wide pipeline composes from config, which
+    // can't express custom shapes (those still export as C# code).
+    // Disabled while any session is live: SaveAsProfile both saves AND activates (a container rebuild),
+    // which can't run under a live session. Saving-without-activating would leave the store claiming a
+    // profile active while StudioServices keeps the old live overrides until restart, so we forbid it
+    // outright rather than half-apply (Codex P2).
+    private bool CanSaveAsProfile() =>
+        IsChainValid && IsDefaultShape && !string.IsNullOrWhiteSpace(ProfileName) && !IsRunning && !RunBlocked;
+
+    [RelayCommand(CanExecute = nameof(CanSaveAsProfile))]
+    private void SaveAsProfile()
+    {
+        if (!_graph.TryOrder(out var chain, out _)) return;
+        var name = ProfileName.Trim();
+        // includeSecrets:false → an inspector API key never reaches the saved profile (keys live in the
+        // secrets layer); a default-shape chain's pairs fully describe the pipeline.
+        _services.Profiles.Save(name, BuilderChainCompiler.Pairs(_graph, chain));
+        _services.ActivateProfile(name); // CanExecute guarantees no live session — safe to apply now
+        StatusText = $"Saved & activated pipeline profile “{name}”.";
+        ProfileName = "";
+    }
 
     // ── run from canvas ──────────────────────────────────────────────────────
 

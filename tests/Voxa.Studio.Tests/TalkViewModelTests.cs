@@ -137,4 +137,122 @@ public class TalkViewModelTests
         vm.StartBlocked = true;
         Assert.False(vm.StartCommand.CanExecute(null));
     }
+
+    // ── pipeline-state pill (the "what's happening" cue) ─────────────────────
+
+    [Fact]
+    public void Phase_Tracks_The_Turn_Lifecycle()
+    {
+        var vm = Vm();
+        long clock = 1000;
+        vm.NowTick = () => clock;
+        Assert.Equal(TalkPhase.Idle, vm.Phase);
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStarted));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Hearing, vm.Phase);
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStopped));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Transcribing, vm.Phase);
+
+        vm.EnqueueForTest(new TranscriptEvent("hi", IsFinal: true));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Thinking, vm.Phase);
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.BotStarted));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Speaking, vm.Phase);
+    }
+
+    [Fact]
+    public void Speaking_Holds_Through_Per_Sentence_Gaps_Then_Settles_To_Listening()
+    {
+        // TextToSpeechProcessor emits BotStarted/BotStopped PER SENTENCE, so a naive mapping would
+        // flicker Speaking↔Listening mid-reply. The debounce holds Speaking until the bot is quiet.
+        var vm = Vm();
+        long clock = 5000;
+        vm.NowTick = () => clock;
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.BotStarted));
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.BotStopped)); // sentence 1 finished
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Speaking, vm.Phase); // debounced — another sentence may follow
+
+        clock += 200;                                // a brief inter-sentence gap...
+        vm.EnqueueForTest(new TtsChunkEvent(3200, 16000)); // ...sentence 2 audio
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Speaking, vm.Phase);
+
+        clock += 700;                                // now genuinely quiet
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Listening, vm.Phase);
+    }
+
+    [Fact]
+    public void A_Turn_That_Yields_No_Speech_Falls_Back_To_Listening()
+    {
+        var vm = Vm();
+        long clock = 0;
+        vm.NowTick = () => clock;
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStopped));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Transcribing, vm.Phase);
+
+        clock += 13_000; // STT/agent produced nothing (filtered hallucination) — don't strand the pill
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Listening, vm.Phase);
+    }
+
+    [Fact]
+    public void Phase_Label_And_Pulse_Reflect_The_State()
+    {
+        var vm = Vm();
+        vm.NowTick = () => 0;
+        Assert.Equal("Idle", vm.PhaseLabel);
+        Assert.False(vm.PhasePulse);
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStarted));
+        vm.DrainPending();
+        Assert.Equal("Hearing you", vm.PhaseLabel);
+        Assert.True(vm.PhasePulse);
+    }
+
+    [Fact]
+    public void The_Phase_Pill_Shows_Whenever_A_Phase_Is_Active_Even_Before_IsRunning()
+    {
+        // Codex P2: the pill must not be gated on IsRunning, or the cold-start "Warming up…" state
+        // (set before IsRunning flips true) would never be seen.
+        var vm = Vm();
+        vm.NowTick = () => 0;
+        Assert.False(vm.ShowPhasePill); // Idle → hidden
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStarted));
+        vm.DrainPending();
+        Assert.False(vm.IsRunning);     // tests never call StartAsync
+        Assert.True(vm.ShowPhasePill);  // ...yet the live phase is still shown
+    }
+
+    [Fact]
+    public void Stt_Eating_The_Timeout_Budget_Does_Not_Flip_Thinking_To_Listening()
+    {
+        // Codex P2: a big Whisper model can chew most of the 12s budget during Transcribing; entering
+        // Thinking must restart the clock so the agent's work doesn't trip the no-speech fallback.
+        var vm = Vm();
+        long clock = 0;
+        vm.NowTick = () => clock;
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStopped));
+        vm.DrainPending(); // Transcribing, _phaseSinceTick = 0
+
+        clock += 11_000;   // STT chews most of the budget
+        vm.EnqueueForTest(new TranscriptEvent("a long utterance", IsFinal: true));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Thinking, vm.Phase); // timeout was reset on entering Thinking
+
+        clock += 2_000;    // 2s of agent work — would have blown the old (un-reset) budget
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Thinking, vm.Phase); // still thinking, not wrongly "Listening"
+    }
 }

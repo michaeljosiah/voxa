@@ -46,6 +46,9 @@ public sealed class StudioServices : IAsyncDisposable
     /// <summary>Activation + credentials facade the Settings dialog and the Config filter share.</summary>
     public ProviderSecretsService Secrets { get; }
 
+    /// <summary>Named pipeline profiles + the active one — the app-wide "which pipeline am I running".</summary>
+    public PipelineProfileStore Profiles { get; }
+
     public VoxaProviderRegistry Registry => Provider.GetRequiredService<VoxaProviderRegistry>();
 
     /// <summary>Raised after the container is swapped (Reconfigure / ApplySecrets) — views refresh from it.</summary>
@@ -55,7 +58,8 @@ public sealed class StudioServices : IAsyncDisposable
         IConfiguration? configuration = null,
         IStudioAudioDevice? audioDevice = null,
         ISecretsStore? secretsStore = null,
-        ProviderActivationStore? activationStore = null)
+        ProviderActivationStore? activationStore = null,
+        PipelineProfileStore? pipelineProfiles = null)
     {
         _baseConfiguration = configuration ?? new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -70,10 +74,13 @@ public sealed class StudioServices : IAsyncDisposable
         // rule). Tests inject a MemorySecretsStore + temp activation path for isolation.
         SecretsStore = secretsStore ?? CreateDefaultSecretsStore();
         Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
+        Profiles = pipelineProfiles ?? new PipelineProfileStore();
 
-        // Fold the stored secrets into the FIRST build so a returning user's providers are live from
-        // the first session — no post-construction Reconfigure, no double build.
+        // Fold the stored secrets AND the saved active profile into the FIRST build, so a returning user
+        // reopens on the pipeline they left — live from the first session, no post-construction rebuild.
         _secrets = Secrets.BuildConfigPairs();
+        if (Profiles.TryGetActive(out var activePairs))
+            _overrides = new Dictionary<string, string?>(activePairs);
         (Configuration, Provider, ModelCache) = Build(_baseConfiguration, _secrets, _overrides);
     }
 
@@ -103,6 +110,19 @@ public sealed class StudioServices : IAsyncDisposable
         old.Dispose();
 
         Reconfigured?.Invoke();
+    }
+
+    /// <summary>
+    /// Make <paramref name="name"/> the active pipeline app-wide: persist the choice and rebuild the
+    /// container from its pairs (or back to the base config when null). Like <see cref="Reconfigure"/>,
+    /// the caller must ensure no live session is running; fires <see cref="Reconfigured"/> so views refresh.
+    /// </summary>
+    public void ActivateProfile(string? name)
+    {
+        Profiles.SetActive(name);
+        Reconfigure(name is not null && Profiles.TryGet(name, out var pairs)
+            ? pairs
+            : new Dictionary<string, string?>());
     }
 
     /// <summary>
@@ -149,6 +169,33 @@ public sealed class StudioServices : IAsyncDisposable
     }
 
     public TalkSession CreateTalkSession() => TalkSession.Create(Provider, AudioDevice);
+
+    /// <summary>
+    /// Warm the configured STT/TTS model weights into memory (whisper.cpp caches its
+    /// <c>WhisperFactory</c> process-wide, so a later Talk session reuses them — the first turn isn't
+    /// a cold start). When <paramref name="cachedOnly"/> is true this NO-OPS if any required artifact is
+    /// missing, honoring "no network before the user acts" — which makes it safe on the splash/startup
+    /// path and after a Config Apply. Best-effort: a genuinely broken model resurfaces with its
+    /// remediation message when the pipeline starts, so failures here are swallowed.
+    /// </summary>
+    public async Task WarmUpAsync(bool cachedOnly, CancellationToken ct = default)
+    {
+        if (cachedOnly && ActiveConfigArtifacts.Missing(Configuration, ModelCache).Count > 0)
+            return; // a download would be needed — defer to the user-triggered Talk Start
+
+        var voxa = Configuration.GetSection("Voxa");
+        var registry = Registry;
+        using var scope = Provider.CreateScope();
+        var sp = scope.ServiceProvider;
+        try
+        {
+            if (voxa["Stt"] is { } stt && registry.TryGetStt(stt, out var sttDesc) && sttDesc.WarmUpAsync is not null)
+                await sttDesc.WarmUpAsync(sp, voxa, ct).ConfigureAwait(false);
+            if (voxa["Tts"] is { } tts && registry.TryGetTts(tts, out var ttsDesc) && ttsDesc.WarmUpAsync is not null)
+                await ttsDesc.WarmUpAsync(sp, voxa, ct).ConfigureAwait(false);
+        }
+        catch { /* best-effort warm-up */ }
+    }
 
     public async ValueTask DisposeAsync()
     {

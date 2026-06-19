@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: named pipeline profiles, app-wide (Builder Phase 2).** Save a pipeline you've built as
+  a named **profile** and switch the whole app to it from one place. A new **Pipeline Profile** bar sits
+  above every view: pick a profile and it's applied everywhere at once — Talk, the Playgrounds, the lot —
+  via the same live-reconfigure the Config Apply uses; the choice persists, so Studio reopens on the
+  pipeline you left. Save one from the **Builder** ("Save as profile", for default-shape chains) — it
+  appears in the bar and becomes active. Profiles store only the provider/model selection, **never API
+  keys** (those stay in the encrypted secrets layer), so the `~/voxa-pipelines.json` file is safe to
+  share. A raw Config **Apply** still works and simply shows the bar as "Custom".
+- **Voxa Studio: Talk feels alive — pipeline state, warm-up, smoother render.** Talk used to look
+  frozen while it worked. A prominent **status pill** now shows the live pipeline state — Warming up →
+  Listening → Hearing you → Transcribing → Thinking → Speaking — derived from the diagnostics hub, so
+  you always know what's happening (and, crucially with half-duplex on speakers, exactly when the mic is
+  live: *Listening* = your turn). It debounces the per-sentence TTS edges so it doesn't flicker mid-reply.
+  Cached models are now **warmed up during the launch splash** (and again after a Config Apply), so a
+  returning user's first turn is instant — whisper.cpp caches its factory process-wide, so the live
+  session reuses what the splash warmed (Start re-warms only as a safety net). Warm-up is **cached-only**
+  off the splash: first-run still downloads at your first Start, with progress — no network before you
+  act. The active **pipeline** (VAD · STT · agent · TTS · voice) is shown as an always-visible chip.
+  And the VAD-trace render is throttled to ~12 fps, cutting per-frame allocations and stutter.
 - **Voxa Studio: Builder reliability + validation (Phase 1).** The Pipeline Builder canvas was flaky
   and easy to leave in a broken state. Node dragging now captures the pointer, so a fast drag no longer
   stalls or strands the gesture (it matched wire-dragging's behavior, which already captured). A new
