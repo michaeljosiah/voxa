@@ -119,6 +119,11 @@ public class App : Application
                 _services = boot.Result;
                 bootDone = true;
 
+                // Warm already-cached models in the background while the splash is up, so the first Talk
+                // turn isn't a cold start. Cached-only: this NEVER downloads (no network before the user
+                // acts) — a first-run fetch still happens, with progress, at the user's first Start.
+                _ = Task.Run(() => _services!.WarmUpAsync(cachedOnly: true));
+
                 var remaining = minimumOnScreen - shown.Elapsed;
                 if (remaining > TimeSpan.Zero)
                 {

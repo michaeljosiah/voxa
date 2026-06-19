@@ -57,6 +57,19 @@ public class StudioBootTests
         Assert.NotNull(session.Hub);
     }
 
+    [Fact]
+    public async Task WarmUp_CachedOnly_Touches_No_Network_When_Models_Are_Not_Cached()
+    {
+        // The splash/startup warm-up path: with an empty cache, cached-only warm-up must NO-OP — no
+        // download, no throw — so it preserves "no network before the user acts" on first launch.
+        var cacheRoot = TestSupport.TempDir();
+        var services = TestSupport.Services(cacheRoot);
+
+        await services.WarmUpAsync(cachedOnly: true);
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(cacheRoot));
+    }
+
     [AvaloniaFact]
     public void Section_Views_All_Construct()
     {

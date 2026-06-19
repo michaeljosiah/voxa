@@ -77,7 +77,7 @@ public partial class BuilderView : UserControl
         base.OnDetachedFromVisualTree(e);
     }
 
-    // ── node dragging ────────────────────────────────────────────────────────
+    // ── node dragging (capture to the canvas so a fast drag never loses the pointer) ──
 
     private void OnNodePressed(object? sender, PointerPressedEventArgs e)
     {
@@ -92,26 +92,11 @@ public partial class BuilderView : UserControl
         _dragMoved = false;
         var pos = e.GetPosition(GraphPanel);
         _dragOffset = new Point(pos.X - node.X, pos.Y - node.Y);
-    }
-
-    private void OnNodeMoved(object? sender, PointerEventArgs e)
-    {
-        if (_dragNode is not { } node) return;
-        if (!_dragMoved)
-        {
-            _dragMoved = true;
-            Vm?.PushUndo(); // one undo step per drag, not per pixel
-        }
-        var pos = e.GetPosition(GraphPanel);
-        node.X = Math.Max(0, pos.X - _dragOffset.X);
-        node.Y = Math.Max(0, pos.Y - _dragOffset.Y);
-    }
-
-    private void OnNodeReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (_dragNode is { } node && _dragMoved)
-            Vm?.SnapNode(node);
-        _dragNode = null;
+        // Capture to the canvas so subsequent moves/releases land on GraphPanel (OnCanvasMoved/
+        // OnCanvasReleased) even when the cursor outruns the node card. Without this the move
+        // events fall on bare canvas, the node stalls mid-drag, and releasing off-node strands
+        // the drag state — the flakiness this fixes. (Wire dragging already captures this way.)
+        e.Pointer.Capture(GraphPanel);
     }
 
     // ── wire dragging (out port → any spot on a target node) ────────────────
@@ -129,12 +114,37 @@ public partial class BuilderView : UserControl
 
     private void OnCanvasMoved(object? sender, PointerEventArgs e)
     {
-        if (_wireFrom is null) return;
-        EdgesLayer.TempWireEnd = e.GetPosition(GraphPanel);
+        // A node drag and a wire drag both capture to the canvas; the node drag takes priority.
+        if (_dragNode is { } node)
+        {
+            if (!_dragMoved)
+            {
+                _dragMoved = true;
+                Vm?.PushUndo(); // one undo step per drag, not per pixel
+            }
+            var p = e.GetPosition(GraphPanel);
+            node.X = Math.Max(0, p.X - _dragOffset.X);
+            node.Y = Math.Max(0, p.Y - _dragOffset.Y);
+            return;
+        }
+        if (_wireFrom is not null)
+            EdgesLayer.TempWireEnd = e.GetPosition(GraphPanel);
     }
 
     private void OnCanvasReleased(object? sender, PointerReleasedEventArgs e)
     {
+        // Release the capture taken in OnNodePressed/OnPortPressed. Avalonia keeps routing pointer
+        // input to the captured GraphPanel until it's released, which would swallow the next click on
+        // a toolbar/palette control after a drag (Codex P2). No-op when nothing was captured.
+        if (_dragNode is not null || _wireFrom is not null) e.Pointer.Capture(null);
+
+        if (_dragNode is { } dragged)
+        {
+            if (_dragMoved) Vm?.SnapNode(dragged);
+            _dragNode = null;
+            return;
+        }
+
         if (_wireFrom is not { } from) return;
         _wireFrom = null;
         EdgesLayer.TempWireStart = null;

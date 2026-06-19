@@ -167,6 +167,68 @@ public class BuilderViewModelTests
         Assert.True(fresh.IsChainValid);
     }
 
+    // ── reset + validation (VST builder polish) ──────────────────────────────
+
+    [Fact]
+    public void Reset_To_Default_Restores_The_Default_Pipeline_And_Is_Undoable()
+    {
+        var vm = Vm();
+        vm.SeedFromPairs(new Dictionary<string, string?>
+        {
+            ["Voxa:Vad:Engine"] = "None",
+            ["Voxa:Tts"] = "Kokoro",
+        });
+        Assert.Equal(7, vm.Nodes.Count); // no VAD
+
+        vm.ResetToDefaultCommand.Execute(null);
+
+        Assert.Equal(8, vm.Nodes.Count);
+        Assert.True(vm.IsChainValid);
+        Assert.True(vm.IsDefaultShape);
+        Assert.Equal("Silero", NodeOf(vm, BuilderNodeKind.Vad).Model.Provider);
+        Assert.Equal("Piper", NodeOf(vm, BuilderNodeKind.Tts).Model.Provider);
+        Assert.Equal("tiny.en", NodeOf(vm, BuilderNodeKind.Stt).Model.Options["Model"]);
+
+        vm.Undo(); // a fat-fingered reset is recoverable
+        Assert.Equal(7, vm.Nodes.Count);
+    }
+
+    [Fact]
+    public void A_Valid_Chain_Allows_Save_And_Rings_No_Node()
+    {
+        var vm = Vm();
+        Assert.True(vm.IsChainValid);
+        Assert.True(vm.SaveGraphCommand.CanExecute(null));
+        Assert.Empty(vm.ValidationErrors);
+        Assert.All(vm.Nodes, n => Assert.False(n.HasError));
+    }
+
+    [Fact]
+    public void An_Invalid_Chain_Blocks_Save_Lists_Every_Error_And_Rings_The_Bad_Nodes()
+    {
+        var vm = Vm();
+        Assert.True(vm.SaveGraphCommand.CanExecute(null));
+
+        // Removing the filter strands STT's output and the Agent's input.
+        vm.Select(NodeOf(vm, BuilderNodeKind.Filter));
+        vm.RemoveSelectedCommand.Execute(null);
+
+        Assert.False(vm.IsChainValid);
+        Assert.False(vm.SaveGraphCommand.CanExecute(null)); // #5: invalid can't be saved
+        Assert.NotEmpty(vm.ValidationErrors);
+
+        Assert.True(NodeOf(vm, BuilderNodeKind.Stt).HasError);    // dangling output
+        Assert.True(NodeOf(vm, BuilderNodeKind.Agent).HasError);  // dangling input
+        Assert.False(NodeOf(vm, BuilderNodeKind.Source).HasError); // still fully wired
+
+        // Repairing the chain clears the block and the rings.
+        Assert.True(vm.TryConnect(NodeOf(vm, BuilderNodeKind.Stt), NodeOf(vm, BuilderNodeKind.Agent), out _));
+        Assert.True(vm.IsChainValid);
+        Assert.True(vm.SaveGraphCommand.CanExecute(null));
+        Assert.Empty(vm.ValidationErrors);
+        Assert.All(vm.Nodes, n => Assert.False(n.HasError));
+    }
+
     // ── exporters ────────────────────────────────────────────────────────────
 
     [Fact]

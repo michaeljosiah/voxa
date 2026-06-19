@@ -359,6 +359,9 @@ public sealed partial class ConfigViewModel : ObservableObject
     {
         try
         {
+            // A raw Config Apply is a one-off override — it no longer matches a saved profile, so clear
+            // the active one (the shell's profile bar then reads "Custom").
+            _services.Profiles.SetActive(null);
             _services.Reconfigure(DraftPairs(includeSecrets: true));
             var agent = ShowAgentOptions ? $"{SelectedAgent} ({AgentModel})" : SelectedAgent;
             ApplyStatus = $"Applied — next Talk session: {SelectedStt} → {agent} → {SelectedTts}.";

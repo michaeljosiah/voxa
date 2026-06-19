@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Voxa.Studio.Controls;
 using Voxa.Studio.Services;
+using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Views;
 
@@ -74,13 +75,18 @@ public static class Converters
         new FuncValueConverter<BuilderPortType?, string>(type =>
             type is { } t ? BuilderGraph.PortLabel(t) : "—");
 
-    /// <summary>(IsSelected, StageKey) → border ring: stage accent when selected, hairline otherwise.</summary>
+    /// <summary>(IsSelected, StageKey, HasError) → border ring: red when invalid, stage accent when
+    /// selected, hairline otherwise. The error state wins so a bad node is unmistakable.</summary>
     public static readonly IMultiValueConverter NodeRing =
         new FuncMultiValueConverter<object?, IBrush?>(values =>
         {
             var items = values.ToList();
-            return items is [bool selected, string key]
-                ? selected ? (IBrush?)StageBrush.Convert(key, typeof(IBrush), null, CultureInfo.InvariantCulture) : Line2Brush
+            if (items is [bool selected, string key, bool hasError])
+                return hasError ? (Themed("VxBadBrush") ?? BadBrush)
+                     : selected ? (IBrush?)StageBrush.Convert(key, typeof(IBrush), null, CultureInfo.InvariantCulture)
+                     : Line2Brush;
+            return items is [bool s, string k]
+                ? s ? (IBrush?)StageBrush.Convert(k, typeof(IBrush), null, CultureInfo.InvariantCulture) : Line2Brush
                 : Line2Brush;
         });
 
@@ -98,7 +104,22 @@ public static class Converters
             });
         });
 
+    /// <summary>TalkPhase → status-pill accent: warm-up amber, listening green, hearing accent,
+    /// transcribing cyan, thinking purple, speaking orange, idle grey.</summary>
+    public static readonly IValueConverter PhaseBrush =
+        new FuncValueConverter<TalkPhase, IBrush?>(phase => phase switch
+        {
+            TalkPhase.WarmingUp    => WarnBrush,
+            TalkPhase.Listening    => StageOutBrush,
+            TalkPhase.Hearing      => Themed("VxAccentBrush") ?? StageSttBrush,
+            TalkPhase.Transcribing => StageSttBrush,
+            TalkPhase.Thinking     => StageAgentBrush,
+            TalkPhase.Speaking     => StageTtsBrush,
+            _                      => MatchBrush,
+        });
+
     private static readonly IBrush Line2Brush = new SolidColorBrush(Color.Parse("#29A6B2C2")); // line-2
+    private static readonly IBrush BadBrush = new SolidColorBrush(Color.Parse("#EF5350"));     // invalid-node ring fallback
 
     private static readonly IBrush StageVadBrush = new SolidColorBrush(Color.Parse("#76849B"));
     private static readonly IBrush StageSttBrush = new SolidColorBrush(Color.Parse("#4FC3F7"));
