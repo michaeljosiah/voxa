@@ -218,4 +218,41 @@ public class TalkViewModelTests
         Assert.Equal("Hearing you", vm.PhaseLabel);
         Assert.True(vm.PhasePulse);
     }
+
+    [Fact]
+    public void The_Phase_Pill_Shows_Whenever_A_Phase_Is_Active_Even_Before_IsRunning()
+    {
+        // Codex P2: the pill must not be gated on IsRunning, or the cold-start "Warming up…" state
+        // (set before IsRunning flips true) would never be seen.
+        var vm = Vm();
+        vm.NowTick = () => 0;
+        Assert.False(vm.ShowPhasePill); // Idle → hidden
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStarted));
+        vm.DrainPending();
+        Assert.False(vm.IsRunning);     // tests never call StartAsync
+        Assert.True(vm.ShowPhasePill);  // ...yet the live phase is still shown
+    }
+
+    [Fact]
+    public void Stt_Eating_The_Timeout_Budget_Does_Not_Flip_Thinking_To_Listening()
+    {
+        // Codex P2: a big Whisper model can chew most of the 12s budget during Transcribing; entering
+        // Thinking must restart the clock so the agent's work doesn't trip the no-speech fallback.
+        var vm = Vm();
+        long clock = 0;
+        vm.NowTick = () => clock;
+
+        vm.EnqueueForTest(new TurnEvent(TurnEdge.UserStopped));
+        vm.DrainPending(); // Transcribing, _phaseSinceTick = 0
+
+        clock += 11_000;   // STT chews most of the budget
+        vm.EnqueueForTest(new TranscriptEvent("a long utterance", IsFinal: true));
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Thinking, vm.Phase); // timeout was reset on entering Thinking
+
+        clock += 2_000;    // 2s of agent work — would have blown the old (un-reset) budget
+        vm.DrainPending();
+        Assert.Equal(TalkPhase.Thinking, vm.Phase); // still thinking, not wrongly "Listening"
+    }
 }
