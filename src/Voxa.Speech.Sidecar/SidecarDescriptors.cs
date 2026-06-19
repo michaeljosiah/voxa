@@ -18,8 +18,16 @@ public static class SidecarDescriptors
         ConfigSection: ConfigSectionName,
         OutputSampleRate: 24000,
         Validate: Validate,
-        CreateProcessor: (sp, root) => new TextToSpeechProcessor(
-            new SidecarTtsEngine(SidecarOptions.FromConfiguration(root), LoggerFor(sp))))
+        CreateProcessor: (sp, root) =>
+        {
+            // Label emitted AudioRawFrames with the configured rate (matching ResolveOutputSampleRate and
+            // the session envelope), not the processor's 24 kHz default — Codex P2, mirrors the Piper descriptor.
+            var options = SidecarOptions.FromConfiguration(root);
+            return new TextToSpeechProcessor(
+                new SidecarTtsEngine(options, LoggerFor(sp)),
+                outputSampleRate: options.OutputSampleRate,
+                logger: LoggerFor(sp));
+        })
     {
         ResolveOutputSampleRate = root => SidecarOptions.FromConfiguration(root).OutputSampleRate,
     };

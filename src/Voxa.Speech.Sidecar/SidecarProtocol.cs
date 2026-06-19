@@ -39,7 +39,12 @@ internal static class SidecarProtocol
 
         var header = JsonSerializer.Deserialize<SidecarResponseHeader>(headerLine, Json);
         if (header?.Error is { Length: > 0 } error)
+        {
+            // The sidecar writes a terminator after its error header; drain it so the long-lived stdout
+            // stays aligned for the next request (a recoverable error must not desync the protocol).
+            await DrainToTerminatorAsync(stdout, ct).ConfigureAwait(false);
             throw new VoxaModelUnavailableException($"Voxa TTS sidecar reported an error: {error}");
+        }
 
         var lengthBuffer = new byte[4];
         while (true)
@@ -50,6 +55,26 @@ internal static class SidecarProtocol
             var frame = new byte[length];
             await ReadExactlyAsync(stdout, frame, ct).ConfigureAwait(false);
             yield return frame;
+        }
+    }
+
+    /// <summary>Consume frames up to and including the zero-length terminator — realigns the stream after an error.</summary>
+    private static async Task DrainToTerminatorAsync(Stream stdout, CancellationToken ct)
+    {
+        try
+        {
+            var lengthBuffer = new byte[4];
+            while (true)
+            {
+                await ReadExactlyAsync(stdout, lengthBuffer, ct).ConfigureAwait(false);
+                var length = BinaryPrimitives.ReadUInt32LittleEndian(lengthBuffer);
+                if (length == 0) return;
+                await ReadExactlyAsync(stdout, new byte[length], ct).ConfigureAwait(false);
+            }
+        }
+        catch (VoxaModelUnavailableException)
+        {
+            // The sidecar closed its output after erroring (a crash) — nothing left to realign.
         }
     }
 

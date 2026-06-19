@@ -50,6 +50,36 @@ public class VoxaSidecarTests
     }
 
     [Fact]
+    public async Task Protocol_Realigns_After_An_Error_For_The_Next_Request()
+    {
+        // Codex P2: the sidecar writes a terminator after its error header. The reader must drain it so a
+        // second request on the same long-lived stream reads cleanly instead of NUL-desyncing.
+        using var stream = new MemoryStream();
+        stream.Write(Encoding.UTF8.GetBytes("{\"error\":\"boom\"}\n"));
+        WriteLen(stream, 0);                                                 // request 1 terminator
+        stream.Write(Encoding.UTF8.GetBytes("{\"sample_rate\":24000}\n"));   // request 2
+        WriteLen(stream, 2); stream.Write(new byte[] { 7, 8 }); WriteLen(stream, 0);
+        stream.Position = 0;
+
+        await Assert.ThrowsAsync<VoxaModelUnavailableException>(async () =>
+        {
+            await foreach (var _ in SidecarProtocol.ReadResponseAsync(stream, CancellationToken.None)) { }
+        });
+
+        var collected = new List<byte>();
+        await foreach (var chunk in SidecarProtocol.ReadResponseAsync(stream, CancellationToken.None))
+            collected.AddRange(chunk.ToArray());
+        Assert.Equal(new byte[] { 7, 8 }, collected); // the second response, read after realigning
+    }
+
+    private static void WriteLen(Stream stream, uint value)
+    {
+        var bytes = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+        stream.Write(bytes);
+    }
+
+    [Fact]
     public void EncodeRequest_Is_A_SnakeCase_Json_Line()
     {
         var line = Encoding.UTF8.GetString(
