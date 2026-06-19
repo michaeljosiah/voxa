@@ -74,17 +74,37 @@
           <Button Classes="vx-ghost" Content="Tidy" Command="{Binding TidyCommand}" />
           <Button Classes="vx-ghost" Content="Reset" Command="{Binding ResetToDefaultCommand}"
                   ToolTip.Tip="Reset the canvas to the default pipeline (undoable)" />
-          <Button Classes="vx-primary" Content="Save" Command="{Binding SaveCurrentProfileCommand}"
-                  ToolTip.Tip="Save changes to the active profile (the one in the Pipeline Profile bar)" />
-          <TextBox Width="124" Watermark="new profile name" Text="{Binding ProfileName}"
-                   VerticalAlignment="Center"
-                   ToolTip.Tip="Name this pipeline to save it as a NEW app-wide profile" />
-          <Button Classes="vx-ghost" Content="Save as new" Command="{Binding SaveAsProfileCommand}"
-                  ToolTip.Tip="Save this (default-shape) pipeline as a new profile and make it active" />
-          <Button Classes="vx-ghost" Content="appsettings" Command="{Binding ExportAppSettingsCommand}"
-                  ToolTip.Tip="Export as config — enabled when the chain matches UseDefaults()" />
-          <Button Classes="vx-ghost" Content="C# compose" Command="{Binding ExportCSharpCommand}"
-                  ToolTip.Tip="Export as composition code — works for any valid chain" />
+          <!-- Save: update the active profile, or save as a new named profile -->
+          <Button Classes="vx-primary" Content="Save  ▾" ToolTip.Tip="Save the pipeline to a profile">
+            <Button.Flyout>
+              <Flyout>
+                <StackPanel Width="248" Spacing="10">
+                  <Button Classes="vx-ghost" HorizontalAlignment="Stretch" Content="Save to active profile"
+                          Command="{Binding SaveCurrentProfileCommand}"
+                          ToolTip.Tip="Overwrite the profile selected in the Pipeline Profile bar" />
+                  <Border Height="1" Background="{StaticResource VxLine1Brush}" />
+                  <TextBlock Classes="vx-sub" Text="Save as a new profile" />
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Text="{Binding ProfileName}" Watermark="profile name" Margin="0,0,6,0" />
+                    <Button Grid.Column="1" Classes="vx-ghost" Content="Create"
+                            Command="{Binding SaveAsProfileCommand}" />
+                  </Grid>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+
+          <!-- Export: appsettings (default-shape) or C# composition -->
+          <Button Classes="vx-ghost" Content="Export  ▾" ToolTip.Tip="Export this pipeline">
+            <Button.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="appsettings.json" Command="{Binding ExportAppSettingsCommand}"
+                          ToolTip.Tip="Config — enabled when the chain matches UseDefaults()" />
+                <MenuItem Header="C# compose" Command="{Binding ExportCSharpCommand}"
+                          ToolTip.Tip="Composition code — works for any valid chain" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
           <Button Classes="vx-primary" Content="Run graph" Command="{Binding RunCommand}"
                   IsVisible="{Binding !IsRunning}" />
           <Button Classes="vx-danger" Content="Stop" Command="{Binding StopCommand}"

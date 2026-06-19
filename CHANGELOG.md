@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
+  (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
+  plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.
 - **Voxa Studio: Models tabs + provider filters (Models & Voices).** The **Models** page now groups the
   cache into tabs — **All / STT / TTS / Other** — and each tab has a **provider** dropdown (Whisper /
   Piper / Kokoro, scoped to what's in that tab) to narrow the list. The **Voices** library gains the same
