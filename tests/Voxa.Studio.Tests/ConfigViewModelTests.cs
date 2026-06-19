@@ -186,4 +186,87 @@ public class ConfigViewModelTests
 
         Assert.Contains("OpenAI / gpt-4o", shell.Talk.ProviderChain);
     }
+
+    // ── Ollama (local, keyless LLM agent — VLS-003 surfaced in Studio) ───────
+
+    [Fact]
+    public void Ollama_Is_Offered_As_An_Agent_Provider()
+        => Assert.Contains("Ollama", Vm().AgentProviders);
+
+    [Fact]
+    public void Switching_To_Ollama_Validates_Keylessly_And_Swaps_The_Model_Placeholder()
+    {
+        var vm = Vm();
+        vm.SelectedAgent = "Ollama";
+
+        // The model field swaps from the OpenAI default to a sensible local one, and the card shows the
+        // Base URL row (Ollama) instead of the API-key row (OpenAI).
+        Assert.Equal("llama3.2", vm.AgentModel);
+        Assert.True(vm.ShowAgentOptions);
+        Assert.True(vm.ShowAgentBaseUrl);
+        Assert.False(vm.ShowAgentApiKey);
+
+        // Keyless: valid out of the box against the default local daemon endpoint.
+        Assert.True(vm.IsValid, string.Join("; ", vm.ValidationErrors));
+        Assert.Contains("\"Ollama\"", vm.ExportJson);
+        Assert.Contains("llama3.2", vm.ExportJson);
+        Assert.DoesNotContain("ApiKey", vm.ExportJson);
+
+        // The default base URL stays implicit; no secret is ever drafted for Ollama.
+        var pairs = vm.DraftPairs(includeSecrets: true);
+        Assert.Equal("Ollama", pairs["Voxa:Agent:Provider"]);
+        Assert.False(pairs.ContainsKey("Voxa:Agent:BaseUrl"));
+        Assert.False(pairs.ContainsKey("Voxa:Agent:ApiKey"));
+    }
+
+    [Fact]
+    public void Ollama_Custom_Base_Url_Reaches_The_Export_And_Default_Stays_Implicit()
+    {
+        var vm = Vm();
+        vm.SelectedAgent = "Ollama";
+
+        Assert.DoesNotContain("BaseUrl", vm.ExportJson); // default endpoint is implicit
+
+        vm.AgentBaseUrl = "http://gpu-box:11434/v1";
+        Assert.True(vm.IsValid, string.Join("; ", vm.ValidationErrors));
+        Assert.Contains("http://gpu-box:11434/v1", vm.ExportJson);
+        Assert.Equal("http://gpu-box:11434/v1", vm.DraftPairs()["Voxa:Agent:BaseUrl"]);
+    }
+
+    [Fact]
+    public void Switching_Back_To_OpenAI_Restores_The_Cloud_Model_Placeholder()
+    {
+        var vm = Vm();
+        vm.SelectedAgent = "Ollama";
+        Assert.Equal("llama3.2", vm.AgentModel);
+
+        vm.SelectedAgent = "OpenAI";
+        Assert.Equal("gpt-4o-mini", vm.AgentModel);
+        Assert.True(vm.ShowAgentApiKey);
+        Assert.False(vm.ShowAgentBaseUrl);
+    }
+
+    // ── Whisper GPU device (VLS-002 surfaced in Studio) ──────────────────────
+
+    [Fact]
+    public void Whisper_Devices_List_Includes_Cpu_And_Cuda()
+    {
+        var vm = Vm();
+        Assert.Contains("cpu", vm.WhisperDevices);
+        Assert.Contains("cuda", vm.WhisperDevices);
+    }
+
+    [Fact]
+    public void Whisper_Device_Stays_Implicit_On_Cpu_And_Reaches_The_Export_On_Gpu()
+    {
+        var vm = Vm(); // default STT is WhisperCpp
+        Assert.Equal("cpu", vm.SelectedWhisperDevice);
+        Assert.False(vm.DraftPairs().ContainsKey("Voxa:WhisperCpp:Device")); // cpu is the implicit default
+        Assert.DoesNotContain("Device", vm.ExportJson);
+
+        vm.SelectedWhisperDevice = "cuda";
+        Assert.True(vm.IsValid, string.Join("; ", vm.ValidationErrors));
+        Assert.Equal("cuda", vm.DraftPairs()["Voxa:WhisperCpp:Device"]);
+        Assert.Contains("\"cuda\"", vm.ExportJson);
+    }
 }

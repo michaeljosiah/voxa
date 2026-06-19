@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Voxa.AspNetCore;
 using Voxa.Diagnostics;
@@ -30,16 +31,18 @@ public sealed class TalkSession : IAsyncDisposable
     private Task? _micPump;
     private Task? _speakerPump;
     private bool _started;
+    private readonly MicGate _micGate;
 
     public VoxaDiagnosticsHub Hub { get; }
     public int InputSampleRate { get; }
     public int OutputSampleRate { get; }
 
     private TalkSession(
-        IServiceScope scope, IStudioAudioDevice device, ComposedVoice composed)
+        IServiceScope scope, IStudioAudioDevice device, ComposedVoice composed, bool allowBargeIn)
     {
         _scope = scope;
         _device = device;
+        _micGate = new MicGate(allowBargeIn);
         Hub = scope.ServiceProvider.GetRequiredService<VoxaDiagnosticsHub>();
         InputSampleRate = composed.InputSampleRate;
         OutputSampleRate = composed.OutputSampleRate;
@@ -66,7 +69,7 @@ public sealed class TalkSession : IAsyncDisposable
         var scope = root.CreateScope();
         try
         {
-            return new TalkSession(scope, device, compose(scope.ServiceProvider));
+            return new TalkSession(scope, device, compose(scope.ServiceProvider), ReadAllowBargeIn(root));
         }
         catch
         {
@@ -74,6 +77,13 @@ public sealed class TalkSession : IAsyncDisposable
             throw;
         }
     }
+
+    // Half-duplex by default (Voxa:Studio:AllowBargeIn=false): on speakers the mic must not feed the
+    // bot's own audio back into the pipeline. Set it true for full-duplex barge-in (use headphones).
+    private static bool ReadAllowBargeIn(IServiceProvider services)
+        => bool.TryParse(
+            (services.GetService(typeof(IConfiguration)) as IConfiguration)?["Voxa:Studio:AllowBargeIn"],
+            out var allow) && allow;
 
     /// <summary>[source, parts…, sink] — index i+1 is composed part i. Queue-depth badges read this.</summary>
     internal IReadOnlyList<FrameProcessor> Processors => _pipeline.Processors;
@@ -99,7 +109,12 @@ public sealed class TalkSession : IAsyncDisposable
         try
         {
             await foreach (var frame in _device.CaptureAsync(microphone, InputSampleRate, ct).ConfigureAwait(false))
+            {
+                // Half-duplex echo suppression (P1): drop captured audio while the bot is speaking, so an
+                // on-speaker user doesn't loop the bot's own output back through VAD → STT → agent.
+                if (!_micGate.ShouldIngest()) continue;
                 await _pipeline.Source.IngestAsync(new AudioRawFrame(frame, InputSampleRate, 1), ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) { /* session stop */ }
     }
@@ -117,6 +132,11 @@ public sealed class TalkSession : IAsyncDisposable
                 {
                     case BotStartedSpeakingFrame:
                         awaitFirstAudio = true;
+                        _micGate.BotStartedSpeaking(); // close the mic gate while the bot talks
+                        break;
+
+                    case BotStoppedSpeakingFrame:
+                        _micGate.BotStoppedSpeaking(); // reopen after a short hangover
                         break;
 
                     case AudioRawFrame audio:

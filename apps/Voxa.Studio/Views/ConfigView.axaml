@@ -56,10 +56,13 @@
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowWhisperOptions}">
-        <Grid ColumnDefinitions="130,*">
+        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
           <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
-          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
                     ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
+          <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
+          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding WhisperDevices}" SelectedItem="{Binding SelectedWhisperDevice}" />
         </Grid>
       </Border>
 
@@ -98,19 +101,26 @@
         </StackPanel>
       </Border>
 
-      <!-- LLM agent: pick OpenAI above and the local pipeline answers with a real model. -->
+      <!-- LLM agent: pick OpenAI (cloud) or Ollama (local) above and the pipeline answers with a real model. -->
       <Border Classes="vx-card" IsVisible="{Binding ShowAgentOptions}">
         <StackPanel Spacing="8">
-          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+          <Grid ColumnDefinitions="130,*">
             <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Chat model" />
-            <TextBox Grid.Column="1" Margin="0,0,0,8" Text="{Binding AgentModel}"
-                     Watermark="gpt-4o-mini" />
-            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="API key" />
-            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AgentApiKey}"
+            <TextBox Grid.Column="1" Text="{Binding AgentModel}" Watermark="gpt-4o-mini / llama3.2" />
+          </Grid>
+          <Grid ColumnDefinitions="130,*" IsVisible="{Binding ShowAgentApiKey}">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="API key" />
+            <TextBox Grid.Column="1" Text="{Binding AgentApiKey}"
                      PasswordChar="●" Watermark="sk-… (blank = use environment / user-secrets)" />
           </Grid>
-          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+          <Grid ColumnDefinitions="130,*" IsVisible="{Binding ShowAgentBaseUrl}">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Base URL" />
+            <TextBox Grid.Column="1" Text="{Binding AgentBaseUrl}" Watermark="http://localhost:11434/v1" />
+          </Grid>
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" IsVisible="{Binding ShowAgentApiKey}"
                      Text="The key is applied to the running app only — it is never written into the exported JSON or to disk. For servers, set Voxa__OpenAI__ApiKey or user-secrets." />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" IsVisible="{Binding ShowAgentBaseUrl}"
+                     Text="Ollama is keyless and local — start it with 'ollama serve', pull the model above ('ollama pull llama3.2'), and point Base URL at the daemon." />
         </StackPanel>
       </Border>
 

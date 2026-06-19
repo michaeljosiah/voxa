@@ -42,10 +42,12 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedProfile = voxa["Profile"] ?? "Default";
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
+        _selectedWhisperDevice = voxa["WhisperCpp:Device"] ?? "cpu";
         _selectedPiperVoice = voxa["Piper:Voice"] ?? "en_US-amy-low";
         _selectedKokoroVoice = voxa["Kokoro:Voice"] ?? "af_heart";
         _selectedKokoroPrecision = voxa["Kokoro:Precision"] ?? "int8";
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
+        _agentBaseUrl = voxa["Agent:BaseUrl"] ?? "http://localhost:11434/v1";
 
         Regenerate();
         // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
@@ -63,6 +65,7 @@ public sealed partial class ConfigViewModel : ObservableObject
     public IReadOnlyList<string> VadEngines { get; }
     public IReadOnlyList<string> Profiles { get; } = ["Default", "LowLatency", "Quality", "Cheap"];
     public IReadOnlyList<string> WhisperModels { get; } = WhisperCppModelCatalog.KnownModels.ToList();
+    public IReadOnlyList<string> WhisperDevices { get; } = Enum.GetNames<WhisperDevice>().Select(n => n.ToLowerInvariant()).ToList();
     public IReadOnlyList<string> PiperVoices { get; } = PiperVoiceCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroVoices { get; } = KokoroCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroPrecisions { get; } = KokoroCatalog.KnownPrecisions.ToList();
@@ -73,12 +76,13 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedProfile;
     [ObservableProperty] private string _selectedAgent;
     [ObservableProperty] private string _selectedWhisperModel;
+    [ObservableProperty] private string _selectedWhisperDevice;
     [ObservableProperty] private string _selectedPiperVoice;
     [ObservableProperty] private string _selectedKokoroVoice;
     [ObservableProperty] private string _selectedKokoroPrecision;
 
     // Agent providers aren't registry STT/TTS entries — they're DefaultAgentFactory's pair.
-    private static readonly string[] AgentProviderNames = ["Echo", "OpenAI"];
+    private static readonly string[] AgentProviderNames = ["Echo", "OpenAI", "Ollama"];
 
     /// <summary>
     /// Rebuild the STT/TTS/Agent dropdowns from the live registry, filtered to identities that are
@@ -129,6 +133,9 @@ public sealed partial class ConfigViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private string _agentApiKey = "";
 
+    /// <summary>Base URL for the Ollama agent's OpenAI-compatible endpoint. Keyless and local.</summary>
+    [ObservableProperty] private string _agentBaseUrl = "http://localhost:11434/v1";
+
     /// <summary>True while a Talk session is live — applying a config swap mid-call is blocked.</summary>
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private bool _applyBlocked;
@@ -154,7 +161,9 @@ public sealed partial class ConfigViewModel : ObservableObject
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
     public bool ShowCloudVoiceOptions => CloudVoiceKeyFor(SelectedTts) is not null;
-    public bool ShowAgentOptions => string.Equals(SelectedAgent, "OpenAI", StringComparison.OrdinalIgnoreCase);
+    public bool ShowAgentOptions => ShowAgentApiKey || ShowAgentBaseUrl;
+    public bool ShowAgentApiKey => string.Equals(SelectedAgent, "OpenAI", StringComparison.OrdinalIgnoreCase);
+    public bool ShowAgentBaseUrl => string.Equals(SelectedAgent, "Ollama", StringComparison.OrdinalIgnoreCase);
 
     // The config key each library-backed provider selects its voice with.
     private static string? CloudVoiceKeyFor(string? tts) => tts?.ToLowerInvariant() switch
@@ -219,13 +228,29 @@ public sealed partial class ConfigViewModel : ObservableObject
     }
     partial void OnSelectedVadChanged(string value) => Regenerate();
     partial void OnSelectedProfileChanged(string value) => Regenerate();
-    partial void OnSelectedAgentChanged(string value) { OnPropertyChanged(nameof(ShowAgentOptions)); Regenerate(); }
+    partial void OnSelectedAgentChanged(string value)
+    {
+        // Swap the model placeholder so the field reads sensibly for the chosen provider.
+        if (string.Equals(value, "Ollama", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(AgentModel, "gpt-4o-mini", StringComparison.OrdinalIgnoreCase))
+            AgentModel = "llama3.2";
+        else if (string.Equals(value, "OpenAI", StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(AgentModel, "llama3.2", StringComparison.OrdinalIgnoreCase))
+            AgentModel = "gpt-4o-mini";
+
+        OnPropertyChanged(nameof(ShowAgentOptions));
+        OnPropertyChanged(nameof(ShowAgentApiKey));
+        OnPropertyChanged(nameof(ShowAgentBaseUrl));
+        Regenerate();
+    }
     partial void OnSelectedWhisperModelChanged(string value) => Regenerate();
+    partial void OnSelectedWhisperDeviceChanged(string value) => Regenerate();
     partial void OnSelectedPiperVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroPrecisionChanged(string value) => Regenerate();
     partial void OnAgentModelChanged(string value) => Regenerate();
     partial void OnAgentApiKeyChanged(string value) => Regenerate();
+    partial void OnAgentBaseUrlChanged(string value) => Regenerate();
 
     // ── draft → JSON + validation ────────────────────────────────────────────
 
@@ -247,6 +272,8 @@ public sealed partial class ConfigViewModel : ObservableObject
         if (!string.Equals(SelectedVad, "Silero", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Vad:Engine"] = SelectedVad;
         if (ShowWhisperOptions) pairs["Voxa:WhisperCpp:Model"] = SelectedWhisperModel;
+        if (ShowWhisperOptions && !string.Equals(SelectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase))
+            pairs["Voxa:WhisperCpp:Device"] = SelectedWhisperDevice;
         if (ShowPiperOptions) pairs["Voxa:Piper:Voice"] = SelectedPiperVoice;
         if (ShowKokoroOptions)
         {
@@ -257,12 +284,12 @@ public sealed partial class ConfigViewModel : ObservableObject
         // the voice id only, never an API key.
         if (CloudVoiceKeyFor(SelectedTts) is { } voiceKey && !string.IsNullOrWhiteSpace(SelectedCloudVoice))
             pairs[voiceKey] = SelectedCloudVoice;
-        if (ShowAgentOptions)
-        {
-            pairs["Voxa:Agent:Model"] = AgentModel;
-            if (includeSecrets && !string.IsNullOrWhiteSpace(AgentApiKey))
-                pairs["Voxa:Agent:ApiKey"] = AgentApiKey.Trim();
-        }
+        if (ShowAgentOptions) pairs["Voxa:Agent:Model"] = AgentModel;
+        if (ShowAgentApiKey && includeSecrets && !string.IsNullOrWhiteSpace(AgentApiKey))
+            pairs["Voxa:Agent:ApiKey"] = AgentApiKey.Trim();
+        if (ShowAgentBaseUrl && !string.IsNullOrWhiteSpace(AgentBaseUrl) &&
+            !string.Equals(AgentBaseUrl, "http://localhost:11434/v1", StringComparison.OrdinalIgnoreCase))
+            pairs["Voxa:Agent:BaseUrl"] = AgentBaseUrl.Trim();
         return pairs;
     }
 
