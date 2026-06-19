@@ -108,7 +108,7 @@ public sealed class DefaultVoicePipelineComposer
             }
             else if (_registry.TryGetVad(o.Vad.Engine, out var vadDesc))
             {
-                parts.Add(sp => vadDesc.CreateProcessor(sp, WithVadObserver(sp, vadSettings, diagnostics)));
+                parts.Add(sp => vadDesc.CreateProcessor(sp, WithSmartTurn(sp, WithVadObserver(sp, vadSettings, diagnostics))));
             }
             else
             {
@@ -150,6 +150,22 @@ public sealed class DefaultVoicePipelineComposer
             Parts:            parts,
             InputSampleRate:  inputSampleRate,
             OutputSampleRate: outputSampleRate);
+    }
+
+    /// <summary>
+    /// Wire a registered <see cref="ISmartTurnClassifier"/> into the VAD's turn-end confirmation (P0).
+    /// Zero-cost when none is registered — <c>GetService</c> returns null and the VAD keeps its classic
+    /// silence-only behavior. The VAD's sample rate is captured so the classifier can read the PCM.
+    /// </summary>
+    private static VoxaVadSettings WithSmartTurn(IServiceProvider sp, VoxaVadSettings settings)
+    {
+        var classifier = sp.GetService<ISmartTurnClassifier>();
+        if (classifier is null) return settings;
+        var sampleRate = settings.SampleRate;
+        return settings with
+        {
+            ConfirmTurnEnd = (pcm, ct) => classifier.IsTurnCompleteAsync(pcm, sampleRate, ct),
+        };
     }
 
     /// <summary>

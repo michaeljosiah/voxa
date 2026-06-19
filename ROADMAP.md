@@ -24,6 +24,14 @@ The chained `Whisper → gpt-4o-mini → TTS` pipeline currently sits at ~1.6 s 
 
 ### Smart turn detection (single biggest win)
 
+> **VPS-002 update (shipped).** The framework integration is complete end-to-end: `ISmartTurnClassifier`
+> (in `Voxa.Speech.Abstractions`), `VoxaVadSettings.ConfirmTurnEnd` plumbed through `SileroVadDescriptors`,
+> and `DefaultVoicePipelineComposer` auto-wiring any DI-registered classifier into the VAD (zero-cost when
+> absent). A new opt-in **`Voxa.Audio.SmartTurn`** package ships `HttpSmartTurnClassifier` + `AddVoxaSmartTurn`
+> (`Voxa:SmartTurn`). With one registered, `Voxa:Vad:StopDuration` can safely drop to ~200 ms. **Remaining:**
+> the on-device `LocalSmartTurnClassifier` (a SHA-256-pinned ONNX model + an audio-preprocessing spike to
+> match the model's input tensor) — the seam is ready for it.
+
 Pipecat ships `OpenAISmartTurnAnalyzer` and on-device CoreML / `local_smart_turn_v2` / `v3` classifiers in `pipecat/audio/turn/smart_turn/`. They sit *on top of* silence VAD: silence-end fires → classifier says "is the user actually done?" → only then UserStoppedSpeakingFrame fires. With this, `stop_secs=0.2` is safe — within-sentence pauses don't trigger early flush.
 
 Voxa equivalent shape: a new `Voxa.Audio.SmartTurn` package with `ISmartTurnClassifier` interface, plus implementations:
