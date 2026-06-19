@@ -15,7 +15,7 @@ namespace Voxa.Mcp;
 internal static class VoiceToolCore
 {
     /// <summary>Synthesize <paramref name="text"/> to a WAV file; returns the written path.</summary>
-    public static async Task<string> SpeakAsync(string text, string tts, string? voice, string? outputPath, CancellationToken ct)
+    public static async Task<string> SpeakAsync(IConfiguration hostConfiguration, string text, string tts, string? voice, string? outputPath, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("voxa_speak: 'text' must not be empty.", nameof(text));
@@ -26,14 +26,14 @@ internal static class VoiceToolCore
         {
             case "kokoro":
             {
-                var root = VoxaRoot(("Kokoro:Voice", voice ?? "af_heart"));
+                var root = VoxaRoot(hostConfiguration, ("Kokoro:Voice", voice ?? "af_heart"));
                 sampleRate = KokoroDescriptors.Tts.GetEffectiveOutputSampleRate(root);
                 engine = new KokoroTtsEngine(KokoroOptions.FromConfiguration(root), CacheFor(root));
                 break;
             }
             case "piper":
             {
-                var root = VoxaRoot(("Piper:Voice", voice ?? "en_US-lessac-medium"));
+                var root = VoxaRoot(hostConfiguration, ("Piper:Voice", voice ?? "en_US-lessac-medium"));
                 sampleRate = PiperDescriptors.Tts.GetEffectiveOutputSampleRate(root);
                 engine = new PiperTtsEngine(PiperOptions.FromConfiguration(root), CacheFor(root));
                 break;
@@ -63,7 +63,7 @@ internal static class VoiceToolCore
     }
 
     /// <summary>Transcribe a 16 kHz mono PCM16 WAV; returns the transcript text.</summary>
-    public static async Task<string> TranscribeAsync(string wavPath, string? model, string? language, CancellationToken ct)
+    public static async Task<string> TranscribeAsync(IConfiguration hostConfiguration, string wavPath, string? model, string? language, CancellationToken ct)
     {
         if (!File.Exists(wavPath))
             throw new FileNotFoundException($"voxa_transcribe: WAV file not found: {wavPath}");
@@ -77,7 +77,7 @@ internal static class VoiceToolCore
                 "Convert it first, e.g.: ffmpeg -i input -ar 16000 -ac 1 -c:a pcm_s16le out.wav");
         }
 
-        var root = VoxaRoot(("WhisperCpp:Model", model ?? "base.en"), ("WhisperCpp:Language", language ?? "en"));
+        var root = VoxaRoot(hostConfiguration, ("WhisperCpp:Model", model ?? "base.en"), ("WhisperCpp:Language", language ?? "en"));
         var engine = new WhisperCppSttEngine(WhisperCppOptions.FromConfiguration(root), CacheFor(root));
         try
         {
@@ -105,8 +105,12 @@ internal static class VoiceToolCore
 
     // ── helpers (mirror the CLI; a shared headless-helpers package is a future refactor) ────────
 
-    private static IConfigurationSection VoxaRoot(params (string Key, string? Value)[] pairs)
+    // Layer the per-call tool arguments ON TOP of the MCP host's configuration so deployment settings
+    // (Voxa:Models:Offline, Voxa:WhisperCpp:ModelPath, Voxa:Piper:ExecutablePath, cache path, …) are
+    // honoured rather than discarded — the per-call values win where both set the same key.
+    private static IConfigurationSection VoxaRoot(IConfiguration hostConfiguration, params (string Key, string? Value)[] pairs)
         => new ConfigurationBuilder()
+            .AddConfiguration(hostConfiguration)
             .AddInMemoryCollection(pairs.ToDictionary(p => $"Voxa:{p.Key}", p => p.Value))
             .Build()
             .GetSection("Voxa");
