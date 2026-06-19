@@ -31,6 +31,11 @@ public class HttpSmartTurnClassifierTests
             => throw new HttpRequestException("boom");
     }
 
+    private sealed class FakeHttpClientProvider(HttpClient client) : IVoxaHttpClientProvider
+    {
+        public HttpClient? Resolve() => client;
+    }
+
     private static HttpSmartTurnClassifier Classifier(HttpMessageHandler handler)
         => new(new SmartTurnOptions { Endpoint = "http://localhost/predict" }, new HttpClient(handler));
 
@@ -96,6 +101,29 @@ public class HttpSmartTurnClassifierTests
 
         using var sp = new ServiceCollection().AddVoxaSmartTurn(config).BuildServiceProvider();
         Assert.IsType<HttpSmartTurnClassifier>(sp.GetService<ISmartTurnClassifier>());
+    }
+
+    [Fact] // Codex P2: the smart-turn endpoint must honor a host-customized Voxa HTTP client, not pin VoxaHttp.Shared.
+    public async Task AddVoxaSmartTurn_Http_Uses_The_Host_Configured_HttpClient()
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Voxa:SmartTurn:Provider"] = "Http",
+            ["Voxa:SmartTurn:Endpoint"] = "http://localhost/predict",
+        }).Build();
+
+        var usedHostClient = false;
+        var hostClient = new HttpClient(new StubHandler(HttpStatusCode.OK, "{\"complete\":true}", _ => usedHostClient = true));
+
+        using var sp = new ServiceCollection()
+            .AddSingleton<IVoxaHttpClientProvider>(new FakeHttpClientProvider(hostClient))
+            .AddVoxaSmartTurn(config)
+            .BuildServiceProvider();
+
+        await sp.GetRequiredService<ISmartTurnClassifier>()
+            .IsTurnCompleteAsync(new byte[320], 16000, CancellationToken.None);
+
+        Assert.True(usedHostClient); // the POST went through the resolved client, not the shared fallback
     }
 
     [Fact]
