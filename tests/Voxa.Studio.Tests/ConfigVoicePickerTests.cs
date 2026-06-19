@@ -107,7 +107,8 @@ public class ConfigVoicePickerTests
         var config = TestSupport.LocalConfig(null,
             ("Voxa:Tts", "ElevenLabs"), ("Voxa:ElevenLabs:ApiKey", "fake-key"));
         await using var services = new StudioServices(config, new NullAudioDevice(),
-            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
 
         var vm = new ConfigViewModel(services);
 

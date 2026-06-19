@@ -93,7 +93,8 @@ public class SettingsIntegrationTests
         var config = TestSupport.LocalConfig(null,
             ("Voxa:Agent:Provider", "OpenAI"), ("Voxa:Agent:Model", "gpt-4o-mini"));
         await using var services = new StudioServices(config, new NullAudioDevice(),
-            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
         var shell = new MainWindowViewModel(services);
 
         Assert.False(shell.Config.IsValid);   // OpenAI agent selected, no key → invalid

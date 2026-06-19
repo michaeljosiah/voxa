@@ -178,6 +178,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // under a live session (mirrors Config.ApplyBlocked) — the bar is disabled then anyway.
         if (_suppressProfileActivate || value is null || value == CustomProfile || IsLive) return;
         Services.ActivateProfile(value);
+        // Reload the Builder canvas from the MERGED live config (not the sparse stored pairs, which would
+        // show hard-coded defaults for omitted keys and bake them back on Save) — Codex P2.
+        Builder.LoadFromLiveConfig();
     }
 
     [RelayCommand]

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: app icon.** The Windows executable and taskbar/title-bar now show the VOXA mark instead
+  of a blank default icon — a multi-resolution `voxa.ico` (16–256 px) generated from the brand geometry
+  (`tools/voxa-icon-gen.cs`), wired via `ApplicationIcon` and the windows' `Icon`.
+- **Voxa Studio: Builder "Save" updates the active profile.** Editing a pipeline and saving it back to the
+  selected profile no longer needs a re-typed name — a **Save** button updates the active profile in place
+  and re-applies it live. Selecting a profile in the Pipeline Profile bar now also loads it onto the Builder
+  canvas (undoable), so *select → edit → Save* round-trips. "Save as new" still creates a fresh named profile.
 - **Voxa Studio: named pipeline profiles, app-wide (Builder Phase 2).** Save a pipeline you've built as
   a named **profile** and switch the whole app to it from one place. A new **Pipeline Profile** bar sits
   above every view: pick a profile and it's applied everywhere at once — Talk, the Playgrounds, the lot —

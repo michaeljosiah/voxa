@@ -205,6 +205,25 @@ public sealed partial class BuilderViewModel : ObservableObject
         _services = services;
         Palette = BuildPalette();
         SeedFromPairs(LivePairs());
+        _services.Profiles.Changed += OnProfilesChanged;
+    }
+
+    /// <summary>The active profile changed (saved/activated/deleted) — refresh the "Save" affordance.</summary>
+    private void OnProfilesChanged()
+    {
+        OnPropertyChanged(nameof(ActiveProfileName));
+        OnPropertyChanged(nameof(HasActiveProfile));
+        SaveCurrentProfileCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Reload the canvas from the live (merged base + profile) config — the shell calls this
+    /// after activating a profile, so the canvas matches what ACTUALLY runs. Seeding from the sparse
+    /// stored pairs would fill omitted keys with hard-coded defaults that can differ from the live
+    /// pipeline (and a later Save would bake them in). Undoable — Ctrl+Z restores the prior canvas.</summary>
+    public void LoadFromLiveConfig()
+    {
+        PushUndo();
+        SeedFromPairs(LivePairs(), clearHistory: false);
     }
 
     // ── bindable state ───────────────────────────────────────────────────────
@@ -221,10 +240,12 @@ public sealed partial class BuilderViewModel : ObservableObject
 
     [ObservableProperty] private string _selectedProfile = "Default";
     [ObservableProperty] private BuilderNodeVm? _selectedNode;
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(SaveAsProfileCommand))]
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(SaveAsProfileCommand), nameof(SaveCurrentProfileCommand))]
     private bool _isRunning;
     /// <summary>True while a Talk session owns the audio device — Run disables.</summary>
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(SaveAsProfileCommand))]
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(SaveAsProfileCommand), nameof(SaveCurrentProfileCommand))]
     private bool _runBlocked;
     [ObservableProperty] private string _statusText = "Wire the chain — ports only accept matching frame types.";
     [ObservableProperty] private string? _errorText;
@@ -236,6 +257,10 @@ public sealed partial class BuilderViewModel : ObservableObject
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveAsProfileCommand))]
     private string _profileName = "";
+
+    /// <summary>The app-wide active profile (null = Custom). The "Save" button updates this one in place.</summary>
+    public string? ActiveProfileName => _services.Profiles.ActiveName;
+    public bool HasActiveProfile => _services.Profiles.ActiveName is not null;
 
     // export pane (progressive disclosure: hidden until an export button is pressed)
     [ObservableProperty] private bool _isExportOpen;
@@ -489,6 +514,7 @@ public sealed partial class BuilderViewModel : ObservableObject
         RunCommand.NotifyCanExecuteChanged();
         SaveGraphCommand.NotifyCanExecuteChanged();
         SaveAsProfileCommand.NotifyCanExecuteChanged();
+        SaveCurrentProfileCommand.NotifyCanExecuteChanged();
         ExportAppSettingsCommand.NotifyCanExecuteChanged();
         ExportCSharpCommand.NotifyCanExecuteChanged();
     }
@@ -902,6 +928,21 @@ public sealed partial class BuilderViewModel : ObservableObject
         _services.ActivateProfile(name); // CanExecute guarantees no live session — safe to apply now
         StatusText = $"Saved & activated pipeline profile “{name}”.";
         ProfileName = "";
+    }
+
+    // Update the ACTIVE profile in place with the current canvas — the "Save" button (no new name needed).
+    // Same live-session and default-shape constraints as SaveAsProfile, plus there must be an active profile.
+    private bool CanSaveCurrentProfile() =>
+        IsChainValid && IsDefaultShape && HasActiveProfile && !IsRunning && !RunBlocked;
+
+    [RelayCommand(CanExecute = nameof(CanSaveCurrentProfile))]
+    private void SaveCurrentProfile()
+    {
+        if (_services.Profiles.ActiveName is not { } name) return;
+        if (!_graph.TryOrder(out var chain, out _)) return;
+        _services.Profiles.Save(name, BuilderChainCompiler.Pairs(_graph, chain));
+        _services.ActivateProfile(name); // re-apply so the update goes live everywhere immediately
+        StatusText = $"Saved changes to profile “{name}”.";
     }
 
     // ── run from canvas ──────────────────────────────────────────────────────
