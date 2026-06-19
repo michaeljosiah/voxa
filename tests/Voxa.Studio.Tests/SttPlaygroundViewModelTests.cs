@@ -62,9 +62,9 @@ public class SttPlaygroundViewModelTests
     {
         var vm = new SttPlaygroundViewModel(TestSupport.Services());
 
-        // 19 pinned GGML models after VLS-002 added the medium/large-v3 families (was 12); growing the
+        // 20 pinned GGML models after VLS-002 added the medium/large-v3 families (was 12); growing the
         // catalog should consciously update this.
-        Assert.Equal(19, vm.Models.Count);
+        Assert.Equal(20, vm.Models.Count);
         Assert.All(vm.Models, m => Assert.False(m.IsCached));
         Assert.Equal("tiny.en", vm.SelectedModel?.Name); // the 2-minutes-to-wow default
         Assert.All(vm.Models, m => Assert.True(m.SizeBytes > 0));

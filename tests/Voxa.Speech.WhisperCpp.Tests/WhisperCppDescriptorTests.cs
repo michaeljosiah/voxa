@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Voxa.Speech;
 using Voxa.Speech.WhisperCpp;
+using Whisper.net.LibraryLoader;
 
 namespace Voxa.Speech.WhisperCpp.Tests;
 
@@ -137,8 +138,21 @@ public class WhisperCppDescriptorTests
     public void Catalog_Includes_The_VLS002_Large_Models()
     {
         foreach (var name in new[]
-                 { "medium", "medium.en", "medium-q5_0", "large-v3", "large-v3-q5_0", "large-v3-turbo", "large-v3-turbo-q5_0" })
+                 { "medium", "medium.en", "medium-q5_0", "medium.en-q5_0", "large-v3", "large-v3-q5_0", "large-v3-turbo", "large-v3-turbo-q5_0" })
             Assert.True(WhisperCppModelCatalog.TryGet(name, out _), $"catalog is missing '{name}'");
+    }
+
+    [Fact]
+    public void IsRuntimeFor_Accepts_Only_A_Matching_Gpu_Runtime()
+    {
+        // The fail-loud guard (Codex P2): an explicit GPU device must reject a CPU (or absent) loaded
+        // runtime — the case where another engine already locked the process to CPU before this one.
+        Assert.True(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.Cuda, RuntimeLibrary.Cuda));
+        Assert.True(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.Cuda, RuntimeLibrary.Cuda12));
+        Assert.True(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.Vulkan, RuntimeLibrary.Vulkan));
+        Assert.False(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.Cuda, RuntimeLibrary.Cpu));
+        Assert.False(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.CoreML, RuntimeLibrary.Cpu));
+        Assert.False(WhisperCppSttEngine.IsRuntimeFor(WhisperDevice.Cuda, null));
     }
 
     [Fact]

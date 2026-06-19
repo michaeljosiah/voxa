@@ -126,6 +126,22 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
                 $"driver/toolkit is installed, or set Voxa:WhisperCpp:Device=cpu. ({ex.Message})", ex);
         }
 
+        // Whisper.net loads the native runtime once per process and ignores later RuntimeLibraryOrder
+        // changes, so an explicit GPU request can build successfully against a CPU runtime that another
+        // engine already loaded — silently running on CPU. Verify the runtime that actually loaded
+        // satisfies the request, or fail loud (the device contract), which also closes that race.
+        RuntimeLibrary? loaded = RuntimeOptions.LoadedLibrary;
+        if (_options.Device is WhisperDevice.Cuda or WhisperDevice.Vulkan or WhisperDevice.CoreML
+            && !IsRuntimeFor(_options.Device, loaded))
+        {
+            throw new VoxaModelUnavailableException(
+                $"Voxa:WhisperCpp:Device={_options.Device} but the loaded whisper.cpp runtime is " +
+                $"'{loaded?.ToString() ?? "none"}'. Either the matching Whisper.net.Runtime.* package isn't " +
+                "installed/usable, or another engine already loaded a different runtime in this process " +
+                "(Whisper.net locks the native library on first load) — install the GPU runtime and ensure it " +
+                "loads first, or set Voxa:WhisperCpp:Device=cpu.");
+        }
+
         if (!useGpu && IsHeavyModel(Path.GetFileName(modelPath)))
             _logger.LogWarning(
                 "WhisperCpp STT: '{Model}' is a large/medium model on CPU — expect well above real-time latency. " +
@@ -229,6 +245,15 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
             case WhisperDevice.Auto:   break; // keep Whisper.net's default order
         }
     }
+
+    /// <summary>True when <paramref name="loaded"/> is a native runtime that satisfies an explicit GPU device.</summary>
+    internal static bool IsRuntimeFor(WhisperDevice device, RuntimeLibrary? loaded) => device switch
+    {
+        WhisperDevice.Cuda   => loaded is RuntimeLibrary.Cuda or RuntimeLibrary.Cuda12,
+        WhisperDevice.Vulkan => loaded is RuntimeLibrary.Vulkan,
+        WhisperDevice.CoreML => loaded is RuntimeLibrary.CoreML,
+        _ => true,
+    };
 
     private static bool IsHeavyModel(string fileName) =>
         fileName.Contains("large", StringComparison.OrdinalIgnoreCase) ||

@@ -34,6 +34,7 @@ public static class WhisperCppModelCatalog
         ["medium"]              = Entry("ggml-medium.bin",              "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208", 1_533_763_059),
         ["medium.en"]           = Entry("ggml-medium.en.bin",           "cc37e93478338ec7700281a7ac30a10128929eb8f427dda2e865faa8f6da4356", 1_533_774_781),
         ["medium-q5_0"]         = Entry("ggml-medium-q5_0.bin",         "19fea4b380c3a618ec4723c3eef2eb785ffba0d0538cf43f8f235e7b3b34220f", 539_212_467),
+        ["medium.en-q5_0"]      = Entry("ggml-medium.en-q5_0.bin",      "76733e26ad8fe1c7a5bf7531a9d41917b2adc0f20f2e4f5531688a8c6cd88eb0", 539_225_533),
         ["large-v3"]            = Entry("ggml-large-v3.bin",            "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2", 3_095_033_483),
         ["large-v3-q5_0"]       = Entry("ggml-large-v3-q5_0.bin",       "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1", 1_081_140_203),
         ["large-v3-turbo"]      = Entry("ggml-large-v3-turbo.bin",      "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69", 1_624_555_275),
