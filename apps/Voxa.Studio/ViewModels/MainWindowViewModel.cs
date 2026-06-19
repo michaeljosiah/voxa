@@ -178,6 +178,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // under a live session (mirrors Config.ApplyBlocked) — the bar is disabled then anyway.
         if (_suppressProfileActivate || value is null || value == CustomProfile || IsLive) return;
         Services.ActivateProfile(value);
+        // Load it onto the Builder canvas too, so the Builder edits the profile you selected (then "Save").
+        if (Services.Profiles.TryGet(value, out var pairs)) Builder.LoadProfile(pairs);
     }
 
     [RelayCommand]

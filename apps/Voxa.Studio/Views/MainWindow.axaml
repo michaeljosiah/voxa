@@ -6,6 +6,7 @@
         x:Class="Voxa.Studio.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Voxa Studio"
+        Icon="/Assets/voxa.ico"
         Width="1280" Height="820"
         MinWidth="960" MinHeight="640"
         WindowStartupLocation="CenterScreen"
