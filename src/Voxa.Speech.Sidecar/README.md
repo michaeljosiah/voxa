@@ -21,15 +21,16 @@ SidecarTtsEngine yields the PCM frames into the pipeline
 **Shipped (this package):** the .NET integration — `SidecarTtsEngine` (`ITextToSpeechEngine`), the
 `SidecarProtocol` wire format (unit-tested over an in-memory stream), the `Sidecar` provider
 descriptor, and the runnable Python sidecar source under `sidecar/`. The engine works **today** with a
-sidecar you point it at.
+sidecar you point it at. **Local voice cloning is wired** (VVL-001's deferred slot): the
+`SidecarVoiceCloneProvider` (via `ResolveCloner`) persists a reference clip and returns its path as the
+voice, which the engine passes to the sidecar as the speaker reference (zero-shot, e.g. XTTS-v2/OpenVoice)
+— keyless, with the consent gate in the host (Studio).
 
 **Deferred (needs a Python build environment + an audio-quality spike — the VVL-002 gate):**
 - **The frozen, SHA-256-pinned per-platform binaries** and their `VoxaModelCache` catalog + auto-download.
   No binary is fabricated or pinned here — there is nothing to hash yet. Build one (below) and set
   `Voxa:Sidecar:ExecutablePath`, or run the script in dev mode.
 - **The model spike: XTTS-v2 vs OpenVoice** (quality / latency / licence) to choose the default engine.
-- **Local voice cloning** (`IVoiceCloneProvider` via `ResolveCloner`) — it rides the *same* transport as a
-  future `"mode": "clone"` request; the seam already exists in `Voxa.Speech.Abstractions` (VVL-001).
 
 > ⚠️ Heavy tier: a real frozen binary bundles PyTorch and is multi-GB and accelerator-specific. On CPU
 > these models miss the live first-audio budget — their natural home is a Studio generation/voiceover
