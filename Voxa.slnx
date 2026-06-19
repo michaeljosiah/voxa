@@ -15,6 +15,7 @@
     <Project Path="src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj" />
     <Project Path="src/Voxa.Cli/Voxa.Cli.csproj" />
     <Project Path="src/Voxa.Core/Voxa.Core.csproj" />
+    <Project Path="src/Voxa.Mcp/Voxa.Mcp.csproj" />
     <Project Path="src/Voxa.Observability/Voxa.Observability.csproj" />
     <Project Path="src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj" />
     <Project Path="src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj" />
@@ -36,6 +37,7 @@
     <Project Path="tests/Voxa.Cli.Tests/Voxa.Cli.Tests.csproj" />
     <Project Path="tests/Voxa.Core.Tests/Voxa.Core.Tests.csproj" />
     <Project Path="tests/Voxa.LocalSpeech.Tests/Voxa.LocalSpeech.Tests.csproj" />
+    <Project Path="tests/Voxa.Mcp.Tests/Voxa.Mcp.Tests.csproj" />
     <Project Path="tests/Voxa.Observability.Tests/Voxa.Observability.Tests.csproj" />
     <Project Path="tests/Voxa.Services.AzureVoiceLive.Tests/Voxa.Services.AzureVoiceLive.Tests.csproj" />
     <Project Path="tests/Voxa.Services.MicrosoftAgents.Tests/Voxa.Services.MicrosoftAgents.Tests.csproj" />
