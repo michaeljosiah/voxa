@@ -86,6 +86,30 @@ public class TurnTakingSmokeTests
         Assert.Equal(3, BaselineGate.Check(regressed, baseline).Count);   // TOR + ttfb + yield gates all fire
     }
 
+    [Fact] // Codex P1: a green gate must mean the benchmark ran — a baseline-required metric that's missing/null fails.
+    public void Baseline_Gate_Fails_When_A_Required_Metric_Is_Absent()
+    {
+        var baseline = new Baseline("mini", "mock",
+            new BaselineTolerance(Tor: 0.05, LatencyMsPct: 0.20, LatencyMsAbs: 50.0),
+            new Dictionary<string, BaselineCategory>
+            {
+                ["pause_handling"] = new(Tor: 0.0),
+                ["smooth_turn_taking"] = new(TtfbP50Ms: 300.0),
+            });
+
+        // A filtered/empty run that omits smooth_turn_taking entirely.
+        var omitted = new[] { new CategoryScore("pause_handling", Tor: 0.0, null, null, null, Skipped: false) };
+        Assert.Contains(BaselineGate.Check(omitted, baseline), r => r.Contains("smooth_turn_taking"));
+
+        // A run that produced the category but its required metric went null (a broken stage).
+        var nulled = new[]
+        {
+            new CategoryScore("pause_handling", Tor: 0.0, null, null, null, Skipped: false),
+            new CategoryScore("smooth_turn_taking", null, null, null, null, Skipped: false),
+        };
+        Assert.Contains(BaselineGate.Check(nulled, baseline), r => r.Contains("smooth_turn_taking"));
+    }
+
     [Fact] // Codex P1: user_interruption is scored on barge-in YIELD, not reply latency (else it hides barge-in regressions).
     public async Task User_Interruption_Is_Scored_On_Yield_Not_Reply_Latency()
     {

@@ -54,39 +54,47 @@ public sealed record Baseline(
                 : new BaselineCategory(Note: "not exercised offline: barge-in yield needs a real-time/duplex source")));
 }
 
-/// <summary>Diffs a scored run against the baseline within tolerance — a regression is a build failure.</summary>
+/// <summary>
+/// Diffs a scored run against the baseline within tolerance — a regression is a build failure. Iterates the
+/// <b>baseline</b> (the contract of what must be measured), not the run, so a category the baseline requires
+/// but the run didn't produce — an empty/filtered corpus, or a metric that went <c>null</c> — fails the gate
+/// rather than letting it go green without exercising the benchmark. A <c>skipped</c> or note-only baseline
+/// entry (e.g. an offline-unexercised category) requires nothing.
+/// </summary>
 public static class BaselineGate
 {
     public static IReadOnlyList<string> Check(IReadOnlyList<CategoryScore> scores, Baseline baseline)
     {
         var regressions = new List<string>();
-        foreach (var score in scores)
+        var byCategory = scores.ToDictionary(s => s.Category, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (category, b) in baseline.Categories)
         {
-            if (score.Skipped) continue;
-            if (!baseline.Categories.TryGetValue(score.Category, out var b) || b.Skipped == true) continue;
+            if (b.Skipped == true) continue;                       // not required to produce a number
+            byCategory.TryGetValue(category, out var score);
 
-            // pause_handling — TOR is lower-better; a rise beyond tolerance is a regression.
-            if (score.Tor is double tor && b.Tor is double bTor && tor - bTor > baseline.Tolerance.Tor)
-                regressions.Add(
-                    $"{score.Category}: TOR {tor:0.###} regressed from {bTor:0.###} (tolerance {baseline.Tolerance.Tor:0.###}).");
-
-            // smooth_turn_taking — first-word latency must not get slower beyond tolerance.
-            if (score.TtfbP50Ms is double ms && b.TtfbP50Ms is double bMs)
+            if (b.Tor is double bTor)
             {
-                var allowed = Math.Max(bMs * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs);
-                if (ms - bMs > allowed)
-                    regressions.Add(
-                        $"{score.Category}: ttfb_p50 {ms:0.#} ms regressed from {bMs:0.#} ms (allowed +{allowed:0.#} ms).");
+                if (score?.Tor is not double tor)
+                    regressions.Add($"{category}: TOR missing from the run (baseline requires it).");
+                else if (tor - bTor > baseline.Tolerance.Tor)
+                    regressions.Add($"{category}: TOR {tor:0.###} regressed from {bTor:0.###} (tolerance {baseline.Tolerance.Tor:0.###}).");
             }
-
-            // user_interruption — barge-in yield must not get slower beyond tolerance (null when not exercised).
-            if (score.BargeInYieldP50Ms is double y && b.BargeInYieldP50Ms is double bY)
+            else if (b.TtfbP50Ms is double bMs)
             {
-                var allowed = Math.Max(bY * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs);
-                if (y - bY > allowed)
-                    regressions.Add(
-                        $"{score.Category}: barge-in yield {y:0.#} ms regressed from {bY:0.#} ms (allowed +{allowed:0.#} ms).");
+                if (score?.TtfbP50Ms is not double ms)
+                    regressions.Add($"{category}: ttfb_p50 missing from the run (baseline requires it).");
+                else if (ms - bMs > Math.Max(bMs * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs))
+                    regressions.Add($"{category}: ttfb_p50 {ms:0.#} ms regressed from {bMs:0.#} ms (allowed +{Math.Max(bMs * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs):0.#} ms).");
             }
+            else if (b.BargeInYieldP50Ms is double bY)
+            {
+                if (score?.BargeInYieldP50Ms is not double y)
+                    regressions.Add($"{category}: barge-in yield missing from the run (baseline requires it).");
+                else if (y - bY > Math.Max(bY * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs))
+                    regressions.Add($"{category}: barge-in yield {y:0.#} ms regressed from {bY:0.#} ms (allowed +{Math.Max(bY * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs):0.#} ms).");
+            }
+            // else: a note-only entry (not exercised by design) requires nothing.
         }
         return regressions;
     }
