@@ -33,11 +33,14 @@ var result = await TurnTakingHarness.RunAsync(options, Console.WriteLine);
 
 Console.WriteLine($"\n{result.Records.Count} sample(s) → {options.OutDir} (summary.csv + score.json written).");
 foreach (var s in result.Scores)
-    Console.WriteLine(s.Skipped
-        ? $"  {s.Category,-20} skipped"
-        : s.Tor is double tor
-            ? $"  {s.Category,-20} TOR {tor:0.###}"
-            : $"  {s.Category,-20} ttfb_p50 {s.TtfbP50Ms:0.#} ms (responsiveness {s.Responsiveness:0.###})");
+{
+    var line = s.Skipped ? "skipped"
+        : s.Tor is double tor ? $"TOR {tor:0.###}"
+        : s.TtfbP50Ms is double ms ? $"ttfb_p50 {ms:0.#} ms (responsiveness {s.Responsiveness:0.###})"
+        : s.BargeInYieldP50Ms is double y ? $"barge-in yield {y:0.#} ms (responsiveness {s.Responsiveness:0.###})"
+        : "not exercised offline (barge-in yield needs a real-time/duplex source)";
+    Console.WriteLine($"  {s.Category,-20} {line}");
+}
 
 // Dev verb: write the scored run out as the checked-in baseline.
 if (flags.TryGetValue("write-baseline", out var baselineOut) && baselineOut is not null)

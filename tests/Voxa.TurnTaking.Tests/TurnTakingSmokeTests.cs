@@ -73,15 +73,32 @@ public class TurnTakingSmokeTests
             {
                 ["pause_handling"] = new(Tor: 0.0),
                 ["smooth_turn_taking"] = new(TtfbP50Ms: 300.0),
+                ["user_interruption"] = new(BargeInYieldP50Ms: 100.0),
             });
 
         var regressed = new[]
         {
-            new CategoryScore("pause_handling", Tor: 1.0, null, null, Skipped: false),        // barged in on the pause
-            new CategoryScore("smooth_turn_taking", null, TtfbP50Ms: 600.0, 0.6, Skipped: false), // 2× slower
+            new CategoryScore("pause_handling", Tor: 1.0, null, null, null, Skipped: false),                 // barged in on the pause
+            new CategoryScore("smooth_turn_taking", null, TtfbP50Ms: 600.0, null, 0.6, Skipped: false),       // 2× slower reply
+            new CategoryScore("user_interruption", null, null, BargeInYieldP50Ms: 500.0, 0.67, Skipped: false), // 5× slower yield
         };
 
-        Assert.Equal(2, BaselineGate.Check(regressed, baseline).Count);
+        Assert.Equal(3, BaselineGate.Check(regressed, baseline).Count);   // TOR + ttfb + yield gates all fire
+    }
+
+    [Fact] // Codex P1: user_interruption is scored on barge-in YIELD, not reply latency (else it hides barge-in regressions).
+    public async Task User_Interruption_Is_Scored_On_Yield_Not_Reply_Latency()
+    {
+        var outDir = TempOut();
+        try
+        {
+            var result = await TurnTakingHarness.RunAsync(MockOptions(outDir, category: "user_interruption"));
+            var score = result.Scores.Single(s => s.Category == "user_interruption");
+
+            Assert.Null(score.TtfbP50Ms);            // NOT the reply-after-user-stops latency
+            Assert.Null(score.BargeInYieldP50Ms);    // offline file-driven harness produces no barge-in → not exercised
+        }
+        finally { TryDelete(outDir); }
     }
 
     [Fact] // VRT-001 R5: the scorer's direction is correct — staying silent through the pause scores BETTER (lower TOR).
@@ -89,7 +106,7 @@ public class TurnTakingSmokeTests
     {
         static SampleRecord Rec(int userStoppedEdges) => new(
             "s", "pause_handling", new EngineNames("mock", "Echo", "mock"),
-            new SampleTimings(1, 1, 1, 100, 200), new SampleTranscripts(null, "x"),
+            new SampleTimings(1, 1, 1, 100, 200, null), new SampleTranscripts(null, "x"),
             new TurnSignals(userStoppedEdges, BotStartedEdges: 1), "s.response.wav", null);
 
         static double Tor(params SampleRecord[] recs)

@@ -85,7 +85,7 @@ internal static class SampleRunner
             // Failures are data, never a silent drop — write the record with the error + null timings.
             var record = new SampleRecord(
                 sample.SampleId, sample.Category, engines,
-                new SampleTimings(null, null, null, null, null),
+                new SampleTimings(null, null, null, null, null, null),
                 new SampleTranscripts(sample.ReferenceText, null),
                 new TurnSignals(0, 0),
                 File.Exists(responsePath) ? responseName : null,
@@ -107,7 +107,33 @@ internal static class SampleRunner
             ttfb = (firstTts.TimestampMicros - userStopped.TimestampMicros) / 1000.0;
 
         return new SampleTimings(
-            Stage("stt_final"), Stage("agent_first_token"), Stage("tts_first_byte"), ttfb, totalWallMs);
+            Stage("stt_final"), Stage("agent_first_token"), Stage("tts_first_byte"), ttfb, totalWallMs,
+            BargeInYield(events));
+    }
+
+    /// <summary>
+    /// Barge-in yield: a user-interruption while the bot is speaking → the bot's stop/interrupt edge. This
+    /// is the real <c>user_interruption</c> metric (how fast the bot YIELDS), not how fast it replies after
+    /// the user stops. Null when no barge-in occurred — which the offline file-driven harness never produces
+    /// (the source dumps all audio before the bot replies, so there is no real-time overlap); it populates
+    /// only on a real-time / full-duplex source.
+    /// </summary>
+    private static double? BargeInYield(IReadOnlyList<DiagnosticEvent> events)
+    {
+        long? botStart = null, bargeIn = null;
+        foreach (var t in events.OfType<TurnEvent>().OrderBy(e => e.TimestampMicros))
+        {
+            switch (t.Edge)
+            {
+                case TurnEdge.BotStarted: botStart = t.TimestampMicros; bargeIn = null; break;
+                case TurnEdge.UserStarted when botStart is not null: bargeIn = t.TimestampMicros; break;
+                case TurnEdge.Interrupted:
+                case TurnEdge.BotStopped:
+                    if (bargeIn is long b) return (t.TimestampMicros - b) / 1000.0;
+                    botStart = null; break;
+            }
+        }
+        return null;
     }
 
     private static async Task WaitForListenerAsync(VoxaDiagnosticsHub hub, CancellationToken ct)

@@ -15,7 +15,11 @@ public sealed record SampleTimings(
     [property: JsonPropertyName("llm")] double? Llm,
     [property: JsonPropertyName("tts")] double? Tts,
     [property: JsonPropertyName("ttft_first_audio_from_speech_end")] double? TtftFirstAudioFromSpeechEnd,
-    [property: JsonPropertyName("total_wall")] double? TotalWall);
+    [property: JsonPropertyName("total_wall")] double? TotalWall,
+    // Barge-in yield: a user-interruption while the bot is speaking → the bot's stop/interrupt. The
+    // user_interruption score's real metric. Null when no barge-in occurred (the offline file-driven
+    // harness has no real-time overlap, so this populates only on a real-time/duplex source).
+    [property: JsonPropertyName("barge_in_yield_ms")] double? BargeInYieldMs);
 
 /// <summary>Reference (from sample metadata) vs the STT hypothesis transcript.</summary>
 public sealed record SampleTranscripts(

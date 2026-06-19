@@ -13,7 +13,9 @@ public sealed record BaselineTolerance(
 public sealed record BaselineCategory(
     [property: JsonPropertyName("tor")] double? Tor = null,
     [property: JsonPropertyName("ttfb_p50_ms")] double? TtfbP50Ms = null,
-    [property: JsonPropertyName("skipped")] bool? Skipped = null);
+    [property: JsonPropertyName("barge_in_yield_p50_ms")] double? BargeInYieldP50Ms = null,
+    [property: JsonPropertyName("skipped")] bool? Skipped = null,
+    [property: JsonPropertyName("note")] string? Note = null);
 
 /// <summary>
 /// The checked-in regression reference — per category, the TOR / latency the pipeline achieves on the mini
@@ -46,8 +48,10 @@ public sealed record Baseline(
         scores.ToDictionary(
             s => s.Category,
             s => s.Skipped ? new BaselineCategory(Skipped: true)
-                : s.Tor.HasValue ? new BaselineCategory(Tor: s.Tor)        // pause_handling (TOR)
-                : new BaselineCategory(TtfbP50Ms: s.TtfbP50Ms)));          // latency categories
+                : s.Tor.HasValue ? new BaselineCategory(Tor: s.Tor)                              // pause_handling (TOR)
+                : s.TtfbP50Ms.HasValue ? new BaselineCategory(TtfbP50Ms: s.TtfbP50Ms)            // smooth_turn_taking
+                : s.BargeInYieldP50Ms.HasValue ? new BaselineCategory(BargeInYieldP50Ms: s.BargeInYieldP50Ms) // user_interruption
+                : new BaselineCategory(Note: "not exercised offline: barge-in yield needs a real-time/duplex source")));
 }
 
 /// <summary>Diffs a scored run against the baseline within tolerance — a regression is a build failure.</summary>
@@ -66,13 +70,22 @@ public static class BaselineGate
                 regressions.Add(
                     $"{score.Category}: TOR {tor:0.###} regressed from {bTor:0.###} (tolerance {baseline.Tolerance.Tor:0.###}).");
 
-            // smooth_turn_taking / user_interruption — first-word latency must not get slower beyond tolerance.
+            // smooth_turn_taking — first-word latency must not get slower beyond tolerance.
             if (score.TtfbP50Ms is double ms && b.TtfbP50Ms is double bMs)
             {
                 var allowed = Math.Max(bMs * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs);
                 if (ms - bMs > allowed)
                     regressions.Add(
                         $"{score.Category}: ttfb_p50 {ms:0.#} ms regressed from {bMs:0.#} ms (allowed +{allowed:0.#} ms).");
+            }
+
+            // user_interruption — barge-in yield must not get slower beyond tolerance (null when not exercised).
+            if (score.BargeInYieldP50Ms is double y && b.BargeInYieldP50Ms is double bY)
+            {
+                var allowed = Math.Max(bY * baseline.Tolerance.LatencyMsPct, baseline.Tolerance.LatencyMsAbs);
+                if (y - bY > allowed)
+                    regressions.Add(
+                        $"{score.Category}: barge-in yield {y:0.#} ms regressed from {bY:0.#} ms (allowed +{allowed:0.#} ms).");
             }
         }
         return regressions;

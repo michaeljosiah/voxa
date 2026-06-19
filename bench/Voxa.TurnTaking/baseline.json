@@ -11,10 +11,10 @@
       "tor": 0
     },
     "smooth_turn_taking": {
-      "ttfb_p50_ms": 0.239
+      "ttfb_p50_ms": 0.26
     },
     "user_interruption": {
-      "ttfb_p50_ms": 0.194
+      "note": "not exercised offline: barge-in yield needs a real-time/duplex source"
     },
     "backchannel": {
       "skipped": true

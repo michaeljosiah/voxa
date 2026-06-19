@@ -52,13 +52,21 @@ matters — the same raw quantity is good in one category and bad in another:
 |---|---|---|
 | `pause_handling` | turn-offset-rate (fraction of samples where the turn ended *during* the within-turn pause) | **lower** |
 | `smooth_turn_taking` | first-word latency after end-of-turn (the ttfb p50) | **higher responsiveness** (lower ms) |
-| `user_interruption` | responsiveness to the barge-in | **higher responsiveness** (lower ms) |
+| `user_interruption` | barge-in **yield** latency (how fast the bot stops when interrupted) | **higher responsiveness** (lower ms) |
 | `backchannel` | — | **skipped** — needs a full-duplex model a cascade can't be; discovered, logged skipped, never scored (§5) |
 
 The TOR is detected from the diagnostics turn edges: more than one `UserStopped` on a `pause_handling`
 sample means the VAD ended the turn during the within-turn pause — a premature turn-take. Refreshing
 `baseline.json` is a deliberate, reviewed change (a knob moved, a category improved), never a silent
 overwrite — the same discipline as bumping a model SHA-pin.
+
+> **Barge-in note.** `user_interruption` scores the bot's **yield** (a `UserStarted` while the bot is
+> speaking → its stop/interrupt edge), *not* how fast it replies after the user stops — so a system that
+> talks over the interruption can't score well, and barge-in/AEC regressions stay visible. A real barge-in
+> needs the bot speaking *while* the user audio arrives; the offline file-driven source has no real-time
+> overlap and produces none, so offline the yield is **reported as not-exercised** (null, not gated). It
+> populates on a real-time / full-duplex source — the metric is wired and correct, the offline lane just
+> can't exercise it.
 
 ## The mini fixture
 
