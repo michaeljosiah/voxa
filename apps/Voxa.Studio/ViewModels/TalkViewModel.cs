@@ -126,7 +126,8 @@ public sealed partial class TalkViewModel : ObservableObject
 
     /// <summary>The live pipeline state — the prominent status pill binds to this.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PhaseLabel)), NotifyPropertyChangedFor(nameof(PhasePulse))]
+    [NotifyPropertyChangedFor(nameof(PhaseLabel)), NotifyPropertyChangedFor(nameof(PhasePulse)),
+     NotifyPropertyChangedFor(nameof(ShowPhasePill))]
     private TalkPhase _phase = TalkPhase.Idle;
 
     public string PhaseLabel => Phase switch
@@ -143,6 +144,10 @@ public sealed partial class TalkViewModel : ObservableObject
     /// <summary>In-progress phases pulse; settled ones (Idle/Listening) hold steady.</summary>
     public bool PhasePulse => Phase is TalkPhase.WarmingUp or TalkPhase.Hearing
         or TalkPhase.Transcribing or TalkPhase.Thinking or TalkPhase.Speaking;
+
+    /// <summary>The pill shows from the moment Start is pressed (WarmingUp, before IsRunning) until the
+    /// session ends — so the cold-start "Warming up…" state is actually visible.</summary>
+    public bool ShowPhasePill => Phase != TalkPhase.Idle;
 
     /// <summary>True while a Builder or Metrics run owns the pipeline — starting Talk is blocked.</summary>
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand))]
@@ -303,13 +308,20 @@ public sealed partial class TalkViewModel : ObservableObject
 
                 case TranscriptEvent { IsFinal: true } t:
                     Transcript.Add(new ChatBubble { IsUser = true, Text = t.Text });
-                    if (Phase is TalkPhase.Hearing or TalkPhase.Transcribing) Phase = TalkPhase.Thinking;
+                    // Entering Thinking restarts the no-speech timeout — STT may have eaten most of the
+                    // budget (a big Whisper model on CPU), and the agent's work shouldn't count against it.
+                    if (Phase is TalkPhase.Hearing or TalkPhase.Transcribing)
+                    {
+                        Phase = TalkPhase.Thinking;
+                        _phaseSinceTick = now;
+                    }
                     Log(e, $"\"{t.Text}\"");
                     break;
 
                 case AgentDeltaEvent delta:
                     _streamingBot ??= NewBotBubble();
                     _streamingBot.Text += delta.TextDelta;
+                    _phaseSinceTick = now; // the agent is producing — keep the timeout from firing mid-turn
                     Log(e, $"+{delta.TextDelta.Length} chars");
                     break;
 

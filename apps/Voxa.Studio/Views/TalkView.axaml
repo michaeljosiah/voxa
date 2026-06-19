@@ -90,7 +90,7 @@
           <!-- live pipeline state — the single, prominent "what's happening" cue (also tells you
                when the mic is actually live: Listening = your turn) -->
           <Border Grid.Row="1" Margin="16,8,16,12" Padding="13,7" CornerRadius="20"
-                  HorizontalAlignment="Left" IsVisible="{Binding IsRunning}"
+                  HorizontalAlignment="Left" IsVisible="{Binding ShowPhasePill}"
                   Background="{StaticResource VxPanel2Brush}"
                   BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1">
             <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
