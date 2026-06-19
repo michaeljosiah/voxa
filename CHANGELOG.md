@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`VoxaVadSettings.ConfirmTurnEnd` → `SileroVadOptions`) and the `DefaultVoicePipelineComposer`, which
   auto-wires any registered classifier (zero-cost when none is). A new opt-in **`Voxa.Audio.SmartTurn`**
   package ships `AddVoxaSmartTurn(configuration)` and two classifiers, so the VAD asks "is the user
-  actually done?" at the silence timeout and `Voxa:Vad:StopDuration` can drop to ~200 ms without clipping
+  actually done?" at the silence timeout and `Voxa:Vad:StopDurationMs` can drop to ~200 ms without clipping
   speakers who pause to think:
   - `Provider: "Http"` (`HttpSmartTurnClassifier`) — POST the recent speech to any smart-turn endpoint.
   - `Provider: "Sidecar"` (`SidecarSmartTurnClassifier`) — run the real `pipecat-ai/smart-turn-v3` model

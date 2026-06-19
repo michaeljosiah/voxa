@@ -3,10 +3,10 @@
 Smart turn detection for the Voxa pipeline — the single biggest latency lever (ROADMAP P0).
 
 A silence-only VAD can't tell a *within-sentence pause* ("give me the weather for… London") from
-*end-of-turn*, so `Voxa:Vad:StopDuration` has to stay conservative (~800 ms) to avoid clipping
+*end-of-turn*, so `Voxa:Vad:StopDurationMs` has to stay conservative (~800 ms) to avoid clipping
 thinkers. A smart-turn classifier sits on top of the silence VAD: silence-end fires → the classifier
 looks at the recent speech audio → only a **complete** verdict ends the turn. With one wired,
-`StopDuration` can drop to ~200 ms without cutting people off.
+that timeout can drop to ~200 ms without cutting people off.
 
 ## Do I need Python?
 
