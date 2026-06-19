@@ -193,7 +193,8 @@ public class SttPlaygroundViewModelTests
         // so the user could never stop a recording before the 30 s cap. Stop must be a separate
         // synchronous command that stays executable during the recording.
         var services = new StudioServices(TestSupport.LocalConfig(), new FakeMicDevice(),
-            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()));
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
         var vm = new SttPlaygroundViewModel(services) { Source = SttSource.Mic };
         vm.EngineFactoryOverride = _ => new FakeSttEngine("stopped mid stream");
 

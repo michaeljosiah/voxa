@@ -216,12 +216,14 @@ public sealed partial class BuilderViewModel : ObservableObject
         SaveCurrentProfileCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>Load a profile's pairs onto the canvas (the shell calls this when one is activated), so
-    /// "edit then Save" round-trips to that profile. Undoable — Ctrl+Z restores the prior canvas.</summary>
-    public void LoadProfile(IReadOnlyDictionary<string, string?> pairs)
+    /// <summary>Reload the canvas from the live (merged base + profile) config — the shell calls this
+    /// after activating a profile, so the canvas matches what ACTUALLY runs. Seeding from the sparse
+    /// stored pairs would fill omitted keys with hard-coded defaults that can differ from the live
+    /// pipeline (and a later Save would bake them in). Undoable — Ctrl+Z restores the prior canvas.</summary>
+    public void LoadFromLiveConfig()
     {
         PushUndo();
-        SeedFromPairs(pairs, clearHistory: false);
+        SeedFromPairs(LivePairs(), clearHistory: false);
     }
 
     // ── bindable state ───────────────────────────────────────────────────────
