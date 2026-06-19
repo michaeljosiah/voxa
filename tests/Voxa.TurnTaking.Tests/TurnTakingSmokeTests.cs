@@ -142,6 +142,20 @@ public class TurnTakingSmokeTests
         Assert.True(Tor(Rec(1)) < Tor(Rec(2)));   // silence wins
     }
 
+    [Fact] // Codex P2: a pause_handling run with NO UserStopped edge (VAD never closed the turn) must not score a perfect 0.
+    public void Scorer_Pause_Handling_With_No_Turn_Edge_Is_Null_Not_Perfect()
+    {
+        var noEdge = new[]
+        {
+            new SampleRecord("s", "pause_handling", new EngineNames("mock", "Echo", "mock"),
+                new SampleTimings(1, 1, 1, 100, 200, null), new SampleTranscripts(null, "x"),
+                new TurnSignals(UserStoppedEdges: 0, BotStartedEdges: 0), "s.response.wav", null),
+        };
+
+        var tor = Scorer.Score(noEdge, Summarizer.Summarize(noEdge)).Single(s => s.Category == "pause_handling").Tor;
+        Assert.Null(tor); // not 0.0 — and a null required metric then fails the baseline gate
+    }
+
     [Fact]
     public void Backchannel_Is_Never_In_The_Cascade_Fair_Set()
         => Assert.DoesNotContain(CorpusWalker.SkippedCategory, CorpusWalker.CascadeFairCategories);

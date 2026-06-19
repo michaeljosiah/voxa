@@ -60,13 +60,17 @@ sample means the VAD ended the turn during the within-turn pause — a premature
 `baseline.json` is a deliberate, reviewed change (a knob moved, a category improved), never a silent
 overwrite — the same discipline as bumping a model SHA-pin.
 
-> **Barge-in note.** `user_interruption` scores the bot's **yield** (a `UserStarted` while the bot is
-> speaking → its stop/interrupt edge), *not* how fast it replies after the user stops — so a system that
-> talks over the interruption can't score well, and barge-in/AEC regressions stay visible. A real barge-in
-> needs the bot speaking *while* the user audio arrives; the offline file-driven source has no real-time
-> overlap and produces none, so offline the yield is **reported as not-exercised** (null, not gated). It
-> populates on a real-time / full-duplex source — the metric is wired and correct, the offline lane just
-> can't exercise it.
+> **Barge-in note (a real limitation, tracked).** `user_interruption` scores the bot's **yield** (a
+> `UserStarted` while the bot is speaking → its stop/interrupt edge), *not* how fast it replies after the
+> user stops — so a system that talks over the interruption can't score well, and barge-in/AEC regressions
+> stay visible. But a real barge-in needs the bot speaking *while* the user audio arrives, and the
+> file-driven `WavFileSourceProcessor` drains the whole user clip before the agent/TTS emit anything — so
+> **no barge-in occurs, even on the full corpus**, and the yield is `null`. The harness is honest about this:
+> the metric is wired + gated (a yield regression fails the gate), and offline it's reported as **not
+> exercised** (a `note` in `baseline.json`, never a passing number). Actually *exercising* it needs a
+> **real-time / timeline source** that injects user audio mid-bot-speech — deferred to the barge-in/AEC
+> workstream (**VRT-003**), which owns the duplex seam, rather than bolting a wall-clock-timing simulator
+> (the spec's R2 "non-determinism" High risk) onto the VRT-001 measurement harness.
 
 ## The mini fixture
 

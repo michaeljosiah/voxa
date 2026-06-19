@@ -40,8 +40,12 @@ public static class Scorer
                 case "pause_handling":
                     // TOR: fraction of samples where the VAD ended the turn during the within-turn pause —
                     // detected as more than one UserStopped edge. Lower is better (barging in on the gap is the
-                    // failure; a perfect score is "never spoke during the gap").
-                    double? tor = ok.Count == 0 ? null : (double)ok.Count(r => r.Signals.UserStoppedEdges > 1) / ok.Count;
+                    // failure). Only samples where a turn was actually observed (>=1 UserStopped) are valid:
+                    // ZERO edges means the VAD never closed the turn (a sample-rate/config regression, dropped
+                    // diagnostics) and must NOT score as a perfect 0 — exclude it. If none are valid the metric
+                    // is null, which fails the baseline gate (the benchmark observed no completed user turn).
+                    var valid = ok.Where(r => r.Signals.UserStoppedEdges >= 1).ToList();
+                    double? tor = valid.Count == 0 ? null : (double)valid.Count(r => r.Signals.UserStoppedEdges > 1) / valid.Count;
                     scores.Add(new CategoryScore(s.Category, tor, null, null, null, Skipped: false));
                     break;
 
