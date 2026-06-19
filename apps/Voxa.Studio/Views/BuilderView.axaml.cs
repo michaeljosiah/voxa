@@ -133,6 +133,11 @@ public partial class BuilderView : UserControl
 
     private void OnCanvasReleased(object? sender, PointerReleasedEventArgs e)
     {
+        // Release the capture taken in OnNodePressed/OnPortPressed. Avalonia keeps routing pointer
+        // input to the captured GraphPanel until it's released, which would swallow the next click on
+        // a toolbar/palette control after a drag (Codex P2). No-op when nothing was captured.
+        if (_dragNode is not null || _wireFrom is not null) e.Pointer.Capture(null);
+
         if (_dragNode is { } dragged)
         {
             if (_dragMoved) Vm?.SnapNode(dragged);
