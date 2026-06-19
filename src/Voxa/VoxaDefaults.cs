@@ -69,9 +69,11 @@ public static class VoxaDefaultsExtensions
 /// Default <see cref="IVoiceAgentFactory"/> registered by the Voxa meta-package, dispatching on
 /// <c>Voxa:Agent:Provider</c>: null/<c>"OpenAI"</c> → a <see cref="ChatClientAgent"/> over the
 /// OpenAI chat completions API (model/key from <c>Voxa:Agent:Model</c> / <c>Voxa:Agent:ApiKey</c>,
-/// key falling back to <c>Voxa:OpenAI:ApiKey</c>); <c>"Echo"</c> → a keyless diagnostic agent
-/// that repeats the transcript back — it closes the no-API-key loop for first-touch demos and
-/// zero-cost CI conversations (VLS-001 WS4).
+/// key falling back to <c>Voxa:OpenAI:ApiKey</c>); <c>"Ollama"</c> → the same
+/// <see cref="ChatClientAgent"/> pointed at a local Ollama daemon's OpenAI-compatible endpoint
+/// (<c>Voxa:Agent:BaseUrl</c>, default <c>http://localhost:11434/v1</c>; keyless, fully offline —
+/// VLS-003); <c>"Echo"</c> → a keyless diagnostic agent that repeats the transcript back — it closes
+/// the no-API-key loop for first-touch demos and zero-cost CI conversations (VLS-001 WS4).
 /// </summary>
 internal sealed class DefaultAgentFactory : IVoiceAgentFactory
 {
@@ -99,15 +101,22 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
             });
         }
 
-        var apiKey = ResolveApiKey(options);
-
-        IChatClient chatClient = new OpenAIClient(new ApiKeyCredential(apiKey!))
-            .GetChatClient(options.Model)
-            .AsIChatClient();
+        IChatClient chatClient = IsOllama(options)
+            // Ollama speaks the OpenAI chat-completions API, so the OpenAI client is reused, pointed at
+            // the local daemon. It needs no real credential — never reuse the OpenAI key here, or it
+            // would be sent as a bearer token to the Ollama endpoint (VLS-003).
+            ? new OpenAIClient(
+                    new ApiKeyCredential(OllamaApiKey(options)),
+                    new OpenAIClientOptions { Endpoint = OllamaEndpoint() })
+                .GetChatClient(OllamaModel(options))
+                .AsIChatClient()
+            : new OpenAIClient(new ApiKeyCredential(ResolveApiKey(options)!))
+                .GetChatClient(options.Model)
+                .AsIChatClient();
 
         return new ChatClientAgent(chatClient, new ChatClientAgentOptions
         {
-            Name        = "VoxaVoiceAgent",
+            Name        = IsOllama(options) ? "VoxaOllamaAgent" : "VoxaVoiceAgent",
             ChatOptions = new ChatOptions { Instructions = options.Instructions },
         });
     }
@@ -122,17 +131,34 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
     private static bool IsEcho(VoxaAgentOptions options)
         => string.Equals(options.Provider, "Echo", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsOllama(VoxaAgentOptions options)
+        => string.Equals(options.Provider, "Ollama", StringComparison.OrdinalIgnoreCase);
+
     private IReadOnlyList<string> CheckUsable(VoxaAgentOptions options)
     {
         // Echo is keyless by design — always usable.
         if (IsEcho(options)) return [];
+
+        // Ollama is a local, keyless daemon (OpenAI-compatible). Validate only the endpoint shape —
+        // never probe the daemon at startup, which would make boot depend on `ollama serve` running.
+        if (IsOllama(options))
+        {
+            return Uri.TryCreate(OllamaBaseUrl(), UriKind.Absolute, out var uri)
+                   && uri.Scheme is "http" or "https" && !string.IsNullOrEmpty(uri.Host)
+                ? []
+                :
+                [
+                    $"Voxa:Agent:BaseUrl '{OllamaBaseUrl()}' is not a valid http(s) URL. Point it at your " +
+                    "Ollama OpenAI-compatible endpoint (default http://localhost:11434/v1).",
+                ];
+        }
 
         if (options.Provider is not null &&
             !string.Equals(options.Provider, "OpenAI", StringComparison.OrdinalIgnoreCase))
         {
             return
             [
-                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI' or 'Echo' " +
+                $"The default Voxa agent factory only handles Voxa:Agent:Provider 'OpenAI', 'Ollama' or 'Echo' " +
                 $"(got '{options.Provider}'). " +
                 "Register a custom IVoiceAgentFactory singleton for other providers.",
             ];
@@ -144,8 +170,8 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
             [
                 "No OpenAI API key configured for the default voice agent. " +
                 "Set Voxa:Agent:ApiKey or Voxa:OpenAI:ApiKey (user-secrets or environment variable " +
-                "Voxa__OpenAI__ApiKey), set Voxa:Agent:Provider to 'Echo' for a keyless demo agent, " +
-                "or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.",
+                "Voxa__OpenAI__ApiKey), set Voxa:Agent:Provider to 'Echo' for a keyless demo agent or " +
+                "'Ollama' for a local LLM, or register your own AIAgent / IChatClient / IVoiceAgentFactory in DI.",
             ];
         }
 
@@ -154,6 +180,28 @@ internal sealed class DefaultAgentFactory : IVoiceAgentFactory
 
     private string? ResolveApiKey(VoxaAgentOptions options)
         => !string.IsNullOrEmpty(options.ApiKey) ? options.ApiKey : _configuration["Voxa:OpenAI:ApiKey"];
+
+    // Ollama needs no real credential; never reuse the OpenAI key (it would reach the Ollama endpoint).
+    // Honour an explicit Voxa:Agent:ApiKey only (a secured gateway), else a constant placeholder.
+    private static string OllamaApiKey(VoxaAgentOptions options)
+        => string.IsNullOrEmpty(options.ApiKey) ? "ollama" : options.ApiKey;
+
+    // Ollama's OpenAI-compatible base URL (VLS-003): Voxa:Agent:BaseUrl wins, else Voxa:Ollama:BaseUrl,
+    // else the daemon default.
+    private string OllamaBaseUrl()
+        => _configuration["Voxa:Agent:BaseUrl"]
+           ?? _configuration["Voxa:Ollama:BaseUrl"]
+           ?? "http://localhost:11434/v1";
+
+    private Uri OllamaEndpoint() => new(OllamaBaseUrl());
+
+    // Voxa:Agent:Model names the Ollama model (which must be pulled, e.g. `ollama pull llama3.2`). The
+    // OpenAI-oriented default is meaningless to Ollama, so fall back to a small, common local default.
+    private static string OllamaModel(VoxaAgentOptions options)
+        => string.IsNullOrWhiteSpace(options.Model) ||
+           string.Equals(options.Model, "gpt-4o-mini", StringComparison.OrdinalIgnoreCase)
+            ? "llama3.2"
+            : options.Model;
 }
 
 /// <summary>
