@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Voxa.AspNetCore;
 using Voxa.Diagnostics;
@@ -30,16 +31,18 @@ public sealed class TalkSession : IAsyncDisposable
     private Task? _micPump;
     private Task? _speakerPump;
     private bool _started;
+    private readonly MicGate _micGate;
 
     public VoxaDiagnosticsHub Hub { get; }
     public int InputSampleRate { get; }
     public int OutputSampleRate { get; }
 
     private TalkSession(
-        IServiceScope scope, IStudioAudioDevice device, ComposedVoice composed)
+        IServiceScope scope, IStudioAudioDevice device, ComposedVoice composed, bool allowBargeIn)
     {
         _scope = scope;
         _device = device;
+        _micGate = new MicGate(allowBargeIn);
         Hub = scope.ServiceProvider.GetRequiredService<VoxaDiagnosticsHub>();
         InputSampleRate = composed.InputSampleRate;
         OutputSampleRate = composed.OutputSampleRate;
@@ -66,13 +69,30 @@ public sealed class TalkSession : IAsyncDisposable
         var scope = root.CreateScope();
         try
         {
-            return new TalkSession(scope, device, compose(scope.ServiceProvider));
+            return new TalkSession(scope, device, compose(scope.ServiceProvider), ReadAllowBargeIn(root));
         }
         catch
         {
             scope.Dispose();
             throw;
         }
+    }
+
+    // Half-duplex by default (Voxa:Studio:AllowBargeIn=false): on speakers the mic must not feed the
+    // bot's own audio back into the pipeline. Set it true for full-duplex barge-in (use headphones).
+    private static bool ReadAllowBargeIn(IServiceProvider services)
+        => bool.TryParse(
+            (services.GetService(typeof(IConfiguration)) as IConfiguration)?["Voxa:Studio:AllowBargeIn"],
+            out var allow) && allow;
+
+    // Playback duration of a queued PCM16 frame (bytes ÷ bytes-per-second) — how long the bot stays
+    // audible, which is what the mic gate needs since RenderAsync only enqueues.
+    private static TimeSpan PcmDuration(AudioRawFrame audio)
+    {
+        var bytesPerSecond = audio.SampleRate * audio.Channels * 2; // 16-bit samples
+        return bytesPerSecond > 0
+            ? TimeSpan.FromSeconds(audio.Pcm.Length / (double)bytesPerSecond)
+            : TimeSpan.Zero;
     }
 
     /// <summary>[source, parts…, sink] — index i+1 is composed part i. Queue-depth badges read this.</summary>
@@ -99,7 +119,12 @@ public sealed class TalkSession : IAsyncDisposable
         try
         {
             await foreach (var frame in _device.CaptureAsync(microphone, InputSampleRate, ct).ConfigureAwait(false))
+            {
+                // Half-duplex echo suppression (P1): drop captured audio while the bot is speaking, so an
+                // on-speaker user doesn't loop the bot's own output back through VAD → STT → agent.
+                if (!_micGate.ShouldIngest()) continue;
                 await _pipeline.Source.IngestAsync(new AudioRawFrame(frame, InputSampleRate, 1), ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException) { /* session stop */ }
     }
@@ -117,11 +142,21 @@ public sealed class TalkSession : IAsyncDisposable
                 {
                     case BotStartedSpeakingFrame:
                         awaitFirstAudio = true;
+                        _micGate.BotStartedSpeaking(); // close the mic gate while the bot talks
+                        break;
+
+                    case BotStoppedSpeakingFrame:
+                        // Priority-routed: arrives while queued audio may still be playing. Only clears
+                        // the flag — the playback tail (NoteRenderedAudio) governs when the mic reopens.
+                        _micGate.BotStoppedSpeaking();
                         break;
 
                     case AudioRawFrame audio:
                         var t0 = awaitFirstAudio && Hub.HasListeners ? Hub.NowMicros() : 0;
                         await _device.RenderAsync(audio.Pcm, ct).ConfigureAwait(false);
+                        // RenderAsync only queues; tell the gate how long this audio will actually be
+                        // audible so the mic stays shut until the speakers drain (echo suppression).
+                        _micGate.NoteRenderedAudio(PcmDuration(audio));
                         if (awaitFirstAudio)
                         {
                             awaitFirstAudio = false;
@@ -135,6 +170,7 @@ public sealed class TalkSession : IAsyncDisposable
                     case UserStartedSpeakingFrame:
                     case InterruptionFrame:
                         await _device.FlushRenderAsync().ConfigureAwait(false);
+                        _micGate.PlaybackFlushed(); // dropped audio won't play — let the gate reopen promptly
                         break;
                 }
             }

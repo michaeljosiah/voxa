@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio: half-duplex echo suppression + local-provider config (VST-004 polish).** Talk now
+  gates the mic while the bot is speaking (plus a short hangover), so a user on **speakers** no longer
+  loops the bot's own output back through VAD → STT → agent — the "it keeps repeating what I said"
+  feedback loop. Half-duplex is the default; set `Voxa:Studio:AllowBargeIn=true` for full-duplex
+  barge-in (use headphones). The Config tab also surfaces two providers that already existed in the
+  pipeline: **Ollama** as a keyless local agent (model + Base URL, no API-key field) and a Whisper
+  **Device** selector (cpu / auto / cuda / vulkan / coreml) for GPU-accelerated STT.
 - **Voxa Studio: dictation core (VST-004, foundation).** A new headless `DictationSession` service —
   push-to-talk capture of the mic into an utterance buffer, then local whisper.cpp transcription —
   walking `Idle → Recording → Transcribing → Completed/Failed` for the UI to render. Avalonia-free and
