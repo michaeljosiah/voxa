@@ -68,7 +68,19 @@ public sealed class DictationSession : IAsyncDisposable
         if (State != DictationState.Recording) return Transcript;
 
         _capture?.Cancel();
-        try { await _captureTask; } catch { /* capture loop cancelled */ }
+        try
+        {
+            await _captureTask;
+        }
+        catch (OperationCanceledException) { /* expected on stop */ }
+        catch (Exception ex)
+        {
+            // A real capture failure (unplugged device, unsupported format) must surface as Failed —
+            // not be swallowed and then reported as a successful empty transcript.
+            ErrorMessage = ex.Message;
+            SetState(DictationState.Failed);
+            return string.Empty;
+        }
 
         SetState(DictationState.Transcribing);
         byte[] pcm;

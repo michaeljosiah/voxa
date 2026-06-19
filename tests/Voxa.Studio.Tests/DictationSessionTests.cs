@@ -56,6 +56,21 @@ public class DictationSessionTests
         Assert.False(string.IsNullOrEmpty(session.ErrorMessage));
     }
 
+    [Fact]
+    public async Task A_Capture_Failure_Surfaces_As_Failed_Not_A_Silent_Success()
+    {
+        // Codex P2: a real device fault (unplugged mic, unsupported format) must report Failed — not be
+        // swallowed like cancellation and then reported as a successful empty transcript.
+        var session = new DictationSession(new FaultingAudioDevice(), () => new FakeSttEngine("unused"));
+        session.Start(new AudioEndpoint("mic", "Mic", IsDefault: true));
+
+        var text = await session.StopAndTranscribeAsync();
+
+        Assert.Equal(string.Empty, text);
+        Assert.Equal(DictationSession.DictationState.Failed, session.State);
+        Assert.False(string.IsNullOrEmpty(session.ErrorMessage));
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────
 
     private sealed class FakeAudioDevice(int frames) : IStudioAudioDevice
@@ -71,6 +86,26 @@ public class DictationSessionTests
                 await Task.Yield();
                 yield return new byte[640]; // one 20 ms PCM16 frame at 16 kHz
             }
+        }
+
+        public ValueTask StartRenderAsync(AudioEndpoint speaker, int sampleRate, CancellationToken ct) => ValueTask.CompletedTask;
+        public ValueTask RenderAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct) => ValueTask.CompletedTask;
+        public ValueTask FlushRenderAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>A device that yields one frame then faults — models a mid-capture WASAPI error.</summary>
+    private sealed class FaultingAudioDevice : IStudioAudioDevice
+    {
+        public IReadOnlyList<AudioEndpoint> CaptureEndpoints() => [new("mic", "Faulting Mic", true)];
+        public IReadOnlyList<AudioEndpoint> RenderEndpoints() => [];
+
+        public async IAsyncEnumerable<ReadOnlyMemory<byte>> CaptureAsync(
+            AudioEndpoint microphone, int sampleRate, [EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.Yield();
+            yield return new byte[640];
+            throw new InvalidOperationException("capture device unavailable");
         }
 
         public ValueTask StartRenderAsync(AudioEndpoint speaker, int sampleRate, CancellationToken ct) => ValueTask.CompletedTask;
