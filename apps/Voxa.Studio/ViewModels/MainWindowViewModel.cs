@@ -68,6 +68,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Voices.Refresh();
             Config.RefreshCloudVoices();   // keys may have changed; Apply is a user action
             Models.Refresh();
+            // Pre-warm the newly-applied model (cached-only, background) so the next Talk start is warm.
+            _ = Task.Run(() => services.WarmUpAsync(cachedOnly: true));
         };
     }
 

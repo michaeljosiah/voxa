@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Extensions.DependencyInjection;
 using Voxa.Diagnostics;
 using Voxa.Studio.Audio;
 using Voxa.Studio.Services;
@@ -229,26 +228,10 @@ public sealed partial class TalkViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Load the configured STT/TTS model weights before the first turn, via the same descriptor warm-up
-    /// the server's hosted guard runs. Best-effort: a failure here doesn't block the session (it's just
-    /// colder), and a genuinely broken model resurfaces when the pipeline starts.
-    /// </summary>
-    private async Task WarmUpEnginesAsync()
-    {
-        var voxa = _services.Configuration.GetSection("Voxa");
-        var registry = _services.Registry;
-        using var scope = _services.Provider.CreateScope();
-        var sp = scope.ServiceProvider;
-        try
-        {
-            if (voxa["Stt"] is { } sttName && registry.TryGetStt(sttName, out var stt) && stt.WarmUpAsync is not null)
-                await stt.WarmUpAsync(sp, voxa, CancellationToken.None);
-            if (voxa["Tts"] is { } ttsName && registry.TryGetTts(ttsName, out var tts) && tts.WarmUpAsync is not null)
-                await tts.WarmUpAsync(sp, voxa, CancellationToken.None);
-        }
-        catch { /* best-effort; the pipeline start surfaces any real model failure with remediation */ }
-    }
+    // Warm-up lives on StudioServices now — the splash and a Config Apply pre-warm cached models, so at
+    // Start this is usually a fast no-op. We still call it (cachedOnly:false) as the safety net: it covers
+    // a model just downloaded above on first run, or a provider changed since the splash warmed.
+    private Task WarmUpEnginesAsync() => _services.WarmUpAsync(cachedOnly: false);
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()

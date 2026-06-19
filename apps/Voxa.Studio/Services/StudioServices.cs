@@ -150,6 +150,33 @@ public sealed class StudioServices : IAsyncDisposable
 
     public TalkSession CreateTalkSession() => TalkSession.Create(Provider, AudioDevice);
 
+    /// <summary>
+    /// Warm the configured STT/TTS model weights into memory (whisper.cpp caches its
+    /// <c>WhisperFactory</c> process-wide, so a later Talk session reuses them — the first turn isn't
+    /// a cold start). When <paramref name="cachedOnly"/> is true this NO-OPS if any required artifact is
+    /// missing, honoring "no network before the user acts" — which makes it safe on the splash/startup
+    /// path and after a Config Apply. Best-effort: a genuinely broken model resurfaces with its
+    /// remediation message when the pipeline starts, so failures here are swallowed.
+    /// </summary>
+    public async Task WarmUpAsync(bool cachedOnly, CancellationToken ct = default)
+    {
+        if (cachedOnly && ActiveConfigArtifacts.Missing(Configuration, ModelCache).Count > 0)
+            return; // a download would be needed — defer to the user-triggered Talk Start
+
+        var voxa = Configuration.GetSection("Voxa");
+        var registry = Registry;
+        using var scope = Provider.CreateScope();
+        var sp = scope.ServiceProvider;
+        try
+        {
+            if (voxa["Stt"] is { } stt && registry.TryGetStt(stt, out var sttDesc) && sttDesc.WarmUpAsync is not null)
+                await sttDesc.WarmUpAsync(sp, voxa, ct).ConfigureAwait(false);
+            if (voxa["Tts"] is { } tts && registry.TryGetTts(tts, out var ttsDesc) && ttsDesc.WarmUpAsync is not null)
+                await ttsDesc.WarmUpAsync(sp, voxa, ct).ConfigureAwait(false);
+        }
+        catch { /* best-effort warm-up */ }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await AudioDevice.DisposeAsync().ConfigureAwait(false);
