@@ -16,7 +16,8 @@ public sealed class TurnTakingHarness
     public static readonly TimeSpan PerSampleWallCap = TimeSpan.FromSeconds(30);
 
     public sealed record Options(
-        string CorpusDir, string OutDir, string? Category, int? Limit, string Stt, string Tts, string Llm);
+        string CorpusDir, string OutDir, string? Category, int? Limit, string Stt, string Tts, string Llm,
+        IReadOnlyDictionary<string, string?>? ExtraConfig = null);
 
     public sealed record Result(
         IReadOnlyList<SampleRecord> Records,
@@ -56,14 +57,18 @@ public sealed class TurnTakingHarness
 
     private static ServiceProvider BuildServiceProvider(Options options)
     {
-        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var pairs = new Dictionary<string, string?>
         {
             ["Voxa:Stt"] = options.Stt,
             ["Voxa:Tts"] = options.Tts,
             ["Voxa:Agent:Provider"] = options.Llm,    // "Echo" by default — the deterministic mock LLM
             ["Voxa:Diagnostics:Enabled"] = "true",     // mandatory: the harness reads stage timings from the hub
             ["Voxa:Models:EagerWarmup"] = "false",     // no warm-up (we use a plain ServiceCollection anyway)
-        }).Build();
+        };
+        // Provider-specific overrides (e.g. a pinned Whisper model / Piper voice for the LocalModels lane).
+        if (options.ExtraConfig is not null)
+            foreach (var (key, value) in options.ExtraConfig) pairs[key] = value;
+        var config = new ConfigurationBuilder().AddInMemoryCollection(pairs).Build();
 
         var services = new ServiceCollection();
         services.AddLogging();

@@ -112,9 +112,16 @@ public class TurnTakingSmokeTests
         var outDir = TempOut();
         try
         {
+            // WhisperCpp tiny.en + Piper en_US-amy-low — the same models the zero-network lane caches
+            // (the smallest, per the local-speech e2e test), so this needs no download there.
             var options = new TurnTakingHarness.Options(
                 MiniFixture, outDir, Category: "smooth_turn_taking", Limit: 1,
-                Stt: "WhisperCpp", Tts: "Kokoro", Llm: "Echo");
+                Stt: "WhisperCpp", Tts: "Piper", Llm: "Echo",
+                ExtraConfig: new Dictionary<string, string?>
+                {
+                    ["Voxa:WhisperCpp:Model"] = "tiny.en",
+                    ["Voxa:Piper:Voice"] = "en_US-amy-low",
+                });
 
             var result = await TurnTakingHarness.RunAsync(options);
 

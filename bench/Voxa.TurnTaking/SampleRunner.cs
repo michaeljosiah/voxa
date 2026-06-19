@@ -47,17 +47,28 @@ internal static class SampleRunner
             }, CancellationToken.None);
 
             var sw = Stopwatch.StartNew();
-            await using (var runner = new PipelineRunner(pipeline, ct))
+            try
             {
+                // SubscribeAsync only sets HasListeners once its iterator actually starts; wait for that
+                // before starting the pipeline so the guarded diagnostics taps don't drop events published
+                // before the subscriber registers (which would leave a successful sample with null timings).
+                await WaitForListenerAsync(hub, ct).ConfigureAwait(false);
+
+                await using var runner = new PipelineRunner(pipeline, ct);
                 await runner.StartAsync(new StartFrame(composed.InputSampleRate, 1), ct).ConfigureAwait(false);
                 await runner.WaitAsync().WaitAsync(wallCap, ct).ConfigureAwait(false);
-            }
-            sw.Stop();
 
-            // Let the subscriber drain the last buffered events, then stop it.
-            await Task.Delay(100, ct).ConfigureAwait(false);
-            subCts.Cancel();
-            await pump.ConfigureAwait(false);
+                // Let the subscriber drain the last buffered events before we stop it.
+                await Task.Delay(100, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Always stop the pump — even when a sample times out / throws — so no SubscribeAsync
+                // listener leaks for the rest of the run.
+                sw.Stop();
+                subCts.Cancel();
+                try { await pump.ConfigureAwait(false); } catch { /* best-effort */ }
+            }
 
             var record = new SampleRecord(
                 sample.SampleId, sample.Category, engines,
@@ -97,6 +108,13 @@ internal static class SampleRunner
 
         return new SampleTimings(
             Stage("stt_final"), Stage("agent_first_token"), Stage("tts_first_byte"), ttfb, totalWallMs);
+    }
+
+    private static async Task WaitForListenerAsync(VoxaDiagnosticsHub hub, CancellationToken ct)
+    {
+        // Bounded spin (~200 ms ceiling) — the Task.Run subscriber registers near-instantly in practice.
+        for (var i = 0; i < 200 && !hub.HasListeners; i++)
+            await Task.Delay(1, ct).ConfigureAwait(false);
     }
 
     private static TurnSignals ReduceSignals(IReadOnlyList<DiagnosticEvent> events)
