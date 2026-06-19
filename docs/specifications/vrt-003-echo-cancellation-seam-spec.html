@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT-003 — Acoustic Echo Cancellation Seam (IEchoCanceller)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-003 — Acoustic Echo Cancellation Seam (IEchoCanceller)</h1>
+  <div class="sub">A first-class, config-driven <b>seam</b> for true barge-in over speakers —
+    <code>IEchoCanceller</code>, an <code>EchoCancellerProcessor</code> placed <em>before</em> the VAD in the
+    composer, an auto-fed far-end (bot-audio) reference, and a <b>null / passthrough default</b>. This ships the
+    seam + wiring + null default, <b>not</b> a DSP: with no acoustic echo canceller configured, the composed
+    pipeline is byte-identical to today.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-003 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P1 Echo suppression → P2 Barge-in foundation</div>
+    <div><b>Depends on</b> <code>DefaultVoicePipelineComposer</code> chain; the TTS / bot-audio far-end path</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M2</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — the chain &amp; the insertion point</a></li>
+    <li><a href="#s5">WS1 — the <code>IEchoCanceller</code> seam</a></li>
+    <li><a href="#s6">WS2 — the <code>EchoCancellerProcessor</code> + reference feed wiring</a></li>
+    <li><a href="#s7">WS3 — interplay with half-duplex gating &amp; barge-in</a></li>
+    <li><a href="#s8">Configuration reference</a></li>
+    <li><a href="#s9">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VRT-003 add, in one sentence?</b>
+    <p>It adds the <em>plug</em> (a named, swappable seam — <code>IEchoCanceller</code>) that a real acoustic echo
+    canceller drops into, so a user can interrupt the bot <em>while it is speaking out loud on speakers</em> — but it
+    deliberately ships <em>without</em> a DSP, defaulting to a do-nothing passthrough.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>Voxa is half-duplex today: while the bot is talking, the microphone is effectively gated so the bot doesn't
+    hear (and try to transcribe) its own voice coming back through the speakers (ROADMAP P1). That gate is the thing
+    that blocks true barge-in over a speaker. The only safe way to lift it is to first subtract the bot's audio from
+    the mic signal — which is exactly what an acoustic echo canceller does. So before we can do barge-in-over-speakers
+    well, we need the <em>seam</em> for echo cancellation in the right place in the chain. This is that foundation.</p>
+  </div>
+  <div class="qa">
+    <b>Does this make the pipeline heavier, or change anything for today's users?</b>
+    <p>No. The default is <code>NullEchoCanceller</code> — a passthrough that returns the mic audio unchanged and
+    ignores the reference feed. With no acoustic echo canceller configured the composer inserts <em>nothing</em>, so
+    the composed pipeline is <b>byte-identical</b> to today and golden-tested to prove it. You only pay for echo
+    cancellation if you opt in via <code>Voxa:Aec:Engine</code>.</p>
+  </div>
+  <div class="qa">
+    <b>What ships in VRT-003, and what is deferred?</b>
+    <p><b>Ships:</b> the <code>IEchoCanceller</code> interface (in a new <code>Voxa.Audio.Abstractions</code>), the
+    <code>EchoCancellerProcessor</code> that runs it before the VAD, the plumbing that feeds the bot's TTS audio in as
+    the far-end reference, the <code>NullEchoCanceller</code> default, and a <code>TryGetAec</code> registry slot +
+    descriptor so an implementation drops in by config. <b>Deferred:</b> a production echo-cancellation DSP
+    (WebRTC&nbsp;APM, SpeexDSP via P/Invoke, or a managed AEC) — that is a separate follow-up item once a license-clean
+    .NET binding is chosen. VRT-003 builds the socket; the DSP is the bulb you screw in later.</p>
+  </div>
+  <div class="qa">
+    <b>What does it explicitly <em>not</em> change?</b>
+    <p>It does not change the existing interruption / barge-in <em>policy</em> (that's VRT-002's interruption-debounce
+    and recovery), and it does not by itself remove the half-duplex gate — it makes lifting that gate <em>possible</em>
+    and describes the migration (§7). The audio frame contract, the bounded-channel backpressure convention, and the
+    diagnostics taps are untouched.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VRT-003 imports speech-core's <code>EchoCancellerInterface</code> + auto far-end-feed pattern onto Voxa's
+frame/processor model. speech-core's chain is <code>mic → AEC → enhance → VAD → STT</code> with the canceller
+auto-fed the playback (far-end) signal; Voxa's <code>DefaultVoicePipelineComposer.Compose</code> builds
+<code>VAD → STT → … → TTS</code>, so the AEC slots in as a <em>new first stage before the VAD</em>. Three small
+workstreams, all opt-in:</p>
+
+<ul>
+  <li><b>WS1 — the seam <span class="badge additive">additive</span>.</b> An <code>IEchoCanceller</code> abstraction in
+    a new zero-extra-dependency <code>Voxa.Audio.Abstractions</code> package: <code>FeedReference(farEndPcm)</code>
+    (the TTS / bot playback), <code>CancelEcho(nearEndPcm) → pcm</code> (the mic), <code>Reset()</code>, and a
+    sample-rate contract. The seam stays deliberately simple — buffering, frame alignment, and rate conversion between
+    the far-end and near-end streams are the <em>implementation's</em> responsibility, exactly as in speech-core.</li>
+  <li><b>WS2 — the processor + reference feed <span class="badge p1">P1</span>.</b> An
+    <code>EchoCancellerProcessor</code> placed before the VAD that runs <code>CancelEcho</code> on each
+    <code>AudioRawFrame</code>, with the bot's TTS audio auto-tapped and fed in via <code>FeedReference</code>. A
+    <code>NullEchoCanceller</code> default keeps the chain byte-identical when nothing is configured; a
+    <code>TryGetAec</code> registry slot + a descriptor let a real implementation drop in via
+    <code>Voxa:Aec:Engine</code>.</li>
+  <li><b>WS3 — barge-in interplay <span class="badge p2">P2</span> (design, not policy).</b> With an acoustic echo
+    canceller present, the half-duplex gate <em>can</em> be lifted for true barge-in; VRT-002's
+    <code>MinInterruptionDuration</code> debounce filters whatever residual echo the canceller doesn't fully remove.
+    VRT-003 describes the migration (AEC opt-in → gate optional) but ships neither the gate change nor the debounce.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A real acoustic echo canceller drops in purely by configuration; with
+none configured the default is a passthrough and the composed pipeline is byte-identical to today. VRT-003 is the
+half-duplex&nbsp;→&nbsp;full-duplex <em>foundation</em>, sequenced (in program item M2) alongside VRT-002 whose
+barge-in robustness this makes viable on speakers.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Define <code>IEchoCanceller</code> as a stable, minimal seam (in <code>Voxa.Audio.Abstractions</code>) mirroring
+    speech-core's <code>EchoCancellerInterface</code>: feed far-end, cancel near-end, reset, sample-rate contract.</li>
+  <li>Insert an <code>EchoCancellerProcessor</code> <em>before</em> the VAD in <code>DefaultVoicePipelineComposer</code>
+    and auto-feed it the bot-audio (TTS) stream as the far-end reference.</li>
+  <li>Ship a <code>NullEchoCanceller</code> passthrough default so the chain is unchanged and byte-identical when no
+    acoustic echo canceller is configured.</li>
+  <li>Add a <code>TryGetAec</code> registry slot + a descriptor so a real implementation resolves from
+    <code>Voxa:Aec:Engine</code>, the same self-describing way VAD providers resolve via <code>TryGetVad</code>.</li>
+  <li>Honour every cross-cutting invariant: forward <code>StartFrame</code>/<code>EndFrame</code>; bounded
+    <code>DropOldest</code> on the audio path; diagnostics byte-identical-when-off; config-capture; one-PR-per-change
+    with a CHANGELOG entry and this spec landed before the code.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>Shipping a production AEC DSP.</b> No WebRTC&nbsp;APM / SpeexDSP / managed echo canceller binding lands here —
+    that is a separate follow-up item once a license-clean .NET binding is selected (§9, §13).</li>
+  <li><b>Shipping the barge-in policy.</b> The interruption-debounce, interruption-recovery, and empty-STT recovery
+    knobs are <b>VRT-002</b>. VRT-003 only makes that policy robust on speakers; it does not implement it.</li>
+  <li><b>Removing the half-duplex gate.</b> VRT-003 makes lifting it <em>possible</em> and specifies the migration
+    (§7); the gate change itself is gated on a real acoustic echo canceller existing and is out of scope here.</li>
+  <li><b>Speech enhancement / denoise.</b> That is the sibling <b>VLS-004</b> <code>IAudioEnhancer</code> stage, which
+    composes <em>after</em> the AEC in the same insertion region (§4). Not specced here.</li>
+  <li><b>Multi-rate resampling helpers</b> as a shared utility — if a real implementation needs them and they don't
+    already exist, that's its concern (§13).</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Passthrough-off composition</td><td><b>Byte-identical</b> to today — with <code>Voxa:Aec:Engine</code> unset / <code>None</code> the composer inserts no stage (golden-tested, same guard as the diagnostics-off golden).</td></tr>
+  <tr><td>Default-package weight</td><td><b>0</b> new runtime dependency on the default path; <code>Voxa.Audio.Abstractions</code> takes only what <code>Voxa.Speech.Abstractions</code> already takes (no ASP.NET / ONNX / native).</td></tr>
+  <tr><td>Default test lane</td><td>No new network, no native binary; the seam, the null default, and the wiring are covered by offline unit tests with a fake canceller.</td></tr>
+  <tr><td>Reference-feed hot path</td><td><code>FeedReference</code> must be non-blocking and allocation-light enough to call from the TTS / worker thread without stalling synthesis; the seam contract requires it.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — the chain &amp; the insertion point</h2>
+
+<p>speech-core's on-device chain is <code>mic → AEC → enhance → VAD → STT</code>, with the echo canceller given the
+playback signal automatically as its far-end reference. Voxa's granular chain is built by
+<code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code> as <code>VAD → STT → TranscriptionFilter →
+agent → SentenceAggregator → TTS</code>. The acoustic echo canceller is therefore a <b>new first stage, inserted
+before the VAD block</b>, and the same insertion region is where VLS-004's enhancer will later sit:</p>
+
+<pre><code>            ┌─────────────────────── far-end reference (bot audio) ───────────────────────┐
+            │                                                                              │
+ mic ──▶ <span class="cm">[ AEC ]</span> ──▶ <span class="cm">[ enhance (VLS-004) ]</span> ──▶ VAD ──▶ STT ──▶ filter ──▶ agent ──▶ aggregator ──▶ TTS ─┘
+         <span class="cm">VRT-003</span>        <span class="cm">(separate item)</span>      <span class="cm">└──────────────── unchanged granular chain ─────────────┘</span></code></pre>
+
+<p>The insertion is the first thing the composer adds to <code>parts</code>, ahead of the existing VAD block (the
+<code>if (!string.Equals(o.Vad.Engine, "None", …))</code> region). Because every later stage forwards unhandled
+frames downstream, prepending a stage that emits the same <code>AudioRawFrame</code> shape it consumes is transparent
+to them. The far-end reference is the bot-audio (TTS-output) stream, tapped and routed to the canceller's
+<code>FeedReference</code> — modelled directly on speech-core's auto far-end feed.</p>
+
+<h3>File-change table</h3>
+<table>
+  <tr><th>File / project</th><th>Change</th></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Audio.Abstractions/IEchoCanceller.cs</span> <i>(new)</i></td><td>WS1 — the <code>IEchoCanceller</code> seam + <code>NullEchoCanceller</code> passthrough, in a new package. No dependency on Core, ASP.NET, ONNX, or native code.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Audio.Abstractions/EchoCancellerProcessor.cs</span> <i>(new)</i></td><td>WS2 — the processor that runs <code>CancelEcho</code> on each <code>AudioRawFrame</code> and exposes the <code>FeedReference</code> tap. (May instead live beside the seam; one new <code>Voxa.Audio.*</code> package either way.)</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Speech.Abstractions/VoxaProviderDescriptor.cs</span></td><td>WS2 — add a <code>VoxaAecDescriptor</code> record (peer of <code>VoxaVadDescriptor</code>): <code>Name</code> + <code>CreateProcessor(IServiceProvider, VoxaAecSettings)</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.AspNetCore/VoxaProviderRegistry.cs</span></td><td>WS2 — add an <code>_aec</code> dictionary, <code>AecNames</code>, an <code>Add(VoxaAecDescriptor)</code>, and <code>TryGetAec(name, out …)</code> — same shape as the VAD slot.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs</span></td><td>WS2 — insert the AEC stage before the VAD block; wire the far-end (bot-audio) reference feed. Skipped entirely when <code>Voxa:Aec:Engine</code> is unset / <code>None</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.AspNetCore/VoxaOptions.cs</span> (+ validator)</td><td>WS2 — an <code>Aec</code> options node (<code>Engine</code>, default <code>None</code>) and a fail-fast validator that rejects an unknown engine name at startup — mirroring the <code>Vad</code> option + <code>VoxaDefaultsGuard</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs</span></td><td><b>Reference only / no required change.</b> It is the bot-audio sink and the existing interruption-epoch purge (VPS-001); WS3 documents how the far-end tap relates to it. Cited as the model for "bot audio out is already a first-class, observable stream."</td></tr>
+</table>
+
+<div class="callout"><b>Invariant.</b> The audio contract is unchanged: <code>AudioRawFrame(Pcm, SampleRate, Channels)</code>
+in, <code>AudioRawFrame</code> out. The AEC stage only subtracts echo from the near-end PCM — it must not change the
+frame's announced sample rate or channel count, and it forwards <code>StartFrame</code>/<code>EndFrame</code> and every
+other non-audio frame downstream untouched (or the sink never completes).</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the <code>IEchoCanceller</code> seam</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Abstractions <i>(new)</i></span>
+  <span><b>Risk</b> <span class="sev-low">Low</span></span>
+  <span><b>Network</b> none</span>
+  <span><b>Surface</b> additive (new interface + null default)</span>
+</div>
+
+<p>The seam mirrors speech-core's <code>EchoCancellerInterface</code> on the smallest possible surface. Two
+concurrent inputs — a <em>far-end</em> reference (what is being played out the speakers, i.e. the bot's TTS audio) and
+a <em>near-end</em> capture (the raw mic) — and one output: the near-end with the far-end's echo removed. The
+implementation owns the hard parts; the seam stays trivial.</p>
+
+<span class="filelabel">src/Voxa.Audio.Abstractions/IEchoCanceller.cs (new — sketch)</span>
+<pre><code>namespace Voxa.Audio;
+
+<span class="cm">/// &lt;summary&gt;</span>
+<span class="cm">/// Acoustic echo canceller seam (VRT-003): subtracts the far-end playback signal (the bot's TTS</span>
+<span class="cm">/// audio) from the near-end mic capture so the user can barge in over speakers without the bot</span>
+<span class="cm">/// hearing itself. Models speech-core's EchoCancellerInterface. Implementations OWN buffering,</span>
+<span class="cm">/// frame alignment, and any rate conversion between far-end and near-end — the seam stays simple.</span>
+<span class="cm">/// Default impl is &lt;see cref="NullEchoCanceller"/&gt; (passthrough); a real DSP is a follow-up item.</span>
+<span class="cm">/// &lt;/summary&gt;</span>
+public interface IEchoCanceller
+{
+    <span class="cm">/// &lt;summary&gt;The PCM sample rate this canceller is configured for (near-end / output rate, Hz).</span>
+    <span class="cm">/// The processor advertises the same rate the chain runs at; far-end at a different rate is the</span>
+    <span class="cm">/// implementation's problem (it resamples internally).&lt;/summary&gt;</span>
+    int SampleRate { get; }
+
+    <span class="cm">/// &lt;summary&gt;Feed the far-end reference — a chunk of the audio being played to the user</span>
+    <span class="cm">/// (bot/TTS PCM). Called from the TTS / writer thread, CONCURRENTLY with &lt;see cref="CancelEcho"/&gt;.</span>
+    <span class="cm">/// MUST be non-blocking and allocation-light: it runs on the synthesis hot path. The impl buffers</span>
+    <span class="cm">/// and time-aligns this against the near-end internally; passing a different rate is allowed.&lt;/summary&gt;</span>
+    void FeedReference(ReadOnlyMemory&lt;byte&gt; farEndPcm);
+
+    <span class="cm">/// &lt;summary&gt;Remove the far-end echo from one near-end (mic) chunk and return the cleaned PCM.</span>
+    <span class="cm">/// Called from the audio thread, once per &lt;c&gt;AudioRawFrame&lt;/c&gt;. May return the input unchanged</span>
+    <span class="cm">/// (passthrough) or a same-length cleaned buffer; it must NOT change the sample count semantics</span>
+    <span class="cm">/// the caller relies on for the frame's duration.&lt;/summary&gt;</span>
+    ReadOnlyMemory&lt;byte&gt; CancelEcho(ReadOnlyMemory&lt;byte&gt; nearEndPcm);
+
+    <span class="cm">/// &lt;summary&gt;Reset all adaptive/filter state and drop buffered far-end. Called on session start,</span>
+    <span class="cm">/// on an interruption epoch, and when the bot stops speaking, so stale echo state never bleeds</span>
+    <span class="cm">/// into a fresh turn.&lt;/summary&gt;</span>
+    void Reset();
+}
+
+<span class="cm">/// &lt;summary&gt;The default. Returns the mic audio untouched and ignores the reference feed, so the</span>
+<span class="cm">/// composed pipeline is byte-identical to one built before this seam existed. Used whenever</span>
+<span class="cm">/// Voxa:Aec:Engine is unset or "None".&lt;/summary&gt;</span>
+public sealed class NullEchoCanceller : IEchoCanceller
+{
+    public static readonly NullEchoCanceller Instance = new();
+    public int SampleRate =&gt; 0;                                    <span class="cm">// rate-agnostic; it never inspects audio</span>
+    public void FeedReference(ReadOnlyMemory&lt;byte&gt; farEndPcm) { }  <span class="cm">// no-op</span>
+    public ReadOnlyMemory&lt;byte&gt; CancelEcho(ReadOnlyMemory&lt;byte&gt; nearEndPcm) =&gt; nearEndPcm; <span class="cm">// passthrough</span>
+    public void Reset() { }
+}</code></pre>
+
+<div class="callout"><b>The seam stays simple on purpose.</b> Far-end and near-end arrive on different threads, at
+different chunk sizes, and possibly at different sample rates (TTS-output rate vs mic rate). VRT-003 deliberately does
+<b>not</b> try to solve alignment or resampling in the seam — those are pushed into the implementation, precisely as
+speech-core does. A real <code>IEchoCanceller</code> internally keeps a far-end ring buffer, time-aligns it to the
+near-end, resamples as needed, and runs its adaptive filter. The contract the framework guarantees is only:
+<code>FeedReference</code> may be called concurrently with <code>CancelEcho</code>; both are on hot paths; the impl
+owns thread-safety of its own buffers.</div>
+
+<div class="callout warn"><b>Where this lives — never in <code>Voxa.Core</code>.</b> Per the program's cross-cutting
+invariants, <code>Voxa.Core</code> stays zero-dependency (NUlid only). The seam therefore lives in a new
+<code>Voxa.Audio.Abstractions</code> package (a peer to <code>Voxa.Speech.Abstractions</code>). It references the Core
+frame/processor types it needs (for WS2's processor) and nothing else — no ASP.NET, Azure, ONNX, or OpenTelemetry.
+The reference-impl DSP, when it lands, goes in a further opt-in <code>Voxa.Audio.Aec.*</code> package, never here.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the <code>EchoCancellerProcessor</code> + reference feed wiring</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.Abstractions + Voxa.AspNetCore</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (far-end plumbing)</span>
+  <span><b>Default</b> NullEchoCanceller (passthrough)</span>
+  <span><b>Insertion</b> before the VAD block</span>
+</div>
+
+<h3>The processor</h3>
+<p>A <code>FrameProcessor</code> placed before the VAD. On each downstream <code>AudioRawFrame</code> it runs
+<code>CancelEcho</code> and forwards a frame carrying the cleaned PCM (or, for <code>NullEchoCanceller</code>, the very
+same buffer). Every other frame — <code>StartFrame</code>, <code>EndFrame</code>, system frames — is forwarded
+unchanged. It resets the canceller on session start and on an interruption epoch so adaptive state never carries
+stale echo into a new turn.</p>
+
+<span class="filelabel">src/Voxa.Audio.Abstractions/EchoCancellerProcessor.cs (new — sketch)</span>
+<pre><code>public sealed class EchoCancellerProcessor : FrameProcessor
+{
+    private readonly IEchoCanceller _aec;
+
+    public EchoCancellerProcessor(IEchoCanceller aec) : base("EchoCanceller")
+        =&gt; _aec = aec;
+
+    protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
+    {
+        _aec.Reset();
+        return base.OnStartAsync(frame, ct);   <span class="cm">// forward StartFrame downstream — non-negotiable</span>
+    }
+
+    protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+    {
+        switch (frame)
+        {
+            case AudioRawFrame audio:
+                <span class="cm">// Near-end mic in → cleaned PCM out. Same rate/channels; only the samples change.</span>
+                var cleaned = _aec.CancelEcho(audio.Pcm);
+                await PushFrameAsync(audio with { Pcm = cleaned }, ct).ConfigureAwait(false);
+                break;
+
+            case InterruptionFrame:           <span class="cm">// barge-in epoch: drop stale far-end + filter state</span>
+                _aec.Reset();
+                await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);  <span class="cm">// forward it on</span>
+                break;
+
+            default:
+                await base.ProcessFrameAsync(frame, ct).ConfigureAwait(false);  <span class="cm">// forward everything else</span>
+                break;
+        }
+    }
+}</code></pre>
+
+<h3>Feeding the far-end reference (the bot-audio tap)</h3>
+<p>The canceller needs the audio that is <em>about to be played to the user</em> — the bot's TTS output, the far-end
+signal. In Voxa that is the bot-audio stream that flows downstream toward the transport: in the WebSocket host it is
+exactly what <code>WebSocketAudioSink</code> serializes as binary audio (and already epoch-purges on barge-in,
+VPS-001). The wiring routes a copy of each outbound bot <code>AudioRawFrame</code> into the canceller's
+<code>FeedReference</code> as it is produced — speech-core's "auto far-end feed."</p>
+
+<p>Two viable plumbing shapes; the spec recommends the first as the smallest, most transport-agnostic change:</p>
+<ul>
+  <li><b>(Recommended) A shared per-session <code>IEchoCanceller</code> instance + a far-end tap processor.</b> The
+    composer constructs one canceller for the session, hands it to the <code>EchoCancellerProcessor</code> (near-end,
+    before the VAD) <em>and</em> to a tiny tap on the bot-audio path that calls <code>FeedReference</code> on each
+    outbound <code>AudioRawFrame</code> before it reaches the sink. The tap forwards the frame unchanged — it only
+    observes. Because <code>FeedReference</code> and <code>CancelEcho</code> are contractually concurrent-safe, the two
+    sides can run on their own threads. This keeps the sink (<code>WebSocketAudioSink</code> / Studio's audio device)
+    unmodified and works for any transport.</li>
+  <li><b>(Alternative) The sink feeds the reference directly.</b> A host whose sink already owns the bot-audio buffer
+    could call <code>FeedReference</code> from there. Rejected as the default because it couples the seam to each
+    transport and would need touching every sink; the tap-processor approach is transport-agnostic, matching the
+    composer's "transport-agnostic since VST-001 WS0" design.</li>
+</ul>
+
+<div class="callout"><b>Timing note (why "during synthesis").</b> The reference must be fed <em>as the bot audio is
+produced/played</em>, not after the turn — an echo canceller can only subtract what it has already seen on the
+far-end. The tap therefore sits on the live outbound bot-audio path and feeds frame-by-frame. The verification
+protocol (§11) asserts exactly this: a fake canceller confirms <code>FeedReference</code> is called <em>during</em>
+synthesis, interleaved with <code>CancelEcho</code>, not batched at the end.</div>
+
+<h3>The null default — byte-identical when unconfigured</h3>
+<p>When <code>Voxa:Aec:Engine</code> is unset or <code>None</code>, the composer inserts <b>no</b> AEC stage and
+<b>no</b> far-end tap at all — not even a <code>NullEchoCanceller</code>-wrapped passthrough. (The passthrough exists
+for hosts that resolve <code>IEchoCanceller</code> explicitly and for tests; the default <em>composition</em> simply
+omits the stage.) This is the same discipline as the diagnostics taps, which are inserted "only when enabled, so a
+production pipeline with diagnostics off composes byte-identically." The composer change is guarded the same way:</p>
+
+<span class="filelabel">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs (insertion — before the VAD block)</span>
+<pre><code><span class="cm">// 0. Acoustic echo cancellation (VRT-003). Inserted only when configured, so the default chain</span>
+<span class="cm">//    is byte-identical to today. Far-end (bot audio) is auto-fed via a tap on the outbound path.</span>
+if (!string.Equals(o.Aec.Engine, "None", StringComparison.OrdinalIgnoreCase))
+{
+    if (_registry.TryGetAec(o.Aec.Engine, out var aecDesc))
+    {
+        var aecSettings = new VoxaAecSettings(SampleRate: inputSampleRate);
+        parts.Add(sp =&gt; aecDesc.CreateProcessor(sp, aecSettings));   <span class="cm">// before the VAD</span>
+        <span class="cm">// …and register the far-end tap for this session's shared canceller (see WS2 plumbing).</span>
+    }
+    else
+    {
+        _logger.LogWarning(
+            "Voxa:Aec:Engine '{Engine}' not found in registry; running without echo cancellation.",
+            o.Aec.Engine);
+    }
+}
+<span class="cm">// 1. VAD … (existing block, unchanged) …</span></code></pre>
+
+<h3>The registry slot &amp; descriptor</h3>
+<p>The registry grows an AEC slot in the identical shape to its VAD slot (<code>TryGetVad</code> →
+<code>CreateProcessor(sp, VoxaVadSettings)</code>), and the abstractions grow a <code>VoxaAecDescriptor</code> peer of
+<code>VoxaVadDescriptor</code>. A provider package describes itself once; the meta-package's <code>AddVoxa</code>
+registers it; the composer materialises it from the config name. No new resolution model.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/VoxaProviderDescriptor.cs (additions) &nbsp;·&nbsp; src/Voxa.AspNetCore/VoxaProviderRegistry.cs (additions)</span>
+<pre><code><span class="cm">// Abstractions — settings the composer resolves and hands the factory (peer of VoxaVadSettings).</span>
+public sealed record VoxaAecSettings(int SampleRate);
+
+<span class="cm">// Abstractions — self-description (peer of VoxaVadDescriptor). Knobs are profile/rate-mediated,</span>
+<span class="cm">// so the factory takes resolved settings, not an IConfigurationSection.</span>
+public sealed record VoxaAecDescriptor(
+    string Name,
+    Func&lt;IServiceProvider, VoxaAecSettings, FrameProcessor&gt; CreateProcessor);
+
+<span class="cm">// Registry — the TryGetVad twin.</span>
+private readonly Dictionary&lt;string, VoxaAecDescriptor&gt; _aec = new(StringComparer.OrdinalIgnoreCase);
+public IReadOnlyCollection&lt;string&gt; AecNames =&gt; _aec.Keys;
+internal void Add(VoxaAecDescriptor d, ILogger? log = null) { /* last-wins, debug-log overwrite */ _aec[d.Name] = d; }
+public bool TryGetAec(string name, out VoxaAecDescriptor descriptor) =&gt; _aec.TryGetValue(name, out descriptor!);</code></pre>
+
+<div class="callout good"><b>Drop-in story.</b> A future <code>Voxa.Audio.Aec.WebRtc</code> (or SpeexDSP) package ships a
+<code>VoxaAecDescriptor</code> named e.g. <code>WebRtc</code>, its <code>CreateProcessor</code> wiring a real
+<code>IEchoCanceller</code> into an <code>EchoCancellerProcessor</code>. A user adds the package and sets
+<code>Voxa:Aec:Engine = WebRtc</code> — no other change. Until then, <code>None</code> is the default and the chain is
+unchanged.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — interplay with half-duplex gating &amp; barge-in</h2>
+
+<div class="ws-head">
+  <span><b>Scope</b> design / migration only</span>
+  <span><b>Policy owner</b> VRT-002 (debounce / recovery)</span>
+  <span><b>Gate today</b> half-duplex (ROADMAP P1)</span>
+  <span><b>Ships here</b> nothing — the path forward</span>
+</div>
+
+<p>Today Voxa is half-duplex: while the bot is speaking, the mic path is gated so the bot does not transcribe its own
+voice returning through the speakers. That gate is what blocks true barge-in over a speaker (it works fine with
+headphones / a near-perfect mic, where there is no acoustic loop). The point of VRT-003 is to make lifting that gate
+<em>safe</em>:</p>
+
+<ol>
+  <li><b>Without an acoustic echo canceller (today, and the VRT-003 default):</b> the half-duplex gate stays. Lifting
+    it would feed the bot's own audio into STT and trigger phantom interruptions. <code>NullEchoCanceller</code> changes
+    nothing; behaviour is exactly as before.</li>
+  <li><b>With a real acoustic echo canceller configured:</b> the mic signal reaching the VAD has the bot's audio
+    subtracted, so the VAD/STT see (mostly) only the user. The gate can then be made <em>optional</em> — opening the
+    path to genuine talk-over-the-bot barge-in.</li>
+  <li><b>Residual echo is mopped up by VRT-002's debounce:</b> no echo canceller is perfect; some residual leaks
+    through, especially right after the bot starts or stops. VRT-002's <code>MinInterruptionDuration</code> requires a
+    minimum span of <em>confirmed</em> user speech during bot playback before emitting an <code>InterruptionFrame</code>,
+    which filters that residual (and coughs/clicks). VRT-002's interruption-recovery then resumes playback if the user
+    stops within the recovery window. VRT-003 supplies the clean(er) signal; VRT-002 supplies the judgement.</li>
+</ol>
+
+<h3>Migration: AEC opt-in → gate optional</h3>
+<table>
+  <tr><th>Stage</th><th>State</th></tr>
+  <tr><td><b>Now (VRT-003 ships)</b></td><td>Seam + null default + wiring land. Gate unchanged. <code>Voxa:Aec:Engine = None</code>. Pipeline byte-identical.</td></tr>
+  <tr><td><b>+ a real DSP (follow-up item)</b></td><td>A <code>Voxa.Audio.Aec.*</code> package ships an <code>IEchoCanceller</code>. Users opt in via <code>Voxa:Aec:Engine</code>; the canceller cleans the mic. Gate still on by default — AEC alone is the conservative win (the bot stops hearing itself).</td></tr>
+  <tr><td><b>+ gate-lift knob (VRT-002 territory)</b></td><td>A profile/tuning flag (e.g. <code>FullDuplexBargeIn</code>) makes the half-duplex gate optional <em>when</em> an AEC is active, deferring interruption decisions to VRT-002's debounce/recovery. Measured by VRT-001's barge-in category before it becomes a default.</td></tr>
+</table>
+
+<div class="callout"><b>Why the existing epoch-purge matters here.</b> <code>WebSocketAudioSink</code> already bumps an
+interruption epoch and drops queued bot audio on barge-in (VPS-001). That is the <em>output</em> side of barge-in —
+stop playing the now-stale bot audio fast. VRT-003 + VRT-002 are the <em>input</em> side — decide, from a cleaned mic,
+that the user really did barge in. The two compose: the AEC cleans the signal, VRT-002 debounces the decision,
+<code>InterruptionFrame</code> fires, and the existing purge stops the speaker almost immediately. The
+<code>EchoCancellerProcessor</code> also <code>Reset()</code>s on that same interruption epoch so the next turn starts
+with clean filter state.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration reference</h2>
+
+<span class="filelabel">appsettings.json — new key (under Voxa:Aec)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "WhisperCpp",
+    "Tts": "Kokoro",
+    "Aec": {
+      "Engine": "None"          <span class="cm">// NEW. None (default) | &lt;impl name, e.g. "WebRtc"&gt;</span>
+                                 <span class="cm">// None  ⇒ no AEC stage inserted; pipeline byte-identical to today.</span>
+                                 <span class="cm">// &lt;impl&gt; ⇒ resolved via VoxaProviderRegistry.TryGetAec; requires</span>
+                                 <span class="cm">//          the matching Voxa.Audio.Aec.* package referenced by the app.</span>
+    }
+  }
+}</code></pre>
+
+<table>
+  <tr><th>Value</th><th>Meaning</th></tr>
+  <tr><td><code>None</code> <i>(default)</i></td><td>No echo cancellation. The composer inserts no AEC stage and no far-end tap. This is what CI and every current host run; byte-identical to today.</td></tr>
+  <tr><td><code>&lt;impl&gt;</code></td><td>A registered acoustic-echo-canceller engine name (e.g. <code>WebRtc</code>). Resolved through <code>TryGetAec</code>; the matching opt-in package must be referenced. Unknown name → fail-fast at startup via the options validator (same as an unknown STT/VAD provider).</td></tr>
+</table>
+
+<p>The validator follows the <b>config-capture rule</b>: it reads the captured <code>IConfiguration</code> passed to
+<code>AddVoxa</code> and never calls <code>GetRequiredService&lt;IConfiguration&gt;()</code> (which would break the
+plain-<code>ServiceCollection</code> hosts — Voxa Studio, tests, CLI). Same discipline as the existing composer,
+validator, and <code>DefaultAgentFactory</code>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — the seam + null default (ships alone).</b> New <code>Voxa.Audio.Abstractions</code> package with
+    <code>IEchoCanceller</code> + <code>NullEchoCanceller</code> + <code>EchoCancellerProcessor</code>, plus the
+    <code>VoxaAecDescriptor</code>/<code>VoxaAecSettings</code> records and the <code>TryGetAec</code> registry slot.
+    Pure additive; nothing is wired into the default composition yet. Independently mergeable.</li>
+  <li><b>Phase B — composer wiring + far-end feed + config/validator.</b> Insert the AEC stage before the VAD,
+    register the bot-audio far-end tap, add the <code>Voxa:Aec</code> option + fail-fast validator. Guarded so
+    <code>None</code> inserts nothing — the passthrough-off golden must stay green. This is where the byte-identical
+    invariant is enforced.</li>
+  <li><b>Follow-up item (NOT this spec) — a real DSP binding.</b> A separate <code>Voxa.Audio.Aec.*</code> package
+    binding one echo-cancellation DSP, gated on choosing a license-clean .NET path. Candidate notes:
+    <ul>
+      <li><b>WebRTC Audio Processing Module (APM).</b> The cleanest cross-platform AEC story and a permissive license,
+        but needs a .NET binding / P/Invoke wrapper around a native build — bundling native binaries is the same
+        re-bundling concern flagged for the Whisper GPU runtimes (VLS-002), so it follows the pinned-native pattern
+        (<code>VoxaModelArtifact</code> / process-boundary discipline) and is opt-in.</li>
+      <li><b>SpeexDSP echo canceller via P/Invoke.</b> Smaller and simpler; license is permissive (BSD-style) but the
+        cancellation quality is older/weaker than WebRTC APM. Same native-bundling caveat.</li>
+      <li><b>A future managed AEC.</b> Avoids native bundling entirely; none mature today — revisit on demand.</li>
+    </ul>
+    Each candidate carries a license-closure gate test (mirroring the Kokoro GPL gate) and stays behind a process or
+    package boundary per the cross-cutting invariants.</li>
+</ol>
+<p>One logical change per PR (per CONTRIBUTING): Phase A and Phase B are two PRs; the DSP binding is its own later
+item with its own spec. Each PR adds an <code>[Unreleased]</code> CHANGELOG entry; this <code>docs/specifications/*</code>
+spec lands <b>before</b> the code.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> New <code>Voxa.Audio.Abstractions</code> project (no ASP.NET/Azure/ONNX/native dep); add to <code>Voxa.slnx</code>.
+    <span class="ac">AC: builds warnings-as-errors clean; references only Core frame/processor types.</span></li>
+  <li><span class="tid">T1.2</span> <code>IEchoCanceller</code> (<code>SampleRate</code>, <code>FeedReference</code>, <code>CancelEcho</code>, <code>Reset</code>) + thread-safety/ownership doc-comment.
+    <span class="ac">AC: contract states FeedReference/CancelEcho are concurrent; alignment + resampling are the impl's job.</span></li>
+  <li><span class="tid">T1.3</span> <code>NullEchoCanceller</code> passthrough (returns near-end unchanged, ignores reference).
+    <span class="ac">AC: <code>CancelEcho(x) == x</code> (same buffer); <code>FeedReference</code>/<code>Reset</code> are no-ops.</span></li>
+  <li><span class="tid">T1.4</span> <code>EchoCancellerProcessor</code>: run <code>CancelEcho</code> per <code>AudioRawFrame</code>; <code>Reset</code> on Start + interruption; forward all other frames.
+    <span class="ac">AC: <code>StartFrame</code>/<code>EndFrame</code> and system frames forwarded; audio rate/channels preserved.</span></li>
+  <li><span class="tid">T1.5</span> <code>VoxaAecSettings</code> + <code>VoxaAecDescriptor</code> (peers of the VAD records).</li>
+  <li><span class="tid">T2.1</span> <code>VoxaProviderRegistry</code>: <code>_aec</code> dict, <code>AecNames</code>, <code>Add(VoxaAecDescriptor)</code>, <code>TryGetAec</code> (case-insensitive, last-wins).</li>
+  <li><span class="tid">T2.2</span> <code>Voxa:Aec:Engine</code> option (default <code>None</code>) + fail-fast validator on an unknown engine (config-capture; no <code>GetRequiredService&lt;IConfiguration&gt;</code>).</li>
+  <li><span class="tid">T2.3</span> Composer: insert the AEC stage before the VAD block, guarded by <code>Engine != None</code>; unknown engine → warn + run without.</li>
+  <li><span class="tid">T2.4</span> Far-end reference feed: a bot-audio tap calls <code>FeedReference</code> on each outbound bot <code>AudioRawFrame</code> for the session's shared canceller (transport-agnostic; sink unmodified).</li>
+  <li><span class="tid">T2.5</span> Golden: with <code>Engine</code> unset/<code>None</code>, the composed pipeline is byte-identical to today (no stage, no tap).
+    <span class="ac">AC: extends the existing diagnostics-off golden; default lane, no network.</span></li>
+  <li><span class="tid">T2.6</span> Fake-AEC tests: <code>FeedReference</code>/<code>CancelEcho</code> ordering; far-end fed <em>during</em> synthesis; <code>Reset</code> on interruption epoch.</li>
+  <li><span class="tid">T2.7</span> Docs: a short AEC section in <code>docs/performance-tuning.md</code> (or <code>docs/local-speech.md</code>) — what the seam is, that the default is passthrough, how a real impl drops in.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline) — golden</b></td><td>Compose with <code>Voxa:Aec:Engine</code> unset / <code>None</code> and assert the processor list is <b>byte-identical</b> to the pre-VRT-003 composition (no AEC stage, no far-end tap). This is the load-bearing test: the seam must be invisible until opted into.</td></tr>
+  <tr><td><b>Default (offline) — fake AEC</b></td><td>A <code>FakeEchoCanceller</code> records every <code>FeedReference</code> / <code>CancelEcho</code> call. Drive a synthetic turn (bot audio out interleaved with mic frames in) and assert: (a) <code>CancelEcho</code> runs once per inbound <code>AudioRawFrame</code>; (b) <code>FeedReference</code> is called <em>during</em> synthesis — interleaved with, not after, the near-end calls; (c) <code>Reset</code> fires on <code>StartFrame</code> and on an <code>InterruptionFrame</code> epoch; (d) the frame's announced sample rate / channels are unchanged through the stage.</td></tr>
+  <tr><td><b>Default (offline) — config/validate</b></td><td><code>Voxa:Aec:Engine</code> parse + validation: a known registered name resolves; an unknown name fails fast at startup with an actionable message; <code>None</code> resolves to "no stage". Runs in the plain-<code>ServiceCollection</code> path (no <code>IConfiguration</code> service-location).</td></tr>
+  <tr><td><b>Manual / hardware (follow-up, with a real DSP)</b></td><td>On a real speaker+mic setup with a bound <code>IEchoCanceller</code>: play bot TTS aloud, speak over it, confirm the mic-side VAD/STT no longer transcribe the bot's own audio and that talk-over barge-in fires (with VRT-002's debounce). Not part of VRT-003's CI; belongs to the DSP follow-up item.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Golden drift — the inserted stage (or an accidentally-inserted passthrough) changes the default composition, breaking the byte-identical guarantee.</td><td class="sev-high">High</td><td>Composer inserts <b>nothing</b> when <code>Engine == None</code> (not even a <code>NullEchoCanceller</code> wrapper). The passthrough-off golden (T2.5) extends the existing diagnostics-off golden and gates every PR.</td></tr>
+  <tr><td>R2</td><td>Frame alignment / sample-rate mismatch between far-end (TTS rate) and near-end (mic rate) corrupts cancellation.</td><td class="sev-med">Med</td><td><b>Pushed into the implementation</b>, by design — the seam contract makes buffering/alignment/resampling the impl's responsibility (speech-core does exactly this). The framework only guarantees concurrent-safe feed/cancel. The null default is rate-agnostic, so VRT-003 itself carries no alignment risk.</td></tr>
+  <tr><td>R3</td><td>Reference-feed thread-safety: <code>FeedReference</code> runs on the TTS/writer thread concurrently with <code>CancelEcho</code> on the audio thread; a blocking or allocating feed stalls synthesis.</td><td class="sev-med">Med</td><td>The seam doc-comment mandates a non-blocking, allocation-light <code>FeedReference</code>; the fake-AEC test exercises concurrent feed/cancel. The tap only observes and forwards the frame, so the outbound bot-audio path is never stalled by the tap itself.</td></tr>
+  <tr><td>R4</td><td>Far-end tap retains bot audio in memory (a second copy of the whole session).</td><td class="sev-med">Med</td><td>The tap forwards the existing frame and calls <code>FeedReference</code> synchronously; it never buffers. Any buffering is the canceller's, which is bounded ring-buffer state it owns and <code>Reset()</code>s per turn.</td></tr>
+  <tr><td>R5</td><td>Adaptive filter state bleeds across turns (stale echo applied to a new utterance).</td><td class="sev-low">Low</td><td><code>EchoCancellerProcessor</code> calls <code>Reset()</code> on <code>StartFrame</code> and on every interruption epoch; the contract documents Reset semantics.</td></tr>
+  <tr><td>R6</td><td>Users expect echo cancellation to work out of the box and are surprised the default does nothing.</td><td class="sev-low">Low</td><td>Spec, config docs, and the <code>None</code> default value make explicit that VRT-003 ships the seam, not a DSP; the drop-in story and the follow-up DSP item are documented (§6, §9).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>A production AEC DSP.</b> WebRTC&nbsp;APM / SpeexDSP-via-P/Invoke / a managed canceller — a separate follow-up
+    item with its own spec, gated on a license-clean .NET binding and following the pinned-native / process-boundary
+    discipline (§9).</li>
+  <li><b>The barge-in policy.</b> Interruption-debounce (<code>MinInterruptionDuration</code>), interruption-recovery,
+    empty-STT recovery — owned by <b>VRT-002</b>. VRT-003 only makes them robust on speakers.</li>
+  <li><b>Lifting the half-duplex gate.</b> The full-duplex gate-optional knob is described as the migration (§7) but
+    not shipped; it rides on a real AEC existing and on VRT-002, and is measured by VRT-001's barge-in category.</li>
+  <li><b>Speech enhancement / denoise</b> (<code>IAudioEnhancer</code>) — the sibling <b>VLS-004</b> stage that composes
+    <em>after</em> the AEC in the same insertion region. Specced separately.</li>
+  <li><b>Shared multi-rate resampling helpers.</b> If a real <code>IEchoCanceller</code> needs resampling and a helper
+    doesn't already exist in the tree, providing one is that item's concern — VRT-003 keeps the seam minimal and does
+    not add framework-level DSP utilities.</li>
+  <li><b>A Studio surface for AEC.</b> Per the program's product boundary, all logic is Core; Studio would at most
+    expose the toggle later — not part of this item.</li>
+</ul>
+
+</div>
+</body>
+</html>

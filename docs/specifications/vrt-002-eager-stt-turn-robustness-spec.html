@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT-002 — Eager STT &amp; Turn-Taking Robustness</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-002 — Eager STT &amp; Turn-Taking Robustness</h1>
+  <div class="sub">Two workstreams that shave perceived turn latency and close a checklist of barge-in /
+    turn edge cases on the granular cascade. <b>WS1</b> adds <em>eager (speculative) STT</em>: when silence
+    reaches a new <code>EagerSttDelay</code> (shorter than the gate's <code>StopDuration</code>), the buffered
+    utterance is dispatched to STT <em>before</em> end-of-turn is confirmed, and discarded if the user resumes.
+    <b>WS2</b> adds five independently-tunable robustness knobs (interruption debounce + recovery, empty-STT
+    recovery, force-split, response-duration cap). Both compose with the already-shipped smart-turn seam and the
+    pre-roll buffer — neither is re-implemented here.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-002 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P0 Latency + P2 Barge-in</div>
+    <div><b>Depends on</b> VRT-001 (measurement); SileroVad smart-turn seam + pre-roll already shipped</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M2</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">WS1 — Eager / speculative STT</a></li>
+    <li><a href="#s6">WS2 — Turn-taking robustness checklist</a></li>
+    <li><a href="#s7">Configuration reference</a></li>
+    <li><a href="#s8">Plan of action — phases</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VRT-002 add, in one sentence?</b>
+    <p>It makes Voxa <em>start transcribing the moment the user pauses</em> instead of waiting for the full
+    end-of-turn silence, and it adds a small set of safety knobs so coughs, echo, empty transcripts, and runaway
+    speech can't make a conversation feel laggy or get the pipeline stuck.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>Voxa already has the two hard pieces — a smart-turn seam (<code>SileroVadOptions.ConfirmTurnEnd</code>,
+    shipped in PR&nbsp;#26) that <em>decides whether</em> a turn ended, and pre-roll (<code>PrerollDuration</code>)
+    that protects the first syllable. What's missing is the cheap latency win: even once you believe the turn is
+    over, today the cascade waits the entire <code>StopDuration</code> hangover (800&nbsp;ms by default) before STT
+    runs. speech-core's <code>AgentConfig</code> shows ~0.3&nbsp;s is recoverable by transcribing speculatively
+    during that hangover. VRT-001 gives us the number to prove the win is real.</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The smart-turn classifier itself (already shipped — VRT-002 only <em>acts faster on its verdict</em>),
+    pre-roll (already shipped — do not re-add it as a "gap"), the per-frame <code>CancellationToken</code>
+    interruption model, the bounded drop-oldest backpressure convention, and acoustic echo cancellation (that's
+    VRT-003). With every new knob at its default, the composed pipeline is byte-identical to today.</p>
+  </div>
+  <div class="qa">
+    <b>How does eager STT <em>compose</em> with the smart-turn seam rather than replace it?</b>
+    <p>They answer different questions. Smart-turn answers <em>"is the turn actually over?"</em>; eager answers
+    <em>"how fast do I act once I believe it is?"</em>. Eager fires a <em>speculative</em> transcription early; if
+    smart-turn later returns <code>false</code> (a mid-sentence pause), that verdict <b>overrides and cancels</b>
+    the pending eager dispatch. The speculative work is bounded and thrown away on resume — never promoted to a
+    turn unless end-of-turn is confirmed.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VRT-002 is two workstreams on the granular cascade (<code>VAD → STT → TranscriptionFilter → agent →
+SentenceAggregator → TTS</code>), each knob individually mergeable:</p>
+
+<ul>
+  <li><b>WS1 — Eager / speculative STT <span class="badge p1">P0</span>.</b> A new
+    <code>EagerSttDelay</code> on <code>SileroVadOptions</code> (and a matching tuning knob). On reaching it inside
+    the unvoiced hangover — <em>before</em> <code>StopDuration</code> / <code>ConfirmTurnEnd</code> confirm — the
+    VAD speculatively emits an end-of-utterance signal so STT (and optionally an LLM prefetch) can start on the
+    buffered utterance. The speculative utterance is <b>marked</b> so resumed speech isn't mistaken for an
+    interruption, and it is <b>discarded on resume</b> via the existing per-frame <code>CancellationToken</code>.
+    A smart-turn <code>ConfirmTurnEnd → false</code> cancels a pending eager dispatch.</li>
+  <li><b>WS2 — Robustness checklist <span class="badge p2">P2</span>.</b> Five tunable knobs, each with a single
+    anti-bug rationale: <em>interruption debounce</em> (<code>MinInterruptionDuration</code>), <em>interruption
+    recovery</em> (<code>InterruptionRecoveryTimeout</code>), <em>empty / low-confidence STT recovery</em>,
+    <em>force-split</em> (<code>MaxUtteranceDuration</code>), and <em>response-duration cap</em>
+    (<code>MaxResponseDuration</code>). Each is testable in isolation with a synthetic VAD-probability sequence.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> Perceived turn latency drops by the hangover-minus-eager-delay
+window (≈300&nbsp;ms at the proposed defaults), <em>measured</em> as a VRT-001 before/after delta rather than
+asserted; and the pipeline gains documented, defaulted-off defences against the barge-in / stuck-state edge cases
+that speech-core's <code>AgentConfig</code> already encodes. Everything is opt-in at the tuning layer; defaults
+keep today's behaviour byte-for-byte.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Recover the STT-during-hangover latency window with a speculative dispatch that is <em>safe</em> — correct on
+    resume, correct against smart-turn, never double-counts a turn.</li>
+  <li>Add five robustness knobs, each individually mergeable, each defaulting to today's behaviour, each covered by
+    a deterministic synthetic-VAD headless test.</li>
+  <li>Keep all new state inside the existing processors — <code>SileroVadProcessor</code> (VAD-side knobs) and
+    <code>AgentLoopProcessor</code> (turn-worker-side recovery + response cap) — plus the
+    <code>WebSocketAudioSink</code> recovery interplay. No new project, no new abstraction.</li>
+  <li>Surface every knob through the same config → profile → settings → options path as the existing VAD knobs.</li>
+  <li>Make the net latency win an objective number via VRT-001; gate the change on that delta.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>The <b>smart-turn classifier</b> itself — shipped in PR&nbsp;#26 (<code>ConfirmTurnEnd</code> +
+    <code>Voxa.Audio.SmartTurn</code>). VRT-002 only acts on its verdict faster.</li>
+  <li><b>Pre-roll / speech-pad</b> — shipped (<code>PrerollDuration</code>, 300&nbsp;ms). Do <em>not</em> re-add.</li>
+  <li><b>Acoustic echo cancellation</b> — that is VRT-003 (<code>IEchoCanceller</code>). VRT-002's interruption
+    debounce filters echo <em>residual</em> heuristically; AEC is what makes barge-in robust on open speakers.</li>
+  <li>The turn-taking benchmark harness — that is VRT-001; VRT-002 <em>consumes</em> it as the acceptance signal.</li>
+  <li>LLM prefetch as a separate engine — WS1 <em>permits</em> an optional prefetch on the eager signal but ships
+    the VAD-side dispatch + STT trigger; a dedicated prefetch path can land as a fast-follow.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Behaviour with every new knob at default</td><td><b>Byte-identical</b> to today — golden-tested, diagnostics off.</td></tr>
+  <tr><td>Net turn-latency win (eager on, <code>EagerSttDelay</code> ≈ <code>StopDuration</code> − 300&nbsp;ms)</td><td>Measurable reduction in VRT-001 voice-to-voice / TTFT for the <b>pause-handling</b> + <b>smooth turn-taking</b> categories.</td></tr>
+  <tr><td>Speculative work wasted on resume</td><td>Bounded to one in-flight STT pass per utterance; cancelled via the per-frame token. Measure the waste rate via VRT-001.</td></tr>
+  <tr><td><code>Voxa.Core</code> dependency surface</td><td><b>0</b> new dependencies (NUlid only); new frame/flag in <code>Voxa.Core</code> stays zero-dep.</td></tr>
+  <tr><td>Allocation on the VAD hot path</td><td>No per-window allocation added at steady state; the eager dispatch is one signal per hangover, not per window.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>Everything lands in existing processors and the existing tuning chain. The data flow is unchanged:</p>
+
+<pre><code>appsettings.json  →  VoxaVadOptions / VoxaAggregatorOptions  (Voxa.AspNetCore)
+                  →  VoxaTuningResolver.Resolve  →  VoxaEffectiveTuning
+                  →  VoxaVadSettings  (Voxa.Speech.Abstractions)
+                  →  SileroVadDescriptors.Vad.CreateProcessor  →  SileroVadOptions
+                  →  SileroVadProcessor</code></pre>
+
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/Voxa.Audio.SileroVad/SileroVadOptions.cs</code></td><td>WS1 — add <code>EagerSttDelay</code>. WS2 — add <code>MinInterruptionDuration</code>, <code>InterruptionRecoveryTimeout</code>, <code>MaxUtteranceDuration</code>. (All <code>TimeSpan?</code> / opt-in; <code>null</code> ⇒ today's behaviour.)</td></tr>
+  <tr><td><code>src/Voxa.Audio.SileroVad/SileroVadProcessor.cs</code></td><td>WS1 — eager-dispatch state in the unvoiced hangover; mark + cancel-on-resume; precedence vs <code>ConfirmTurnEnd</code>. WS2 — force-split timer; interruption-debounce gate on speech-during-playback.</td></tr>
+  <tr><td><code>src/Voxa.Core/Frames/SystemFrames.cs</code> (or a sibling in <code>Voxa.Core/Frames</code>)</td><td>WS1 — the eager marker: either an <code>Eager</code> flag on a new lifecycle frame or a dedicated <code>SpeculativeUtteranceFrame : SystemFrame</code>. Stays zero-dep.</td></tr>
+  <tr><td><code>src/Voxa.Core/Processors/AgentLoopProcessor.cs</code></td><td>WS2 — empty / low-confidence STT recovery (reset turn + bot-speaking state); <code>MaxResponseDuration</code> cap on the turn worker's driver enumeration.</td></tr>
+  <tr><td><code>src/Voxa.Transports.WebSocket/WebSocketAudioSink.cs</code></td><td>WS2 — interruption-recovery interplay with the existing epoch purge: a recovered (cancelled-in-window) barge-in must not leave queued bot audio stranded behind a bumped epoch.</td></tr>
+  <tr><td><code>src/Voxa.AspNetCore/Configuration/VoxaTuningResolver.cs</code> + <code>VoxaOptions.cs</code></td><td>Add the new knobs to <code>VoxaVadOptions</code> / a tuning block, the <code>VoxaEffectiveTuning</code> record, and each profile preset.</td></tr>
+  <tr><td><code>src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs</code> + <code>SileroVadDescriptors.cs</code> + <code>VoxaVadSettings</code></td><td>Thread the new <code>VoxaVadSettings</code> fields into <code>SileroVadOptions</code> (same shape as the existing six fields).</td></tr>
+</table>
+
+<div class="callout"><b>Invariant — diagnostics-off composition stays byte-identical.</b> The new knobs are all
+nullable / defaulted to the current values, so when a profile resolves them to today's numbers and
+<code>Voxa:Diagnostics:Enabled</code> is false, <code>DefaultVoicePipelineComposer.Compose</code> emits the same
+processor graph it does now. The existing golden composition test (diagnostics-off byte-identity) must stay green;
+extend it to assert the defaults path is unchanged.</div>
+
+<div class="callout warn"><b>Forward the lifecycle frames.</b> The eager marker is a <code>SystemFrame</code> and
+must be forwarded downstream like every other system frame (and never swallow <code>StartFrame</code> /
+<code>EndFrame</code>, or the sink never completes). The marker is <em>not</em> <code>IUninterruptible</code> — a
+speculative utterance is exactly the thing that <em>should</em> be cancellable on resume.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — Eager / speculative STT</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.SileroVad + Voxa.Core</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (precedence / correctness)</span>
+  <span><b>Default</b> off (<code>EagerSttDelay = null</code>)</span>
+  <span><b>Model</b> speech-core <code>eager_stt</code> / <code>eager_stt_delay</code></span>
+</div>
+
+<h3>The window we're recovering</h3>
+<p>Today the gate, once <code>_isSpeaking</code>, only emits <code>UserStoppedSpeakingFrame</code> after a full
+<code>StopDuration</code> of accumulated silence (then optionally re-decided by <code>ConfirmTurnEnd</code>). That
+<code>UserStoppedSpeakingFrame</code> is what force-flushes the batched STT engine downstream. So even on a clean
+end-of-turn, STT does not begin until the <em>entire</em> hangover has elapsed.</p>
+
+<p>Eager STT inserts an earlier, <em>speculative</em> trigger at a new <code>EagerSttDelay</code> (strictly less
+than <code>StopDuration</code>). On reaching it, the VAD emits an <b>eager end-of-utterance</b> signal — a marked
+frame — that lets STT start transcribing the already-buffered utterance immediately, overlapping the rest of the
+hangover. Modelled directly on speech-core's <code>eager_stt</code> / <code>eager_stt_delay</code> /
+discard-on-resume behaviour.</p>
+
+<h3>The state machine (additions only)</h3>
+<ol>
+  <li><b>Arm.</b> While <code>_isSpeaking</code> and accumulating <code>_unvoicedAccum</code>: when it first
+    crosses <code>EagerSttDelay</code> (and eager is enabled, and we haven't already dispatched for this
+    hangover), emit the eager marker + a speculative <code>UserStoppedSpeakingFrame</code> equivalent so STT
+    flushes. Keep <code>_isSpeaking = true</code> — the gate has <em>not</em> closed.</li>
+  <li><b>Resume ⇒ discard.</b> If a voiced window arrives before the hangover completes, the user resumed within
+    the window. Cancel the in-flight speculative STT via the existing per-frame <code>CancellationToken</code>
+    (the same machinery an interruption uses), clear the eager-dispatched flag, and — because the utterance was
+    <b>marked</b> — do <em>not</em> raise an <code>InterruptionFrame</code>: resumed speech inside an eager window
+    is a continuation, not a barge-in.</li>
+  <li><b>Confirm ⇒ promote.</b> If the hangover completes (and <code>ConfirmTurnEnd</code>, if wired, returns
+    <code>true</code>), the turn is genuinely over: the already-running speculative transcription <em>is</em> the
+    turn's transcription. Close the gate as today. No second STT pass.</li>
+  <li><b>Smart-turn override.</b> If <code>ConfirmTurnEnd</code> returns <code>false</code> at
+    <code>StopDuration</code> (mid-sentence pause), it <b>overrides and cancels</b> the pending eager dispatch —
+    same cancellation path as resume — and the gate stays open for another <code>StopDuration</code>. Precedence
+    is explicit and one-directional: <em>smart-turn&nbsp;false&nbsp;&gt;&nbsp;eager&nbsp;dispatch</em>.</li>
+</ol>
+
+<div class="callout danger"><b>Precedence is the load-bearing correctness rule.</b> Eager dispatch is a
+<em>bet</em> that the turn ended; smart-turn is the <em>authority</em> on whether it did. Therefore: (a) eager may
+only fire when <code>EagerSttDelay &lt; StopDuration</code> (validate this — a misconfiguration where eager ≥ stop
+is meaningless and must be rejected or clamped); (b) a <code>ConfirmTurnEnd → false</code> always cancels a pending
+eager pass; (c) a resumed voiced window always cancels a pending eager pass. The eager transcription is only ever
+<em>promoted</em> to the real turn when end-of-turn is confirmed.</div>
+
+<h3>Marking the speculative utterance</h3>
+<p>The downstream sink (<code>WebSocketAudioSink</code>) treats a <code>UserStartedSpeakingFrame</code> arriving as
+a data frame as a barge-in (it bumps the epoch). A naive speculative-stop followed by resumed speech would
+therefore look like an interruption. The fix is to <b>mark</b> the eager utterance so resumed speech inside the
+window is recognised as continuation:</p>
+
+<span class="filelabel">src/Voxa.Core/Frames/SystemFrames.cs (one of the two — pick at implementation)</span>
+<pre><code><span class="cm">// Option A — a dedicated marker frame (preferred: explicit, no field churn on existing frames).</span>
+<span class="cm">// Emitted by the VAD at EagerSttDelay; tells STT to flush speculatively and tells the sink</span>
+<span class="cm">// "a UserStarted following this is a continuation, not a barge-in".</span>
+public sealed record SpeculativeUtteranceFrame : SystemFrame;
+
+<span class="cm">// Option B — a flag on the stop frame. UserStoppedSpeakingFrame is a record, so this is additive</span>
+<span class="cm">// and defaults to the non-speculative case (Eager == false ⇒ today's behaviour).</span>
+<span class="cm">// public sealed record UserStoppedSpeakingFrame(bool Eager = false) : SystemFrame;</span></code></pre>
+
+<h3>VAD option + state change (sketch)</h3>
+<span class="filelabel">src/Voxa.Audio.SileroVad/SileroVadOptions.cs (addition)</span>
+<pre><code><span class="cm">/// Speculative ("eager") STT trigger. When set and strictly less than StopDuration, the gate</span>
+<span class="cm">/// emits a marked speculative end-of-utterance once unvoiced silence reaches this delay — so STT</span>
+<span class="cm">/// starts on the buffered utterance BEFORE StopDuration / ConfirmTurnEnd confirm end-of-turn.</span>
+<span class="cm">/// Discarded if the user resumes within the window, or if ConfirmTurnEnd returns false (both</span>
+<span class="cm">/// cancel via the per-frame CancellationToken). Default null = no eager dispatch (unchanged).</span>
+public TimeSpan? EagerSttDelay { get; init; }</code></pre>
+
+<span class="filelabel">src/Voxa.Audio.SileroVad/SileroVadProcessor.cs (additions inside the hangover branch — intent, not final code)</span>
+<pre><code><span class="cm">// Fields: bool _eagerDispatched; CancellationTokenSource? _eagerCts;</span>
+
+<span class="cm">// While speaking and unvoiced is accumulating, BEFORE the StopDuration branch:</span>
+if (_isSpeaking &amp;&amp; !voiced
+    &amp;&amp; _options.EagerSttDelay is { } eager
+    &amp;&amp; eager &lt; _options.StopDuration
+    &amp;&amp; !_eagerDispatched
+    &amp;&amp; _unvoicedAccum &gt;= eager)
+{
+    _eagerDispatched = true;
+    <span class="cm">// Marked, speculative: STT flushes; the sink reads the marker and will NOT treat a</span>
+    <span class="cm">// following UserStarted as a barge-in. Gate stays OPEN (_isSpeaking unchanged).</span>
+    await PushFrameAsync(new SpeculativeUtteranceFrame(), ct).ConfigureAwait(false);
+}
+
+<span class="cm">// On the next VOICED window while a speculative pass is pending → resume ⇒ discard:</span>
+if (voiced &amp;&amp; _eagerDispatched)
+{
+    _eagerDispatched = false;
+    <span class="cm">// Cancel the in-flight speculative STT exactly like an interruption cancels data work.</span>
+    <span class="cm">// No InterruptionFrame: the marker said "continuation, not barge-in".</span>
+}
+
+<span class="cm">// In the existing StopDuration branch, when ConfirmTurnEnd returns FALSE:</span>
+<span class="cm">//   smart-turn overrides eager → cancel the pending speculative pass, reset _eagerDispatched,</span>
+<span class="cm">//   keep the gate open (mid-sentence pause), as today.</span>
+<span class="cm">// When the gate genuinely closes (confirmed=true): the speculative transcription IS the turn;</span>
+<span class="cm">//   clear _eagerDispatched, emit the normal UserStoppedSpeakingFrame, do not re-run STT.</span></code></pre>
+
+<div class="callout"><b>Why this is safe against the existing machinery.</b> Cancellation reuses the per-frame
+<code>CancellationToken</code> Voxa already replaces only after an interruption — no new cancellation model. The
+gate-open invariant during the eager window means pre-roll and the smart-turn recent-speech tail
+(<code>SnapshotRecentSpeech</code>) keep accumulating exactly as before; eager does not touch either.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — Turn-taking robustness checklist</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Audio.SileroVad + Voxa.Core + Voxa.Transports.WebSocket</span>
+  <span><b>Risk</b> <span class="sev-low">Low–Med</span> (each knob isolated)</span>
+  <span><b>Default</b> every knob off / today's value</span>
+  <span><b>Model</b> speech-core <code>AgentConfig</code></span>
+</div>
+
+<p>Five independent knobs. Each is a separate PR, each ships with one synthetic-VAD headless test, each defaults to
+current behaviour. They divide by owner: three live on the VAD (speech-timing), two on the agent loop / sink
+(turn / playback state).</p>
+
+<h3>6.1 — <code>MinInterruptionDuration</code> (interruption debounce)</h3>
+<p><b>Knob:</b> <code>SileroVadOptions.MinInterruptionDuration</code> (<code>TimeSpan?</code>).
+<b>Anti-bug:</b> a single cough, lip-smack, or residual echo of the bot's own audio leaking into the mic produces
+a brief voiced blip that — during bot playback — fires an <code>InterruptionFrame</code> and kills the bot
+mid-sentence. <b>Rule:</b> while the bot is speaking, require at least <code>MinInterruptionDuration</code> of
+<em>confirmed, sustained</em> user speech before emitting the interruption. This is the same accumulate-then-fire
+shape as the existing <code>StartDuration</code> gate, but specifically gating the barge-in path. Default
+<code>null</code> ⇒ interrupt on first confirmed speech (today's behaviour).</p>
+<div class="callout warn"><b>Heuristic, not AEC.</b> Debounce filters short residual; it does not cancel echo. On
+open speakers, true robustness needs <b>VRT-003</b>'s <code>IEchoCanceller</code> in front of the VAD. Debounce and
+AEC are complementary: debounce trims what slips past, AEC removes the bulk.</div>
+
+<h3>6.2 — <code>InterruptionRecoveryTimeout</code> (interruption recovery)</h3>
+<p><b>Knob:</b> <code>SileroVadOptions.InterruptionRecoveryTimeout</code> (<code>TimeSpan?</code>).
+<b>Anti-bug:</b> the user starts to interrupt, then stops almost immediately ("uh— no, go on"). Today that brief
+barge-in has already purged the bot's queued audio (epoch bump in <code>WebSocketAudioSink</code>) and torn down
+the turn — the user has to wait for a full re-synthesis. <b>Rule:</b> if the user stops within
+<code>InterruptionRecoveryTimeout</code> of the interruption, treat it as a false barge-in and <em>resume</em> the
+existing playback instead of reprocessing. <b>Sink interplay:</b> the epoch purge in
+<code>WebSocketAudioSink.WriteLoopAsync</code> drops audio tagged with a stale epoch; recovery must either defer
+the epoch bump until the barge-in is confirmed past the recovery window, or restore the prior epoch so the still-in-
+flight bot audio is not stranded. Default <code>null</code> ⇒ no recovery (an interruption always reprocesses).</p>
+<div class="callout danger"><b>Touch the epoch carefully.</b> The existing purge is correctness-critical (it's how
+barge-in stops bot audio "almost immediately"). Recovery must not re-deliver audio the client already discarded.
+The safe design is a short <em>provisional</em> phase: hold the epoch bump (or buffer the purge decision) for
+<code>InterruptionRecoveryTimeout</code>, commit it only if the barge-in persists. Cover both directions
+(recovers / does not recover) with tests.</div>
+
+<h3>6.3 — Empty / low-confidence STT recovery</h3>
+<p><b>Owner:</b> <code>AgentLoopProcessor</code> turn worker.
+<b>Anti-bug:</b> the VAD fires <code>UserStoppedSpeakingFrame</code>, STT runs, and returns <em>nothing</em>
+(silence misfire, a noise burst, a Whisper hallucination the filter drops) — or a sub-threshold-confidence result.
+Today <code>ProcessFrameAsync</code> only enqueues a turn for a non-empty final transcription
+(<code>!string.IsNullOrWhiteSpace(t.Text)</code>), so the agent does not run; but any latched per-turn / bot-
+speaking state set on the <em>expectation</em> of a turn can be left dangling, and the pipeline waits forever for a
+turn that will never come. speech-core calls this out explicitly: <em>without an empty-STT reset, the pipeline gets
+stuck.</em> <b>Rule:</b> on an empty or sub-threshold final transcription, explicitly reset turn state and the
+bot-speaking flags (release whatever was latched in anticipation of the turn) so the next
+<code>UserStartedSpeakingFrame</code> is processed normally. This is a no-op when STT always returns text — hence
+default-safe.</p>
+
+<h3>6.4 — <code>MaxUtteranceDuration</code> (force-split)</h3>
+<p><b>Knob:</b> <code>SileroVadOptions.MaxUtteranceDuration</code> (<code>TimeSpan?</code>).
+<b>Anti-bug:</b> a user who never pauses (reading a list, dictating, a stuck-open mic) keeps the gate open
+indefinitely. The VAD buffers the whole utterance; STT never flushes; memory grows; the agent never gets a turn.
+<b>Rule:</b> cap the open-gate duration at <code>MaxUtteranceDuration</code>. On reaching it while still
+<code>_isSpeaking</code>, force-emit a <code>UserStoppedSpeakingFrame</code> (flushing STT for an intermediate
+transcription), then immediately re-arm as a fresh utterance so capture continues. This bounds memory and yields
+periodic intermediate transcriptions for very long speech. Default <code>null</code> ⇒ no cap (today's behaviour).</p>
+<div class="callout warn"><b>Don't over-split.</b> Too low a cap chops natural sentences and produces
+half-utterance transcriptions the agent must stitch. Default off; the <code>Quality</code> profile should leave it
+generous or unset. Validate it is comfortably larger than <code>StartDuration</code> + a typical sentence.</div>
+
+<h3>6.5 — <code>MaxResponseDuration</code> (response-duration cap)</h3>
+<p><b>Owner:</b> <code>AgentLoopProcessor</code> turn worker (driver enumeration).
+<b>Anti-bug:</b> a hallucinating or looping LLM streams text without end, or TTS synthesises a runaway response —
+the bot talks over the user's next several turns and burns tokens / audio. <b>Rule:</b> bound the wall-clock (or
+emitted-audio) duration of a single turn's output at <code>MaxResponseDuration</code>; on exceeding it, stop
+pumping the driver's yielded frames for that turn and close the turn cleanly
+(<code>LlmTurnEndedFrame</code> still fires in the existing <code>finally</code>). Because the turn worker already
+isolates each turn in try/catch and owns the per-turn stopwatch, this is a bounded check on the existing
+<code>await foreach (var frame in _driver.RunTurnAsync(...))</code> loop. Default <code>null</code> ⇒ no cap.</p>
+<div class="callout"><b>Reuse, don't reinvent.</b> The turn worker already starts a <code>Stopwatch</code> per turn
+and aggregates a <code>TurnSummary</code>. The cap is a comparison against that stopwatch plus a graceful break —
+it must still emit <code>LlmTurnEndedFrame</code> and run <code>OnTurnCompleted</code>/cleanup so downstream state
+is consistent. It is <em>not</em> an exception; a capped turn is a normal (truncated) completion.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Configuration reference</h2>
+
+<p>New keys flow through the existing <code>Voxa</code> tuning surface. VAD-timing knobs join
+<code>VoxaVadOptions</code>; the agent-loop caps join the agent/tuning block. All are nullable in config and fall
+through to the active profile, exactly like the current VAD knobs.</p>
+
+<span class="filelabel">appsettings.json — new keys (all under the Voxa section)</span>
+<pre><code>{
+  "Voxa": {
+    "Profile": "LowLatency",
+    "Vad": {
+      "Engine": "Silero",
+      "EagerSttDelayMs": 150,            <span class="cm">// NEW (WS1). null = no eager dispatch. Must be &lt; StopDurationMs.</span>
+      "MinInterruptionDurationMs": 120,  <span class="cm">// NEW (WS2). null = interrupt on first confirmed speech.</span>
+      "InterruptionRecoveryMs": 250,     <span class="cm">// NEW (WS2). null = no recovery (always reprocess).</span>
+      "MaxUtteranceDurationMs": 20000    <span class="cm">// NEW (WS2). null = no force-split.</span>
+    },
+    "Agent": {
+      "MaxResponseDurationMs": 30000     <span class="cm">// NEW (WS2). null = no response cap.</span>
+                                          <span class="cm">// (Empty-STT recovery has no knob — always-on, no-op when STT returns text.)</span>
+    }
+  }
+}</code></pre>
+
+<h3>Profile defaults</h3>
+<p>Extend <code>VoxaEffectiveTuning</code> + each preset in <code>VoxaProfiles</code>. Proposed defaults (tune
+against VRT-001 at implementation):</p>
+<table>
+  <tr><th>Knob</th><th>Default</th><th>LowLatency</th><th>Quality</th><th>Cheap</th></tr>
+  <tr><td><code>EagerSttDelay</code></td><td>off</td><td>≈ <code>StopDuration</code> − 250&nbsp;ms (e.g. 150&nbsp;ms vs 400)</td><td>off (favour smart-turn accuracy)</td><td>≈ <code>StopDuration</code> − 300&nbsp;ms</td></tr>
+  <tr><td><code>MinInterruptionDuration</code></td><td>off</td><td>100&nbsp;ms</td><td>150&nbsp;ms</td><td>120&nbsp;ms</td></tr>
+  <tr><td><code>InterruptionRecoveryTimeout</code></td><td>off</td><td>250&nbsp;ms</td><td>300&nbsp;ms</td><td>250&nbsp;ms</td></tr>
+  <tr><td><code>MaxUtteranceDuration</code></td><td>off</td><td>20&nbsp;s</td><td>off / 30&nbsp;s</td><td>20&nbsp;s</td></tr>
+  <tr><td><code>MaxResponseDuration</code></td><td>off</td><td>30&nbsp;s</td><td>off / 60&nbsp;s</td><td>30&nbsp;s</td></tr>
+</table>
+<div class="callout"><b>Default profile stays inert.</b> The <code>Default</code> profile leaves every new knob off, so
+an unconfigured host behaves exactly as today. <code>Quality</code> deliberately disables eager (it prefers letting
+smart-turn make the unhurried-but-correct call); <code>LowLatency</code> / <code>Cheap</code> enable it.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases</h2>
+<p>WS1 first (the latency win and the measurement loop), then the WS2 knobs — each WS2 knob individually mergeable.
+One logical change per PR (per CONTRIBUTING); every PR adds an <code>[Unreleased]</code> CHANGELOG entry, stays
+warnings-as-errors clean, and follows the spec (this document) which lands first.</p>
+<ol>
+  <li><b>Phase A — WS1 eager STT.</b> Marker frame + <code>EagerSttDelay</code> option + VAD state machine
+    (arm / resume-discard / confirm-promote / smart-turn-override) + tuning wiring. Lands with its synthetic-VAD
+    tests <em>and</em> a VRT-001 before/after delta in the PR description. Single PR (the eager mechanism is one
+    indivisible behaviour).</li>
+  <li><b>Phase B1 — <code>MinInterruptionDuration</code>.</b> Barge-in debounce on the VAD. One PR.</li>
+  <li><b>Phase B2 — <code>InterruptionRecoveryTimeout</code> + sink interplay.</b> Provisional-epoch recovery in
+    <code>WebSocketAudioSink</code>. One PR (highest sink risk — keep it isolated).</li>
+  <li><b>Phase B3 — Empty / low-confidence STT recovery.</b> Turn-state reset in <code>AgentLoopProcessor</code>.
+    One PR (no config knob).</li>
+  <li><b>Phase B4 — <code>MaxUtteranceDuration</code> force-split.</b> VAD open-gate cap. One PR.</li>
+  <li><b>Phase B5 — <code>MaxResponseDuration</code> cap.</b> Turn-worker output bound. One PR.</li>
+</ol>
+<p>Phases B1–B5 are mutually independent and may be parallelised or reordered; only Phase A must precede them (it
+introduces the marker frame and establishes the VRT-001 measurement habit).</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Add the eager marker (<code>SpeculativeUtteranceFrame</code> or
+    <code>UserStoppedSpeakingFrame.Eager</code>) in <code>Voxa.Core/Frames</code>; forwarded downstream; not
+    <code>IUninterruptible</code>.
+    <span class="ac">AC: zero new <code>Voxa.Core</code> dependencies; frame round-trips through a test pipeline.</span></li>
+  <li><span class="tid">T1.2</span> Add <code>EagerSttDelay</code> to <code>SileroVadOptions</code>; thread through
+    <code>VoxaVadSettings</code> → <code>SileroVadDescriptors</code> → composer → resolver/profiles.
+    <span class="ac">AC: config <code>EagerSttDelayMs</code> reaches the processor; <code>null</code> ⇒ no dispatch.</span></li>
+  <li><span class="tid">T1.3</span> Implement the VAD eager state machine: arm at <code>EagerSttDelay</code>,
+    discard-on-resume, promote-on-confirm.
+    <span class="ac">AC: speculative STT flushes early; gate stays open until confirmed.</span></li>
+  <li><span class="tid">T1.4</span> Precedence: <code>ConfirmTurnEnd → false</code> cancels a pending eager
+    dispatch; validate / clamp <code>EagerSttDelay &lt; StopDuration</code>.
+    <span class="ac">AC: smart-turn false never lets a speculative turn promote; misconfig is rejected or clamped with a warning.</span></li>
+  <li><span class="tid">T1.5</span> VRT-001 before/after delta captured in the PR.
+    <span class="ac">AC: pause-handling + smooth-turn-taking latency drops; waste-on-resume rate reported.</span></li>
+  <li><span class="tid">T2.1</span> <code>MinInterruptionDuration</code> debounce on the barge-in path.
+    <span class="ac">AC: a sub-threshold blip during playback does not emit <code>InterruptionFrame</code>; sustained speech does.</span></li>
+  <li><span class="tid">T2.2</span> <code>InterruptionRecoveryTimeout</code> + provisional-epoch interplay in
+    <code>WebSocketAudioSink</code>.
+    <span class="ac">AC: stop-within-window resumes playback (no re-synthesis); persistent barge-in still purges.</span></li>
+  <li><span class="tid">T2.3</span> Empty / low-confidence STT recovery in <code>AgentLoopProcessor</code>.
+    <span class="ac">AC: an empty final transcription resets turn + bot-speaking state; the pipeline accepts the next turn (no wedge).</span></li>
+  <li><span class="tid">T2.4</span> <code>MaxUtteranceDuration</code> force-split.
+    <span class="ac">AC: an unbroken voiced stream past the cap force-emits <code>UserStoppedSpeakingFrame</code> and re-arms.</span></li>
+  <li><span class="tid">T2.5</span> <code>MaxResponseDuration</code> cap on the turn worker.
+    <span class="ac">AC: an over-long driver stream is truncated; <code>LlmTurnEndedFrame</code> + cleanup still run.</span></li>
+  <li><span class="tid">T3.1</span> Extend the diagnostics-off golden composition test to assert defaults-path byte-identity.
+    <span class="ac">AC: with all knobs at default + diagnostics off, the composed graph is unchanged.</span></li>
+  <li><span class="tid">T3.2</span> Docs: add the new knobs to <code>docs/performance-tuning.md</code>; note the eager↔smart-turn precedence.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+
+<p>Every knob gets a deterministic, offline headless test driving a <em>synthetic VAD-probability sequence</em>
+through the real processor — the same pattern as the existing
+<code>tests/Voxa.Audio.SileroVad.Tests/SileroVadProcessorTests.cs</code> /
+<code>SileroVadConfirmTurnEndTests.cs</code> (build a pipeline, ingest <code>Silence</code> / <code>WhiteNoise</code>
+PCM windows, assert on the captured frames). No model download — these run in the default lane.</p>
+
+<table>
+  <tr><th>Knob / behaviour</th><th>Synthetic sequence → assertion</th></tr>
+  <tr><td><b>Eager dispatch</b> (T1.3)</td><td>speech → silence past <code>EagerSttDelay</code> but before <code>StopDuration</code> ⇒ a <code>SpeculativeUtteranceFrame</code> (or eager-marked stop) is captured <em>before</em> the gate closes; the gate stays open.</td></tr>
+  <tr><td><b>Discard on resume</b> (T1.3)</td><td>speech → short silence past <code>EagerSttDelay</code> → speech again ⇒ no <code>InterruptionFrame</code>; the eager pass is cancelled; one continuous utterance.</td></tr>
+  <tr><td><b>Smart-turn override</b> (T1.4)</td><td><code>ConfirmTurnEnd</code> stubbed to return <code>false</code>; speech → silence past <code>EagerSttDelay</code> and <code>StopDuration</code> ⇒ eager dispatch cancelled, gate stays open, no <code>UserStoppedSpeakingFrame</code> until a later confirm.</td></tr>
+  <tr><td><b>Eager &lt; Stop validation</b> (T1.4)</td><td><code>EagerSttDelay ≥ StopDuration</code> ⇒ rejected at construction/validation or clamped with a warning (assert the chosen policy).</td></tr>
+  <tr><td><b>Interruption debounce</b> (T2.1)</td><td>bot-speaking; inject &lt; <code>MinInterruptionDuration</code> of voiced ⇒ no <code>InterruptionFrame</code>; inject ≥ it ⇒ exactly one.</td></tr>
+  <tr><td><b>Interruption recovery</b> (T2.2)</td><td>headless <code>WebSocketAudioSink</code> over a fake socket: barge-in then stop within window ⇒ queued audio not stranded / playback resumes; barge-in then continue ⇒ epoch committed, stale audio purged (existing behaviour preserved).</td></tr>
+  <tr><td><b>Empty-STT recovery</b> (T2.3)</td><td><code>AgentLoopProcessor</code> with a fake driver: feed an empty / whitespace final <code>TranscriptionFrame</code> ⇒ no turn enqueued, state reset, a subsequent non-empty transcription runs a turn normally.</td></tr>
+  <tr><td><b>Force-split</b> (T2.4)</td><td>continuous voiced windows past <code>MaxUtteranceDuration</code> ⇒ a forced <code>UserStoppedSpeakingFrame</code> mid-stream, then capture continues (a second <code>UserStartedSpeakingFrame</code>).</td></tr>
+  <tr><td><b>Response cap</b> (T2.5)</td><td>fake driver yielding an unbounded chunk stream ⇒ output truncated at <code>MaxResponseDuration</code>; <code>LlmTurnEndedFrame</code> still observed.</td></tr>
+  <tr><td><b>Defaults byte-identity</b> (T3.1)</td><td>compose with all knobs at default + diagnostics off ⇒ processor graph identical to the pre-VRT-002 golden.</td></tr>
+  <tr><td><b>Acceptance signal</b></td><td><b>VRT-001</b> mini-fixture run, eager on vs off: a measurable voice-to-voice / TTFT reduction on the pause-handling and smooth-turn-taking categories, with no regression on user-interruption. This delta — not a hand-wave — gates the WS1 merge.</td></tr>
+</table>
+
+<div class="callout good"><b>Determinism.</b> All knob tests use synthetic probability streams / fake engines and
+fake transports — no network, no model, fully in the default (offline) lane. Only the VRT-001 full-corpus run is
+<code>Category=LocalModels</code>-gated; the mini-fixture delta is hermetic.</div>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Eager ↔ smart-turn precedence wrong: a speculative turn promotes despite <code>ConfirmTurnEnd → false</code>, so the bot answers a mid-sentence pause.</td><td class="sev-high">High</td><td>Explicit one-directional precedence (smart-turn false &gt; eager); eager only ever <em>promotes</em> on confirmed end-of-turn; dedicated override test (T1.4). Eager off in the <code>Quality</code> profile.</td></tr>
+  <tr><td>R2</td><td>Resumed speech inside the eager window is mistaken for a barge-in (epoch bump / interruption), cutting the user off.</td><td class="sev-high">High</td><td>The eager utterance is <b>marked</b>; the sink and interruption path treat post-marker resume as continuation, not <code>InterruptionFrame</code>. Discard-on-resume test (T1.3).</td></tr>
+  <tr><td>R3</td><td>Speculative STT work wasted on resume (CPU / cloud quota burned for nothing).</td><td class="sev-med">Med</td><td>Bounded to one in-flight pass per utterance, cancelled via the existing per-frame token; waste-on-resume rate measured via VRT-001 and tuned through <code>EagerSttDelay</code>.</td></tr>
+  <tr><td>R4</td><td><code>InterruptionRecoveryTimeout</code> re-delivers audio the client already purged (epoch mishandling) → garbled playback.</td><td class="sev-high">High</td><td>Provisional-epoch design: defer/commit the purge over the recovery window; never re-deliver discarded audio; both-direction sink tests (T2.2). Isolated in its own PR.</td></tr>
+  <tr><td>R5</td><td>Over-aggressive force-split chops natural sentences into half-utterances the agent must stitch.</td><td class="sev-med">Med</td><td>Default off; generous profile values; validate cap ≫ <code>StartDuration</code> + a sentence; force-split yields an <em>intermediate</em> transcription, not a hard turn boundary the agent can't recover.</td></tr>
+  <tr><td>R6</td><td>Empty-STT recovery resets state mid-turn and drops a legitimately-in-flight turn.</td><td class="sev-low">Low</td><td>Reset only fires on an <em>empty / sub-threshold</em> final result (the no-turn case); a non-empty final still enqueues a turn. No-op when STT returns text.</td></tr>
+  <tr><td>R7</td><td>A new knob silently changes default behaviour (breaks the golden).</td><td class="sev-med">Med</td><td>Every knob is nullable / defaults to today's value; defaults-byte-identity golden (T3.1) is the gate.</td></tr>
+  <tr><td>R8</td><td>Debounce alone is trusted as echo defence on open speakers and still lets the bot self-interrupt.</td><td class="sev-low">Low</td><td>Documented as heuristic; real barge-in robustness on speakers is <b>VRT-003</b> (<code>IEchoCanceller</code>). The two compose.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>The smart-turn classifier.</b> Shipped (PR&nbsp;#26): <code>SileroVadOptions.ConfirmTurnEnd</code> +
+    <code>Voxa.Audio.SmartTurn</code> (<code>HttpSmartTurnClassifier</code>). VRT-002 acts on its verdict faster; it
+    does not change the classifier. A local ONNX smart-turn model remains separately deferred.</li>
+  <li><b>Pre-roll / speech-pad.</b> Shipped (<code>PrerollDuration</code>, 300&nbsp;ms). Not re-implemented.</li>
+  <li><b>Acoustic echo cancellation.</b> <b>VRT-003</b> — the <code>IEchoCanceller</code> seam inserted before the
+    VAD. VRT-002's interruption debounce is a heuristic complement, not a substitute.</li>
+  <li><b>The turn-taking benchmark itself.</b> <b>VRT-001</b> (Full-Duplex-Bench harness). VRT-002 consumes it as
+    the acceptance signal; it does not build it.</li>
+  <li><b>A dedicated LLM-prefetch engine.</b> WS1 permits an optional prefetch on the eager signal but ships the
+    VAD dispatch + STT trigger; a first-class prefetch path (warm the agent on the speculative transcript) is a
+    natural fast-follow once the eager delta is proven by VRT-001.</li>
+  <li><b>Streaming / interim transcripts.</b> <b>VRT-004</b> — interim <code>TranscriptionFrame(IsFinal:false)</code>
+    propagation. Independent of eager's <em>final</em> speculative dispatch.</li>
+</ul>
+
+</div>
+</body>
+</html>

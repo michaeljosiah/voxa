@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT-001 — Turn-Taking Quality Benchmark (Full-Duplex-Bench Harness)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-001 — Turn-Taking Quality Benchmark (Full-Duplex-Bench Harness)</h1>
+  <div class="sub">A new <code>bench/Voxa.TurnTaking</code> harness — peer to <code>bench/Voxa.Benchmarks</code> — that drives
+    the <b>composed</b> voice pipeline through a turn-taking corpus and turns "does this change actually improve the
+    conversation?" into an answerable, regression-gated number. It walks the
+    <a href="https://github.com/DanielLin94144/Full-Duplex-Bench">Full-Duplex-Bench v1.0</a> corpus layout
+    (arXiv 2503.04721, ASRU 2025), runs each sample through <code>DefaultVoicePipelineComposer.Compose</code> with mock or
+    local engines, emits a per-sample JSON record + a response WAV, rolls those up to per-category latency percentiles, and
+    scores the three <b>cascade-fair</b> categories against a checked-in <code>baseline.json</code>. It is the measurement
+    foundation the rest of the VRT line is gated against — and it reuses the existing diagnostics timing substrate rather
+    than inventing new instrumentation.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-001 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P0 — Latency/quality (new benchmark)</div>
+    <div><b>Depends on</b> VoxaDiagnosticsHub/StageLatencyTracker, DefaultVoicePipelineComposer, Voxa.Testing</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M1</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">The corpus &amp; categories</a></li>
+    <li><a href="#s6">The driver (<code>bench/Voxa.TurnTaking</code>)</a></li>
+    <li><a href="#s7">Summary &amp; scoring</a></li>
+    <li><a href="#s8">Configuration / CLI reference</a></li>
+    <li><a href="#s9">Plan of action — phases</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VRT-001 add, in one sentence?</b>
+    <p>A benchmark harness that plays scripted conversations into Voxa's real pipeline and measures <em>how well it takes
+    turns</em> — when the bot starts talking after you pause, whether it handles a clean hand-off, and whether it stops
+    when you interrupt — emitting one comparable number per category that a regression gate can guard.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>The next four VRT items all <em>claim</em> to improve conversation: smart-turn already shipped (PR #26), eager STT
+    is next (VRT-002), barge-in/AEC after that (VRT-003), streaming captions (VRT-004). But Voxa today has only
+    <em>latency</em> micro-benchmarks (<code>bench/Voxa.Benchmarks</code>) and a per-turn latency waterfall — no
+    <em>behavioural</em> turn-taking benchmark. You cannot tell whether any of those changes actually help a conversation
+    without one. So the program opens here: measure first, then every turn-taking change after week one gets an objective
+    before/after verdict.</p>
+  </div>
+  <div class="qa">
+    <b>What does this <em>not</em> change?</b>
+    <p>Nothing in the runtime. This is a benchmark in <code>bench/</code> — a console app plus a small library. It is not a
+    NuGet package, it is not in <code>Voxa.Core</code>, and it adds no new instrumentation: it observes the existing
+    <code>VoxaDiagnosticsHub</code> / <code>StageLatencyTracker</code> stage timings and the <code>voxa.turn.ttfb</code>
+    metric the pipeline already produces. It drives the same <code>DefaultVoicePipelineComposer.Compose</code> path a real
+    server or Voxa Studio drives — no parallel pipeline.</p>
+  </div>
+  <div class="qa">
+    <b>How does it stay hermetic and offline in the default lane?</b>
+    <p>The default run uses <em>mock</em> STT / LLM / TTS engines and a tiny checked-in fixture (a handful of samples). It
+    downloads nothing, hits no network, and is deterministic — so it can be a fast xUnit smoke test in the normal CI lane.
+    The real run (local Whisper / Kokoro engines, the full corpus) is gated behind
+    <code>[Trait("Category","LocalModels")]</code>, exactly like the rest of the speech tier.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VRT-001 ports speech-core's Full-Duplex-Bench workflow onto Voxa's frame/processor pipeline. speech-core integrates
+FDB v1.0 end-to-end — <b>driver → per-sample JSON → summary CSV → category scoring → checked-in baseline → CI gate</b> —
+and Voxa is a cascade, so the same three cascade-fair categories apply. The work is four loosely-sequential workstreams in
+a single new <code>bench/Voxa.TurnTaking</code> project:</p>
+
+<ul>
+  <li><b>WS1 — The driver <span class="badge additive">new harness</span>.</b> A console app + library that walks the FDB
+    v1.0 corpus layout, composes the pipeline via <code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code>, feeds
+    each sample's input WAV through it, subscribes to the diagnostics hub for stage timings, and writes
+    <code>&lt;category&gt;__&lt;id&gt;.json</code> (per-stage + voice-to-voice timings) plus the response WAV.</li>
+  <li><b>WS2 — Engines (mock + local) <span class="badge p1">P0</span>.</b> Mock engines make the default lane offline and
+    deterministic; trait-gated local engines (Whisper/Kokoro) make the run real. Selected by CLI flag; mock is the default
+    so the harness builds and runs with no models present.</li>
+  <li><b>WS3 — Summary roll-up <span class="badge additive">new harness</span>.</b> Aggregate the per-sample JSON into a
+    per-category <code>p50/p90/p99</code> CSV (the same shape as <code>bench/BASELINE.md</code>'s tables).</li>
+  <li><b>WS4 — Scoring + baseline gate <span class="badge p1">P0</span>.</b> A direction-aware scorer over the three
+    cascade-fair categories (turn-offset-rate + first-word latency) and a checked-in <code>baseline.json</code> the smoke
+    test diffs against, so a regression in turn-taking quality fails the build.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> "Did eager STT / barge-in / streaming actually improve the conversation?"
+becomes a single command (<code>dotnet run --project bench/Voxa.TurnTaking</code>) producing a per-category score, and the
+mini-fixture smoke run is a CI gate that catches turn-taking regressions before they merge — without ever touching the
+network in the default lane.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Make "does this improve turn-taking?" an answerable, regression-gated number — the prerequisite for VRT-002 / VRT-003 /
+    VRT-004.</li>
+  <li>Drive the <b>real composed pipeline</b> (<code>DefaultVoicePipelineComposer.Compose</code>), not a bespoke benchmark
+    pipeline, so the number reflects what ships.</li>
+  <li>Reuse the existing diagnostics timing substrate (<code>StageLatencyTracker</code> stages,
+    <code>voxa.turn.ttfb</code>) — add no new instrumentation to the runtime.</li>
+  <li>Stay offline + deterministic in the default lane (mock engines, tiny checked-in fixture); real engines and the full
+    corpus behind <code>Category=LocalModels</code>.</li>
+  <li>Emit FDB-shaped artifacts: per-sample JSON + response WAV → per-category percentile CSV → category score →
+    <code>baseline.json</code> regression gate.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>The <b>backchannel</b> category — architecturally N/A for a cascade (see §5); logged as skipped, never scored.</li>
+  <li>Running the full corpus in CI — the gate runs on a mini fixture; the full run is manual / <code>LocalModels</code>.</li>
+  <li>An <b>LLM-judge</b> scorer — opt-in, a later follow-up (§13).</li>
+  <li>Changing any pipeline behaviour. VRT-001 only <em>measures</em>; the improvements are VRT-002+.</li>
+  <li>New instrumentation in <code>Voxa.Core</code> — the harness consumes the hub, it does not extend it.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td><code>Voxa.Core</code> dependency surface</td><td><b>0</b> — VRT-001 lives in <code>bench/</code>, references packages like any consumer; it adds nothing to Core.</td></tr>
+  <tr><td>Default test lane</td><td>No network, no models, deterministic. The smoke run (mock engines, mini fixture) completes in <b>&lt; ~10&nbsp;s</b> and is the CI gate.</td></tr>
+  <tr><td>Checked-in fixture size</td><td><b>&le; a few hundred KB</b> — a handful of short real WAVs (the <code>fdb_mini</code> analogue); never a fabricated corpus (see §5).</td></tr>
+  <tr><td>Per-sample wall (mock engines)</td><td>Bounded by the input WAV length + mock latencies; a 5&nbsp;s sample runs in roughly real time or faster.</td></tr>
+  <tr><td>Determinism (mock lane)</td><td>Byte-stable per-sample JSON timings within a small tolerance run-to-run, so the baseline diff is meaningful.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>VRT-001 is a <b>consumer</b> of three things Voxa already ships. It introduces no new seam — its entire job is to wire
+them together into an FDB workflow:</p>
+
+<table>
+  <tr><th>Existing surface</th><th>How VRT-001 uses it</th></tr>
+  <tr><td><code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code></td><td>The transport-agnostic composition that returns a <code>ComposedVoice</code> (processor factories + <code>InputSampleRate</code>/<code>OutputSampleRate</code>). The harness builds a per-sample service scope, calls <code>Compose</code>, links the parts into a runnable pipeline, and feeds the sample audio in. <b>Same path</b> a WebSocket connection or Voxa Studio uses.</td></tr>
+  <tr><td><code>VoxaDiagnosticsHub</code> + <code>StageLatencyTracker</code></td><td>The timing substrate. The harness registers a hub per session (scoped, same as a server connection), sets <code>Voxa:Diagnostics:Enabled=true</code>, and <code>SubscribeAsync</code>es to collect the derived <code>StageLatencyEvent</code>s (<code>vad_close</code>, <code>stt_final</code>, <code>agent_first_token</code>, <code>tts_first_byte</code>) and the <code>TurnEvent</code> edges — no new instrumentation.</td></tr>
+  <tr><td><code>voxa.turn.ttfb</code> / <code>voxa.stage.latency</code> (<code>VoxaMetrics</code>)</td><td>The voice-to-voice and per-stage histograms are the canonical definition of "latency". The harness derives the same numbers per sample from the hub events so the JSON timings line up with what production reports.</td></tr>
+  <tr><td><code>Voxa.Testing</code> — <code>WavFile</code>, <code>WavFileSourceProcessor</code>, <code>WavFileSinkProcessor</code></td><td>Read each sample's input WAV; feed it as <code>AudioRawFrame</code>s (chunked, default 20&nbsp;ms) followed by an <code>EndFrame</code>; capture the synthesized response as a WAV. Reused verbatim — no new audio I/O.</td></tr>
+</table>
+
+<div class="callout"><b>Invariant — drive the composed pipeline, observe the existing substrate.</b> VRT-001 must
+<em>not</em> assemble its own VAD&rarr;STT&rarr;agent&rarr;TTS chain or add a private latency timer. It calls
+<code>Compose</code> and reads the diagnostics hub. If the harness and production disagree on a number, the harness is
+wrong by construction — which is the point: the benchmark measures what ships.</div>
+
+<div class="callout warn"><b>Plain <code>ServiceCollection</code>, not the Generic Host.</b> Like Voxa Studio and the tests,
+the harness uses a plain <code>ServiceCollection</code> + <code>AddVoxa</code> so hosted services (eager model warm-up)
+never run and nothing touches the network before a sample asks for it. Per the config-capture rule, any provider that needs
+configuration captures the <code>IConfiguration</code> passed to <code>AddVoxa</code> — the harness builds that
+configuration in-memory (the mock provider names + a diagnostics flag).</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>The corpus &amp; categories</h2>
+
+<div class="ws-head">
+  <span><b>Corpus</b> Full-Duplex-Bench v1.0</span>
+  <span><b>Source</b> arXiv 2503.04721, ASRU 2025</span>
+  <span><b>Layout</b> per-category sample dirs</span>
+  <span><b>Default fixture</b> mini (checked in)</span>
+</div>
+
+<p>The harness targets the <a href="https://github.com/DanielLin94144/Full-Duplex-Bench">Full-Duplex-Bench v1.0</a> corpus
+(<a href="https://arxiv.org/abs/2503.04721">arXiv 2503.04721</a>, ASRU 2025) — the same corpus speech-core integrates. FDB
+groups samples by <em>turn-taking behaviour</em>: each category is a folder of samples, each sample an input audio clip (the
+user side of a conversation, with a scripted pause/hand-off/interruption) plus reference metadata. The harness walks that
+layout: <code>&lt;corpus-dir&gt;/&lt;category&gt;/&lt;sample-id&gt;/…</code>.</p>
+
+<h3>The three cascade-fair categories</h3>
+<p>FDB defines four behaviours; only three are meaningful for a <b>cascade</b> (STT&rarr;LLM&rarr;TTS, half-duplex today),
+and Voxa scores exactly those three:</p>
+
+<table>
+  <tr><th>Category</th><th>What it probes</th><th>Direction (good = …)</th></tr>
+  <tr><td><code>pause_handling</code></td><td>The user pauses mid-thought (a within-turn silence) but is <em>not</em> done. A good system <b>waits</b> and does not barge in on the gap. Measures premature turn-taking.</td><td><b>lower</b> turn-offset-rate — fewer/later bot starts during the pause is better</td></tr>
+  <tr><td><code>smooth_turn_taking</code></td><td>The user finishes a turn cleanly. A good system responds <em>promptly</em> after end-of-turn — not too slow (dead air), not too eager.</td><td><b>higher</b> responsiveness — a faster, correctly-placed first word is better</td></tr>
+  <tr><td><code>user_interruption</code></td><td>The user barges in while the bot is (notionally) speaking. A good system <b>yields</b> quickly. Measures interruption responsiveness.</td><td><b>higher</b> responsiveness — a faster yield / first reaction is better</td></tr>
+</table>
+
+<div class="callout danger"><b>Do not fake backchannel.</b> FDB's fourth category, <code>backchannel</code> (the system emitting
+"mm-hm" / "right" <em>while the user keeps the floor</em>), requires a full-duplex model that talks and listens at once. A
+cascade structurally cannot do this — it is half-duplex by design (mic gated during playback). The harness must
+<b>discover the category, log it as <code>skipped</code> with a one-line reason, and emit no score for it.</b> Never
+synthesize a placeholder number, never run it through the cascade and pretend the result means something. A fabricated
+backchannel score is a lie in the report, not a TODO.</div>
+
+<div class="callout danger"><b>Do not fabricate a corpus.</b> FDB ships via Google Drive, not a single tarball, and its
+license governs redistribution. <b>Ship a tiny, real, checked-in fixture</b> — a handful of genuinely short WAVs across the
+three categories (the <code>fdb_mini</code> analogue) for the offline smoke gate — and <b>document the full-corpus fetch</b>
+(the Drive link + the expected on-disk layout) in the harness README and <code>--help</code>. Do not generate synthetic
+"sample" audio and call it the corpus; the smoke fixture exists to exercise the <em>plumbing</em>, and its provenance must be
+real audio with a recorded source.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>The driver (<code>bench/Voxa.TurnTaking</code>)</h2>
+
+<div class="ws-head">
+  <span><b>Project</b> bench/Voxa.TurnTaking (console + library)</span>
+  <span><b>Peer of</b> bench/Voxa.Benchmarks</span>
+  <span><b>Packable</b> false</span>
+  <span><b>Default engines</b> mock (offline)</span>
+</div>
+
+<p>A new console-plus-library project, peer to <code>bench/Voxa.Benchmarks</code>. <code>Program.cs</code> is a thin CLI
+entry (like the existing <code>BenchmarkSwitcher</code> shim); the testable logic — corpus walk, per-sample run, JSON
+emit, roll-up, scoring — lives in the library so the smoke test calls it directly. It is <code>IsPackable=false</code> and,
+like the other bench project, keeps warnings-as-errors off for itself.</p>
+
+<span class="filelabel">bench/Voxa.TurnTaking/Voxa.TurnTaking.csproj (shape — mirrors Voxa.Benchmarks.csproj)</span>
+<pre><code>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;OutputType&gt;Exe&lt;/OutputType&gt;
+    &lt;TargetFramework&gt;net10.0&lt;/TargetFramework&gt;
+    &lt;IsPackable&gt;false&lt;/IsPackable&gt;
+    <span class="cm">&lt;!-- A benchmark harness, not shipped code: keep it out of warnings-as-errors churn. --&gt;</span>
+    &lt;TreatWarningsAsErrors&gt;false&lt;/TreatWarningsAsErrors&gt;
+  &lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;
+    <span class="cm">&lt;!-- The meta-package + composer (drives the real pipeline) and the WAV test helpers. --&gt;</span>
+    &lt;ProjectReference Include="..\..\src\Voxa\Voxa.csproj" /&gt;
+    &lt;ProjectReference Include="..\..\src\Voxa.AspNetCore\Voxa.AspNetCore.csproj" /&gt;
+    &lt;ProjectReference Include="..\..\src\Voxa.Testing\Voxa.Testing.csproj" /&gt;
+    <span class="cm">&lt;!-- Local engines are referenced for the LocalModels lane; mock is built-in. --&gt;</span>
+  &lt;/ItemGroup&gt;
+&lt;/Project&gt;</code></pre>
+
+<h3>Per-sample loop</h3>
+<p>For each sample under the selected categories:</p>
+<ol>
+  <li>Build a per-sample <code>ServiceCollection</code> + <code>AddVoxa(configuration)</code> with the chosen STT/LLM/TTS
+    provider names (mock by default) and <code>Voxa:Diagnostics:Enabled=true</code>; register a fresh
+    <code>VoxaDiagnosticsHub</code> in the scope.</li>
+  <li>Call <code>composer.Compose(scope.ServiceProvider)</code> → a <code>ComposedVoice</code>; materialise its
+    <code>Parts</code> into a pipeline with a <code>WavFileSourceProcessor</code> (the sample's input WAV) at the head and a
+    <code>WavFileSinkProcessor</code> (the response WAV) at the tail.</li>
+  <li>Start a <code>SubscribeAsync</code> reader on the hub <em>before</em> the run; collect <code>TurnEvent</code>s and the
+    derived <code>StageLatencyEvent</code>s into a per-sample list.</li>
+  <li>Run the pipeline to completion (the <code>WavFileSourceProcessor</code> emits the audio then an <code>EndFrame</code>;
+    wait for the sink to drain), under a wall-clock cap so a wedged sample can't hang the run.</li>
+  <li>Reduce the collected events to the timings (below), write
+    <code>&lt;out-dir&gt;/&lt;category&gt;__&lt;sample-id&gt;.json</code> and the response WAV. On any exception, write the
+    record with <code>error</code> populated and <code>null</code> timings — <b>never drop a failed sample silently</b>;
+    a missing record is indistinguishable from a pass.</li>
+</ol>
+
+<h3>Per-sample JSON record schema</h3>
+<p>One file per sample, named <code>&lt;category&gt;__&lt;sample-id&gt;.json</code> (the FDB convention). All timings are
+milliseconds, derived from the hub's stage events; <code>null</code> when the stage didn't occur (e.g. the bot correctly
+stayed silent through a <code>pause_handling</code> gap):</p>
+
+<span class="filelabel">&lt;out-dir&gt;/pause_handling__sample_0007.json</span>
+<pre><code>{
+  "sample_id":   "sample_0007",
+  "category":    "pause_handling",
+  "engines":     { "stt": "mock", "llm": "mock", "tts": "mock" },   <span class="cm">// provenance of the run</span>
+  "timings_ms": {
+    "stt":                            142.0,   <span class="cm">// stt_final stage (gate close → final transcript)</span>
+    "llm":                             88.0,    <span class="cm">// agent_first_token (final transcript → first delta)</span>
+    "tts":                             61.0,    <span class="cm">// tts_first_byte (first delta → first synth audio)</span>
+    "ttft_first_audio_from_speech_end": 304.0,  <span class="cm">// the voice-to-voice number == voxa.turn.ttfb</span>
+    "total_wall":                     1290.0    <span class="cm">// sample start → pipeline drained</span>
+  },
+  "transcripts": {
+    "reference":  "so the thing is ... uh ... I wanted to ask",   <span class="cm">// from the sample metadata, if present</span>
+    "hypothesis": "so the thing is I wanted to ask"               <span class="cm">// the STT final transcript</span>
+  },
+  "response_wav": "pause_handling__sample_0007.response.wav",
+  "error":        null    <span class="cm">// a string (message + stage) when the sample failed; timings then null</span>
+}</code></pre>
+
+<div class="callout"><b>Timing provenance.</b> <code>stt</code> / <code>llm</code> / <code>tts</code> map one-to-one onto the
+<code>StageLatencyTracker</code> stages <code>stt_final</code> / <code>agent_first_token</code> / <code>tts_first_byte</code>;
+<code>ttft_first_audio_from_speech_end</code> is the <code>UserStopped</code>-edge → first <code>TtsChunkEvent</code> delta,
+i.e. the same quantity <code>voxa.turn.ttfb</code> records. The harness does not time anything itself — it reduces the
+events the pipeline already publishes, so the JSON and the production histograms agree by construction.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Summary &amp; scoring</h2>
+
+<h3>WS3 — summary roll-up (per-category percentiles)</h3>
+<p>A <code>summarize</code> step reads every per-sample JSON in the out-dir and emits one CSV row per category with the
+<code>p50/p90/p99</code> of each timing — the same percentile shape <code>bench/BASELINE.md</code> uses for the
+micro-benchmarks, so the two read alike. Failed samples (non-null <code>error</code>) are counted but excluded from the
+percentiles, and the count is reported:</p>
+
+<span class="filelabel">&lt;out-dir&gt;/summary.csv</span>
+<pre><code>category,n,errors,ttfb_p50,ttfb_p90,ttfb_p99,stt_p50,llm_p50,tts_p50,total_wall_p50
+pause_handling,40,0,,,,142.0,88.0,61.0,1290.0        <span class="cm"># ttfb blank when the bot correctly stayed silent</span>
+smooth_turn_taking,52,1,331.0,512.0,690.0,150.0,95.0,64.0,1402.0
+user_interruption,33,0,288.0,470.0,640.0,,,,612.0
+backchannel,0,0,,,,,,,                                <span class="cm"># discovered, skipped — N/A for a cascade (§5)</span></code></pre>
+
+<h3>WS4 — the scorer (direction-aware, per category)</h3>
+<p>A <code>score</code> step turns the per-category aggregates into the FDB-style metrics: a <b>turn-offset-rate (TOR)</b>
+and a <b>first-word latency</b>, interpreted per category. The crucial detail speech-core gets right and a naive scorer gets
+wrong is <b>direction</b>: the same raw quantity is good in one category and bad in another.</p>
+
+<table>
+  <tr><th>Category</th><th>Metric</th><th>Better is</th><th>Rationale</th></tr>
+  <tr><td><code>pause_handling</code></td><td>TOR (fraction of samples where the bot started speaking during the within-turn pause)</td><td class="sev-low"><b>lower</b></td><td>Barging in on a thinking-pause is the failure; a perfect score is "never spoke during the gap".</td></tr>
+  <tr><td><code>smooth_turn_taking</code></td><td>first-word latency after end-of-turn (the <code>ttfb</code> percentile)</td><td class="sev-med"><b>higher responsiveness</b> (lower ms)</td><td>After a clean hand-off the bot <em>should</em> respond; faster-and-correctly-placed wins.</td></tr>
+  <tr><td><code>user_interruption</code></td><td>responsiveness to the barge-in (yield / first-reaction latency)</td><td class="sev-med"><b>higher responsiveness</b> (lower ms)</td><td>The bot should yield quickly; a faster reaction to the interruption wins.</td></tr>
+  <tr><td><code>backchannel</code></td><td>—</td><td>—</td><td><b>skipped</b>; no score emitted (§5).</td></tr>
+</table>
+
+<div class="callout"><b>Why "responsiveness", not raw latency.</b> For <code>smooth_turn_taking</code> and
+<code>user_interruption</code> the harness reports a <em>direction-normalised</em> score so "higher is better" holds across
+the report (e.g. a bounded inverse of the latency percentile), while keeping the raw ms in the CSV. <code>pause_handling</code>
+stays a rate where lower is better. This mirrors FDB's per-category interpretation and keeps the baseline diff legible: every
+scored category moves in one obvious direction.</div>
+
+<h3>The checked-in baseline gate</h3>
+<p>A <code>baseline.json</code> (per category: the TOR / latency the current pipeline achieves on the <b>mini fixture</b>) is
+committed to the harness directory. The smoke test (§11) runs the mock-engine harness over the fixture, scores it, and diffs
+against the baseline within a tolerance — a regression in turn-taking quality <b>fails the build</b>. Refreshing the baseline
+is a deliberate code change with a justification in the PR (a knob moved, a category improved), never a silent overwrite —
+the same discipline as bumping a model SHA-pin.</p>
+
+<span class="filelabel">bench/Voxa.TurnTaking/baseline.json (mini-fixture baseline — illustrative numbers)</span>
+<pre><code>{
+  "fixture":   "mini",
+  "engines":   "mock",
+  "tolerance": { "tor": 0.05, "latency_ms_pct": 0.20 },   <span class="cm">// regression beyond this fails the gate</span>
+  "categories": {
+    "pause_handling":     { "tor": 0.00 },                <span class="cm">// lower-better: must not regress upward</span>
+    "smooth_turn_taking": { "ttfb_p50_ms": 330.0 },       <span class="cm">// must not regress slower beyond tolerance</span>
+    "user_interruption":  { "ttfb_p50_ms": 290.0 },
+    "backchannel":        "skipped"
+  }
+}</code></pre>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Configuration / CLI reference</h2>
+
+<p>The console exposes a small flag set. Mock engines are the <b>default</b> for every engine slot so the harness builds and
+runs with no models and no network — the offline smoke path is the path of least resistance.</p>
+
+<table>
+  <tr><th>Flag</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>--corpus-dir &lt;path&gt;</code></td><td>the checked-in mini fixture</td><td>Root of the FDB-layout corpus (<code>&lt;category&gt;/&lt;id&gt;/…</code>). Omit to use the bundled mini fixture.</td></tr>
+  <tr><td><code>--out-dir &lt;path&gt;</code></td><td><code>./fdb-out</code></td><td>Where per-sample JSON, response WAVs, <code>summary.csv</code>, and the score land.</td></tr>
+  <tr><td><code>--category &lt;name&gt;</code></td><td>all three</td><td>Restrict to one cascade-fair category (<code>pause_handling</code> | <code>smooth_turn_taking</code> | <code>user_interruption</code>). <code>backchannel</code> is always skipped.</td></tr>
+  <tr><td><code>--limit &lt;n&gt;</code></td><td>(none)</td><td>Cap samples per category — for a fast smoke pass over a large corpus.</td></tr>
+  <tr><td><code>--stt &lt;name&gt;</code></td><td><code>mock</code></td><td>STT provider name passed to <code>AddVoxa</code> (<code>mock</code> | a real provider, e.g. <code>WhisperCpp</code> in the <code>LocalModels</code> lane).</td></tr>
+  <tr><td><code>--tts &lt;name&gt;</code></td><td><code>mock</code></td><td>TTS provider name (<code>mock</code> | e.g. <code>Kokoro</code>).</td></tr>
+  <tr><td><code>--llm &lt;name&gt;</code></td><td><code>mock</code></td><td>Agent backing (<code>mock</code> deterministic responder | a real <code>IChatClient</code> provider).</td></tr>
+</table>
+
+<span class="filelabel">examples</span>
+<pre><code><span class="cm"># Offline smoke — mock engines, bundled mini fixture (what CI runs):</span>
+dotnet run -c Release --project bench/Voxa.TurnTaking
+
+<span class="cm"># One category, real local engines, the full fetched corpus (LocalModels lane):</span>
+dotnet run -c Release --project bench/Voxa.TurnTaking -- \
+  --corpus-dir ./full-duplex-bench --category smooth_turn_taking \
+  --stt WhisperCpp --tts Kokoro --llm openai --out-dir ./fdb-full</code></pre>
+
+<div class="callout warn"><b>Mock defaults are load-bearing.</b> If a real engine were the default, <code>dotnet run</code>
+(and the smoke test) would download models / hit the network on a clean checkout — breaking the offline default lane. Mock
+is the default precisely so the hermetic path is the zero-argument path; real engines are an explicit opt-in.</div>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases</h2>
+
+<p>Sequenced to get an end-to-end signal as early as possible, mirroring speech-core's M1–M4 progression
+(driver → real engines → summary → scoring/gate). Each phase is independently reviewable.</p>
+
+<ol>
+  <li><b>Phase A — Mock-driver smoke.</b> The project, the corpus walk, the per-sample loop over <code>Compose</code> with
+    <b>mock</b> engines, the per-sample JSON + response WAV, and the bundled mini fixture. End state: <code>dotnet run</code>
+    produces JSON for the three categories offline, and an xUnit smoke test asserts the records exist and parse. This is the
+    spine — everything else hangs off it.</li>
+  <li><b>Phase B — Real local engines.</b> Wire <code>--stt</code>/<code>--tts</code>/<code>--llm</code> to the real providers
+    so a <code>LocalModels</code>-gated run over the fetched corpus produces real transcripts and real timings. No new harness
+    structure — just provider selection + the fetch doc.</li>
+  <li><b>Phase C — Summary roll-up.</b> The <code>summarize</code> step → per-category <code>p50/p90/p99</code>
+    <code>summary.csv</code>, error counts, backchannel logged-skipped.</li>
+  <li><b>Phase D — Scoring + baseline gate.</b> The direction-aware <code>score</code> step, the checked-in
+    <code>baseline.json</code>, and the smoke test's baseline diff. End state: a turn-taking regression on the mini fixture
+    fails the build — the gate VRT-002+ are measured against.</li>
+</ol>
+
+<p>One logical change per PR (per CONTRIBUTING): Phases A–D are separate PRs, each with an <code>[Unreleased]</code>
+CHANGELOG entry. This spec lands <b>before</b> Phase A's code (spec-before-code).</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Create <code>bench/Voxa.TurnTaking</code> (console + library, <code>IsPackable=false</code>), add to <code>Voxa.slnx</code>.
+    <span class="ac">AC: builds in Release; references the meta-package, composer, and <code>Voxa.Testing</code>.</span></li>
+  <li><span class="tid">T1.2</span> Corpus walker over the FDB layout (<code>&lt;category&gt;/&lt;id&gt;/…</code>) + the bundled mini fixture (real short WAVs, source documented).
+    <span class="ac">AC: enumerates the three cascade-fair categories; <code>backchannel</code> is discovered and logged <code>skipped</code>, never run.</span></li>
+  <li><span class="tid">T1.3</span> Per-sample run: build scope → <code>Compose</code> → <code>WavFileSource</code> head + <code>WavFileSink</code> tail → run to <code>EndFrame</code> under a wall cap.
+    <span class="ac">AC: subscribes to the hub before the run; reduces <code>StageLatencyEvent</code>/<code>TurnEvent</code> to the timings; no private timer.</span></li>
+  <li><span class="tid">T1.4</span> Mock STT/LLM/TTS engines (deterministic, offline) selectable via <code>--stt</code>/<code>--llm</code>/<code>--tts</code>, mock as default.
+    <span class="ac">AC: zero-argument run touches no network and downloads nothing.</span></li>
+  <li><span class="tid">T1.5</span> Per-sample JSON record (schema §6) + response WAV; <code>error</code> populated on failure with <code>null</code> timings.
+    <span class="ac">AC: a forced sample failure produces a record, not a silent drop.</span></li>
+  <li><span class="tid">T2.1</span> Wire <code>--stt</code>/<code>--tts</code>/<code>--llm</code> to real providers; document the full-corpus fetch (Drive link + on-disk layout) in README + <code>--help</code>.
+    <span class="ac">AC: a <code>LocalModels</code>-gated run produces real transcripts; default lane unaffected.</span></li>
+  <li><span class="tid">T3.1</span> <code>summarize</code> → <code>summary.csv</code> with per-category <code>p50/p90/p99</code> + error counts; backchannel row present, blank, marked skipped.
+    <span class="ac">AC: percentiles exclude failed samples; counts reported.</span></li>
+  <li><span class="tid">T4.1</span> Direction-aware <code>score</code> (TOR + first-word latency, lower-better for <code>pause_handling</code>, higher-responsiveness for the other two).
+    <span class="ac">AC: <code>backchannel</code> emits no score; direction is correct per §7.</span></li>
+  <li><span class="tid">T4.2</span> Checked-in <code>baseline.json</code> (mini fixture, mock engines) + a baseline-diff in the smoke test within tolerance.
+    <span class="ac">AC: an injected regression fails the gate; refreshing the baseline is a reviewed change.</span></li>
+  <li><span class="tid">T4.3</span> xUnit smoke test (default lane): run mock harness over the fixture, assert records + summary + baseline pass.
+    <span class="ac">AC: runs offline in the default lane in seconds; the <code>ctest</code>-equivalent gate.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td><b>Mock-driver smoke.</b> The xUnit test drives the harness library over the bundled mini fixture with mock engines, asserts a per-sample JSON exists and parses for each of the three categories, asserts <code>backchannel</code> is logged skipped, and diffs the score against <code>baseline.json</code> within tolerance. No download, no models, no GPU; completes in seconds. This is the CI gate.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td><b>Real local-engine run.</b> Over a fetched FDB corpus (or a moderate subset via <code>--limit</code>) with <code>--stt WhisperCpp --tts Kokoro</code>: confirm real transcripts populate the records, the per-category percentiles are sane, and the response WAVs are non-empty. Gated, network/model-aware lane — not in the inner loop.</td></tr>
+  <tr><td><b>Manual / full corpus</b></td><td>The full fetched corpus across all three categories with production-grade engines, used to set or refresh <code>baseline.json</code> and to produce the before/after delta a VRT-002/003/004 PR cites. Run on demand; the numbers, not the harness, are the deliverable.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Corpus hosting — FDB ships via Google Drive, no single tarball; a contributor can't reproduce a run.</td><td class="sev-med">Med</td><td>Ship a tiny <b>real</b> checked-in mini fixture for the offline gate; document the full Drive fetch + on-disk layout. The default lane never needs the full corpus.</td></tr>
+  <tr><td>R2</td><td>Non-determinism — real engines / async timing make per-sample numbers wobble, so a baseline diff flaps.</td><td class="sev-high">High</td><td>The gate uses <b>mock</b> engines (deterministic) on the mini fixture, with a tolerance band; real-engine runs are <code>LocalModels</code>-only and not gated.</td></tr>
+  <tr><td>R3</td><td>Faking the skipped <code>backchannel</code> category to "complete the matrix".</td><td class="sev-high">High</td><td>Hard rule (§5): discover, log <code>skipped</code>, emit no score. A test asserts no backchannel score is produced.</td></tr>
+  <tr><td>R4</td><td>The harness builds its own pipeline / its own timer and drifts from production.</td><td class="sev-high">High</td><td>Drive <code>DefaultVoicePipelineComposer.Compose</code> and read the diagnostics hub only (§4). By construction the JSON timings equal <code>voxa.turn.ttfb</code>/<code>voxa.stage.latency</code>.</td></tr>
+  <tr><td>R5</td><td>Scorer gets the <b>direction</b> wrong (treats lower-latency as good for <code>pause_handling</code>, where silence is the win).</td><td class="sev-med">Med</td><td>Per-category direction table (§7) is the contract; a unit test asserts a "bot stayed silent through the pause" sample scores <em>better</em>, not worse.</td></tr>
+  <tr><td>R6</td><td>A wedged sample (stuck STT / never-ending TTS) hangs the whole run.</td><td class="sev-low">Low</td><td>Per-sample wall-clock cap; on timeout write the record with <code>error</code> set and move on — failures are data, not crashes.</td></tr>
+  <tr><td>R7</td><td>Fabricated fixture audio (synthetic clips passed off as a corpus) makes the gate meaningless.</td><td class="sev-med">Med</td><td>Fixture WAVs are real, short, and source-documented; the smoke gate exercises plumbing, the real numbers come from the fetched FDB corpus.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>The <code>backchannel</code> category.</b> Architecturally N/A for a half-duplex cascade — logged skipped, never
+    scored (§5). Revisit only if/when the local full-duplex speech-to-speech seam (VRT-005) gives Voxa a model that can talk
+    and listen at once.</li>
+  <li><b>Full corpus in CI.</b> The gate runs the mini fixture; the full FDB run is manual / <code>LocalModels</code> by
+    design — corpus size and engine cost don't belong in the inner loop.</li>
+  <li><b>LLM-judge scoring.</b> An opt-in semantic judge (did the bot's <em>content</em> make sense, not just its timing) is
+    a later follow-up; VRT-001 scores turn-taking <em>mechanics</em> (TOR + latency) only.</li>
+  <li><b>Changing pipeline behaviour.</b> VRT-001 is measurement only. The improvements it gates — eager STT (<b>VRT-002</b>),
+    AEC / barge-in robustness (<b>VRT-003</b>), streaming interim captions (<b>VRT-004</b>) — are separate items, each
+    required to cite a VRT-001 before/after delta. See <code>docs/speech-core-parity-program.md</code>.</li>
+</ul>
+
+</div>
+</body>
+</html>

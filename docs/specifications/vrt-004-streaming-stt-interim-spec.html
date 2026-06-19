@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VRT-004 — Streaming STT: Interim Transcriptions End-to-End</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-004 — Streaming STT: Interim Transcriptions End-to-End</h1>
+  <div class="sub">Realise the speech-to-text contract that is <b>already streaming-shaped</b>: propagate interim
+    (<code>IsFinal:false</code>) transcripts from <code>SpeechToTextProcessor</code> to the diagnostics hub and Studio's
+    live caption, behind an opt-in flag that keeps the default pipeline byte-identical — and ship the <b>first true
+    streaming engine</b> (Azure continuous-recognition) so those interims actually appear as the user speaks. The agent
+    still acts on finals only.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-004 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P0 — Streaming STT (Deepgram / Azure streaming)</div>
+    <div><b>Depends on</b> <code>ISpeechToTextEngine</code> already streaming-shaped; <code>SpeechToTextProcessor</code>; <code>TranscriptionFilter</code></div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M3</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">WS1 — Interim propagation end-to-end</a></li>
+    <li><a href="#s6">WS2 — A first true-streaming engine</a></li>
+    <li><a href="#s7">Configuration reference</a></li>
+    <li><a href="#s8">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VRT-004 add, in one sentence?</b>
+    <p>It makes the <em>live, word-by-word caption</em> appear while the user is still talking — and cuts perceived
+    latency — by finally <em>using</em> a speech-to-text contract that was designed for streaming from day one but whose
+    interim results never flowed anywhere.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>P0 latency. A streaming engine emits a partial hypothesis ("what's the weath…") long before the sentence settles.
+    Surfacing that partial gives the user immediate feedback that they were heard, and — once finals arrive faster than a
+    batch round-trip — shaves real time off the turn. speech-core's Nemotron streaming STT does exactly this on-device at
+    roughly real-time (RTF&nbsp;~1.0), gated behind an <code>emit_partial_transcriptions</code> opt-in; Voxa is already
+    shaped for the same move.</p>
+  </div>
+  <div class="qa">
+    <b>The key insight</b>
+    <p><b>The seam already exists.</b> <code>ISpeechToTextEngine</code> is <em>already</em>
+    <code>StartAsync</code>&nbsp;/&nbsp;<code>WriteAudioAsync</code>&nbsp;/&nbsp;<code>ReadTranscriptsAsync</code>
+    (an <code>IAsyncEnumerable&lt;TranscriptionResult&gt;</code> that yields interim <em>and</em> final results)
+    /&nbsp;<code>StopAsync</code>&nbsp;/&nbsp;<code>FlushAsync</code>. <code>TranscriptionResult</code> already carries
+    <code>IsFinal</code>; <code>TranscriptionFrame</code> already carries <code>IsFinal</code> <em>and</em>
+    <code>SpeakerId</code>. The gap is purely that (a) no engine actually produces interims that reach the user, and
+    (b) the interims that an engine <em>could</em> produce are not propagated downstream or surfaced. This item is an
+    <b>engine + propagation</b>, <b>not a new contract</b>.</p>
+  </div>
+  <div class="qa">
+    <b>What is explicitly <em>not</em> changing?</b>
+    <p>The engine interface and the <code>TranscriptionFrame</code> record — both already support this; we add neither
+    <code>ISpeechToTextEngine</code> nor <code>TranscriptionFrame.IsFinal</code>. Defaults stay off, so the composed
+    pipeline is byte-identical to today (golden-tested). The agent and the hallucination filter keep acting on
+    <em>finals only</em>; interims are display/turn-signal, never a turn.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VRT-004 is two workstreams over the existing speech abstractions and the <code>Voxa.Speech.Azure</code> package:</p>
+
+<ul>
+  <li><b>WS1 — Interim propagation end-to-end <span class="badge additive">opt-in / additive</span>.</b> Add an
+    <code>EmitInterimTranscriptions</code> flag (default <b>off</b>) to <code>SpeechToTextProcessor</code>. When on, the
+    read loop forwards an engine's interim <code>TranscriptionResult(IsFinal:false)</code> as a
+    <code>TranscriptionFrame(IsFinal:false)</code>, coalesced by a minimum interval so partial churn can't flood the
+    pipeline. The interim reaches <code>VoxaDiagnosticsHub</code> (Studio caption) but is <b>gated out at the agent
+    boundary</b>; <code>TranscriptionFilter</code> and the agent loop continue to act on finals only. With the flag off
+    the read loop is byte-for-byte what it is today.</li>
+  <li><b>WS2 — A first true-streaming engine <span class="badge p1">P0</span>.</b> Make
+    <code>Voxa.Speech.Azure</code> the first engine whose interims are <em>real</em>: it already uses the SDK's
+    continuous-recognition events (<code>Recognizing</code>&nbsp;→ interim, <code>Recognized</code>&nbsp;→ final), so the
+    work is to confirm the mapping, expose the interim path it already produces, and wire WS1's flag through Azure's
+    descriptor. A new <code>Voxa.Speech.Deepgram</code> (sub-200&nbsp;ms partials) is named as the fast-follow
+    alternative but is <b>not</b> in scope here (program Open Decision&nbsp;#1: lean Azure first, no new package).</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> With <code>EmitInterimTranscriptions:true</code> and the Azure streaming
+engine, a live caption appears in Studio's Talk view as the user speaks — refining word by word — while the agent and the
+hallucination filter still fire only on the settled, final transcript. Default builds (flag off) are unchanged and
+golden-clean.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Propagate interim <code>TranscriptionResult</code>s as <code>TranscriptionFrame(IsFinal:false)</code> from
+    <code>SpeechToTextProcessor</code>, behind an opt-in flag that keeps the default byte-identical.</li>
+  <li>Surface interims to <code>VoxaDiagnosticsHub</code> so Studio renders a live caption (reusing the existing
+    <code>TranscriptEvent(Text, IsFinal)</code> — no new diagnostic event type).</li>
+  <li>Guarantee interims <b>never</b> trigger a turn or feed the agent: the finals-only gate is explicit and tested.</li>
+  <li>Throttle / coalesce interim churn with a minimum emit interval so a chatty engine can't flood bounded channels.</li>
+  <li>Ship Azure continuous-recognition as the first engine that produces real interims through this path.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li>A <b>local</b> streaming STT model — its own follow-up; it would slot here later as a second streaming engine
+    (the on-device analogue of Azure, behind the same flag).</li>
+  <li>Streaming TTS / Cartesia — a separate P0 TTS bullet, unrelated to this STT path.</li>
+  <li>A new <code>Voxa.Speech.Deepgram</code> package — named as the fast-follow, deferred (§12, Open Decision&nbsp;#1).</li>
+  <li>Any change to <code>ISpeechToTextEngine</code> or the <code>TranscriptionFrame</code> shape — both already support
+    interims.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default-pipeline behaviour (flag off)</td><td><b>Byte-identical</b> to today — golden-tested; the read loop emits finals only, exactly as now.</td></tr>
+  <tr><td>Interims feeding the agent</td><td><b>Zero.</b> Interims must never reach the agent loop or trigger a turn — finals-only gate is a hard invariant.</td></tr>
+  <tr><td>Interim emit rate</td><td>Coalesced to <b>≥ <code>InterimMinInterval</code></b> (default ~150&nbsp;ms) per interim frame — the last partial in a window wins.</td></tr>
+  <tr><td>Voxa.Core dependency set</td><td><b>0</b> additions — propagation uses the existing frame + diagnostics machinery; the Azure SDK stays in the Azure package.</td></tr>
+  <tr><td>Default test lane</td><td>No new network — interim propagation is covered by a <i>fake</i> streaming engine; the real Azure socket is trait-gated / mocked.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>The granular chain is <code>VAD → STT → TranscriptionFilter → [Stt&nbsp;tap] → agent → SentenceAggregator → TTS</code>.
+Three facts about the <em>existing</em> tree make this item small:</p>
+
+<ul>
+  <li><b>The contract is already streaming.</b> <code>SpeechToTextProcessor.ReadLoopAsync</code> already does
+    <code>await foreach (var t in _engine.ReadTranscriptsAsync(ct))</code> and pushes
+    <code>new TranscriptionFrame(t.Text, t.IsFinal, t.Language)</code>. It just never <em>receives</em> an interim today,
+    because the only engines wired in are batch (Whisper REST) or have their interim path unexercised. The change is to
+    decide, per the flag, whether to forward an <code>IsFinal:false</code> result — not to add a code path that pushes
+    transcripts.</li>
+  <li><b>The diagnostics tap already maps interims.</b> <code>DiagnosticsTapProcessor</code> at
+    <code>DiagnosticsTapScope.Stt</code> maps <code>TranscriptionFrame t =&gt; new TranscriptEvent(t.Text, t.IsFinal)</code>
+    — so an interim frame becomes a <code>TranscriptEvent(IsFinal:false)</code> with <b>no new event type</b>. Studio's
+    caption only needs to render the non-final event it will now receive.</li>
+  <li><b>The finals-only gates already exist.</b> <code>TranscriptionFilter</code> only inspects
+    <code>TranscriptionFrame { IsFinal: true }</code> and passes everything else through unchanged; the
+    <code>StageLatencyTracker</code> keys its STT-final timestamp off <code>TranscriptEvent { IsFinal: true }</code>.
+    The remaining work is the <em>agent</em> boundary — see §5, the load-bearing detail.</li>
+</ul>
+
+<div class="callout warn"><b>Load-bearing ordering detail.</b> In <code>DefaultVoicePipelineComposer</code> the STT
+diagnostics tap is inserted <em>after</em> <code>TranscriptionFilter</code> (so diagnostics report transcripts that
+actually drive the agent). The filter forwards interim frames unchanged today — which is exactly what we want for the
+caption (interims must reach the tap) but means an interim frame would <em>also</em> reach the agent if nothing stops it.
+WS1 therefore adds the explicit finals-only gate <b>between the tap and the agent</b> (the agent processor ignores
+non-final transcription frames), so the caption sees interims and the agent never does.</div>
+
+<h4>File-change map</h4>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>SpeechToTextProcessor.cs</code></td><td>WS1 — add <code>EmitInterimTranscriptions</code> + <code>InterimMinInterval</code>; in <code>ReadLoopAsync</code>, forward <code>IsFinal:false</code> results only when the flag is on, coalesced by the interval. Finals path unchanged.</td></tr>
+  <tr><td>Agent stage (<code>AgentLoopProcessor</code> intake / the STT-to-agent adapter)</td><td>WS1 — explicit finals-only gate: ignore <code>TranscriptionFrame { IsFinal:false }</code> for turn/agent purposes (forward downstream so the sink/transport still sees it).</td></tr>
+  <tr><td><code>TranscriptionFilter.cs</code></td><td><b>Unchanged in behaviour</b> — already acts on finals only and passes interims through. Add a one-line doc note that interims are intentionally pass-through for the caption tap.</td></tr>
+  <tr><td><code>AzureSpeechToTextEngine.cs</code> / Azure options + descriptor</td><td>WS2 — confirm the <code>Recognizing</code>→interim / <code>Recognized</code>→final mapping; thread the <code>EmitInterimTranscriptions</code> flag through so the processor forwards what Azure already emits. No SDK swap (it is already continuous-recognition).</td></tr>
+  <tr><td><code>DiagnosticEvents.cs</code>, <code>DiagnosticsTapProcessor.cs</code>, <code>StageLatencyTracker.cs</code></td><td><b>Unchanged.</b> The tap already emits <code>TranscriptEvent(Text, IsFinal)</code>; the tracker already keys on finals.</td></tr>
+  <tr><td>Studio caption view (Studio half)</td><td>Render the non-final <code>TranscriptEvent</code> as a live, replaced-in-place caption; promote to settled text on the final.</td></tr>
+</table>
+
+<div class="callout"><b>speech-core analogue.</b> speech-core's Nemotron streaming STT raises a
+<code>PartialTranscription</code> event at roughly real time (RTF&nbsp;~1.0), behind an opt-in
+<code>emit_partial_transcriptions</code> switch — exactly the on-device counterpart of WS1's
+<code>EmitInterimTranscriptions</code>. We import the <em>shape</em> (opt-in partials, finals drive the agent), not the
+C++; Azure is the cloud engine that realises it first, and a local streaming model is the deferred on-device twin.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — Interim propagation end-to-end</h2>
+
+<div class="ws-head">
+  <span><b>Component</b> Voxa.Speech.Abstractions</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (agent-gate correctness)</span>
+  <span><b>Default</b> off (byte-identical)</span>
+  <span><b>Surface</b> opt-in flag + interval</span>
+</div>
+
+<p>The processor already has the read loop; WS1 adds a flag, a coalescing interval, and forwarding for non-final results.
+The finals path is untouched. With <code>EmitInterimTranscriptions == false</code> the method body is identical to
+today's.</p>
+
+<span class="filelabel">src/Voxa.Speech.Abstractions/SpeechToTextProcessor.cs (additions — sketch)</span>
+<pre><code><span class="cm">// New, additive options. Defaults keep the read loop byte-identical to today.</span>
+<span class="cm">/// &lt;summary&gt;Forward interim (IsFinal:false) transcripts as TranscriptionFrame(IsFinal:false).</span>
+<span class="cm">/// Off by default — mirrors speech-core's emit_partial_transcriptions opt-in.&lt;/summary&gt;</span>
+public bool EmitInterimTranscriptions { get; init; }              <span class="cm">// default false</span>
+
+<span class="cm">/// &lt;summary&gt;Minimum gap between forwarded interim frames; the latest partial in a</span>
+<span class="cm">/// window wins. Bounds interim churn on the audio/data path.&lt;/summary&gt;</span>
+public TimeSpan InterimMinInterval { get; init; } = TimeSpan.FromMilliseconds(150);
+
+private async Task ReadLoopAsync(CancellationToken ct)
+{
+    if (_engine is null) return;
+    long lastInterimTicks = 0;
+    try
+    {
+        await foreach (var t in _engine.ReadTranscriptsAsync(ct).ConfigureAwait(false))
+        {
+            if (t.IsFinal)
+            {
+                <span class="cm">// Finals: exactly as today — drive filter, agent, latency tracker.</span>
+                await PushFrameAsync(new TranscriptionFrame(t.Text, isFinal: true, t.Language), ct)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
+            <span class="cm">// Interims: opt-in only, and coalesced so partial churn can't flood the channel.</span>
+            if (!EmitInterimTranscriptions || string.IsNullOrWhiteSpace(t.Text)) continue;
+
+            var now = Environment.TickCount64;
+            if (now - lastInterimTicks &lt; InterimMinInterval.TotalMilliseconds) continue;
+            lastInterimTicks = now;
+
+            await PushFrameAsync(new TranscriptionFrame(t.Text, isFinal: false, t.Language), ct)
+                .ConfigureAwait(false);
+        }
+    }
+    catch (OperationCanceledException) { <span class="cm">/* shutdown */</span> }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "SpeechToTextProcessor: STT engine read loop failed");
+        await PushErrorAsync($"STT engine failed: {ex.Message}", ex, ct).ConfigureAwait(false);
+    }
+}</code></pre>
+
+<h3>The finals-only gate at the agent boundary (the part that must not regress)</h3>
+<p>Interim frames are forwarded downstream so they reach the STT diagnostics tap (caption) and any transport that wants
+them. They must <b>stop</b> before the agent. The gate lives at the agent intake: a non-final
+<code>TranscriptionFrame</code> is forwarded (so the sink still completes) but does <b>not</b> start a turn or get
+appended to the agent's input.</p>
+
+<span class="filelabel">agent intake (AgentLoopProcessor / STT-to-agent adapter) — finals-only gate</span>
+<pre><code>protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
+{
+    <span class="cm">// Interim transcripts are display/turn-signal only — never a turn, never agent input.</span>
+    if (frame is TranscriptionFrame { IsFinal: false })
+    {
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);   <span class="cm">// forward; do not act</span>
+        return;
+    }
+
+    if (frame is TranscriptionFrame { IsFinal: true } final)
+    {
+        <span class="cm">// existing behaviour: this is what starts/feeds a turn</span>
+        ...
+    }
+    ...
+}</code></pre>
+
+<div class="callout danger"><b>Invariant — interims are not turns.</b> An interim <code>TranscriptionFrame</code> must
+never (a) start an agent turn, (b) be appended to conversation memory, or (c) be counted by
+<code>StageLatencyTracker</code> as the STT-final edge. (a)/(b) are enforced by the agent-intake gate above; (c) holds
+for free because the tracker already keys on <code>TranscriptEvent { IsFinal: true }</code>. The hallucination
+<code>TranscriptionFilter</code> already ignores non-finals — leave it that way so partials still reach the caption tap.</div>
+
+<h3>Surfacing the caption (diagnostics)</h3>
+<p>No diagnostics code changes: the interim <code>TranscriptionFrame</code> already maps to
+<code>TranscriptEvent(Text, IsFinal:false)</code> at the STT tap. Studio's Talk view renders the non-final event as a
+caption that is <em>replaced in place</em> on each update, then promoted to settled text when the matching final arrives.
+Because every publish is behind <code>VoxaDiagnosticsHub.HasListeners</code>, an unobserved session still allocates
+nothing.</p>
+
+<h3>Optional — interims as a richer smart-turn signal</h3>
+<div class="callout"><b>Cross-reference (optional, can defer to VRT-002).</b> The smart-turn seam shipped in PR&nbsp;#26
+(<code>SileroVadOptions.ConfirmTurnEnd</code>) re-decides end-of-turn at the silence timeout from <em>audio</em> alone.
+The latest interim <em>text</em> is a strictly richer signal ("…what's the weather in" clearly is not turn-final). Feeding
+the most-recent partial to the classifier is a natural enhancement that composes with VRT-002's eager-STT decisions; it is
+<b>out of scope for VRT-004's core</b> (it would couple STT text into the VAD seam) and noted here only as the obvious next
+hook.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — A first true-streaming engine</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.Azure</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span> (SDK already continuous)</span>
+  <span><b>Decision</b> Azure first; Deepgram fast-follow</span>
+  <span><b>New deps</b> none</span>
+</div>
+
+<p>Per program Open Decision&nbsp;#1 (<i>lean: Azure first, cheapest, no new package</i>), the first engine to produce
+real interims through WS1 is <code>Voxa.Speech.Azure</code>. The convenient truth: <code>AzureSpeechToTextEngine</code>
+<em>already</em> runs in continuous-recognition mode and already maps both event kinds to <code>TranscriptionResult</code>.
+WS2 is therefore <b>confirm + expose</b>, not a rewrite.</p>
+
+<span class="filelabel">src/Voxa.Speech.Azure/AzureSpeechToTextEngine.cs (the mapping that already exists)</span>
+<pre><code><span class="cm">// Recognizing → interim hypothesis (IsFinal:false). Already wired.</span>
+private void OnRecognizing(object? sender, SpeechRecognitionEventArgs e)
+{
+    if (!string.IsNullOrEmpty(e.Result.Text))
+        _transcripts.Writer.TryWrite(
+            new TranscriptionResult(e.Result.Text, IsFinal: false, _options.RecognitionLanguage));
+}
+
+<span class="cm">// Recognized → settled utterance (IsFinal:true). Already wired.</span>
+private void OnRecognized(object? sender, SpeechRecognitionEventArgs e)
+{
+    if (e.Result.Reason == ResultReason.RecognizedSpeech &amp;&amp; !string.IsNullOrEmpty(e.Result.Text))
+        _transcripts.Writer.TryWrite(
+            new TranscriptionResult(e.Result.Text, IsFinal: true, _options.RecognitionLanguage));
+}</code></pre>
+
+<p>So the SDK event → <code>TranscriptionResult</code> mapping is the model for any streaming engine:</p>
+<table>
+  <tr><th>SDK / socket event</th><th>Maps to</th></tr>
+  <tr><td>Partial / interim hypothesis (Azure <code>Recognizing</code>; Deepgram <code>is_final:false</code>)</td><td><code>TranscriptionResult(text, IsFinal:false, lang)</code></td></tr>
+  <tr><td>Settled utterance (Azure <code>Recognized</code>; Deepgram <code>is_final:true</code> / <code>speech_final</code>)</td><td><code>TranscriptionResult(text, IsFinal:true, lang)</code></td></tr>
+  <tr><td>Error / cancellation</td><td>Complete the transcript channel with the error (as Azure's <code>OnCanceled</code> does)</td></tr>
+</table>
+
+<div class="callout good"><b>What WS2 actually changes.</b> (1) Thread <code>EmitInterimTranscriptions</code> from config
+through the Azure descriptor so the composed <code>SpeechToTextProcessor</code> forwards the interims Azure already
+emits. (2) Add a focused test asserting Azure's two event kinds produce <code>IsFinal:false</code> then
+<code>IsFinal:true</code> in order. No <code>SpeechRecognizer</code> reconfiguration — continuous recognition is already
+how <code>StartAsync</code> runs.</div>
+
+<div class="callout"><b>Deepgram — named, not built.</b> A new <code>Voxa.Speech.Deepgram</code> package (WebSocket streaming,
+sub-200&nbsp;ms partials) is the obvious lower-latency alternative and the program's fast-follow. It would implement the
+same <code>ISpeechToTextEngine</code> and map <code>is_final</code> to <code>TranscriptionResult.IsFinal</code> identically.
+It is <b>deferred</b> (§12) to keep VRT-004 to one provider and no new dependency; the Deepgram SDK would live in its own
+provider package, never in Core.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Configuration reference</h2>
+
+<p>One new key on the STT processor (provider-neutral), surfaced through whichever streaming engine is selected. The
+provider that needs configuration <b>captures the <code>IConfiguration</code> passed to <code>AddVoxa</code></b> — it does
+not call <code>GetRequiredService&lt;IConfiguration&gt;()</code> (that breaks the plain-<code>ServiceCollection</code>
+hosts: Studio, tests, CLI).</p>
+
+<span class="filelabel">appsettings.json — new/affected keys</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "Azure",                       <span class="cm">// the first true-streaming engine (WS2)</span>
+    "Azure": {
+      "SubscriptionKey": "...",
+      "Region": "eastus",
+      "RecognitionLanguage": "en-US"
+    },
+    "Stt:EmitInterimTranscriptions": true, <span class="cm">// NEW. default false → byte-identical pipeline</span>
+    "Stt:InterimMinInterval": "00:00:00.150" <span class="cm">// NEW. coalescing window (default ~150 ms)</span>
+  }
+}</code></pre>
+
+<p>The exact binding location (a shared STT options block vs. per-provider) is an implementation choice; the
+<b>default-off</b> semantics and the <b>finals-only agent gate</b> are the contract. With the flag unset, no interim frame
+is ever produced and the pipeline is the one shipped today.</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — WS1 propagation behind the flag (fake engine).</b> Add <code>EmitInterimTranscriptions</code> +
+    <code>InterimMinInterval</code> to <code>SpeechToTextProcessor</code>; add the agent-intake finals-only gate; prove
+    it with a <i>fake</i> streaming engine that yields interim-then-final. Default-off golden stays byte-identical. No
+    network, no provider change.</li>
+  <li><b>Phase B — WS2 wire the real Azure streaming engine.</b> Thread the flag through the Azure descriptor; add the
+    event-mapping test (interim before final, in order). Continuous recognition is already on; this is confirm + expose.</li>
+  <li><b>Phase C — Studio caption surface.</b> Render the non-final <code>TranscriptEvent</code> in the Talk view as a
+    live, replaced-in-place caption, promoted to settled text on the final. Studio-only; uses the existing diagnostics
+    stream, no new event type, <code>voxa-design</code> tokens for the surface.</li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING): Phase A, Phase B, Phase C are separate PRs, each with an
+<code>[Unreleased]</code> <code>CHANGELOG.md</code> entry. This spec is authored <b>before</b> any of its code, per the
+program's spec-before-code rule.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> Add <code>EmitInterimTranscriptions</code> (default false) + <code>InterimMinInterval</code> to <code>SpeechToTextProcessor</code>.
+    <span class="ac">AC: flag off ⇒ <code>ReadLoopAsync</code> emits finals only; golden default pipeline byte-identical.</span></li>
+  <li><span class="tid">T1.2</span> Forward interim <code>TranscriptionResult(IsFinal:false)</code> as <code>TranscriptionFrame(IsFinal:false)</code> when on, coalesced by the interval.
+    <span class="ac">AC: a fake engine yielding N rapid partials emits ≤ one frame per <code>InterimMinInterval</code>.</span></li>
+  <li><span class="tid">T1.3</span> Add the finals-only gate at the agent intake: non-final transcription frames are forwarded but never start a turn / feed the agent.
+    <span class="ac">AC: with interims flowing, the agent fires exactly once (on the final); conversation memory contains only the final text.</span></li>
+  <li><span class="tid">T1.4</span> Doc-note <code>TranscriptionFilter</code> as intentionally interim-pass-through (for the caption tap); confirm no behaviour change.
+    <span class="ac">AC: filter still drops final hallucinations only; interims pass to the STT tap.</span></li>
+  <li><span class="tid">T2.1</span> Thread <code>EmitInterimTranscriptions</code> through the Azure descriptor/options so the composer forwards Azure's interims.
+    <span class="ac">AC: config <code>true</code> ⇒ composed Azure pipeline emits interim frames; <code>false</code> ⇒ finals only.</span></li>
+  <li><span class="tid">T2.2</span> Test the Azure event mapping: <code>Recognizing</code>→<code>IsFinal:false</code>, <code>Recognized</code>→<code>IsFinal:true</code>, ordered.
+    <span class="ac">AC: runs without a live Azure socket (mock/fake the recognizer events) in the default lane, or trait-gated against the real service.</span></li>
+  <li><span class="tid">T3.1</span> Studio Talk view renders the non-final <code>TranscriptEvent</code> as a live caption, replaced in place, promoted on final.
+    <span class="ac">AC: headless view-model test — non-final events update the caption; the final settles it. Avalonia-free VM.</span></li>
+  <li><span class="tid">T3.2</span> Docs: note the opt-in flag, the interval, and "interims are display/turn-signal, finals drive the agent" in <code>docs/performance-tuning.md</code> / <code>docs/studio.md</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td>A <b>fake streaming engine</b> yields <code>interim → interim → final</code>. Assert: (1) with the flag on, interim <code>TranscriptionFrame(IsFinal:false)</code>s flow and are coalesced to ≤ one per interval; (2) <code>TranscriptionFilter</code> and the agent ignore interims — the agent fires once, on the final; (3) the diagnostics hub receives <code>TranscriptEvent(IsFinal:false)</code> captions plus the final; (4) with the flag <b>off</b>, the frame sequence is byte-identical to today (golden).</td></tr>
+  <tr><td><b><code>Category=LocalModels</code> or mocked socket</b></td><td>The real <code>AzureSpeechToTextEngine</code> contract: feed audio, assert the SDK's <code>Recognizing</code>/<code>Recognized</code> events surface as ordered interim-then-final <code>TranscriptionResult</code>s. Prefer a mocked recognizer for determinism; a live-service variant is opt-in and quota-gated.</td></tr>
+  <tr><td><b>Manual / Studio</b></td><td>Run Studio Talk with <code>Stt=Azure, EmitInterimTranscriptions=true</code>; speak and confirm the caption updates word-by-word, then settles, and that the agent responds only after the final (no double-turns on partials).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Interim churn floods the bounded data channel and drops audio (a fast engine emits dozens of partials/sec).</td><td class="sev-med">Med</td><td><code>InterimMinInterval</code> coalescing (latest partial wins); the data path stays bounded <code>DropOldest</code> — an interim is droppable display data, never a turn.</td></tr>
+  <tr><td>R2</td><td>An interim accidentally triggers a turn or is appended to conversation memory.</td><td class="sev-high">High</td><td>Explicit finals-only gate at the agent intake (T1.3) + a test asserting the agent fires exactly once on the final; the latency tracker already keys on finals.</td></tr>
+  <tr><td>R3</td><td>SDK event-mapping is wrong (an interim mislabelled final, or a final lost) for the streaming engine.</td><td class="sev-med">Med</td><td>Focused mapping test (T2.2) over the SDK's two event kinds, ordered; Azure already maps both — the test pins it against regressions and is the template for Deepgram later.</td></tr>
+  <tr><td>R4</td><td>The opt-in flag drifts and the default pipeline stops being byte-identical (a golden regression).</td><td class="sev-high">High</td><td>Default <code>false</code>; the flag-off path is the unchanged read loop; diagnostics-off golden test guards byte-identity, as for every Speech-Core item.</td></tr>
+  <tr><td>R5</td><td>Studio renders interims as <em>committed</em> transcript lines (caption history pollution).</td><td class="sev-low">Low</td><td>Caption is replaced-in-place for non-finals and only committed on the final; headless VM test (T3.1).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>A local streaming STT model.</b> The on-device analogue of Azure (speech-core's Nemotron-class, partials at
+    RTF&nbsp;~1.0) is its own item; it slots in here later as a second streaming engine behind the same
+    <code>EmitInterimTranscriptions</code> flag — no new propagation work.</li>
+  <li><b><code>Voxa.Speech.Deepgram</code></b> (sub-200&nbsp;ms partials). Named as the fast-follow; deferred so VRT-004
+    ships one provider with no new dependency (Open Decision&nbsp;#1). Same <code>ISpeechToTextEngine</code>, its SDK in
+    its own package.</li>
+  <li><b>Cartesia / streaming TTS.</b> A separate P0 TTS bullet; unrelated to this STT path.</li>
+  <li><b>Interims feeding smart-turn / eager STT.</b> The richer-signal hook (§5) belongs with <b>VRT-002</b>; VRT-004
+    only makes the interim text <em>available</em>.</li>
+</ul>
+
+<div class="callout"><b>Cross-references.</b> Complements ROADMAP <b>P0</b> (Deepgram / Azure streaming). The latest interim
+text can enrich <b>VRT-002</b>'s smart-turn / eager-STT decisions. Latency gains from streaming finals are measured by the
+turn-taking benchmark in <b>VRT-001</b>. Governing plan:
+<code>docs/speech-core-parity-program.md</code>, item M3 (VRT-004).</div>
+
+</div>
+</body>
+</html>

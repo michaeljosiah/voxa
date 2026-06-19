@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-007 — Local ONNX ASR Engines (Parakeet TDT v3 + Nemotron)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-007 — Local ONNX ASR Engines (Parakeet TDT v3 + Nemotron)</h1>
+  <div class="sub">A high-accuracy, fully on-device speech-to-text tier alongside whisper.cpp — three ONNX-Runtime ASR
+    model families on the <b>VLS-006</b> shared host: <b>Parakeet TDT v3</b> (batch, best accuracy) and two
+    <b>Nemotron</b> streaming engines that finally give the offline tier live <em>partials</em>. Ships as a new
+    <code>Voxa.Speech.OnnxAsr</code> package implementing the already-streaming <code>ISpeechToTextEngine</code> contract,
+    each model SHA-256-pinned via <code>VoxaModelCache</code>; the streaming engines consume <b>VRT-004</b>'s interim
+    propagation end-to-end. whisper.cpp and the STT contract are untouched.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-007 v1.0</div>
+    <div><b>Date</b> 2026-06-19</div>
+    <div><b>Status</b> Draft — for review</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P6 — Capability + P0 — Streaming STT</div>
+    <div><b>Depends on</b> VLS-006 ONNX host; VRT-004 interim propagation; <code>ISpeechToTextEngine</code> (already streaming-shaped)</div>
+    <div><b>Program</b> Speech-Core Parity (<code>docs/speech-core-parity-program.md</code>), item M5</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where this plugs in</a></li>
+    <li><a href="#s5">WS1 — Parakeet TDT v3 batch engine</a></li>
+    <li><a href="#s6">WS2 — Nemotron streaming engine</a></li>
+    <li><a href="#s7">WS3 — Nemotron-3.5 multilingual streaming engine</a></li>
+    <li><a href="#s8">WS4 — Licensing &amp; model catalog</a></li>
+    <li><a href="#s9">Configuration reference</a></li>
+    <li><a href="#s10">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s11">Progress checklist</a></li>
+    <li><a href="#s12">Verification protocol</a></li>
+    <li><a href="#s13">Risk register</a></li>
+    <li><a href="#s14">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VLS-007 add, in one sentence?</b>
+    <p>A second on-device speech-to-text option — three NVIDIA-family ONNX models (Parakeet and two Nemotron variants) that
+    are <em>more accurate</em> than the local whisper.cpp tier, and — for the first time on the offline path — can stream
+    <em>partial</em> transcripts as you speak instead of only producing a final result once you stop.</p>
+  </div>
+  <div class="qa">
+    <b>Why now?</b>
+    <p>Voxa's local STT tier (VLS-001/VLS-002) is whisper.cpp, which is <em>batch</em>: it buffers a whole utterance and
+    emits a single final transcript — no live captions, no early text. speech-core proves that Parakeet TDT v3 and the
+    Nemotron streaming models run well on commodity hardware as ONNX graphs, and <b>VLS-006</b> has just given Voxa a shared
+    ONNX-Runtime host to plug them into. The STT contract was <em>already</em> shaped for streaming
+    (<code>ReadTranscriptsAsync</code> yields interim + final); <b>VRT-004</b> wired interim frames through the rest of the
+    pipeline. This item supplies the missing piece: a <em>local</em> engine that actually emits those interims.</p>
+  </div>
+  <div class="qa">
+    <b>Does this change the STT contract or replace whisper.cpp?</b>
+    <p>No to both. <code>ISpeechToTextEngine</code> already has <code>StartAsync</code> / <code>WriteAudioAsync</code> /
+    <code>ReadTranscriptsAsync</code> (interim + final) / <code>StopAsync</code> / <code>FlushAsync</code> — these engines
+    <em>implement</em> that contract, they don't redefine it. whisper.cpp stays exactly as it is; this is an additional
+    engine you select with <code>Voxa:Stt = OnnxAsr</code>. Pick whichever local tier you want per deployment.</p>
+  </div>
+  <div class="qa">
+    <b>What is the hard part?</b>
+    <p>The <em>pre- and post-processing</em>, not the inference. Each model needs a faithfully ported log-mel front-end, a
+    SentencePiece tokenizer/vocab, and a correct neural-transducer decode (TDT for Parakeet, cache-aware streaming RNN-T for
+    the Nemotron pair). That decode logic is fiddly and must be validated against speech-core's reference outputs and known
+    transcripts — it is the long pole of this work, which is why batch Parakeet ships first to prove the host + descriptor
+    before the streaming pair lands.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VLS-007 is one new opt-in package, <code>Voxa.Speech.OnnxAsr</code>, running on the <b>VLS-006</b> shared ONNX-Runtime
+host, with three model families behind the existing <code>ISpeechToTextEngine</code> contract:</p>
+
+<ul>
+  <li><b>WS1 — Parakeet TDT v3 (0.6B) <span class="badge p1">P6</span> <span class="badge additive">batch</span>.</b>
+    A FastConformer encoder + Token-and-Duration-Transducer (TDT) decoder, exported as two ONNX graphs (encoder +
+    decoder_joint) with a 128-bin mel front-end. Highest accuracy; auto-detects language. Runs once per utterance on
+    <code>UserStoppedSpeaking</code> / <code>FlushAsync</code> and emits <code>TranscriptionResult(IsFinal: true)</code> —
+    the simplest decode path, so it lands first.</li>
+  <li><b>WS2 — Nemotron Speech Streaming (0.6B) <span class="badge p2">P0</span> <span class="badge p2">streaming</span>.</b>
+    Cache-aware streaming RNN-T (three graphs: encoder + decoder + joint). speech-core's
+    <code>begin_stream</code>&nbsp;/&nbsp;<code>push_chunk</code>&nbsp;/&nbsp;<code>end_stream</code> loop maps onto
+    <code>WriteAudioAsync</code> → interim <code>TranscriptionResult(IsFinal: false)</code>, finalised on
+    <code>FlushAsync</code>/<code>StopAsync</code>. <b>This is the local streaming engine VRT-004 deferred</b> — it consumes
+    VRT-004's interim propagation end-to-end. ~RTF&nbsp;1.0 on CPU.</li>
+  <li><b>WS3 — Nemotron-3.5 ASR Streaming Multilingual (0.6B) <span class="badge p2">P0</span>
+    <span class="badge p2">streaming</span>.</b> Same streaming shape, plus multilingual coverage and
+    <em>prompt-conditioning</em> — a language/context hint selects an encoder prompt slot (mapped from
+    <code>TranscriptionResult.Language</code> / a config prompt). ONNX-FP16 variant available.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A developer who wants higher local accuracy sets
+<code>"Stt": "OnnxAsr", "OnnxAsr": { "Model": "parakeet-tdt-v3" }</code> and gets best-in-class on-device transcription;
+switching <code>Model</code> to <code>nemotron-streaming</code> turns on live partial captions on the fully offline path —
+the first time the local tier streams. whisper.cpp users change nothing, and CI stays offline and deterministic.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Add a high-accuracy local STT tier (Parakeet TDT v3) selectable by config name, SHA-256-pinned like every other
+    artifact, on the <b>VLS-006</b> host.</li>
+  <li>Ship the first <em>local streaming</em> STT engine(s) — Nemotron streaming + Nemotron-3.5 multilingual — that emit
+    interim <code>TranscriptionResult(IsFinal: false)</code> through <b>VRT-004</b>'s propagation to live captions.</li>
+  <li>Implement the existing <code>ISpeechToTextEngine</code> contract faithfully — do not invent a new STT seam; the
+    contract already streams.</li>
+  <li>Match the <code>WhisperCpp</code> descriptor/catalog/config shape so the new tier self-describes and resolves through
+    <code>VoxaModelCache</code> exactly like whisper.cpp.</li>
+  <li>Keep the default meta-package CPU-only and offline-clean: the heavy 0.6B models are opt-in and trait-gated, GPU rides
+    VLS-006/VLS-002 (never bundled).</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>LiteRT (TFLite) backends</b> — speech-core ships a LiteRT Nemotron twin; Voxa standardizes on ONNX Runtime via
+    VLS-006. Out of scope.</li>
+  <li><b>Non-ASR ONNX models</b> — DeepFilterNet3 (VLS-004), Sidon (VLS-008), the diarization models (VLS-005) are separate
+    consumers of the same host.</li>
+  <li><b>On-device fine-tuning / training</b> — inference only.</li>
+  <li><b>Replacing whisper.cpp</b> — this is an <em>additional</em> engine; both local tiers coexist, selected per
+    deployment.</li>
+  <li><b>A new <code>OnnxEngine</code> / session host</b> — that is VLS-006; this item is its <em>first ASR consumer</em>.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Default meta-package size delta</td><td><b>0</b> — <code>Voxa.Speech.OnnxAsr</code> is a separate opt-in package; the default reference set is unchanged.</td></tr>
+  <tr><td>Default test lane</td><td>No new network; catalog resolve/offline-miss + a fake/tiny-session streaming-shape test run fully offline.</td></tr>
+  <tr><td>Model footprint</td><td>Each family is ~0.6B params (multiple ONNX graphs + tokenizer/config sidecars) — opt-in heavy tier, GPU-friendly via VLS-006.</td></tr>
+  <tr><td>Nemotron streaming on CPU</td><td>~RTF&nbsp;1.0 (real-time-ish; the streaming partials are the win). Parakeet batch on CPU is faster-than-real-time on a typical utterance — confirm on hardware.</td></tr>
+  <tr><td>Decode fidelity</td><td>Transcripts must match speech-core's reference outputs / known-clip transcripts within a small WER tolerance — the gating correctness budget (WS1–WS3).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where this plugs in</h2>
+
+<p>All three engines are vendor engines behind the existing <code>ISpeechToTextEngine</code> contract — exactly the seat
+<code>WhisperCppSttEngine</code> occupies — composed by the generic <code>SpeechToTextProcessor</code>. The processor is
+unchanged: it pipes <code>AudioRawFrame</code> PCM into <code>WriteAudioAsync</code>, calls <code>FlushAsync</code> on
+<code>UserStoppedSpeakingFrame</code>, and turns every <code>TranscriptionResult</code> the read loop yields into a
+<code>TranscriptionFrame(Text, IsFinal, Language)</code>. The batch-vs-streaming difference is entirely <em>inside</em> the
+engine:</p>
+
+<table>
+  <tr><th>Engine</th><th>Shape</th><th>How it uses the contract</th></tr>
+  <tr><td><code>parakeet-tdt-v3</code></td><td><b>Batch</b> (like whisper.cpp)</td><td><code>WriteAudioAsync</code> buffers PCM; <code>FlushAsync</code>/<code>StopAsync</code> run encoder + TDT decode over the buffered utterance and write one <code>TranscriptionResult(IsFinal: true)</code>.</td></tr>
+  <tr><td><code>nemotron-streaming</code></td><td><b>Streaming</b></td><td><code>WriteAudioAsync</code> feeds chunks into the cache-aware encoder loop; the read loop yields interim <code>(IsFinal: false)</code> as text accumulates; <code>FlushAsync</code>/<code>StopAsync</code> emits the authoritative <code>(IsFinal: true)</code>.</td></tr>
+  <tr><td><code>nemotron-3.5-multilingual</code></td><td><b>Streaming</b> + prompt</td><td>As above, plus a language prompt slot selected before/at stream start.</td></tr>
+</table>
+
+<div class="callout"><b>Mapping speech-core's <code>STTInterface</code> onto Voxa.</b> speech-core's Parakeet and Nemotron
+ONNX impls satisfy <code>STTInterface</code> with <code>transcribe()</code> (batch) and the streaming quintet
+<code>supports_streaming()</code> / <code>begin_stream()</code> / <code>push_chunk()</code> / <code>flush_stream()</code> /
+<code>end_stream()</code> / <code>cancel_stream()</code>. Voxa's already-streaming contract is the natural target:
+<code>begin_stream</code> ≈ <code>StartAsync</code>, <code>push_chunk</code> ≈ <code>WriteAudioAsync</code> (its
+<code>PartialResult</code> ≈ an interim <code>TranscriptionResult</code> yielded from <code>ReadTranscriptsAsync</code>),
+<code>flush_stream</code>/<code>end_stream</code> ≈ <code>FlushAsync</code>/<code>StopAsync</code>, and
+<code>cancel_stream</code> ≈ the per-frame <code>CancellationToken</code> + <code>DisposeAsync</code>. We port the model math
+and state machine; we do <b>not</b> port the C++ interface — Voxa's contract is the interface.</div>
+
+<h4>File / package table</h4>
+<table>
+  <tr><th>File / package</th><th>Change</th></tr>
+  <tr><td><code>Voxa.Speech.OnnxAsr</code> (new package)</td><td>The three engines + descriptor + catalog + options. References <code>Voxa.Speech.Abstractions</code> (the STT contract) and <code>Voxa.Audio.Onnx</code> (the VLS-006 host).</td></tr>
+  <tr><td><code>OnnxAsrSttEngine</code> family (new)</td><td>WS1 <code>ParakeetSttEngine</code> (batch), WS2 <code>NemotronStreamingSttEngine</code>, WS3 <code>NemotronMultilingualSttEngine</code> — each <code>ISpeechToTextEngine</code>, each running its graphs on the VLS-006 host.</td></tr>
+  <tr><td><code>OnnxAsrModelCatalog</code> (new)</td><td>WS4 — pinned <code>VoxaModelArtifact</code> entries (model graph(s) + tokenizer/vocab + config) per family; SHA-256 from HuggingFace LFS at implementation time.</td></tr>
+  <tr><td><code>OnnxAsrOptions</code> + <code>OnnxAsrDescriptors</code> (new)</td><td>WS1–WS3 — config binding (<code>Model</code>, <code>Device</code>, <code>Language</code>/prompt) + a <code>VoxaSttDescriptor</code> mirroring <code>WhisperCppDescriptors</code> (keyless <code>Validate</code>, <code>CreateProcessor</code>, <code>WarmUpAsync</code>).</td></tr>
+  <tr><td><code>Voxa.Audio.Onnx</code> (VLS-006)</td><td><b>Reused, unchanged.</b> Session host, EP/device seam (CPU default; CUDA/DirectML opt-in), <code>VoxaModelCache</code> integration, tensor-buffer helpers.</td></tr>
+  <tr><td><code>SpeechToTextProcessor</code>, <code>ISpeechToTextEngine</code>, <code>TranscriptionFrame</code></td><td><b>Unchanged.</b> Already streaming-shaped; the interim path is VRT-004's. This item only adds an engine.</td></tr>
+  <tr><td><code>Voxa.Core</code></td><td><b>Untouched.</b> No ONNX dependency ever enters Core (cross-cutting invariant) — the engines live in <code>Voxa.Speech.OnnxAsr</code> on the <code>Voxa.Audio.Onnx</code> host.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — Parakeet TDT v3 batch engine</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.OnnxAsr</span>
+  <span><b>Host</b> Voxa.Audio.Onnx (VLS-006)</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (TDT decode + mel port)</span>
+  <span><b>Shape</b> batch — final-only</span>
+</div>
+
+<p>Parakeet TDT v3 (0.6B) is a FastConformer encoder + Token-and-Duration-Transducer decoder, exported by NeMo as two ONNX
+graphs — <code>encoder</code> and <code>decoder_joint</code> — plus a SentencePiece vocabulary. It takes 16&nbsp;kHz mono
+Float32 audio and produces text with language detection. Its shape matches whisper.cpp's exactly: the VAD gates audio so
+only speech reaches the engine, and <code>SpeechToTextProcessor</code> calls <code>FlushAsync</code> on
+<code>UserStoppedSpeakingFrame</code> — so the engine buffers PCM between flushes and transcribes once per utterance,
+final-only. That is why it ships first: same lifecycle as the proven whisper.cpp engine, just a different inference core.</p>
+
+<span class="filelabel">src/Voxa.Speech.OnnxAsr/ParakeetSttEngine.cs (sketch — mirrors WhisperCppSttEngine's buffer/flush shape)</span>
+<pre><code><span class="cm">// Batch on-device ASR via ONNX Runtime (VLS-007 WS1). FastConformer encoder + TDT decoder run on the</span>
+<span class="cm">// shared VLS-006 host. Like WhisperCppSttEngine: buffer PCM between flushes, transcribe once per</span>
+<span class="cm">// utterance, emit final-only. Graphs + SentencePiece vocab resolve as pinned VoxaModelArtifacts.</span>
+public sealed class ParakeetSttEngine : ISpeechToTextEngine
+{
+    public const int RequiredSampleRate = 16000; <span class="cm">// 16 kHz mono — a hard model requirement, not a default</span>
+
+    public ParakeetSttEngine(OnnxAsrOptions options, VoxaModelCache cache, IOnnxModelHost host, ILogger? logger = null) { <span class="cm">/* … */</span> }
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        <span class="cm">// Resolve encoder + decoder_joint + vocab from the catalog (cold-cache download), then load both</span>
+        <span class="cm">// graphs on the VLS-006 host (process-wide cached sessions, like KokoroTtsEngine). Build the</span>
+        <span class="cm">// SentencePiece detokenizer + language-token map from the pinned vocab sidecar.</span>
+    }
+
+    public ValueTask WriteAudioAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct)
+    {
+        <span class="cm">// Append PCM16→float to the utterance buffer (grow ×2, like Whisper). No inference here.</span>
+        return ValueTask.CompletedTask;
+    }
+
+    public Task FlushAsync()
+    {
+        <span class="cm">// Speech-end: queue ONE transcription of the buffered utterance off the data loop (chained,</span>
+        <span class="cm">// serialized — exactly WhisperCppSttEngine.QueueTranscriptionLocked). Results arrive via the channel.</span>
+        return Task.CompletedTask;
+    }
+
+    public IAsyncEnumerable&lt;TranscriptionResult&gt; ReadTranscriptsAsync(CancellationToken ct) =&gt; _transcripts.Reader.ReadAllAsync(ct);
+
+    <span class="cm">// transcribe(): mel front-end → encoder Run → TDT greedy decode → detokenize → one final result.</span>
+    private async Task TranscribeAndEmitAsync(float[] samples, CancellationToken ct)
+    {
+        var mel  = ComputeLogMel(samples);                 <span class="cm">// 128 mel bins, n_fft 512, hop 160, win 400, pre-emphasis 0.97</span>
+        var enc  = _host.Run(_encoder, mel);               <span class="cm">// encoded_output[1, T, H], encoded_length</span>
+        var text = TdtGreedyDecode(enc);                   <span class="cm">// token+duration transducer over encoder frames (blank_id = vocab_size)</span>
+        if (text.Length == 0) return;
+        await _transcripts.Writer.WriteAsync(
+            new TranscriptionResult(text, IsFinal: true, Language: _detectedLanguage), ct).ConfigureAwait(false);
+    }
+}</code></pre>
+
+<div class="callout warn"><b>The TDT decode and mel front-end are the work.</b> Parakeet's decoder is a Token-and-Duration
+Transducer: greedy decoding emits a token <em>and</em> a duration (frames to advance) per step, with a blank at
+<code>vocab_size</code> and a small set of duration bins. Get the front-end constants right (speech-core's reference:
+128&nbsp;mel bins, <code>n_fft</code>&nbsp;512, <code>hop_length</code>&nbsp;160, <code>win_length</code>&nbsp;400,
+pre-emphasis&nbsp;0.97, Slaney mel, log-floor) and the transducer loop right (duration-bin advance, blank handling,
+SentencePiece detokenization), or transcripts are subtly wrong. Validate against speech-core's outputs and known-clip
+transcripts (§12 verification). Language is read from the model's language token, not configured.</div>
+
+<h4>Descriptor + catalog entry (mirror WhisperCpp)</h4>
+<p>The descriptor is the <code>WhisperCppDescriptors.Stt</code> shape: a <code>VoxaSttDescriptor(Name, ConfigSection,
+PreferredInputSampleRate, Validate, CreateProcessor)</code> with a keyless <code>Validate</code> (unknown model name,
+offline cache-miss, device value) and a <code>WarmUpAsync</code> that resolves + loads the graphs on startup so the first
+caller pays no download. The catalog entry is several pinned files per model (graphs + vocab + config):</p>
+
+<span class="filelabel">src/Voxa.Speech.OnnxAsr/OnnxAsrModelCatalog.cs (WS1 entry — sha256 + size from HuggingFace LFS, never hand-written)</span>
+<pre><code><span class="cm">// &lt;-- Each Sha256 + SizeBytes read from the model repo's LFS pointer at implementation time. --&gt;</span>
+<span class="cm">// Parakeet TDT v3 (0.6B) — NeMo ONNX export: encoder + decoder_joint + SentencePiece vocab.</span>
+["parakeet-tdt-v3"] = new OnnxAsrModel(
+    Kind:    OnnxAsrKind.Batch,
+    Files:
+    [
+        Entry("parakeet-tdt-v3/encoder.onnx",        "&lt;sha256&gt;", &lt;bytes&gt;),
+        Entry("parakeet-tdt-v3/decoder_joint.onnx",  "&lt;sha256&gt;", &lt;bytes&gt;),
+        Entry("parakeet-tdt-v3/vocab.txt",           "&lt;sha256&gt;", &lt;bytes&gt;),
+    ]),</code></pre>
+
+<div class="callout danger"><b>Do not fabricate hashes.</b> The authoritative <code>SHA-256</code> and exact byte length of
+<em>every</em> file — each ONNX graph, the tokenizer/vocab, the config — <b>must</b> be read at implementation time from the
+model's HuggingFace LFS pointer (<code>oid sha256:&lt;hash&gt;</code> / <code>size&nbsp;&lt;bytes&gt;</code>), exactly as the
+VLS-001/VLS-002 whisper entries were sourced. A hand-written or guessed hash is a bug, not a placeholder: the cache will
+either fetch the wrong file silently or fail verification forever.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — Nemotron streaming engine</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.OnnxAsr</span>
+  <span><b>Host</b> Voxa.Audio.Onnx (VLS-006)</span>
+  <span><b>Risk</b> <span class="sev-high">High</span> (cache-aware RNN-T state)</span>
+  <span><b>Shape</b> streaming — interim + final</span>
+</div>
+
+<p>Nemotron Speech Streaming (0.6B) is cache-aware streaming RNN-T, exported as three ONNX graphs — <code>encoder</code>
+(carrying four rolled caches: <code>pre_cache</code>, <code>cache_last_channel</code>, <code>cache_last_time</code>,
+<code>cache_last_channel_len</code>), <code>decoder</code> (an LSTM with <code>h</code>/<code>c</code> state), and
+<code>joint</code>. speech-core drives it as a <code>begin_stream</code> / <code>push_chunk</code> / <code>end_stream</code>
+state machine over fixed mel windows, carrying the encoder caches across windows and running greedy RNN-T over every emitted
+encoder frame. <b>This is the local streaming engine VRT-004 deferred.</b> It maps onto Voxa's already-streaming contract
+directly:</p>
+
+<table>
+  <tr><th>speech-core <code>STTInterface</code></th><th>Voxa <code>ISpeechToTextEngine</code></th><th>Behaviour</th></tr>
+  <tr><td><code>begin_stream(sr)</code></td><td><code>StartAsync(ct)</code></td><td>Load the three graphs on the VLS-006 host; reset per-stream caches/LSTM state.</td></tr>
+  <tr><td><code>push_chunk(pcm) → PartialResult</code></td><td><code>WriteAudioAsync(pcm, ct)</code> → interim via <code>ReadTranscriptsAsync</code></td><td>Accumulate PCM, run any full mel windows (cache-aware encoder → greedy RNN-T), and yield <code>TranscriptionResult(IsFinal: false)</code> as text grows.</td></tr>
+  <tr><td><code>flush_stream()</code> / <code>end_stream()</code></td><td><code>FlushAsync()</code> / <code>StopAsync()</code></td><td>Drain the trailing partial window and emit the authoritative <code>TranscriptionResult(IsFinal: true)</code> for the utterance.</td></tr>
+  <tr><td><code>cancel_stream()</code></td><td>per-frame <code>CancellationToken</code> + <code>DisposeAsync</code></td><td>Abandon in-flight decode on interruption (the existing cancellation machinery — no new model).</td></tr>
+</table>
+
+<span class="filelabel">src/Voxa.Speech.OnnxAsr/NemotronStreamingSttEngine.cs (sketch — the begin/push/end loop on Voxa's streaming contract)</span>
+<pre><code><span class="cm">// Cache-aware streaming RNN-T (VLS-007 WS2). One engine == one stream (the speech-core constraint).</span>
+<span class="cm">// Consumes VRT-004's interim propagation: interim results become TranscriptionFrame(IsFinal:false)</span>
+<span class="cm">// downstream; TranscriptionFilter + the agent act on finals only (interims are display/turn-signal).</span>
+public sealed class NemotronStreamingSttEngine : ISpeechToTextEngine
+{
+    public ValueTask WriteAudioAsync(ReadOnlyMemory&lt;byte&gt; pcm, CancellationToken ct)
+    {
+        AppendPcm16(pcm.Span);                 <span class="cm">// accumulate float32</span>
+        while (HasFullMelWindow())             <span class="cm">// e.g. 80 ms window; chunk_samples = (mel_frames-1)*hop_length</span>
+        {
+            var window = NextMelWindow();
+            var text   = RunWindow(window);     <span class="cm">// encoder (cache-aware, rolls the 4 caches) → greedy RNN-T over emitted frames</span>
+            if (text.Length &gt; 0)
+            {
+                _accumulated += text;
+                <span class="cm">// INTERIM — IsFinal:false. Throttle/coalesce so interim churn doesn't flood the pipeline (VRT-004 risk).</span>
+                _transcripts.Writer.TryWrite(new TranscriptionResult(_accumulated, IsFinal: false));
+            }
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public Task FlushAsync()  <span class="cm">// UserStoppedSpeaking → finalise</span>
+    {
+        var tail = DrainPartialWindow();
+        var final = (_accumulated + tail).Trim();
+        if (final.Length &gt; 0) _transcripts.Writer.TryWrite(new TranscriptionResult(final, IsFinal: true));
+        ResetStreamState();                    <span class="cm">// caches + LSTM h/c primed to blank for the next utterance</span>
+        return Task.CompletedTask;
+    }
+}</code></pre>
+
+<div class="callout"><b>~RTF 1.0 on CPU — the partials are the point.</b> Unlike Parakeet (faster-than-real-time batch), the
+streaming Nemotron runs at roughly real time on CPU; you don't choose it for raw throughput, you choose it for <em>live
+partial captions on the fully offline path</em>. The cache-aware encoder state (four rolled caches across windows) and the
+LSTM <code>h</code>/<code>c</code> carry are the correctness-critical, fiddly part — port the window math, the cache shapes,
+and the blank-priming from speech-core's reference and validate the emitted interims against a known clip.</div>
+
+<div class="callout warn"><b>Interims are display + turn-signal, never a turn.</b> Per VRT-004, only
+<code>IsFinal: true</code> results drive a turn or reach the agent; <code>TranscriptionFilter</code> and the agent ignore
+interims (they render as live captions and may feed the smart-turn classifier). The engine must <em>throttle/coalesce</em>
+interim emission so per-window churn doesn't flood the pipeline's bounded channels.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — Nemotron-3.5 multilingual streaming engine</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Speech.OnnxAsr</span>
+  <span><b>Host</b> Voxa.Audio.Onnx (VLS-006)</span>
+  <span><b>Risk</b> <span class="sev-high">High</span> (RNN-T + prompt slot)</span>
+  <span><b>Shape</b> streaming + multilingual</span>
+</div>
+
+<p>Nemotron-3.5 ASR Streaming Multilingual (0.6B) is the same cache-aware streaming RNN-T as WS2 — three graphs, four rolled
+encoder caches, greedy RNN-T over emitted frames, caches carried across fixed 320&nbsp;ms windows — with two additions:
+multilingual coverage (a much larger vocabulary) and <b>prompt-conditioning</b>. Unlike Parakeet, language is <em>not</em>
+auto-detected: the encoder takes a one-hot <code>language_mask</code> selecting a prompt slot, chosen from a
+<code>languages.json</code> sidecar (locale → slot; default <code>en-US</code>). So WS3 reuses WS2's engine body and adds a
+language-prompt selection step.</p>
+
+<span class="filelabel">src/Voxa.Speech.OnnxAsr/NemotronMultilingualSttEngine.cs (sketch — WS2 streaming body + prompt slot)</span>
+<pre><code><span class="cm">// Streaming multilingual RNN-T (VLS-007 WS3). Same begin/push/end loop as WS2, plus a prompt slot.</span>
+<span class="cm">// The language hint maps from TranscriptionResult.Language semantics / a config prompt key.</span>
+public sealed class NemotronMultilingualSttEngine : ISpeechToTextEngine
+{
+    public async Task StartAsync(CancellationToken ct)
+    {
+        <span class="cm">// Load encoder + decoder + joint + vocab + languages.json on the VLS-006 host.</span>
+        <span class="cm">// Resolve the prompt slot from OnnxAsrOptions.Language (locale key → slot; unknown → "auto"/slot 0).</span>
+        _languageMask = OneHotPromptSlot(ResolveSlot(_options.Language)); <span class="cm">// fed to the encoder each window</span>
+    }
+
+    <span class="cm">// WriteAudioAsync / FlushAsync identical to WS2, but each encoder Run also passes _languageMask.</span>
+    <span class="cm">// Emitted finals carry the resolved locale as TranscriptionResult.Language so it flows to TranscriptionFrame.</span>
+}</code></pre>
+
+<p>The language hint is sourced the same config-capture way as the rest of <code>OnnxAsrOptions</code> — a
+<code>Voxa:OnnxAsr:Language</code> (or a more explicit prompt key) bound from the captured <code>"Voxa"</code> root section,
+never service-located. A resolved final result sets <code>TranscriptionResult.Language</code> so the locale propagates into
+<code>TranscriptionFrame.Language</code> downstream.</p>
+
+<div class="callout"><b>ONNX-FP16 variant.</b> Nemotron-3.5 publishes an FP16 ONNX export (smaller, faster on capable
+hardware). Treat each precision/repo variant as a <em>distinct pinned catalog entry</em> with its own SHA-256 — the FP16
+graphs are different files than FP32 and must be pinned separately (never assume one hash covers both). The default catalog
+entry chooses one precision explicitly; an alternate precision is a second named entry, not a runtime flag.</div>
+
+<div class="callout warn"><b>Larger vocab, same decode-fidelity bar.</b> The multilingual vocabulary is an order of
+magnitude larger than the English Nemotron's; the SentencePiece detokenization, the <code>language_mask</code> shape, and
+the per-locale slot mapping must all be ported faithfully and validated against speech-core's multilingual reference
+outputs. Get the prompt slot wrong and you transcribe the right audio in the wrong language model.</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>WS4 — Licensing &amp; model catalog</h2>
+
+<div class="ws-head">
+  <span><b>Concern</b> license closure + pinned catalog</span>
+  <span><b>Risk</b> <span class="sev-high">High</span> (weight redistribution)</span>
+  <span><b>Gate</b> mirror the Kokoro license-closure test</span>
+</div>
+
+<div class="callout danger"><b>Verify and record every model's license before pinning it.</b> NeMo / Parakeet / Nemotron
+weights are <em>typically</em> CC-BY-4.0, but the exact terms of the <b>specific ONNX export</b> you pin
+<b>must be confirmed and recorded</b> at implementation time — license, attribution requirement, and redistribution terms
+per repo. If any model's weights are not cleanly redistributable, <b>do not ship that model</b>: either resolve it from the
+upstream repo at first run with attribution recorded, or drop that family from the catalog and note it here. This is the
+same discipline the Kokoro/GPL boundary enforces, and the same rule VLS-004 follows for DeepFilterNet3.</div>
+
+<h4>License-closure gate (mirror the Kokoro one)</h4>
+<p>The Kokoro package enforces its boundary mechanically with a <code>DependencyGraphGateTests</code> pair — one test
+asserts the engine assembly references no forbidden (GPL/AGPL) assembly, another scans the build output for forbidden
+natives. <code>Voxa.Speech.OnnxAsr</code> ships the equivalent so a license regression fails CI rather than shipping; CC-BY
+attribution obligations for the pinned weights are recorded alongside the catalog (a NOTICE/attribution string per model).</p>
+
+<span class="filelabel">tests/Voxa.Speech.OnnxAsr.Tests/DependencyGraphGateTests.cs (mirror of the Kokoro gate)</span>
+<pre><code>[Fact]
+public void OnnxAsr_Package_Closure_Is_Permissively_Licensed()
+{
+    <span class="cm">// Same two-pronged check as the Kokoro gate:</span>
+    <span class="cm">//   (1) referenced assemblies contain no forbidden (GPL/AGPL) names;</span>
+    <span class="cm">//   (2) the build output drops no native the package may not redistribute.</span>
+    <span class="cm">// Plus: each pinned model's recorded license is permissive/CC-BY with its attribution captured.</span>
+}</code></pre>
+
+<h4>Pinned catalog shape</h4>
+<p>Each family is a small set of pinned files — the ONNX graph(s), the tokenizer/vocab, and the model config /
+<code>languages.json</code> — every one a <code>VoxaModelArtifact(Id, DownloadUrl, Sha256, SizeBytes)</code> resolved through
+<code>VoxaModelCache</code> the standard way (resolve / verify / first-run-download-then-offline, with a copy-pasteable
+offline-miss message). This is the multi-file analogue of the single-file whisper catalog.</p>
+
+<table>
+  <tr><th>Model</th><th>Pinned files (each SHA-256-pinned)</th><th>License (verify + record)</th></tr>
+  <tr><td><code>parakeet-tdt-v3</code></td><td>encoder.onnx, decoder_joint.onnx, vocab</td><td>NeMo/Parakeet — typically CC-BY-4.0; confirm the exact export</td></tr>
+  <tr><td><code>nemotron-streaming</code></td><td>encoder.onnx, decoder.onnx, joint.onnx, vocab, config</td><td>Nemotron — typically CC-BY-4.0; confirm</td></tr>
+  <tr><td><code>nemotron-3.5-multilingual</code></td><td>encoder.onnx, decoder.onnx, joint.onnx, vocab, languages.json, config <span class="sev-low">(+ FP16 variant = separate entry)</span></td><td>Nemotron-3.5 — typically CC-BY-4.0; confirm</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Configuration reference</h2>
+
+<span class="filelabel">appsettings.json — new keys (all under Voxa:OnnxAsr), selected by Voxa:Stt = OnnxAsr</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "OnnxAsr",
+    "OnnxAsr": {
+      "Model":    "parakeet-tdt-v3",  <span class="cm">// parakeet-tdt-v3 | nemotron-streaming | nemotron-3.5-multilingual</span>
+      "Device":   "cpu",              <span class="cm">// cpu (default) | cuda | directml — via the VLS-006 / VLS-002 device seam</span>
+      "Language": "en-US"             <span class="cm">// WS3 prompt slot / hint (locale key from languages.json). Ignored by Parakeet (auto-detects).</span>
+                                      <span class="cm">// or set ModelPath sidecars for bring-your-own ONNX exports</span>
+    }
+  }
+}</code></pre>
+<p>Binding follows the <code>WhisperCppOptions.FromConfiguration</code> precedent exactly: <code>OnnxAsrOptions</code> reads
+the <code>Voxa:OnnxAsr</code> section off the captured <code>"Voxa"</code> root passed to <code>AddVoxa</code> —
+<b>never</b> <code>GetRequiredService&lt;IConfiguration&gt;()</code>, so the plain-<code>ServiceCollection</code> hosts
+(Studio, tests, CLI) resolve. <code>Device</code> is parsed/validated the VLS-006 way (CPU default; an explicit GPU value
+that can't load fails loudly at start, never silently on CPU). An unknown <code>Model</code> or <code>Device</code> fails
+the fail-fast options validator at host start (<code>ValidateOnStart</code>), like every other provider name.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — Parakeet batch engine (proves the host + descriptor).</b> Land <code>Voxa.Speech.OnnxAsr</code> with
+    <code>ParakeetSttEngine</code> (batch), the mel front-end + TDT decode, <code>OnnxAsrModelCatalog</code> (the
+    <b>real</b> Parakeet hashes), <code>OnnxAsrOptions</code>/<code>OnnxAsrDescriptors</code> (the WhisperCpp shape), the
+    license-closure gate, and the offline + <code>LocalModels</code> tests. Batch is the simplest decode path, so it
+    validates the VLS-006 host integration and the descriptor wiring before any streaming complexity. <b>Depends on
+    VLS-006.</b></li>
+  <li><b>Phase B — Nemotron streaming engine (on VRT-004).</b> Add <code>NemotronStreamingSttEngine</code> (the
+    begin/push/end loop, cache-aware RNN-T, interim emission) + its pinned catalog entry + the interim-then-final tests.
+    <b>Depends on Phase A (the package + host integration) and VRT-004 (interim propagation).</b></li>
+  <li><b>Phase C — Nemotron-3.5 multilingual streaming.</b> Add <code>NemotronMultilingualSttEngine</code> (Phase B's body
+    + the language-prompt slot), the multilingual catalog entry (+ FP16 variant as a separate entry), and multilingual
+    round-trip tests. <b>Depends on Phase B.</b></li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING) — A, B, C are at least three PRs. Each adds a <code>[Unreleased]</code> CHANGELOG
+entry and updates <code>docs/local-speech.md</code>. This spec is authored before any of them lands — the program's
+spec-before-code rule.</p>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> <code>Voxa.Speech.OnnxAsr</code> package referencing <code>Voxa.Speech.Abstractions</code> + <code>Voxa.Audio.Onnx</code> (VLS-006 host). No dependency enters <code>Voxa.Core</code>.
+    <span class="ac">AC: builds warnings-as-errors clean; Core untouched.</span></li>
+  <li><span class="tid">T1.2</span> <code>ParakeetSttEngine</code> (batch): buffer/flush like Whisper, mel front-end (128 bins, n_fft 512, hop 160, win 400, pre-emphasis 0.97), encoder + TDT greedy decode, SentencePiece detokenize, final-only emit.
+    <span class="ac">AC: emits one <code>TranscriptionResult(IsFinal: true)</code> per utterance; TDT decode validated vs a known transcript.</span></li>
+  <li><span class="tid">T1.3</span> <code>OnnxAsrModelCatalog</code> Parakeet entry — encoder + decoder_joint + vocab, <b>real</b> SHA-256 + size from HF LFS; resolves via <code>VoxaModelCache</code>; offline-miss names the model.</li>
+  <li><span class="tid">T1.4</span> <code>OnnxAsrOptions.FromConfiguration</code> (captured root) + <code>OnnxAsrDescriptors.Stt</code> (<code>VoxaSttDescriptor</code> shape) with keyless <code>Validate</code> + <code>WarmUpAsync</code>; <code>Device</code> parse/validate (VLS-006 seam).
+    <span class="ac">AC: unknown <code>Model</code>/<code>Device</code> fails the fail-fast validator; parse/validate covered offline.</span></li>
+  <li><span class="tid">T1.5</span> License-closure gate test (mirror Kokoro's <code>DependencyGraphGateTests</code>) + recorded per-model license/attribution.</li>
+  <li><span class="tid">T2.1</span> <code>NemotronStreamingSttEngine</code>: <code>begin_stream</code>/<code>push_chunk</code>/<code>end_stream</code> mapped onto <code>StartAsync</code>/<code>WriteAudioAsync</code>/<code>FlushAsync</code>; cache-aware RNN-T over fixed windows; emits interim <code>(IsFinal: false)</code>, finalises on flush.
+    <span class="ac">AC: interim-then-final against the VRT-004 processor path; interim emission throttled/coalesced.</span></li>
+  <li><span class="tid">T2.2</span> Nemotron-streaming pinned catalog entry (encoder + decoder + joint + vocab + config), real hashes.</li>
+  <li><span class="tid">T2.3</span> Verify interims become <code>TranscriptionFrame(IsFinal: false)</code> downstream and that <code>TranscriptionFilter</code> + the agent act on finals only (VRT-004 contract).</li>
+  <li><span class="tid">T3.1</span> <code>NemotronMultilingualSttEngine</code>: WS2 body + language-prompt slot (<code>language_mask</code> from <code>Voxa:OnnxAsr:Language</code> via <code>languages.json</code>); finals carry the resolved locale into <code>TranscriptionResult.Language</code>.</li>
+  <li><span class="tid">T3.2</span> Multilingual catalog entry (+ <b>FP16 variant as a separate pinned entry</b>), real hashes; larger vocab detokenization validated.</li>
+  <li><span class="tid">T3.3</span> Docs: <code>docs/local-speech.md</code> — the OnnxAsr tier (model table, batch vs streaming, partials, when to pick it over whisper.cpp, the GPU note).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline)</b></td><td><b>Catalog resolve / offline-miss</b> for each model (offline cache miss throws the provisioning message — pure probe, no download); <code>Model</code>/<code>Device</code> parse/validate; and a <b>streaming-shape test</b>: drive <code>NemotronStreamingSttEngine</code> with a <b>fake / tiny ONNX session</b> over a buffered fixture and assert it emits at least one interim <code>(IsFinal: false)</code> <i>then</i> a final <code>(IsFinal: true)</code> — proving the begin/push/end → contract mapping without a real model. No network, no real weights.</td></tr>
+  <tr><td><b><code>Category=LocalModels</code></b></td><td>Download + <b>SHA-256 verify</b> the pinned graphs/sidecars, then a <b>WER / round-trip</b> on a known clip with the <b>real</b> model: Parakeet final transcript vs reference; the streaming engines' final transcript vs reference <i>and</i> a sanity check that interims monotonically build toward it. Trait-gated — never the default lane.</td></tr>
+  <tr><td><b>License gate (default lane)</b></td><td>The Kokoro-mirror <code>DependencyGraphGateTests</code> — package closure references no forbidden (GPL/AGPL) assembly, drops no unredistributable native, and every pinned model's recorded license is permissive/CC-BY with attribution captured. Runs offline, every build.</td></tr>
+  <tr><td><b>Fidelity / reference</b></td><td>Cross-check the ported mel front-end + transducer decode against speech-core's reference outputs on shared fixtures (the C++ <code>onnx_inference</code> path) so the port is provably faithful, not merely plausible.</td></tr>
+  <tr><td><b>Manual / Studio</b></td><td>Live: <code>Stt=OnnxAsr, Model=nemotron-streaming</code> in Studio's Talk view shows partial captions building as you speak (the offline tier streaming for the first time); confirm the chosen <code>Device</code>'s loaded backend is logged and STT latency appears in the waterfall.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>Decoder correctness</b> — TDT (Parakeet) and cache-aware streaming RNN-T (Nemotron) are fiddly; a subtly wrong duration-advance, blank handling, or cache shape silently corrupts transcripts.</td><td class="sev-high">High</td><td>Validate each decode against speech-core's reference outputs <i>and</i> known-clip transcripts; the <code>LocalModels</code> WER test gates regressions; batch Parakeet first isolates the encoder/decode before streaming state is added.</td></tr>
+  <tr><td>R2</td><td><b>Pre/post-processing port fidelity</b> — mel front-end constants (bins, FFT, hop, win, pre-emphasis, log floor, Slaney mel) or SentencePiece detokenization off by a hair → wrong text.</td><td class="sev-high">High</td><td>Port the exact constants from speech-core's reference; cross-check mel + detokenize against its <code>onnx_inference</code> outputs on shared fixtures (fidelity lane).</td></tr>
+  <tr><td>R3</td><td><b>Model-weight license</b> not cleanly redistributable (CC-BY attribution or non-redistribution terms).</td><td class="sev-high">High</td><td>Confirm + record each model's license before pinning; license-closure gate (Kokoro mirror) fails CI on a regression; drop or upstream-resolve any non-clean model. Parakeet batch (Phase A) can ship even if a later family is blocked.</td></tr>
+  <tr><td>R4</td><td><b>Incorrect / fabricated SHA-256</b> on any of the multiple files per model → silent wrong file or perpetual verify failure.</td><td class="sev-high">High</td><td>Source every hash from the HF LFS pointer at implementation time; the <code>LocalModels</code> test verifies each downloaded file against its pin.</td></tr>
+  <tr><td>R5</td><td><b>Model size</b> — three 0.6B families (multiple graphs each) bloat the cache and CI time/bandwidth.</td><td class="sev-med">Med</td><td>Opt-in heavy tier, trait-gated; the default lane uses a fake/tiny session and never downloads; GPU-friendly via VLS-006 for live use.</td></tr>
+  <tr><td>R6</td><td><b>Interim churn</b> floods the pipeline's bounded channels (a VRT-004 risk realised by a real streaming engine).</td><td class="sev-med">Med</td><td>Throttle/coalesce interim emission in the engine; interims never trigger a turn or reach the agent (finals only); the default-lane shape test exercises the interim→final ordering.</td></tr>
+  <tr><td>R7</td><td><b>WS3 prompt slot</b> mapped wrong (locale → slot) → right audio transcribed in the wrong language model.</td><td class="sev-med">Med</td><td>Resolve the slot from <code>languages.json</code> with an explicit fallback (<code>auto</code>/slot 0); validate per-locale against speech-core's multilingual reference.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s14"><span class="secno">14.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>LiteRT (TFLite) backends.</b> speech-core ships a LiteRT Nemotron twin; Voxa standardizes on ONNX Runtime via
+    VLS-006. If a TFLite path is ever wanted it is a separate host + item, not this one.</li>
+  <li><b>On-device fine-tuning / adaptation.</b> Inference only; training/adapting these models is out of scope.</li>
+  <li><b>Non-ASR Nemotron variants</b> and other non-ASR ONNX models — DeepFilterNet3 (<b>VLS-004</b>), Sidon
+    (<b>VLS-008</b>), Pyannote/WeSpeaker diarization (<b>VLS-005</b>) are separate consumers of the same VLS-006 host.</li>
+  <li><b>The shared ONNX host itself</b> is <b>VLS-006</b> (<code>Voxa.Audio.Onnx</code>) — this item consumes it; it does
+    not build or modify it.</li>
+  <li><b>Streaming-engine GPU tuning</b> beyond the VLS-006/VLS-002 device seam (e.g. CUDA encoder + CPU decoder split,
+    as speech-core does) — a follow-up optimization once the CPU path is correct.</li>
+  <li><b>A batch Nemotron path.</b> speech-core exposes <code>transcribe()</code> on the streaming models as a
+    begin/push/end convenience; Voxa's streaming engines finalise on <code>FlushAsync</code>, which covers the same need —
+    no separate batch wrapper.</li>
+</ul>
+
+</div>
+</body>
+</html>
