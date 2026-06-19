@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Audio.SmartTurn</PackageId>
+    <Version>0.3.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Smart turn detection for the Voxa pipeline (P0 latency). Plugs an ISmartTurnClassifier into the VAD's silence timeout so a within-sentence pause doesn't end the turn early — letting StopDuration drop without clipping speech. Ships an HTTP classifier; the on-device ONNX classifier is the documented next step.</Description>
+    <PackageTags>voxa;voice;ai;vad;smart-turn;turn-detection</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Ship the Python sidecar source. CopyToOutputDirectory covers this project and ProjectReference
+         consumers (e.g. Studio); packing under contentFiles with copyToOutput covers PackageReference
+         consumers — so the documented default PythonScript ("sidecar/voxa_smart_turn_sidecar.py") resolves
+         against the app output (AppContext.BaseDirectory) in both cases. -->
+    <None Include="sidecar\voxa_smart_turn_sidecar.py"
+          Pack="true"
+          PackagePath="contentFiles\any\any\sidecar\voxa_smart_turn_sidecar.py"
+          PackageCopyToOutput="true"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Audio.SmartTurn.Tests" />
+  </ItemGroup>
+
+</Project>

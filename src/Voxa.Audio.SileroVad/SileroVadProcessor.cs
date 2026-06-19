@@ -39,7 +39,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly Queue<byte[]> _preroll = new();
     private readonly int _prerollWindows;
 
-    // Rolling tail of recent speech audio passed to a smart-turn ConfirmTurnEnd callback.
+    // Rolling buffer of the current turn's speech (up to 8 s) passed to a smart-turn ConfirmTurnEnd callback.
     private readonly Queue<byte[]> _recentSpeech = new();
     private readonly int _recentSpeechWindows;
 
@@ -58,8 +58,9 @@ public sealed class SileroVadProcessor : FrameProcessor
         _windowDuration = TimeSpan.FromSeconds((double)_engine.WindowSize / _options.SampleRate);
         _windowsPerSecond = _options.SampleRate / _engine.WindowSize;
         _prerollWindows = Math.Max(1, (int)Math.Ceiling(_options.PrerollDuration.TotalMilliseconds / _windowDuration.TotalMilliseconds));
-        // ~1 s of recent speech for the smart-turn seam.
-        _recentSpeechWindows = Math.Max(1, (int)Math.Ceiling(1000.0 / _windowDuration.TotalMilliseconds));
+        // Up to 8 s of the current turn for the smart-turn seam: smart-turn-v3 wants the whole current
+        // turn (bounded to its 8 s window), not just a trailing tail, or completion decisions lose context.
+        _recentSpeechWindows = Math.Max(1, (int)Math.Ceiling(8000.0 / _windowDuration.TotalMilliseconds));
     }
 
     /// <summary>The configured sample rate. Audio frames at other rates are forwarded untouched (with a warning).</summary>

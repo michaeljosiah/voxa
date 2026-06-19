@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Voxa.AspNetCore;
+using Voxa.Audio.SmartTurn;
 using Voxa.Speech;
 using Voxa.Studio.Audio;
 
@@ -158,6 +159,10 @@ public sealed class StudioServices : IAsyncDisposable
         // does not — and the meta-package's DefaultAgentFactory resolves it.
         services.AddSingleton<IConfiguration>(configuration);
         services.AddVoxa(configuration); // the meta-package overload: every built-in provider
+        // Smart turn is opt-in (a call on the turn-taking path), so it is NOT in AddVoxa — register it
+        // here so the Config "Smart turn detection" toggle takes effect. No-ops unless Voxa:SmartTurn
+        // selects a provider; the composer then auto-wires the registered ISmartTurnClassifier.
+        services.AddVoxaSmartTurn(configuration);
         var provider = services.BuildServiceProvider();
 
         // One cache handle for the Models view — the same options the engine descriptors

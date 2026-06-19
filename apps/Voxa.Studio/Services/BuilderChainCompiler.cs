@@ -3,6 +3,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
 using Voxa.Diagnostics;
@@ -137,9 +138,9 @@ internal static class BuilderChainCompiler
                         StopDuration:        tuning.VadStopDuration,
                         PrerollDuration:     tuning.VadPrerollDuration);
                     if (string.Equals(node.Provider, "SilenceGate", StringComparison.OrdinalIgnoreCase))
-                        parts.Add(new(node.Id, _ => new SilenceGateProcessor(settings.MinRms, settings.StopDuration)));
+                        parts.Add(new(node.Id, sp => CreateSilenceGate(sp, settings)));
                     else if (registry.TryGetVad(node.Provider ?? "", out var vadDesc))
-                        parts.Add(new(node.Id, sp => vadDesc.CreateProcessor(sp, WithObserver(sp, settings))));
+                        parts.Add(new(node.Id, sp => vadDesc.CreateProcessor(sp, WithSmartTurn(sp, WithObserver(sp, settings)))));
                     else
                         throw new InvalidOperationException($"VAD engine '{node.Provider}' is not registered.");
                     break;
@@ -204,6 +205,30 @@ internal static class BuilderChainCompiler
         foreach (var (index, scope) in taps.OrderByDescending(t => t.Index))
             parts.Insert(index, new(null, sp => new DiagnosticsTapProcessor(
                 sp.GetRequiredService<VoxaDiagnosticsHub>(), scope)));
+    }
+
+    // Mirror DefaultVoicePipelineComposer.WithSmartTurn for the canvas-run path (which builds the VAD
+    // directly rather than via the composer): wire a registered classifier into the silence timeout so a
+    // graph run honors the same Smart turn toggle as a Talk session. No classifier registered → unchanged.
+    internal static VoxaVadSettings WithSmartTurn(IServiceProvider sp, VoxaVadSettings settings)
+    {
+        var classifier = sp.GetService<ISmartTurnClassifier>();
+        if (classifier is null) return settings;
+        return settings with
+        {
+            ConfirmTurnEnd = (pcm, ct) => classifier.IsTurnCompleteAsync(pcm, settings.SampleRate, ct),
+        };
+    }
+
+    // SilenceGate has no turn-confirmation seam, so a registered classifier cannot apply — warn rather than
+    // silently ignore it (mirrors DefaultVoicePipelineComposer.CreateSilenceGate).
+    private static SilenceGateProcessor CreateSilenceGate(IServiceProvider sp, VoxaVadSettings settings)
+    {
+        if (sp.GetService<ISmartTurnClassifier>() is not null)
+            sp.GetService<ILoggerFactory>()?.CreateLogger("Voxa.Studio.BuilderChainCompiler")
+                .LogWarning("A smart-turn classifier is registered but the SilenceGate VAD has no turn-confirmation " +
+                            "seam — turns still end on StopDuration. Use the Silero VAD for smart turn.");
+        return new SilenceGateProcessor(settings.MinRms, settings.StopDuration);
     }
 
     private static VoxaVadSettings WithObserver(IServiceProvider sp, VoxaVadSettings settings)
