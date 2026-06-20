@@ -57,7 +57,14 @@ public sealed class SpeechToTextProcessor : FrameProcessor
         _readLoop = Task.Run(() => ReadLoopAsync(ct));
     }
 
-    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct) => DisposeEngineAsync();
+
+    // Release the engine + read loop on the actual disposal path too (CQ-003): an abrupt teardown (client
+    // disconnect, no EndFrame) would otherwise leak the engine (whisper.cpp handle, sidecar process, HTTP
+    // session) and its read loop. Idempotent (null-out); runs after the loops stop so it never races OnEndAsync.
+    protected override ValueTask DisposeAsyncCore() => DisposeEngineAsync();
+
+    private async ValueTask DisposeEngineAsync()
     {
         if (_engine is not null)
         {

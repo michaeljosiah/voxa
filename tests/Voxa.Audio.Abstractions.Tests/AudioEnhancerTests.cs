@@ -97,6 +97,20 @@ public class AudioEnhancerProcessorTests
     }
 
     [Fact]
+    public async Task Disposing_Without_An_EndFrame_Disposes_The_Enhancer()
+    {
+        // CQ-003: an abrupt teardown (client disconnect, no EndFrame) must still release the enhancer via
+        // DisposeAsyncCore — OnEndAsync alone would leak its model/DSP session.
+        var fake = new FakeAudioEnhancer();
+        var enh = new AudioEnhancerProcessor(fake);
+        enh.Start();
+
+        await enh.DisposeAsync(); // no EndFrame is ever injected
+
+        Assert.True(fake.Disposed);
+    }
+
+    [Fact]
     public async Task Mismatched_Sample_Rate_Fails_Fast_Without_Enhancing_Or_Forwarding()
     {
         // VLS-004 (Codex P2): a rate mismatch is a config error → fail fast. The processor surfaces an upstream

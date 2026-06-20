@@ -33,7 +33,9 @@ public abstract class FrameProcessor : IAsyncDisposable
     private CancellationTokenSource? _currentFrameCts;
     private Task? _systemTask;
     private Task? _dataTask;
+    private CancellationTokenSource? _linkedCts; // links _processorCts + the external token; disposed in DisposeAsync (CQ-010)
     private int _started;
+    private int _disposed;
 
     /// <summary>Human-friendly name for logs and traces. Defaults to the type name.</summary>
     public string Name { get; }
@@ -81,8 +83,8 @@ public abstract class FrameProcessor : IAsyncDisposable
             throw new InvalidOperationException($"FrameProcessor '{Name}' is already started.");
         }
 
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(_processorCts.Token, externalCt);
-        var token = linked.Token;
+        _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_processorCts.Token, externalCt);
+        var token = _linkedCts.Token;
         _systemTask = Task.Run(() => RunSystemLoopAsync(token), token);
         _dataTask = Task.Run(() => RunDataLoopAsync(token), token);
     }
@@ -213,6 +215,11 @@ public abstract class FrameProcessor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Idempotent: a processor may be disposed more than once (e.g. `await using` plus an explicit
+        // dispose). Run teardown — and the derived DisposeAsyncCore hook — at most once, so derived resource
+        // release can't double-fire and the base CTS isn't cancelled/disposed twice (CQ-001 review).
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+
         _processorCts.Cancel();
         _systemChannel.Writer.TryComplete();
         _dataChannel.Writer.TryComplete();
@@ -224,7 +231,20 @@ public abstract class FrameProcessor : IAsyncDisposable
         }
         catch (OperationCanceledException) { }
 
+        // Derived cleanup runs here — after the loops have stopped, before the base CTS is disposed —
+        // so it executes even when a processor is disposed through a FrameProcessor-typed reference (as
+        // PipelineRunner does). Overriding this hook is the supported extension point; hiding DisposeAsync
+        // with `new` would be skipped on that base-typed path (CQ-001).
+        await DisposeAsyncCore().ConfigureAwait(false);
+
+        // Dispose the linked CTS created in Start (CQ-010): as a local it was never disposed, leaking its
+        // registration on the external token for the processor's lifetime. Safe now — the loops have stopped.
+        _linkedCts?.Dispose();
         _processorCts.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>Override to release resources a derived processor owns. Runs once, after the system/data
+    /// loops have stopped and before the base cancellation source is disposed.</summary>
+    protected virtual ValueTask DisposeAsyncCore() => ValueTask.CompletedTask;
 }

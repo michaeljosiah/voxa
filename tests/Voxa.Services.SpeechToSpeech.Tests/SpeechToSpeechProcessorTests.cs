@@ -33,13 +33,30 @@ public class SpeechToSpeechProcessorTests
     }
 
     [Fact]
+    public async Task Disposing_Without_An_EndFrame_Disposes_The_Session()
+    {
+        // CQ-003: an abrupt teardown (client disconnect, no EndFrame) must still release the session via
+        // DisposeAsyncCore — not only OnEndAsync.
+        var h = Build();
+        await h.Runner.StartAsync();
+        await Task.Delay(60);            // OnStartAsync created the session + set the voice
+        Assert.Equal("nova", h.Session.Voice);
+
+        await h.Runner.DisposeAsync();  // abrupt: no EndFrame is ever injected
+
+        Assert.True(h.Session.Disposed);
+    }
+
+    [Fact]
     public async Task Sets_voice_and_system_prompt_on_start()
     {
         var h = Build(new SpeechToSpeechOptions { Voice = "nova", SystemPrompt = "Be brief." });
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await WaitUntil(() => h.Session.Voice is not null, WaitTimeout);
+            // Wait on SystemPrompt: OnStartAsync sets Voice THEN SystemPrompt, so observing the last-set field
+            // non-null guarantees both are set — waiting only on Voice raced the second await under load.
+            await WaitUntil(() => h.Session.SystemPrompt is not null, WaitTimeout);
             Assert.Equal("nova", h.Session.Voice);
             Assert.Equal("Be brief.", h.Session.SystemPrompt);
         }

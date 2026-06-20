@@ -50,6 +50,45 @@ public class SileroVadEagerSttTests
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
 
+    private static byte[] SilentSamples(int sampleCount) => new byte[sampleCount * 2];
+
+    [Fact]
+    public async Task Windowing_Is_Exact_Across_Frame_Boundaries_And_Large_Frames()
+    {
+        // CQ-005 regression: the read-cursor accumulator must produce EXACTLY the same windows the old
+        // RemoveRange(0, windowSize) did — one inference per windowSize samples — regardless of how audio is
+        // chunked: many sub-window frames that straddle window boundaries, then one large multi-window frame
+        // (which exercises consuming several windows in a single ProcessFrameAsync + the lazy compaction).
+        int probeCalls = 0;
+        var vad = new SileroVadProcessor(
+            new SileroVadOptions(), WindowSize,
+            _ => { Interlocked.Increment(ref probeCalls); return 0.02f; }); // always-silent; we only count windows
+        var cap = new CapturingProcessor();
+        var pipeline = Pipeline.Build()
+            .Source(new PipelineSource())
+            .Then(vad)
+            .Then(cap)
+            .Sink(new PipelineSink());
+
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+
+        int totalSamples = 0;
+        for (int i = 0; i < 20; i++) // 20 × 300-sample frames: 300 ∤ 512, so windows straddle frame boundaries
+        {
+            await pipeline.Source.IngestAsync(new AudioRawFrame(SilentSamples(300), SampleRate, 1));
+            totalSamples += 300;
+        }
+        await pipeline.Source.IngestAsync(new AudioRawFrame(SilentSamples(50 * WindowSize), SampleRate, 1)); // big frame
+        totalSamples += 50 * WindowSize;
+
+        int expected = totalSamples / WindowSize;
+        var deadline = DateTime.UtcNow + Timeout;
+        while (Volatile.Read(ref probeCalls) < expected && DateTime.UtcNow < deadline) await Task.Delay(10);
+
+        Assert.Equal(expected, Volatile.Read(ref probeCalls)); // every full window inferred exactly once
+    }
+
     [Fact]
     public async Task Eager_Dispatch_Emits_Speculative_Marker_Without_Closing_The_Gate()
     {

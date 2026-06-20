@@ -15,6 +15,7 @@ public sealed class AudioEnhancerProcessor : FrameProcessor
 {
     private readonly IAudioEnhancer _enhancer;
     private bool _rateMismatchReported; // surface the rate-mismatch error once, not per frame
+    private bool _enhancerDisposed;     // guard: dispose the enhancer exactly once across OnEndAsync + DisposeAsyncCore
 
     public AudioEnhancerProcessor(IAudioEnhancer enhancer) : base("AudioEnhancer")
         => _enhancer = enhancer ?? throw new ArgumentNullException(nameof(enhancer));
@@ -27,8 +28,24 @@ public sealed class AudioEnhancerProcessor : FrameProcessor
 
     protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
     {
-        _enhancer.Dispose(); // release the model/DSP session; EndFrame is forwarded by ProcessFrameAsync
+        DisposeEnhancer();
         return ValueTask.CompletedTask;
+    }
+
+    // Also release on the actual disposal path (CQ-003): an abrupt teardown (client disconnect, no EndFrame)
+    // would otherwise leak the enhancer's model/DSP session. The _enhancerDisposed guard makes this idempotent
+    // with OnEndAsync (the _enhancer field is readonly, so it can't be nulled out) — disposed exactly once.
+    protected override ValueTask DisposeAsyncCore()
+    {
+        DisposeEnhancer();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeEnhancer()
+    {
+        if (_enhancerDisposed) return;
+        _enhancerDisposed = true;
+        _enhancer.Dispose(); // release the model/DSP session
     }
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)

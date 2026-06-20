@@ -16,6 +16,9 @@ internal sealed class ScriptedRealtimeApiTransport : IRealtimeApiTransport
 
     public bool Connected { get; private set; }
 
+    /// <summary>How many times <see cref="DisposeAsync"/> was called — lets a test assert teardown happened.</summary>
+    public int DisposeCount { get; private set; }
+
     public IReadOnlyList<string> SentEvents
     {
         get { lock (_lock) return _sent.ToList(); }
@@ -58,6 +61,7 @@ internal sealed class ScriptedRealtimeApiTransport : IRealtimeApiTransport
 
     public ValueTask DisposeAsync()
     {
+        DisposeCount++;
         Connected = false;
         _serverEvents.Writer.TryComplete();
         return ValueTask.CompletedTask;
