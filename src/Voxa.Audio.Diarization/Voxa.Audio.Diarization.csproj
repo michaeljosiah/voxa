@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Audio.Diarization</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Speaker diarization for the Voxa pipeline (VLS-005) — "who spoke when", filling TranscriptionFrame.SpeakerId. Defines the ISpeakerSegmentation / ISpeakerEmbedding / IDiarizer seams and a pure-C# DiarizationPipeline (constrained agglomerative clustering by cosine distance — no ML runtime in the orchestration). Ships the seams + clustering; the reference ONNX impls (Pyannote segmentation + WeSpeaker embedding) are a separate opt-in package.</Description>
+    <PackageTags>voxa;voice;ai;diarization;speaker;clustering;audio</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!--
+    No project or package references by design. The diarization orchestration is deliberately
+    ML-runtime-free (and Voxa.Core-free): plain vector math over float[] embeddings + the model-backed
+    seams. That purity is what makes the clustering testable on synthetic embeddings in the default
+    lane. The reference ONNX implementations live in a separate Voxa.Audio.Diarization.Onnx package.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Audio.Diarization.Tests" />
+  </ItemGroup>
+
+</Project>
