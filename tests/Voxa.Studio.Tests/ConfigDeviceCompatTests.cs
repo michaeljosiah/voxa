@@ -40,4 +40,49 @@ public class ConfigDeviceCompatTests
         Assert.True(vm.ShowWhisperDeviceWarning);
         Assert.Contains("Unknown device", vm.WhisperDeviceStatus);
     }
+
+    // ── Kokoro ONNX device (VLS-006): the same up-front compatibility surface, via OnnxDeviceProbe ──
+
+    [Fact]
+    public void Kokoro_Cpu_Device_Shows_No_Warning_Or_Note()
+    {
+        var vm = new ConfigViewModel(TestSupport.Services()) { SelectedKokoroDevice = "cpu" };
+
+        Assert.True(vm.KokoroDeviceAvailable);
+        Assert.False(vm.ShowKokoroDeviceWarning);
+        Assert.False(vm.ShowKokoroDeviceNote);
+    }
+
+    [Fact]
+    public void Kokoro_Auto_Device_Shows_A_Note_Not_A_Warning()
+    {
+        var vm = new ConfigViewModel(TestSupport.Services()) { SelectedKokoroDevice = "auto" };
+
+        Assert.True(vm.KokoroDeviceAvailable);
+        Assert.False(vm.ShowKokoroDeviceWarning);
+        Assert.True(vm.ShowKokoroDeviceNote);
+    }
+
+    [Fact]
+    public void Kokoro_Unavailable_Gpu_Device_Shows_A_Clear_Warning()
+    {
+        // DirectML is never bundled in Studio (only the CUDA provider is), and the test host's ONNX runtime is
+        // CPU-only besides — so selecting it flags an up-front warning naming the fix, not a silent CPU fallback.
+        var vm = new ConfigViewModel(TestSupport.Services()) { SelectedKokoroDevice = "directml" };
+
+        Assert.False(vm.KokoroDeviceAvailable);
+        Assert.True(vm.ShowKokoroDeviceWarning);
+        Assert.False(vm.ShowKokoroDeviceNote);
+        Assert.Contains("DirectML", vm.KokoroDeviceStatus);
+    }
+
+    [Fact]
+    public void Kokoro_Unknown_Device_Is_Flagged()
+    {
+        var vm = new ConfigViewModel(TestSupport.Services()) { SelectedKokoroDevice = "gpu" };
+
+        Assert.False(vm.KokoroDeviceAvailable);
+        Assert.True(vm.ShowKokoroDeviceWarning);
+        Assert.Contains("Unknown device", vm.KokoroDeviceStatus);
+    }
 }

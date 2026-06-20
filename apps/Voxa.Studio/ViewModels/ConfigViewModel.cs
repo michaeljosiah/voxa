@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
+using Voxa.Audio.Onnx;
 using Voxa.Speech.Kokoro;
 using Voxa.Speech.Piper;
 using Voxa.Speech.WhisperCpp;
@@ -70,6 +71,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedPiperVoice = voxa["Piper:Voice"] ?? "en_US-amy-low";
         _selectedKokoroVoice = voxa["Kokoro:Voice"] ?? "af_heart";
         _selectedKokoroPrecision = voxa["Kokoro:Precision"] ?? "int8";
+        _selectedKokoroDevice = voxa["Kokoro:Device"] ?? "cpu";
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
         _agentBaseUrl = voxa["Agent:BaseUrl"] ?? "http://localhost:11434/v1";
 
@@ -83,6 +85,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         _smartTurnPythonScript = voxa["SmartTurn:PythonScript"] ?? "sidecar/voxa_smart_turn_sidecar.py";
 
         RefreshWhisperDeviceStatus();
+        RefreshKokoroDeviceStatus();
         Regenerate();
         // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
         // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
@@ -107,6 +110,8 @@ public sealed partial class ConfigViewModel : ObservableObject
     public IReadOnlyList<string> PiperVoices { get; } = PiperVoiceCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroVoices { get; } = KokoroCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroPrecisions { get; } = KokoroCatalog.KnownPrecisions.ToList();
+    /// <summary>ONNX execution targets for Kokoro — the shared device vocabulary (cpu/auto/cuda/directml/coreml).</summary>
+    public IReadOnlyList<string> KokoroDevices { get; } = OnnxDeviceParser.ValidValues;
 
     [ObservableProperty] private string _selectedStt;
     [ObservableProperty] private string _selectedTts;
@@ -120,6 +125,7 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedPiperVoice;
     [ObservableProperty] private string _selectedKokoroVoice;
     [ObservableProperty] private string _selectedKokoroPrecision;
+    [ObservableProperty] private string _selectedKokoroDevice;
 
     // Agent providers aren't registry STT/TTS entries — they're DefaultAgentFactory's pair.
     private static readonly string[] AgentProviderNames = ["Echo", "OpenAI", "Ollama"];
@@ -268,6 +274,55 @@ public sealed partial class ConfigViewModel : ObservableObject
         }
     }
 
+    // ── Kokoro compute-device availability (VLS-006 ONNX GPU) ──────────────────
+    // Whether the selected Kokoro Device's ONNX execution provider is actually in THIS build's loaded ORT
+    // runtime — queried via OnnxDeviceProbe (OrtEnv.GetAvailableProviders, no model load). A GPU device with
+    // no provider would otherwise only fail at session start; this flags it in the picker up front. Studio
+    // bundles the CUDA provider on Windows; directml/coreml stay opt-in and read unavailable until added.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowKokoroDeviceWarning), nameof(ShowKokoroDeviceNote))]
+    private bool _kokoroDeviceAvailable = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowKokoroDeviceWarning), nameof(ShowKokoroDeviceNote))]
+    private string? _kokoroDeviceStatus;
+
+    /// <summary>The selected GPU device's execution provider is missing — show the red remediation.</summary>
+    public bool ShowKokoroDeviceWarning => !KokoroDeviceAvailable && !string.IsNullOrEmpty(KokoroDeviceStatus);
+    /// <summary>The selected device is available but worth a muted note (auto / GPU-needs-hardware).</summary>
+    public bool ShowKokoroDeviceNote => KokoroDeviceAvailable && !string.IsNullOrEmpty(KokoroDeviceStatus);
+
+    private void RefreshKokoroDeviceStatus()
+    {
+        if (!OnnxDeviceParser.TryParse(SelectedKokoroDevice, out var device))
+        {
+            KokoroDeviceAvailable = false;
+            KokoroDeviceStatus =
+                $"Unknown device '{SelectedKokoroDevice}'. Valid: {string.Join(", ", OnnxDeviceParser.ValidValues)}.";
+        }
+        else if (device == OnnxDevice.Cpu)
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus = null; // CPU is the unremarkable default — no note
+        }
+        else if (device == OnnxDevice.Auto)
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus = "Auto — uses the best available ONNX execution provider, falling back to CPU.";
+        }
+        else if (OnnxDeviceProbe.IsAvailable(device))
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus =
+                "Provider present — needs a compatible GPU/driver; a Talk run fails clearly if it can't load.";
+        }
+        else
+        {
+            KokoroDeviceAvailable = false;
+            KokoroDeviceStatus = OnnxDeviceProbe.Remediation(device);
+        }
+    }
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
@@ -361,6 +416,7 @@ public sealed partial class ConfigViewModel : ObservableObject
     partial void OnSelectedPiperVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroPrecisionChanged(string value) => Regenerate();
+    partial void OnSelectedKokoroDeviceChanged(string value) { RefreshKokoroDeviceStatus(); Regenerate(); }
     partial void OnAgentModelChanged(string value) => Regenerate();
     partial void OnAgentApiKeyChanged(string value) => Regenerate();
     partial void OnAgentBaseUrlChanged(string value) => Regenerate();
@@ -421,6 +477,9 @@ public sealed partial class ConfigViewModel : ObservableObject
         {
             pairs["Voxa:Kokoro:Voice"] = SelectedKokoroVoice;
             pairs["Voxa:Kokoro:Precision"] = SelectedKokoroPrecision;
+            // Omit cpu (the default) so the exported block stays minimal — same rule as the Whisper device.
+            if (!string.Equals(SelectedKokoroDevice, "cpu", StringComparison.OrdinalIgnoreCase))
+                pairs["Voxa:Kokoro:Device"] = SelectedKokoroDevice;
         }
         // A library-backed cloud voice (ElevenLabs/Mistral/VoiceClone) writes its provider's key —
         // the voice id only, never an API key.

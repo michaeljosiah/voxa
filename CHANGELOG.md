@@ -156,6 +156,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   library on first load, so a probe-by-loading is avoided), and `OnnxDeviceProbe` reads
   `OrtEnv.GetAvailableProviders()` for the ONNX engines. If a bundled backend still can't load on the hardware,
   the run fails with the framework's copy-pasteable remediation rather than silently dropping to CPU.
+- **Kokoro TTS on GPU (CUDA) + Studio device picker (VLS-006).** `KokoroTtsEngine` is the first engine to adopt
+  the shared `OnnxModelHost`: it now loads its `InferenceSession` through `host.Load(modelPath, device)` instead
+  of constructing one directly, so a new **`Voxa:Kokoro:Device`** (`cpu` default / `auto` / `cuda` / `directml` /
+  `coreml`, parsed via `OnnxDeviceParser`) selects the ONNX execution provider — and an explicit GPU device whose
+  provider isn't in the loaded runtime **fails loud at startup** with the host's remediation rather than silently
+  running on CPU. The session is cached per `(path, device)` on the host's process-wide cache, with the parallel-run
+  gate kept process-wide per `(path, device)` so `EvictAll()` ("unload models") stays correct. **Voxa Studio bundles
+  the CUDA ONNX provider on Windows** (`Microsoft.ML.OnnxRuntime.Gpu.Windows`, with the transitive CPU ORT excluded
+  so there's exactly one `onnxruntime.dll` and no Linux/TensorRT dead weight; `PrivateAssets` keeps the GPU native
+  out of the test project, which stays CPU-only) — the base ORT native still carries the CPU EP, and the ~286 MB
+  CUDA provider loads only on demand, so the default Silero VAD path is byte-for-byte unaffected on non-NVIDIA
+  machines. The Config **Kokoro** card gains a **Device** picker with the same up-front compatibility indicator as
+  Whisper — a red, package-naming warning when the selected provider isn't in the build (queried via
+  `OnnxDeviceProbe`), a muted note for `auto` / an available-but-hardware-dependent GPU. DirectML stays opt-in
+  (its latest ORT release lags the pinned `1.26.0`); CUDA is NVIDIA + CUDA-toolkit only.
 - **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
   input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
   **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they
