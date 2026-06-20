@@ -135,4 +135,37 @@ public class MistralVoiceAndSttTests
 
         Assert.Empty(handler.Snapshots);
     }
+
+    /// <summary>Blocks in SendAsync until its token fires — proves the engine threads a live session token in.</summary>
+    private sealed class BlockingHandler : HttpMessageHandler
+    {
+        public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public volatile bool WasCancelled;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) { WasCancelled = true; throw; }
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
+    [Fact] // CQ-008: parity with the OpenAI engine — an aborted session cancels the in-flight transcription
+    public async Task Flush_Cancels_The_In_Flight_Request_When_The_Session_Is_Torn_Down()
+    {
+        var handler = new BlockingHandler();
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        using var session = new CancellationTokenSource();
+        await engine.StartAsync(session.Token);
+        await engine.WriteAudioAsync(new byte[16000], default);
+
+        var flush = engine.FlushAsync();                                 // in-flight; handler blocks on its ct
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(2));    // the request reached SendAsync
+
+        session.Cancel();                                                // simulate pipeline teardown
+
+        await flush.WaitAsync(TimeSpan.FromSeconds(5));                   // completes (cancelled), not ~100 s timeout
+        Assert.True(handler.WasCancelled);
+    }
 }
