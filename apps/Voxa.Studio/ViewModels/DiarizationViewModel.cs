@@ -140,7 +140,9 @@ public sealed partial class DiarizationViewModel : ObservableObject
             await _services.ModelCache.PrefetchAsync([artifact]);
         }
         var modelPath = await _services.ModelCache.ResolveAsync(artifact);
-        return new PyannoteOnnxSegmentation(modelPath, _host);
+        // Constructing the engine builds the ORT InferenceSession synchronously (a cold session load can be
+        // slow) — do it off the UI thread, like the decode/Segment work, so clicking Run never freezes the window.
+        return await Task.Run<ISpeakerSegmentation>(() => new PyannoteOnnxSegmentation(modelPath, _host));
     }
 
     /// <summary>Decode a 16-bit PCM WAV to mono float samples at <paramref name="sampleRate"/>.</summary>
