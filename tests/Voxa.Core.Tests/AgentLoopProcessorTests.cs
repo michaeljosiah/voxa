@@ -161,6 +161,39 @@ public class AgentLoopProcessorTests
         }
     }
 
+    /// <summary>A driver that blocks forever without yielding — exercises the cap's cancellation path.</summary>
+    private sealed class StallingDriver : IAgentTurnDriver
+    {
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Stall(ct);
+
+        private static async IAsyncEnumerable<Frame> Stall([EnumeratorCancellation] CancellationToken ct)
+        {
+            await Task.Delay(Timeout.Infinite, ct); // never yields a frame; only the cap token ends it
+            yield break;
+        }
+    }
+
+    [Fact]
+    public async Task MaxResponseDuration_Bounds_A_Driver_That_Stalls_Before_Yielding()
+    {
+        // VRT-002 WS2 §6.5 (Codex P2): a driver that never yields (a stalled LLM, or one awaiting a tool) must
+        // still be bounded — the cap cancels the enumeration itself, not merely a post-yield break.
+        var processor = new AgentLoopProcessor(new StallingDriver(), maxResponseDuration: TimeSpan.FromMilliseconds(100));
+        var captured = new CapturingProcessor();
+        var pipeline = Pipeline.Build()
+            .Source(new PipelineSource())
+            .Then(processor)
+            .Then(captured)
+            .Sink(new PipelineSink());
+
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+
+        await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(3));
+        Assert.Contains(captured.Captured, f => f is LlmTurnEndedFrame); // closed cleanly despite zero output
+    }
+
     [Fact]
     public async Task TranscriptionFrame_Is_Forwarded_Downstream_Before_Driver_Yields_Anything()
     {

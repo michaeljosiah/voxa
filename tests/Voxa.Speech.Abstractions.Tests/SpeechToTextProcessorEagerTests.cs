@@ -103,7 +103,7 @@ public class SpeechToTextProcessorEagerTests
     }
 
     [Fact]
-    public async Task NonSuperseded_Speculative_Final_Passes_Through()
+    public async Task Speculative_Final_Is_Held_Until_Confirmed_Then_Forwarded()
     {
         var engine = new FakeSttEngine();
         var (runner, cap, pipeline) = Build(engine);
@@ -111,14 +111,69 @@ public class SpeechToTextProcessorEagerTests
         await using (runner)
         {
             await runner.StartAsync();
-            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout); // engine ready before frames
-            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(9)); // armed, never superseded
+            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(9)); // arm
             await WaitUntilAsync(() => engine.Calls.Contains("flush:9"), Timeout);
 
-            await engine.EmitFinalAsync("promoted text", utteranceId: 9);
+            await engine.EmitFinalAsync("held text", utteranceId: 9);             // arrives before confirm
+            await Task.Delay(80);
+            // Held, not forwarded yet: a fast engine's final must not start a turn before the VAD confirms.
+            Assert.DoesNotContain(cap.Captured.OfType<TranscriptionFrame>(), t => t.Text == "held text");
 
-            await cap.WaitForAsync(f => f is TranscriptionFrame t && t.Text == "promoted text", Timeout);
-            Assert.Contains(cap.Captured.OfType<TranscriptionFrame>(), t => t.Text == "promoted text");
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());    // confirm ⇒ promote
+            await cap.WaitForAsync(f => f is TranscriptionFrame t && t.Text == "held text", Timeout);
+            Assert.Contains(cap.Captured.OfType<TranscriptionFrame>(), t => t.Text == "held text");
+        }
+    }
+
+    [Fact]
+    public async Task Speculative_Final_Arriving_After_Confirm_Is_Forwarded()
+    {
+        var engine = new FakeSttEngine();
+        var (runner, cap, pipeline) = Build(engine);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(9));  // arm
+            await WaitUntilAsync(() => engine.Calls.Contains("flush:9"), Timeout);
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());    // confirm before the final
+            await WaitUntilAsync(() => engine.Calls.Contains("discard"), Timeout);
+
+            await engine.EmitFinalAsync("late text", utteranceId: 9);             // arrives after confirm
+            await cap.WaitForAsync(f => f is TranscriptionFrame t && t.Text == "late text", Timeout);
+            Assert.Contains(cap.Captured.OfType<TranscriptionFrame>(), t => t.Text == "late text");
+        }
+    }
+
+    [Fact]
+    public async Task Speculative_Final_Arriving_Before_Supersede_Is_Still_Dropped()
+    {
+        // The race Codex flagged: a fast engine returns the tagged final BEFORE the VAD's supersede frame.
+        // Holding the final until the verdict means the later supersede still drops it.
+        var engine = new FakeSttEngine();
+        var (runner, cap, pipeline) = Build(engine);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(5));            // arm
+            await WaitUntilAsync(() => engine.Calls.Contains("flush:5"), Timeout);
+
+            await engine.EmitFinalAsync("stale speculative", utteranceId: 5);               // final FIRST (held)
+            await Task.Delay(80);
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(5, Superseded: true)); // then supersede
+            await Task.Delay(80);
+
+            // A real later turn proves the pipeline still flows — and the stale held final never shipped.
+            await engine.EmitFinalAsync("the real turn", utteranceId: null);
+            await cap.WaitForAsync(f => f is TranscriptionFrame t && t.Text == "the real turn", Timeout);
+
+            var texts = cap.Captured.OfType<TranscriptionFrame>().Select(t => t.Text).ToList();
+            Assert.DoesNotContain("stale speculative", texts);
+            Assert.Contains("the real turn", texts);
         }
     }
 

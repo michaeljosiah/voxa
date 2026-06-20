@@ -187,31 +187,52 @@ public sealed class AgentLoopProcessor : FrameProcessor
                         await _onTurnStarted.Invoke(ctx, ct).ConfigureAwait(false);
                     }
 
-                    await foreach (var frame in _driver.RunTurnAsync(ctx, ct).ConfigureAwait(false))
+                    // Response-duration cap (VRT-002 WS2 §6.5): a linked CTS cancels the driver enumeration
+                    // when the wall-clock cap is hit, so a turn that stalls before its first chunk, pauses
+                    // longer than the cap between chunks, or blocks on a frontend tool is bounded too — not
+                    // only one that keeps yielding frames. A capped turn is a normal truncated completion: the
+                    // cancellation is swallowed below and the summary + LlmTurnEndedFrame (finally) still run.
+                    CancellationTokenSource? capCts = null;
+                    if (_maxResponseDuration is { } cap)
                     {
-                        // Response-duration cap (VRT-002 WS2 §6.5): stop pumping a runaway turn and close it
-                        // cleanly — the finally below still emits LlmTurnEndedFrame and OnTurnCompleted runs.
-                        if (_maxResponseDuration is { } cap && stopwatch.Elapsed >= cap)
+                        capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        capCts.CancelAfter(cap);
+                    }
+                    var driverToken = capCts?.Token ?? ct;
+                    try
+                    {
+                        await foreach (var frame in _driver.RunTurnAsync(ctx, driverToken).ConfigureAwait(false))
                         {
-                            break;
-                        }
+                            // Secondary guard: a driver that yields rapidly without ever observing the token
+                            // would otherwise outrun the cancellation between its awaits.
+                            if (_maxResponseDuration is { } c && stopwatch.Elapsed >= c) break;
 
-                        switch (frame)
-                        {
-                            case LlmTextChunkFrame chunk:
-                                assistantText.Append(chunk.Text);
-                                break;
-                            case ToolCallRequestFrame call:
-                                pendingForThisTurn.Add(call.CallId);
-                                break;
-                            case LlmUsageFrame usage:
-                                // Aggregate-only — usage frames are loop bookkeeping, not transport
-                                // output. Hosts read totals via TurnSummary.Usage in OnTurnCompleted.
-                                inputTokens += usage.InputTokens;
-                                outputTokens += usage.OutputTokens;
-                                continue;
+                            switch (frame)
+                            {
+                                case LlmTextChunkFrame chunk:
+                                    assistantText.Append(chunk.Text);
+                                    break;
+                                case ToolCallRequestFrame call:
+                                    pendingForThisTurn.Add(call.CallId);
+                                    break;
+                                case LlmUsageFrame usage:
+                                    // Aggregate-only — usage frames are loop bookkeeping, not transport
+                                    // output. Hosts read totals via TurnSummary.Usage in OnTurnCompleted.
+                                    inputTokens += usage.InputTokens;
+                                    outputTokens += usage.OutputTokens;
+                                    continue;
+                            }
+                            // Forward on the turn token, not the cap token: an already-yielded frame still ships.
+                            await PushFrameAsync(frame, ct).ConfigureAwait(false);
                         }
-                        await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (capCts is { IsCancellationRequested: true } && !ct.IsCancellationRequested)
+                    {
+                        // Response-duration cap fired mid-generation — truncate cleanly and fall through to the summary.
+                    }
+                    finally
+                    {
+                        capCts?.Dispose();
                     }
 
                     var summary = new TurnSummary(
