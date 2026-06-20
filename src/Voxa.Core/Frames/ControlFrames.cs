@@ -18,6 +18,23 @@ public sealed record EndFrame : ControlFrame, IUninterruptible;
 public sealed record HeartbeatFrame : ControlFrame;
 
 /// <summary>
+/// Eager/speculative end-of-utterance marker (VRT-002 WS1). Emitted by the VAD when unvoiced silence reaches
+/// <c>EagerSttDelay</c> (strictly &lt; <c>StopDuration</c>): it tells <c>SpeechToTextProcessor</c> to flush the
+/// buffered utterance speculatively for <see cref="UtteranceId"/> so transcription overlaps the rest of the
+/// hangover. The gate stays open. If the user resumes within the window — or a smart-turn confirmer rejects the
+/// end-of-turn — the VAD re-emits it with <see cref="Superseded"/> = <c>true</c>; the STT processor then drops
+/// any final tagged with that id before it becomes a <see cref="TranscriptionFrame"/> (the suppression
+/// guarantee). Default <see cref="Superseded"/> = <c>false</c> (the arm/flush signal).
+///
+/// <para>
+/// Deliberately a <see cref="ControlFrame"/>, not a <see cref="SystemFrame"/>: it must stay FIFO-ordered with
+/// the <see cref="AudioRawFrame"/>s on the data channel so the speculative flush sees ALL preceding audio. On
+/// the priority/system channel it could overtake still-queued audio, and the peek/discard would drop speech.
+/// </para>
+/// </summary>
+public sealed record SpeculativeUtteranceFrame(long UtteranceId, bool Superseded = false) : ControlFrame;
+
+/// <summary>
 /// Emitted once, immediately after the pipeline starts, to announce the audio sample rates
 /// in use. The WebSocket sink serialises this as <c>{"type":"session","v":1,...}</c> so the
 /// client can configure its AudioContext without hard-coding per-route constants.

@@ -12,6 +12,16 @@ Items below are explicitly *not* in v0.x but are tracked here so they don't get 
 > the number is finally measurable. The **smart-turn classifier** is still outstanding, but its
 > integration seam now exists: `SileroVadOptions.ConfirmTurnEnd`. See `docs/performance-tuning.md`.
 
+> **M2 update (VRT-002 + VRT-003 shipped).** Eager/speculative STT now starts transcription **before** the
+> end-of-turn hangover elapses (`SileroVadOptions.EagerSttDelay`, on in LowLatency/Cheap) — with utterance-id
+> suppression so a resumed (or smart-turn-rejected) speculative pass is dropped before it becomes a turn. Three
+> turn-taking robustness knobs landed (empty-STT recovery, `MaxUtteranceDuration` force-split,
+> `MaxResponseDuration` cap), all off in `Default`. And the **`IEchoCanceller` seam** (VRT-003,
+> `Voxa.Audio.Abstractions`) gives true barge-in over speakers a first-class plug — see P1 below. The two
+> interruption knobs (`MinInterruptionDuration` debounce, `InterruptionRecoveryTimeout`) are deferred to a
+> dedicated follow-up — both need bot-speaking-aware barge-in plus the sink's epoch interplay. See
+> `docs/speech-core-parity-program.md`.
+
 The chained `Whisper → gpt-4o-mini → TTS` pipeline currently sits at ~1.6 s from end-of-spoken-words to first bot audio. Realtime API is ~250–400 ms. Here's the breakdown and where to cut:
 
 | Component | Today | Target | How |
@@ -57,7 +67,14 @@ Estimated effort: ~3 days (was ~1 week — the pipeline integration half is done
 
 When the user is on speakers (not headphones), the mic picks up the bot's own audio and tries to transcribe it. Browser-side `echoCancellation: true` helps but isn't perfect. Logs show stray "speaking user" / "transcription" events firing during bot playback.
 
-Fix: VAD processor listens for `BotStartedSpeakingFrame` / `BotStoppedSpeakingFrame` (need to make these flow upstream as system frames) and drops all audio frames while the bot is speaking. Optional opt-in `AllowBargeIn=true` for the user-can-interrupt case.
+> **VRT-003 update (shipped — the seam).** Voxa now ships the `IEchoCanceller` seam in
+> `Voxa.Audio.Abstractions`: an `EchoCancellerProcessor` placed **before** the VAD plus a far-end tap (after TTS)
+> that feeds the bot's own audio as the reference, wired by the composer from `Voxa:Aec:Engine` (default `None`
+> ⇒ byte-identical). This is the cleaner fix than gating mic audio during bot playback — a real DSP (WebRTC APM /
+> SpeexDSP) drops in as an opt-in `Voxa.Audio.Aec.*` follow-up package. AEC removes the bot's audio so the
+> VAD/STT see only the user; pair it with VRT-002's (deferred) interruption debounce for full robustness.
+
+Original sketch (superseded by VRT-003): VAD processor listens for `BotStartedSpeakingFrame` / `BotStoppedSpeakingFrame` (need to make these flow upstream as system frames) and drops all audio frames while the bot is speaking. Optional opt-in `AllowBargeIn=true` for the user-can-interrupt case.
 
 Estimated effort: ~2 days. Requires a small change to frame direction conventions.
 

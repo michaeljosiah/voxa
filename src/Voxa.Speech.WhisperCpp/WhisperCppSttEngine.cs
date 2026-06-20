@@ -13,14 +13,14 @@ namespace Voxa.Speech.WhisperCpp;
 /// Local speech-to-text over whisper.cpp (VLS-001 WS1). Whisper is an utterance transcriber, not
 /// a streaming recognizer — which matches Voxa's pipeline shape exactly: the VAD gates audio so
 /// only speech reaches this engine, and <see cref="SpeechToTextProcessor"/> calls
-/// <see cref="FlushAsync"/> on <c>UserStoppedSpeakingFrame</c>. The engine buffers PCM between
+/// <see cref="FlushAsync()"/> on <c>UserStoppedSpeakingFrame</c>. The engine buffers PCM between
 /// flushes and transcribes once per utterance, emitting final-only results (no interims in v1).
 ///
 /// <para>
 /// Model weights load once per process: <see cref="WhisperFactory"/> instances are cached per
 /// model path (~75–490 MB each); the per-connection state is just a cheap
 /// <see cref="WhisperProcessor"/>. Transcription runs on worker threads chained one-after-another
-/// (whisper.cpp is CPU-bound native code) so <see cref="FlushAsync"/> returns immediately and the
+/// (whisper.cpp is CPU-bound native code) so <see cref="FlushAsync()"/> returns immediately and the
 /// pipeline data loop never blocks on inference.
 /// </para>
 /// </summary>
@@ -195,6 +195,29 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
         return Task.CompletedTask;
     }
 
+    /// <summary>whisper.cpp batches per utterance, so it can peek-transcribe + discard for eager STT.</summary>
+    public bool SupportsEagerSttFlush => true;
+
+    public Task FlushAsync(long utteranceId)
+    {
+        lock (_gate)
+        {
+            // Speculative (eager) flush (VRT-002 WS1): transcribe the buffered utterance now, tagged with the
+            // id, but do NOT clear the buffer — if the user resumes, the real flush re-transcribes the full
+            // (merged) utterance; on promote the buffer is dropped via DiscardBufferedAudioAsync.
+            if (!_stopped) QueueTranscriptionLocked(utteranceId, clearBuffer: false);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task DiscardBufferedAudioAsync()
+    {
+        // Confirm ⇒ promote: the speculative transcription already covers this audio, so drop the peeked
+        // buffer without re-transcribing (no duplicate turn, and the next utterance starts clean).
+        lock (_gate) _buffered = 0;
+        return Task.CompletedTask;
+    }
+
     public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct)
         => _transcripts.Reader.ReadAllAsync(ct);
 
@@ -275,14 +298,17 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
         _buffered += samples;
     }
 
-    /// <summary>Caller must hold <see cref="_gate"/>.</summary>
-    private void QueueTranscriptionLocked()
+    /// <summary>
+    /// Caller must hold <see cref="_gate"/>. <paramref name="utteranceId"/> tags the emitted result (eager STT);
+    /// <paramref name="clearBuffer"/> false leaves the buffer intact for a speculative (peek) flush.
+    /// </summary>
+    private void QueueTranscriptionLocked(long? utteranceId = null, bool clearBuffer = true)
     {
         if (_buffered < MinUtteranceSamples) return; // VAD blip — keep buffering, don't hallucinate
 
         var samples = new float[_buffered];
         Array.Copy(_buffer, samples, _buffered);
-        _buffered = 0;
+        if (clearBuffer) _buffered = 0;
 
         // Chain onto the previous transcription: utterances stay ordered and inference is
         // serialized without holding any lock during the (long) native call.
@@ -291,11 +317,11 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
         _transcriptions = Task.Run(async () =>
         {
             await previous.ConfigureAwait(false);
-            await TranscribeAndEmitAsync(samples, ct).ConfigureAwait(false);
+            await TranscribeAndEmitAsync(samples, utteranceId, ct).ConfigureAwait(false);
         }, CancellationToken.None);
     }
 
-    private async Task TranscribeAndEmitAsync(float[] samples, CancellationToken ct)
+    private async Task TranscribeAndEmitAsync(float[] samples, long? utteranceId, CancellationToken ct)
     {
         try
         {
@@ -321,7 +347,8 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
 
             await _transcripts.Writer
                 .WriteAsync(new TranscriptionResult(text, IsFinal: true,
-                    Language: _options.AutoDetectLanguage ? null : _options.Language), ct)
+                    Language: _options.AutoDetectLanguage ? null : _options.Language,
+                    UtteranceId: utteranceId), ct)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) { /* engine shutting down */ }

@@ -24,6 +24,7 @@ public sealed class VoxaBuilder
     public VoxaBuilder AddProvider(VoxaSttDescriptor stt)  { Registry.Add(stt);  return this; }
     public VoxaBuilder AddProvider(VoxaTtsDescriptor tts)  { Registry.Add(tts);  return this; }
     public VoxaBuilder AddProvider(VoxaVadDescriptor vad)  { Registry.Add(vad);  return this; }
+    public VoxaBuilder AddProvider(VoxaAecDescriptor aec)  { Registry.Add(aec);  return this; } // VRT-003: external Voxa.Audio.Aec.* packages
 }
 
 public static class VoxaServiceCollectionExtensions

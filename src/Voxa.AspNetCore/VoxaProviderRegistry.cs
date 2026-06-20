@@ -18,10 +18,13 @@ public sealed class VoxaProviderRegistry
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, VoxaVadDescriptor> _vad =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, VoxaAecDescriptor> _aec =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyCollection<string> SttNames => _stt.Keys;
     public IReadOnlyCollection<string> TtsNames => _tts.Keys;
     public IReadOnlyCollection<string> VadNames => _vad.Keys;
+    public IReadOnlyCollection<string> AecNames => _aec.Keys;
 
     internal void Add(VoxaSttDescriptor descriptor, ILogger? logger = null)
     {
@@ -50,8 +53,18 @@ public sealed class VoxaProviderRegistry
     public bool TryGetTts(string name, out VoxaTtsDescriptor descriptor)
         => _tts.TryGetValue(name, out descriptor!);
 
+    internal void Add(VoxaAecDescriptor descriptor, ILogger? logger = null)
+    {
+        if (_aec.ContainsKey(descriptor.Name))
+            logger?.LogDebug("VoxaProviderRegistry: AEC '{Name}' overwritten.", descriptor.Name);
+        _aec[descriptor.Name] = descriptor;
+    }
+
     public bool TryGetVad(string name, out VoxaVadDescriptor descriptor)
         => _vad.TryGetValue(name, out descriptor!);
+
+    public bool TryGetAec(string name, out VoxaAecDescriptor descriptor)
+        => _aec.TryGetValue(name, out descriptor!);
 
     /// <summary>
     /// Resolve the live voice-catalog capability for a named TTS provider, if it offers one

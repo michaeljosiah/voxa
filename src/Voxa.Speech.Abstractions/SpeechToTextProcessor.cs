@@ -17,6 +17,18 @@ public sealed class SpeechToTextProcessor : FrameProcessor
     private ISpeechToTextEngine? _engine;
     private Task? _readLoop;
 
+    // Eager-STT coordination (VRT-002 WS1), touched from the system loop (ProcessFrameAsync) and the read loop
+    // (ReadLoopAsync) under _specLock. A speculative final is HELD (not forwarded) until the VAD confirms or
+    // supersedes the utterance — forwarding it eagerly would let a fast batch engine's final start a turn that
+    // a later supersede could not retract (the race that would break the suppression guarantee).
+    private readonly object _specLock = new();
+    private readonly HashSet<long> _superseded = new();                          // final tagged with this id ⇒ drop
+    private readonly HashSet<long> _confirmed = new();                           // final tagged with this id ⇒ forward
+    private readonly Dictionary<long, TranscriptionResult> _heldFinals = new();  // final arrived before its verdict
+    private bool _speculativePending;
+    private long _activeSpecId;
+    private bool _inUtterance; // true between UserStarted and UserStopped; gates stale (backlogged) arms
+
     /// <summary>Construct with an existing engine instance (one-shot use).</summary>
     public SpeechToTextProcessor(ISpeechToTextEngine engine, ILogger? logger = null)
         : this(() => engine, logger) { }
@@ -56,25 +68,128 @@ public sealed class SpeechToTextProcessor : FrameProcessor
     {
         if (_engine is not null)
         {
-            if (frame is AudioRawFrame audio)
+            switch (frame)
             {
-                // Audio is consumed by STT; transcriptions come back via the read loop.
-                await _engine.WriteAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
-                return;
-            }
+                case AudioRawFrame audio:
+                    // Audio is consumed by STT; transcriptions come back via the read loop.
+                    await _engine.WriteAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
+                    return;
 
-            if (frame is UserStoppedSpeakingFrame)
-            {
-                // Speech-end signal — drain whatever the batch engine has buffered immediately
-                // instead of waiting for its periodic timer. The frame still flows downstream
-                // (transports may want to surface it).
-                try { await _engine.FlushAsync().ConfigureAwait(false); }
-                catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: engine FlushAsync threw"); }
+                case SpeculativeUtteranceFrame spec:
+                    // Eager STT (VRT-002 WS1): flush speculatively, or record a supersession.
+                    await HandleSpeculativeAsync(spec).ConfigureAwait(false);
+                    break; // also forward — the sink reads the marker (continuation, not barge-in)
+
+                case UserStartedSpeakingFrame:
+                    // A new utterance is starting: mark it active and clear any stale eager state — a held final
+                    // or pending arm left by a misordered prior utterance — so it can't promote into this turn.
+                    lock (_specLock)
+                    {
+                        _inUtterance = true;
+                        _speculativePending = false;
+                        _activeSpecId = 0;
+                        _heldFinals.Clear();
+                    }
+                    break;
+
+                case UserStoppedSpeakingFrame stopped:
+                    // Speech-end: flush (or promote a pending speculative pass) and forward. HandleUserStoppedAsync
+                    // forwards the frame (and any promoted transcript) itself, so this case returns.
+                    await HandleUserStoppedAsync(stopped, ct).ConfigureAwait(false);
+                    return;
             }
         }
 
         // Forward control + non-audio frames so Start/End/speaking events reach the sink.
         await PushFrameAsync(frame, ct).ConfigureAwait(false);
+    }
+
+    private async Task HandleSpeculativeAsync(SpeculativeUtteranceFrame spec)
+    {
+        // If the engine doesn't implement eager STT, ignore the marker entirely — no speculative flush and no
+        // held/superseded state, so the turn just flushes normally at speech-end. This prevents a non-eager
+        // batch engine from emitting an untagged speculative final the processor could neither hold nor drop.
+        if (_engine is null || !_engine.SupportsEagerSttFlush) return;
+
+        if (spec.Superseded)
+        {
+            // Resume / smart-turn-false: this speculative utterance is dead. Drop its final whether it already
+            // arrived (held) or arrives later (recorded in _superseded) — the suppression guarantee, robust to
+            // the engine finishing inference before this frame lands.
+            lock (_specLock)
+            {
+                _heldFinals.Remove(spec.UtteranceId);
+                _superseded.Add(spec.UtteranceId);
+                if (_activeSpecId == spec.UtteranceId) _speculativePending = false;
+                PruneLocked();
+            }
+            return;
+        }
+
+        bool arm;
+        lock (_specLock)
+        {
+            // Ignore a stale arm that (under data-loop backlog) arrives after the utterance already stopped:
+            // otherwise it would set _speculativePending after the stop and a later stop would promote the wrong
+            // utterance id. An arm is valid only between UserStarted and UserStopped.
+            arm = _inUtterance;
+            if (arm) { _speculativePending = true; _activeSpecId = spec.UtteranceId; }
+        }
+        if (!arm) return;
+
+        // Speculative flush: transcribe the buffered utterance now, tagged with this id, overlapping the rest of
+        // the hangover. Its result is HELD until the turn is confirmed or superseded (see ReadLoopAsync).
+        try
+        {
+            await _engine.FlushAsync(spec.UtteranceId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // The speculative flush never started — clear the pending flag so the eventual UserStopped does a
+            // classic flush instead of promoting (discarding) a turn that was never transcribed.
+            _logger.LogWarning(ex, "SpeechToTextProcessor: speculative FlushAsync threw; falling back to classic flush");
+            lock (_specLock) { if (_activeSpecId == spec.UtteranceId) _speculativePending = false; }
+        }
+    }
+
+    private async Task HandleUserStoppedAsync(UserStoppedSpeakingFrame frame, CancellationToken ct)
+    {
+        bool promote;
+        long specId;
+        lock (_specLock) { promote = _speculativePending; specId = _activeSpecId; _speculativePending = false; _inUtterance = false; }
+
+        TranscriptionResult? promoted = null;
+        if (promote && _engine is not null)
+        {
+            // Confirm ⇒ promote: the speculative pass IS this turn's transcription. Release its held final (or
+            // mark the id confirmed so the read loop forwards it when it arrives), and drop the engine buffer
+            // without a second transcription (no double STT pass).
+            //
+            // Cross-channel note: this runs on the priority/system loop while a resume's supersede is a
+            // data/control frame. If that supersede were still queued when this stop arrives, a stale partial
+            // could be promoted — but that needs the STT data loop backlogged behind an entire resumed
+            // utterance, which the only eager-capable engine (whisper.cpp, non-blocking buffer-append
+            // WriteAudioAsync) never is. A fully order-independent fix would data-order the confirm signal too;
+            // tracked as a follow-up.
+            lock (_specLock)
+            {
+                if (!_heldFinals.Remove(specId, out promoted)) { _confirmed.Add(specId); PruneLocked(); }
+            }
+            try { await _engine.DiscardBufferedAudioAsync().ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: DiscardBufferedAudioAsync threw"); }
+        }
+        else if (_engine is not null)
+        {
+            // Classic batch flush at speech-end (no eager pass pending).
+            try { await _engine.FlushAsync().ConfigureAwait(false); }
+            catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: engine FlushAsync threw"); }
+        }
+
+        // Forward the speech-end signal first, then the promoted transcript — matching the classic
+        // UserStopped-then-transcript ordering the sink and downstream stages expect.
+        await PushFrameAsync(frame, ct).ConfigureAwait(false);
+        if (promoted is not null)
+            await PushFrameAsync(new TranscriptionFrame(promoted.Text, promoted.IsFinal, promoted.Language), ct).ConfigureAwait(false);
     }
 
     private async Task ReadLoopAsync(CancellationToken ct)
@@ -84,6 +199,32 @@ public sealed class SpeechToTextProcessor : FrameProcessor
         {
             await foreach (var t in _engine.ReadTranscriptsAsync(ct).ConfigureAwait(false))
             {
+                // A tagged speculative final is never forwarded on arrival: it is dropped (superseded),
+                // forwarded (already confirmed), or HELD until the VAD decides (VRT-002 WS1). Holding closes
+                // the race where a fast engine returns the final before the supersede frame lands.
+                if (t.IsFinal && t.UtteranceId is { } id)
+                {
+                    EagerDecision decision;
+                    lock (_specLock)
+                    {
+                        if (_superseded.Remove(id)) decision = EagerDecision.Drop;
+                        else if (_confirmed.Remove(id)) decision = EagerDecision.Forward;
+                        else { _heldFinals[id] = t; PruneLocked(); decision = EagerDecision.Hold; }
+                    }
+
+                    if (decision == EagerDecision.Drop)
+                    {
+                        _logger.LogDebug("SpeechToTextProcessor: dropped superseded speculative final (utterance {Id})", id);
+                        continue;
+                    }
+                    if (decision == EagerDecision.Hold)
+                    {
+                        _logger.LogDebug("SpeechToTextProcessor: holding speculative final (utterance {Id}) pending turn confirmation", id);
+                        continue;
+                    }
+                    // Forward (already confirmed) — fall through.
+                }
+
                 await PushFrameAsync(new TranscriptionFrame(t.Text, t.IsFinal, t.Language), ct).ConfigureAwait(false);
             }
         }
@@ -93,5 +234,17 @@ public sealed class SpeechToTextProcessor : FrameProcessor
             _logger.LogError(ex, "SpeechToTextProcessor: STT engine read loop failed");
             await PushErrorAsync($"STT engine failed: {ex.Message}", ex, ct).ConfigureAwait(false);
         }
+    }
+
+    private enum EagerDecision { Forward, Drop, Hold }
+
+    // Caller must hold _specLock. Safety valve only: ids whose finals never arrive (empty transcription, a
+    // cancelled flush) would otherwise accumulate. In normal operation these collections hold 0–1 entries.
+    private void PruneLocked()
+    {
+        const int cap = 256;
+        if (_superseded.Count > cap) _superseded.Clear();
+        if (_confirmed.Count > cap) _confirmed.Clear();
+        if (_heldFinals.Count > cap) _heldFinals.Clear();
     }
 }

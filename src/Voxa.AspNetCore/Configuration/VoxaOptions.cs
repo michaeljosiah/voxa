@@ -20,6 +20,7 @@ public sealed class VoxaOptions
     public string? Tts { get; set; }
 
     public VoxaVadOptions Vad { get; set; } = new();
+    public VoxaAecOptions Aec { get; set; } = new();
     public VoxaAgentOptions Agent { get; set; } = new();
     public VoxaAggregatorOptions Aggregator { get; set; } = new();
     public VoxaDiagnosticsOptions Diagnostics { get; set; } = new();
@@ -58,6 +59,29 @@ public sealed class VoxaVadOptions
     public int?    StartDurationMs { get; set; }
     public int?    StopDurationMs { get; set; }
     public int?    PrerollDurationMs { get; set; }
+
+    /// <summary>
+    /// Speculative ("eager") STT trigger in ms (VRT-002 WS1). Must be &lt; <see cref="StopDurationMs"/> (or the
+    /// active profile's stop). Null ⇒ fall through to the profile (off in Default/Quality; on in LowLatency/Cheap).
+    /// </summary>
+    public int? EagerSttDelayMs { get; set; }
+
+    /// <summary>
+    /// Force-split cap in ms on a single open-gate utterance (VRT-002 WS2). Null ⇒ profile default (off in
+    /// Default/Quality). Keep comfortably larger than a typical sentence so it doesn't chop natural speech.
+    /// </summary>
+    public int? MaxUtteranceDurationMs { get; set; }
+}
+
+/// <summary>
+/// Acoustic echo cancellation (VRT-003). "None" (default) inserts no AEC stage — the composed pipeline is
+/// byte-identical to today; a registered engine name inserts an <c>EchoCancellerProcessor</c> before the VAD
+/// (and a far-end bot-audio tap after TTS). Requires the matching <c>Voxa.Audio.Aec.*</c> package.
+/// </summary>
+public sealed class VoxaAecOptions
+{
+    /// <summary>"None" (default) or a registered AEC engine name (e.g. "WebRtc").</summary>
+    public string Engine { get; set; } = "None";
 }
 
 /// <summary>
@@ -84,6 +108,13 @@ public sealed class VoxaAgentOptions
 
     /// <summary>History cap: oldest user/assistant pairs are trimmed beyond this.</summary>
     public int MaxHistoryMessages { get; set; } = 50;
+
+    /// <summary>
+    /// Response-duration cap in ms for a single turn (VRT-002 WS2 §6.5). When set, the agent loop stops pumping
+    /// a runaway turn's output once it reaches this wall-clock bound and closes the turn cleanly. Null ⇒ profile
+    /// default (off in Default/Quality; 30 s in LowLatency/Cheap).
+    /// </summary>
+    public int? MaxResponseDurationMs { get; set; }
 }
 
 public sealed class VoxaAggregatorOptions

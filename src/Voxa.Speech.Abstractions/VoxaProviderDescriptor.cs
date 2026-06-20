@@ -128,6 +128,20 @@ public sealed record VoxaVadSettings(
     /// (classic silence-only behavior — byte-for-byte unchanged).
     /// </summary>
     public Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask<bool>>? ConfirmTurnEnd { get; init; }
+
+    /// <summary>
+    /// Speculative ("eager") STT delay (VRT-002 WS1). Threaded to <c>SileroVadOptions.EagerSttDelay</c>: when
+    /// set (and &lt; <see cref="StopDuration"/>) the VAD emits a marked speculative end-of-utterance at this
+    /// silence delay so STT starts before the full hangover elapses. Null ⇒ no eager dispatch (unchanged).
+    /// </summary>
+    public TimeSpan? EagerSttDelay { get; init; }
+
+    /// <summary>
+    /// Force-split cap on a single open-gate utterance (VRT-002 WS2). Threaded to
+    /// <c>SileroVadOptions.MaxUtteranceDuration</c>: a non-pausing speaker gets a forced intermediate
+    /// flush + fresh utterance at this cap. Null ⇒ no cap (unchanged).
+    /// </summary>
+    public TimeSpan? MaxUtteranceDuration { get; init; }
 }
 
 /// <summary>
@@ -138,3 +152,21 @@ public sealed record VoxaVadSettings(
 public sealed record VoxaVadDescriptor(
     string Name,
     Func<IServiceProvider, VoxaVadSettings, FrameProcessor> CreateProcessor);
+
+/// <summary>
+/// Settings the composer resolves and hands the AEC factory (VRT-003; peer of <see cref="VoxaVadSettings"/>).
+/// <paramref name="SampleRate"/> is the near-end (mic / STT-input) rate the canceller runs at;
+/// <paramref name="FarEndSampleRate"/> is the far-end (bot / TTS-output) rate the reference tap feeds. They
+/// differ in mixed-rate pipelines (e.g. 16 kHz mic, 24 kHz TTS), so a real canceller needs both to resample and
+/// time-align the far-end against the near-end. PCM is 16-bit mono throughout the Voxa pipeline.
+/// </summary>
+public sealed record VoxaAecSettings(int SampleRate, int FarEndSampleRate);
+
+/// <summary>
+/// Self-description of an acoustic-echo-canceller provider (VRT-003), peer of <see cref="VoxaVadDescriptor"/>.
+/// AEC knobs are rate/profile-mediated, so the factory receives resolved <see cref="VoxaAecSettings"/> rather
+/// than an <see cref="IConfigurationSection"/>. The factory builds the before-VAD echo-canceller processor.
+/// </summary>
+public sealed record VoxaAecDescriptor(
+    string Name,
+    Func<IServiceProvider, VoxaAecSettings, FrameProcessor> CreateProcessor);

@@ -62,6 +62,14 @@ internal sealed class VoxaOptionsValidator : IValidateOptions<VoxaOptions>
                        $"Valid values: {string.Join(", ", valid)}.");
         }
 
+        // AEC (VRT-003): "None" (default, no stage inserted) or a registered engine. Unknown → fail fast,
+        // the same discipline as STT/TTS/VAD. No engine is registered by default (the DSP is a follow-up).
+        var knownAec = string.Equals(o.Aec.Engine, "None", StringComparison.OrdinalIgnoreCase)
+            || _registry.AecNames.Contains(o.Aec.Engine, StringComparer.OrdinalIgnoreCase);
+        if (!knownAec)
+            errors.Add($"Voxa:Aec:Engine '{o.Aec.Engine}' is not a registered acoustic echo canceller. " +
+                       $"Valid values: {string.Join(", ", new[] { "None" }.Union(_registry.AecNames, StringComparer.OrdinalIgnoreCase))}.");
+
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);

@@ -65,6 +65,7 @@ public static class MicrosoftAgentVoice
             driver,
             onTurnStarted: options.OnTurnStarted,
             onTurnCompleted: options.OnTurnCompleted,
-            onTurnFailed: options.OnTurnFailed);
+            onTurnFailed: options.OnTurnFailed,
+            maxResponseDuration: options.MaxResponseDuration);
     }
 }

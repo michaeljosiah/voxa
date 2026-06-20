@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Audio.Abstractions</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Audio-stage abstractions for the Voxa pipeline. Defines the IEchoCanceller seam (VRT-003) — an acoustic echo canceller placed before the VAD for barge-in over speakers — plus a NullEchoCanceller passthrough default and the EchoCancellerProcessor. Ships the seam, not a DSP.</Description>
+    <PackageTags>voxa;voice;ai;audio;aec;echo-cancellation;abstractions</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only Core frame/processor types — no ASP.NET, Azure, ONNX, or native deps (cross-cutting invariant). -->
+    <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Audio.Abstractions.Tests" />
+  </ItemGroup>
+
+</Project>
