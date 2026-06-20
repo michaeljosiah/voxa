@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the consuming engines (VLS-004/005/007/008, VRT-005). Existing engines are unchanged — adopting the host is an
   additive follow-up. The `OnnxTensors` convenience run-helper is deferred to the first consumer that pins its
   dtype matrix.
+- **Local speech-enhancement / denoise seam (VLS-004 WS1).** A new `IAudioEnhancer` (in `Voxa.Audio.Abstractions`)
+  + `NullAudioEnhancer` passthrough + `AudioEnhancerProcessor` that runs the denoiser per `AudioRawFrame`, placed
+  by the composer **after the AEC stage (VRT-003) and before the VAD** so the VAD and STT see the cleaned mic
+  signal. A `VoxaEnhancerDescriptor` + `TryGetEnhancer` registry slot + public
+  `VoxaBuilder.AddProvider(VoxaEnhancerDescriptor)` let a real engine drop in by config; the composer inserts the
+  stage from `Voxa:Enhance:Engine` (default `None` ⇒ byte-identical, golden-tested) behind a fail-fast validator.
+  Ships the **seam, not a model** — the reference DeepFilterNet3 ONNX engine (WS2) is deferred pending license
+  verification and a SHA-256-pinned artifact (the program's "define the seam, defer the heavy model" discipline).
 - **Streaming STT — interim-transcript coalescing (VRT-004 WS1).** Interim (`IsFinal:false`) transcripts already
   propagate end-to-end for streaming engines and the agent already ignores them; VRT-004 adds
   `SpeechToTextProcessor.InterimMinInterval` (config `Voxa:InterimMinIntervalMs`, default ~150 ms) which throttles

@@ -20,11 +20,14 @@ public sealed class VoxaProviderRegistry
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, VoxaAecDescriptor> _aec =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, VoxaEnhancerDescriptor> _enhancer =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyCollection<string> SttNames => _stt.Keys;
     public IReadOnlyCollection<string> TtsNames => _tts.Keys;
     public IReadOnlyCollection<string> VadNames => _vad.Keys;
     public IReadOnlyCollection<string> AecNames => _aec.Keys;
+    public IReadOnlyCollection<string> EnhancerNames => _enhancer.Keys;
 
     internal void Add(VoxaSttDescriptor descriptor, ILogger? logger = null)
     {
@@ -63,8 +66,18 @@ public sealed class VoxaProviderRegistry
     public bool TryGetVad(string name, out VoxaVadDescriptor descriptor)
         => _vad.TryGetValue(name, out descriptor!);
 
+    internal void Add(VoxaEnhancerDescriptor descriptor, ILogger? logger = null)
+    {
+        if (_enhancer.ContainsKey(descriptor.Name))
+            logger?.LogDebug("VoxaProviderRegistry: Enhancer '{Name}' overwritten.", descriptor.Name);
+        _enhancer[descriptor.Name] = descriptor;
+    }
+
     public bool TryGetAec(string name, out VoxaAecDescriptor descriptor)
         => _aec.TryGetValue(name, out descriptor!);
+
+    public bool TryGetEnhancer(string name, out VoxaEnhancerDescriptor descriptor)
+        => _enhancer.TryGetValue(name, out descriptor!);
 
     /// <summary>
     /// Resolve the live voice-catalog capability for a named TTS provider, if it offers one
