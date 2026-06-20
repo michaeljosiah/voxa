@@ -1,4 +1,5 @@
 using System.Text;
+using Voxa.Speech;
 
 namespace Voxa.Cli;
 
@@ -61,30 +62,11 @@ internal static class WavIO
     /// <summary>Write mono 16-bit PCM as a WAV file at <paramref name="sampleRate"/>.</summary>
     public static async Task WritePcm16Async(string path, byte[] pcm, int sampleRate, CancellationToken ct)
     {
-        const short channels = 1, bits = 16;
-        var byteRate = sampleRate * channels * bits / 8;
-        var blockAlign = (short)(channels * bits / 8);
-
-        using var header = new MemoryStream(44);
-        using (var w = new BinaryWriter(header, Encoding.ASCII, leaveOpen: true))
-        {
-            w.Write("RIFF"u8.ToArray());
-            w.Write(36 + pcm.Length);
-            w.Write("WAVE"u8.ToArray());
-            w.Write("fmt "u8.ToArray());
-            w.Write(16);            // PCM fmt chunk size
-            w.Write((short)1);      // audio format = PCM
-            w.Write(channels);
-            w.Write(sampleRate);
-            w.Write(byteRate);
-            w.Write(blockAlign);
-            w.Write(bits);
-            w.Write("data"u8.ToArray());
-            w.Write(pcm.Length);
-        }
+        var header = new byte[Pcm16Wav.HeaderSize];
+        Pcm16Wav.WriteHeader(header, pcm.Length, sampleRate); // shared canonical PCM16 header (CQ-009)
 
         await using var fs = File.Create(path);
-        await fs.WriteAsync(header.GetBuffer().AsMemory(0, (int)header.Length), ct).ConfigureAwait(false);
+        await fs.WriteAsync(header, ct).ConfigureAwait(false);
         await fs.WriteAsync(pcm, ct).ConfigureAwait(false);
     }
 

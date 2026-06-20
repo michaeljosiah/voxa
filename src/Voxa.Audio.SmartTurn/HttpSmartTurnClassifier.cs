@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -44,7 +43,7 @@ public sealed class HttpSmartTurnClassifier : ISmartTurnClassifier
 
             using var request = new HttpRequestMessage(HttpMethod.Post, _options.Endpoint)
             {
-                Content = new ByteArrayContent(BuildWav(recentSpeechPcm.Span, sampleRate))
+                Content = new ByteArrayContent(Pcm16Wav.Wrap(recentSpeechPcm.Span, sampleRate))
                 {
                     Headers = { ContentType = new MediaTypeHeaderValue("audio/wav") },
                 },
@@ -93,25 +92,4 @@ public sealed class HttpSmartTurnClassifier : ISmartTurnClassifier
         }
     }
 
-    /// <summary>Wrap 16-bit mono PCM in a minimal 44-byte WAV header.</summary>
-    internal static byte[] BuildWav(ReadOnlySpan<byte> pcm, int sampleRate)
-    {
-        var wav = new byte[44 + pcm.Length];
-        var span = wav.AsSpan();
-        "RIFF"u8.CopyTo(span);
-        BinaryPrimitives.WriteUInt32LittleEndian(span[4..], (uint)(36 + pcm.Length));
-        "WAVE"u8.CopyTo(span[8..]);
-        "fmt "u8.CopyTo(span[12..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(span[16..], 16);                       // fmt chunk size
-        BinaryPrimitives.WriteUInt16LittleEndian(span[20..], 1);                        // PCM
-        BinaryPrimitives.WriteUInt16LittleEndian(span[22..], 1);                        // mono
-        BinaryPrimitives.WriteUInt32LittleEndian(span[24..], (uint)sampleRate);
-        BinaryPrimitives.WriteUInt32LittleEndian(span[28..], (uint)(sampleRate * 2));   // byte rate (mono, 16-bit)
-        BinaryPrimitives.WriteUInt16LittleEndian(span[32..], 2);                        // block align
-        BinaryPrimitives.WriteUInt16LittleEndian(span[34..], 16);                       // bits per sample
-        "data"u8.CopyTo(span[36..]);
-        BinaryPrimitives.WriteUInt32LittleEndian(span[40..], (uint)pcm.Length);
-        pcm.CopyTo(span[44..]);
-        return wav;
-    }
 }

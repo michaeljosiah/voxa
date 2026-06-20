@@ -53,16 +53,6 @@ public class HttpSmartTurnClassifierTests
         => Assert.Equal(expected, HttpSmartTurnClassifier.ParseComplete(json, 0.5));
 
     [Fact]
-    public void BuildWav_Wraps_Pcm_In_A_Valid_Header()
-    {
-        var wav = HttpSmartTurnClassifier.BuildWav(new byte[100], 16000);
-        Assert.Equal(44 + 100, wav.Length);
-        Assert.Equal("RIFF", Encoding.ASCII.GetString(wav, 0, 4));
-        Assert.Equal("WAVE", Encoding.ASCII.GetString(wav, 8, 4));
-        Assert.Equal("data", Encoding.ASCII.GetString(wav, 36, 4));
-    }
-
-    [Fact]
     public async Task Posts_A_Wav_And_Returns_The_Endpoint_Verdict()
     {
         HttpRequestMessage? seen = null;

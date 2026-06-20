@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Voxa.Speech;
 using Voxa.Studio.Audio;
 
 namespace Voxa.Studio.Services;
@@ -80,14 +81,5 @@ internal static class WavIo
     }
 
     /// <summary>PCM16 mono → WAV bytes.</summary>
-    public static byte[] Write(byte[] pcm, int sampleRate)
-    {
-        using var ms = new MemoryStream(44 + pcm.Length);
-        using var w = new BinaryWriter(ms);
-        w.Write("RIFF"u8); w.Write(36 + pcm.Length); w.Write("WAVE"u8);
-        w.Write("fmt "u8); w.Write(16); w.Write((short)1); w.Write((short)1);
-        w.Write(sampleRate); w.Write(sampleRate * 2); w.Write((short)2); w.Write((short)16);
-        w.Write("data"u8); w.Write(pcm.Length); w.Write(pcm);
-        return ms.ToArray();
-    }
+    public static byte[] Write(byte[] pcm, int sampleRate) => Pcm16Wav.Wrap(pcm, sampleRate); // shared header (CQ-009)
 }
