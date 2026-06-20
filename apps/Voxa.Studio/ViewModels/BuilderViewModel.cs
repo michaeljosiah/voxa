@@ -854,10 +854,17 @@ public sealed partial class BuilderViewModel : ObservableObject
         }
     }
 
-    /// <summary>The shipped local default pipeline — what "Reset" returns the canvas to.</summary>
+    /// <summary>
+    /// What "Reset" returns the canvas to: the fastest local pipeline that needs no extra setup. The
+    /// <b>LowLatency</b> profile does the heavy lifting — it turns on eager/speculative STT (~150 ms), an
+    /// aggressive VAD stop (~400 ms), the utterance/response caps, and an early first-sentence flush — over the
+    /// fastest local models (whisper <c>tiny.en</c>, Piper <c>en_US-amy-low</c> at 16 kHz). Smart turn and GPU
+    /// are deliberately NOT seeded: each needs external setup (a Python/HTTP classifier; a GPU runtime package),
+    /// so baking them into the reset would produce a default that fails to run out of the box.
+    /// </summary>
     private static readonly Dictionary<string, string?> DefaultPipelinePairs = new()
     {
-        ["Voxa:Profile"] = "Default",
+        ["Voxa:Profile"] = "LowLatency",
         ["Voxa:Vad:Engine"] = "Silero",
         ["Voxa:Stt"] = "WhisperCpp",
         ["Voxa:WhisperCpp:Model"] = "tiny.en",
@@ -866,13 +873,13 @@ public sealed partial class BuilderViewModel : ObservableObject
         ["Voxa:Piper:Voice"] = "en_US-amy-low",
     };
 
-    /// <summary>Reset the canvas to the default pipeline — undoable (one Ctrl+Z restores the prior graph).</summary>
+    /// <summary>Reset the canvas to the high-performance default — undoable (one Ctrl+Z restores the prior graph).</summary>
     [RelayCommand]
     private void ResetToDefault()
     {
         PushUndo();
         SeedFromPairs(DefaultPipelinePairs, clearHistory: false);
-        StatusText = "Reset to the default pipeline.";
+        StatusText = "Reset to the fastest local pipeline (LowLatency profile — eager STT, tight VAD).";
     }
 
     /// <summary>Replace the document and rebuild every VM from it (undo, load, seed).</summary>

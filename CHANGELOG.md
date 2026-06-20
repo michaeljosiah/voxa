@@ -176,6 +176,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `SeedFromPairs`/`BuilderChainCompiler`), and selecting `cpu` in Config emits an explicit `cpu` override when the
   base config pinned a GPU device — so a GPU choice survives Config → "Open in Builder" → run/export, and the
   picker can always turn GPU back off, instead of a layered base value silently winning.
+- **Voxa Studio: Builder "Reset" now restores the fastest pipeline.** Reset-to-default seeds the **LowLatency**
+  profile instead of the byte-identical Default one, so the canvas comes back tuned for the lowest latency using
+  the work that's shipped — eager/speculative STT (~150 ms), an aggressive ~400 ms VAD stop, the utterance and
+  response caps, and an early first-sentence flush — over the fastest local models (whisper `tiny.en`, Piper
+  `en_US-amy-low` at 16 kHz). Smart turn and GPU are deliberately left out of the reset: each needs external
+  setup (a Python/HTTP classifier; a GPU runtime package), so seeding them would yield a default that can't run
+  out of the box. Switch to Quality/Default any time from the profile selector.
 - **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
   input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
   **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they
