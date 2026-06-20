@@ -22,3 +22,18 @@ This package ships the **seam, a passthrough default, and the wiring** — not a
 Enable a real canceller with `Voxa:Aec:Engine` once an implementation package is referenced; with it unset
 or `None` the composer inserts **no** AEC stage, so the pipeline is byte-identical to today. A production DSP
 (WebRTC APM / SpeexDSP / a managed canceller) is a separate, opt-in follow-up package.
+
+## `IAudioEnhancer` (VLS-004)
+
+The spectral-enhancement (denoise) seam for the **local STT tier**: clean the mic signal so on-device
+transcription holds up in a noisy or reverberant room. The composer places it **after the AEC stage and before
+the VAD**, so detection and STT both see the cleaned audio.
+
+- `IAudioEnhancer` — `Enhance(pcm) → pcm` (same length/rate/channels — signal conditioning, not a format
+  change), `Reset()`, `SampleRate`.
+- `NullAudioEnhancer` — passthrough; returns the audio unchanged.
+- `AudioEnhancerProcessor` — runs `Enhance` per `AudioRawFrame`; resets on session start, disposes the engine on end.
+
+Enable a real denoiser with `Voxa:Enhance:Engine` once an implementation package is referenced; unset / `None`
+inserts **no** stage (byte-identical, zero cost). The reference engine (DeepFilterNet3 on ONNX Runtime,
+in-process like Silero/Kokoro) is a separate opt-in `Voxa.Audio.Enhance` follow-up.

@@ -28,6 +28,7 @@ public sealed class VoxaOptions
 
     public VoxaVadOptions Vad { get; set; } = new();
     public VoxaAecOptions Aec { get; set; } = new();
+    public VoxaEnhanceOptions Enhance { get; set; } = new();
     public VoxaAgentOptions Agent { get; set; } = new();
     public VoxaAggregatorOptions Aggregator { get; set; } = new();
     public VoxaDiagnosticsOptions Diagnostics { get; set; } = new();
@@ -88,6 +89,17 @@ public sealed class VoxaVadOptions
 public sealed class VoxaAecOptions
 {
     /// <summary>"None" (default) or a registered AEC engine name (e.g. "WebRtc").</summary>
+    public string Engine { get; set; } = "None";
+}
+
+/// <summary>
+/// Local speech enhancement / denoise (VLS-004). "None" (default) inserts no enhancer stage — the composed
+/// pipeline is byte-identical to today; a registered engine name inserts an <c>AudioEnhancerProcessor</c> after
+/// the AEC stage and before the VAD. Requires the matching <c>Voxa.Audio.Enhance</c> package.
+/// </summary>
+public sealed class VoxaEnhanceOptions
+{
+    /// <summary>"None" (default) or a registered enhancer engine name (e.g. "DeepFilterNet3").</summary>
     public string Engine { get; set; } = "None";
 }
 
