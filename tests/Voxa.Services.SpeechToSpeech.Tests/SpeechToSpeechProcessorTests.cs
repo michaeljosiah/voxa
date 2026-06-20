@@ -54,7 +54,9 @@ public class SpeechToSpeechProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
-            await WaitUntil(() => h.Session.Voice is not null, WaitTimeout);
+            // Wait on SystemPrompt: OnStartAsync sets Voice THEN SystemPrompt, so observing the last-set field
+            // non-null guarantees both are set — waiting only on Voice raced the second await under load.
+            await WaitUntil(() => h.Session.SystemPrompt is not null, WaitTimeout);
             Assert.Equal("nova", h.Session.Voice);
             Assert.Equal("Be brief.", h.Session.SystemPrompt);
         }
