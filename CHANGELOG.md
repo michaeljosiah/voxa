@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Streaming STT — interim-transcript coalescing (VRT-004 WS1).** Interim (`IsFinal:false`) transcripts already
+  propagate end-to-end for streaming engines and the agent already ignores them; VRT-004 adds
+  `SpeechToTextProcessor.InterimMinInterval` (config `Voxa:InterimMinIntervalMs`, default ~150 ms) which throttles
+  interim frames to at most one per window, so a chatty engine can't flood the bounded data channel. Finals are
+  never coalesced and interims are rate-limited (never gated off). Regression tests lock the two invariants —
+  interims keep flowing, and the agent fires exactly once, on the final. The Azure event-mapping pin (WS2) and
+  Studio's live-caption surface (Phase C) are follow-ups.
+
 - **Acoustic echo cancellation seam (VRT-003).** A new zero-extra-dependency **`Voxa.Audio.Abstractions`**
   package defines `IEchoCanceller` (`FeedReference(farEnd)` / `CancelEcho(nearEnd)` / `Reset()` / `SampleRate`)
   — the plug a real DSP fits into for **barge-in over speakers**, where the bot's own audio loops back into the

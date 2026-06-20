@@ -104,6 +104,35 @@ public class AgentLoopProcessorTests
     }
 
     [Fact]
+    public async Task Interim_Then_Final_Fires_The_Agent_Exactly_Once_On_The_Final()
+    {
+        // VRT-004 T1.3: interims are display/turn-signal only; the agent fires once, on the settled final, and
+        // sees only the final text (regression-locks the finals-only match against a future refactor).
+        var invocations = 0;
+        string? seenText = null;
+        var driver = new StubDriver(ctx =>
+        {
+            Interlocked.Increment(ref invocations);
+            seenText = ctx.UserText;
+            return Yield(new LlmTextChunkFrame("ok"));
+        });
+        var (runner, captured, pipeline) = Build(driver);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new TranscriptionFrame("what's the", IsFinal: false));        // interim
+            await pipeline.Source.IngestAsync(new TranscriptionFrame("what's the weather", IsFinal: true)); // final
+
+            await captured.WaitForAsync(f => f is LlmTurnEndedFrame, TimeSpan.FromSeconds(2));
+            await Task.Delay(40);
+
+            Assert.Equal(1, invocations);                 // exactly one turn
+            Assert.Equal("what's the weather", seenText); // driven by the final text only
+        }
+    }
+
+    [Fact]
     public async Task Empty_Final_Is_Forwarded_And_A_Later_Real_Final_Still_Runs_A_Turn()
     {
         // VRT-002 WS2 §6.3: an empty/whitespace final must not wedge the pipeline — a subsequent real

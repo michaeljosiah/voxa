@@ -151,8 +151,14 @@ public sealed class DefaultVoicePipelineComposer
         }
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Vad);
 
-        // 2. STT
-        parts.Add(sp => stt.CreateProcessor(sp, root));
+        // 2. STT (VRT-004: coalesce interim-transcript churn — interval from config, default ~150 ms)
+        var interimMinInterval = TimeSpan.FromMilliseconds(Math.Max(0, o.InterimMinIntervalMs ?? 150));
+        parts.Add(sp =>
+        {
+            var sttProcessor = stt.CreateProcessor(sp, root);
+            sttProcessor.InterimMinInterval = interimMinInterval;
+            return sttProcessor;
+        });
 
         // 3. Transcription filter. The Stt tap sits after it so diagnostics report the
         // transcripts that actually drive the agent, not ones the filter rejected.
