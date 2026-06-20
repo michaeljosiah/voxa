@@ -19,6 +19,13 @@ public sealed class VoxaOptions
     /// <summary>TTS provider name, e.g. "OpenAI", "ElevenLabs", "Azure", "Mistral".</summary>
     public string? Tts { get; set; }
 
+    /// <summary>
+    /// Minimum gap (ms) between forwarded interim transcripts (VRT-004) — coalesces a streaming engine's partial
+    /// churn on the bounded data channel (the latest partial in each window wins). Null ⇒ ~150 ms. Interims are
+    /// rate-limited, never gated off; finals are never coalesced.
+    /// </summary>
+    public int? InterimMinIntervalMs { get; set; }
+
     public VoxaVadOptions Vad { get; set; } = new();
     public VoxaAecOptions Aec { get; set; } = new();
     public VoxaAgentOptions Agent { get; set; } = new();

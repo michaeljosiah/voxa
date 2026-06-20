@@ -41,6 +41,15 @@ public sealed class SpeechToTextProcessor : FrameProcessor
         _logger = logger ?? NullLogger.Instance;
     }
 
+    /// <summary>
+    /// Minimum gap between forwarded interim (<c>IsFinal:false</c>) transcription frames (VRT-004): at most one
+    /// interim per window is forwarded (throttled — the first partial after each window boundary), so a chatty
+    /// streaming engine can't flood the bounded data channel. Finals are never coalesced. This rate-bounds
+    /// interims — it does NOT gate them off; they keep flowing exactly as today, merely rate-limited. Set by the
+    /// composer from config; defaults to ~150 ms.
+    /// </summary>
+    public TimeSpan InterimMinInterval { get; set; } = TimeSpan.FromMilliseconds(150);
+
     protected override async ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
     {
         _engine = _engineFactory();
@@ -195,14 +204,27 @@ public sealed class SpeechToTextProcessor : FrameProcessor
     private async Task ReadLoopAsync(CancellationToken ct)
     {
         if (_engine is null) return;
+        long lastInterimTicks = 0; // VRT-004: coalescing-window clock for interim frames
         try
         {
             await foreach (var t in _engine.ReadTranscriptsAsync(ct).ConfigureAwait(false))
             {
-                // A tagged speculative final is never forwarded on arrival: it is dropped (superseded),
-                // forwarded (already confirmed), or HELD until the VAD decides (VRT-002 WS1). Holding closes
-                // the race where a fast engine returns the final before the supersede frame lands.
-                if (t.IsFinal && t.UtteranceId is { } id)
+                if (!t.IsFinal)
+                {
+                    // Interim (IsFinal:false): already flows today; VRT-004 only COALESCES it so a chatty
+                    // streaming engine can't flood the bounded data channel — the latest partial in each window
+                    // wins. No suppression: drop only empties and in-window churn; interims keep flowing.
+                    if (string.IsNullOrWhiteSpace(t.Text)) continue;
+                    var now = Environment.TickCount64;
+                    if (now - lastInterimTicks < InterimMinInterval.TotalMilliseconds) continue;
+                    lastInterimTicks = now;
+                    await PushFrameAsync(new TranscriptionFrame(t.Text, IsFinal: false, t.Language), ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                // Finals are NEVER coalesced. A tagged speculative final is dropped (superseded), forwarded
+                // (already confirmed), or HELD until the VAD decides (VRT-002 WS1) — see HandleSpeculativeAsync.
+                if (t.UtteranceId is { } id)
                 {
                     EagerDecision decision;
                     lock (_specLock)
@@ -225,7 +247,7 @@ public sealed class SpeechToTextProcessor : FrameProcessor
                     // Forward (already confirmed) — fall through.
                 }
 
-                await PushFrameAsync(new TranscriptionFrame(t.Text, t.IsFinal, t.Language), ct).ConfigureAwait(false);
+                await PushFrameAsync(new TranscriptionFrame(t.Text, IsFinal: true, t.Language), ct).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { /* shutdown */ }
