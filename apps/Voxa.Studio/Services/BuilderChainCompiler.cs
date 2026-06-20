@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
+using Voxa.Audio;
 using Voxa.Diagnostics;
 using Voxa.Processors;
 using Voxa.Services.MicrosoftAgents;
@@ -139,6 +140,28 @@ internal static class BuilderChainCompiler
         var outputSampleRate = tts.GetEffectiveOutputSampleRate(root);
 
         var parts = new List<CompiledPart>();
+
+        // Input cleanup (VRT-003 AEC / VLS-004 denoise), mirroring DefaultVoicePipelineComposer §0/§0.6:
+        // a resolved engine runs BEFORE the VAD so a canvas run cleans the mic signal exactly like a server
+        // — without this the Source node's badge/export would claim cleanup the live experiment never applies.
+        // None configured (the Studio default) ⇒ no parts added, byte-identical to before.
+        var aecEnabled = false;
+        if (!string.Equals(options.Aec.Engine, "None", StringComparison.OrdinalIgnoreCase)
+            && registry.TryGetAec(options.Aec.Engine, out var aecDesc))
+        {
+            var aecSettings = new VoxaAecSettings(inputSampleRate, outputSampleRate);
+            parts.Add(new(null, sp => aecDesc.CreateProcessor(sp, aecSettings))); // near-end, before the VAD
+            aecEnabled = true;
+        }
+        if (!string.Equals(options.Enhance.Engine, "None", StringComparison.OrdinalIgnoreCase)
+            && registry.TryGetEnhancer(options.Enhance.Engine, out var enhDesc))
+        {
+            var enhSettings = new VoxaEnhancerSettings(inputSampleRate);
+            parts.Add(new(null, sp => enhDesc.CreateProcessor(sp, enhSettings, root)));
+        }
+        // The diagnostics taps index off the chain NODES; offset their inserts past these pre-VAD parts.
+        var leadingCleanup = parts.Count;
+
         foreach (var node in chain)
         {
             switch (node.Kind)
@@ -192,7 +215,14 @@ internal static class BuilderChainCompiler
             }
         }
 
-        InsertTaps(parts, chain);
+        InsertTaps(parts, chain, leadingCleanup);
+
+        // Far-end (bot-audio) reference tap — added only when an AEC engine resolved, matching the
+        // composer's §7. It feeds each outbound bot frame into the session's shared IEchoCanceller and
+        // forwards every frame unchanged; with no AEC the chain has no tap (default = byte-identical).
+        if (aecEnabled)
+            parts.Add(new(null, sp => new EchoReferenceTapProcessor(sp.GetRequiredService<IEchoCanceller>())));
+
         return new CompiledChain(parts, inputSampleRate, outputSampleRate);
     }
 
@@ -201,7 +231,7 @@ internal static class BuilderChainCompiler
     /// transcription stage, after the agent, after TTS. Live mode is the builder's whole point,
     /// so taps are unconditional here (the run container forces diagnostics on).
     /// </summary>
-    private static void InsertTaps(List<CompiledPart> parts, IReadOnlyList<BuilderNode> chain)
+    private static void InsertTaps(List<CompiledPart> parts, IReadOnlyList<BuilderNode> chain, int leadingOffset = 0)
     {
         var middle = chain.Where(n => n.Kind is not (BuilderNodeKind.Source or BuilderNodeKind.Sink)).ToList();
 
@@ -221,7 +251,7 @@ internal static class BuilderChainCompiler
             (After(n => BuilderGraph.Flow(n.Kind).Out == BuilderPortType.Audio), DiagnosticsTapScope.Vad),
         };
         foreach (var (index, scope) in taps.OrderByDescending(t => t.Index))
-            parts.Insert(index, new(null, sp => new DiagnosticsTapProcessor(
+            parts.Insert(index + leadingOffset, new(null, sp => new DiagnosticsTapProcessor(
                 sp.GetRequiredService<VoxaDiagnosticsHub>(), scope)));
     }
 

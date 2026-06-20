@@ -27,6 +27,12 @@ public sealed partial class ConfigViewModel : ObservableObject
     // emit an explicit "off" override rather than silently falling back to that base value.
     private readonly bool _smartTurnInBaseConfig;
 
+    // Same rule for the input-cleanup stages: if the base config already names an AEC / denoise engine,
+    // selecting "None" must emit an explicit Voxa:Aec:Engine/Voxa:Enhance:Engine = "None" override —
+    // omitting the key would let the base value win through config layering and keep the stage active.
+    private readonly bool _aecInBaseConfig;
+    private readonly bool _enhanceInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -55,6 +61,8 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedVad = voxa["Vad:Engine"] ?? "Silero";
         _selectedAecEngine = voxa["Aec:Engine"] ?? "None";
         _selectedEnhanceEngine = voxa["Enhance:Engine"] ?? "None";
+        _aecInBaseConfig = !string.Equals(_selectedAecEngine, "None", StringComparison.OrdinalIgnoreCase);
+        _enhanceInBaseConfig = !string.Equals(_selectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase);
         _selectedProfile = voxa["Profile"] ?? "Default";
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
@@ -350,11 +358,17 @@ public sealed partial class ConfigViewModel : ObservableObject
             pairs["Voxa:Profile"] = SelectedProfile;
         if (!string.Equals(SelectedVad, "Silero", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Vad:Engine"] = SelectedVad;
-        // Input cleanup runs before the VAD; emit only a non-default ("None") selection (VRT-003 / VLS-004).
+        // Input cleanup runs before the VAD. Emit the selected engine; when it's "None" but the base
+        // config named one, emit an explicit "None" so Apply/activation actually turns the stage off
+        // (an omitted key would fall back to the base engine through config layering — the smart-turn rule).
         if (!string.Equals(SelectedAecEngine, "None", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Aec:Engine"] = SelectedAecEngine;
+        else if (_aecInBaseConfig)
+            pairs["Voxa:Aec:Engine"] = "None";
         if (!string.Equals(SelectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Enhance:Engine"] = SelectedEnhanceEngine;
+        else if (_enhanceInBaseConfig)
+            pairs["Voxa:Enhance:Engine"] = "None";
         if (ShowWhisperOptions) pairs["Voxa:WhisperCpp:Model"] = SelectedWhisperModel;
         if (ShowWhisperOptions && !string.Equals(SelectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:WhisperCpp:Device"] = SelectedWhisperDevice;

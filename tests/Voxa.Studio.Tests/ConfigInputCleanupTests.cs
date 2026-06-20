@@ -1,3 +1,5 @@
+using Voxa.Studio.Audio;
+using Voxa.Studio.Services;
 using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Tests;
@@ -39,5 +41,26 @@ public class ConfigInputCleanupTests
         var pairs = vm.DraftPairs();
         Assert.Equal("WebRtc", pairs["Voxa:Aec:Engine"]);
         Assert.Equal("DeepFilterNet3", pairs["Voxa:Enhance:Engine"]);
+    }
+
+    [Fact] // codex P2: selecting "None" must override a base-config engine, not silently fall back to it.
+    public async Task Disabling_Overrides_A_Base_Config_Cleanup_Engine()
+    {
+        var config = TestSupport.LocalConfig(null,
+            ("Voxa:Aec:Engine", "WebRtc"), ("Voxa:Enhance:Engine", "DeepFilterNet3"));
+        await using var services = new StudioServices(config, new NullAudioDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
+        var vm = new ConfigViewModel(services);
+
+        Assert.Equal("WebRtc", vm.SelectedAecEngine);          // seeded from the base config
+        Assert.Equal("DeepFilterNet3", vm.SelectedEnhanceEngine);
+
+        vm.SelectedAecEngine = "None";                          // user disables both
+        vm.SelectedEnhanceEngine = "None";
+
+        var pairs = vm.DraftPairs();
+        Assert.Equal("None", pairs["Voxa:Aec:Engine"]);        // explicit off, beating the base value
+        Assert.Equal("None", pairs["Voxa:Enhance:Engine"]);
     }
 }
