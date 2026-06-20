@@ -132,6 +132,26 @@ public class ComposerEnhancerTests
         Assert.Contains("DeepFilterNet3", registry.EnhancerNames, StringComparer.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Registered_Enhancer_Descriptor_Validate_Errors_Surface_At_Startup()
+    {
+        // VLS-004 (Codex P2): a registered enhancer's own Validate must run during ValidateOnStart (parity with
+        // STT/TTS) so a bad model path / option fails at startup, not on the first session.
+        var registry = new VoxaProviderRegistry();
+        registry.Add(Stt());
+        registry.Add(Tts());
+        registry.Add(new VoxaEnhancerDescriptor(
+            "FakeEnhancer",
+            Validate: _ => new[] { "Voxa:Enhance:ModelPath does not exist" },
+            CreateProcessor: (_, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(16000))));
+
+        var validator = new VoxaOptionsValidator(registry, new ConfigurationBuilder().Build());
+        var result = validator.Validate(null, new VoxaOptions { Enhance = new VoxaEnhanceOptions { Engine = "FakeEnhancer" } });
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures!, f => f.Contains("ModelPath does not exist", StringComparison.Ordinal));
+    }
+
     private sealed class ListLogger<T> : ILogger<T>
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = new();
