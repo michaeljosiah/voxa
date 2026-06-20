@@ -28,6 +28,7 @@
     <Project Path="src/Voxa.Services.OpenAIRealtime/Voxa.Services.OpenAIRealtime.csproj" />
     <Project Path="src/Voxa.Services.SpeechToSpeech/Voxa.Services.SpeechToSpeech.csproj" />
     <Project Path="src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj" />
+    <Project Path="src/Voxa.Speech.AssemblyAI/Voxa.Speech.AssemblyAI.csproj" />
     <Project Path="src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj" />
     <Project Path="src/Voxa.Speech.Deepgram/Voxa.Speech.Deepgram.csproj" />
     <Project Path="src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj" />
@@ -60,6 +61,7 @@
     <Project Path="tests/Voxa.Services.OpenAIRealtime.Tests/Voxa.Services.OpenAIRealtime.Tests.csproj" />
     <Project Path="tests/Voxa.Services.SpeechToSpeech.Tests/Voxa.Services.SpeechToSpeech.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Abstractions.Tests/Voxa.Speech.Abstractions.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.AssemblyAI.Tests/Voxa.Speech.AssemblyAI.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Azure.Tests/Voxa.Speech.Azure.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Deepgram.Tests/Voxa.Speech.Deepgram.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.ElevenLabs.Tests/Voxa.Speech.ElevenLabs.Tests.csproj" />

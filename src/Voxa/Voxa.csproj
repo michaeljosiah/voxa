@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
     <ProjectReference Include="..\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.AssemblyAI\Voxa.Speech.AssemblyAI.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Deepgram\Voxa.Speech.Deepgram.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Groq\Voxa.Speech.Groq.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Together\Voxa.Speech.Together.csproj" />
