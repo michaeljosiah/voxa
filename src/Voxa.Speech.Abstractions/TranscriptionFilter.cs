@@ -81,10 +81,10 @@ public sealed class TranscriptionFilter : FrameProcessor
 
         if (ExactBlocklist.Contains(trimmed)) return true;
 
-        var lower = trimmed.ToLowerInvariant();
         for (int i = 0; i < SubstringBlocklist.Count; i++)
         {
-            if (lower.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
+            // OrdinalIgnoreCase already ignores case — no need to allocate a lowercased copy first.
+            if (trimmed.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
         }
 
         return false;
