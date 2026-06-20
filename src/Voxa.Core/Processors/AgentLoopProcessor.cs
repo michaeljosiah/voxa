@@ -333,6 +333,13 @@ public sealed class AgentLoopProcessor : FrameProcessor
         }
     }
 
+    // Binary-compat shim (codex P2): this type previously declared its own public DisposeAsync, so a precompiled
+    // consumer may hold a member reference to AgentLoopProcessor.DisposeAsync. Keep the public member — forwarding
+    // to the base, which now invokes DisposeAsyncCore via virtual dispatch — so upgrading Voxa.Core without
+    // recompiling still binds. Unlike the original, this carries NO cleanup logic (that lives in DisposeAsyncCore),
+    // so cleanup runs exactly once whether disposed through this type or a FrameProcessor reference.
+    public new ValueTask DisposeAsync() => base.DisposeAsync();
+
     protected override async ValueTask DisposeAsyncCore()
     {
         // Runs on every disposal path — including PipelineRunner's base-typed dispose, which the former
