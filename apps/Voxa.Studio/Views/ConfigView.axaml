@@ -16,8 +16,9 @@
 
     <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*" Margin="20,16,20,16">
 
-    <!-- ── selections ── -->
-    <StackPanel Grid.Column="0" Spacing="14">
+    <!-- ── selections ── (scrolls when the stacked cards outgrow the window, instead of clipping) -->
+    <ScrollViewer Grid.Column="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14" Margin="0,0,6,0">
 
       <Border Classes="vx-card">
         <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
@@ -224,6 +225,7 @@
                    IsVisible="{Binding ApplyBlocked}" />
       </StackPanel>
     </StackPanel>
+    </ScrollViewer>
 
     <!-- ── export ── -->
     <Grid Grid.Column="2" RowDefinitions="Auto,*,Auto">

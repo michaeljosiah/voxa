@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Voxa.Audio.Diarization.Onnx;
 using Voxa.Speech;
 using Voxa.Speech.Kokoro;
 using Voxa.Speech.Piper;
@@ -89,6 +90,10 @@ public static class ActiveConfigArtifacts
         foreach (var voice in KokoroCatalog.KnownVoices)
             if (KokoroCatalog.TryGetVoice(voice, out var s)) artifacts.Add(s);
         if (KokoroCatalog.EspeakForCurrentPlatform() is { } espeak) artifacts.Add(espeak);
+
+        // Speaker diarization (VLS-005 WS2): the pinned pyannote segmentation model, so it can be
+        // prefetched / verified / purged from the Models page like any other artifact.
+        artifacts.Add(PyannoteSegmentationCatalog.Model);
 
         return artifacts;
     }

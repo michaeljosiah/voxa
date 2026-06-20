@@ -128,4 +128,27 @@ public class ModelsViewModelTests
         Assert.Equal("All providers", vm.SelectedProvider);
         Assert.Equal("STT", Assert.Single(vm.VisibleRows).Category);
     }
+
+    [Fact]
+    public async Task Pyannote_Segmentation_Model_Is_Recognised_Under_Diarization()
+    {
+        // The pinned pyannote segmentation model (VLS-005 WS2) is a known catalog artifact, so a cached
+        // copy joins as a recognised "Pyannote" row under a dedicated "Diarization" tab — selectable and
+        // downloadable/verifiable like any other model, not dumped in "Other".
+        var cacheRoot = TestSupport.TempDir();
+        var p = Path.Combine(cacheRoot, "pyannote", "segmentation-3.0", "model.onnx");
+        Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+        await File.WriteAllBytesAsync(p, new byte[8]);
+
+        var vm = new ModelsViewModel(TestSupport.Services(cacheRoot));
+
+        var row = Assert.Single(vm.Rows);
+        Assert.Equal("Pyannote", row.EngineLabel);
+        Assert.Equal("Diarization", row.Category);
+        Assert.True(row.IsKnown); // joined against the catalog → verify/purge enabled
+
+        Assert.Contains("Diarization", vm.Tabs);
+        vm.SelectedTab = "Diarization";
+        Assert.Equal("Pyannote", Assert.Single(vm.VisibleRows).Provider);
+    }
 }

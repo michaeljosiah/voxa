@@ -153,6 +153,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   modifier) and the pre-VAD cleanup now **round-trip**: "Open in Builder" and the appsettings export preserve
   `Voxa:SmartTurn:*` / `Voxa:Aec:Engine` / `Voxa:Enhance:Engine` (they ride the VAD and Mic nodes), and the
   nodes show a `· smart turn` / `· AEC … · denoise …` badge so the chain states what it does at a glance.
+- **Voxa Studio: Config scrolls instead of clipping.** When the Config page's stacked option cards (Whisper
+  + agent + cloud-voice + smart-turn, etc.) grew taller than the window, the lower cards and the **Apply**
+  button were simply cut off — you had to drag the window taller or maximize to reach them. The selection
+  column now sits in a vertical `ScrollViewer`, so it scrolls when it outgrows the window and shows nothing
+  when it fits. Scoped to the one page that overflowed at the body level; the fill-and-pan pages (Builder
+  canvas, Talk, Metrics) keep their own internal scrolling.
 - **Voxa Studio: Smart turn detection toggle (Config).** The Config view gains a **Smart turn detection**
   card — flip it on, pick a classifier (**Sidecar**, the real local `pipecat-ai/smart-turn-v3` via Python,
   or **Http**, a model server), and the next Talk session asks "is the user actually done?" at the silence
@@ -163,6 +169,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
   (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
   plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.
+- **Voxa Studio: Models page surfaces the diarization model (VLS-005).** The pinned **pyannote
+  segmentation-3.0** model now appears in the **Models** page under a new **Diarization** tab — so it can be
+  selected, prefetched (it joins "Prefetch full catalog" for air-gap provisioning), SHA-256-verified, and
+  purged like any other artifact, instead of only downloading lazily on first programmatic use. A cached copy
+  is recognised as a **Pyannote** row (not an unknown "Other" file). Studio now references
+  `Voxa.Audio.Diarization.Onnx` directly (the engine is opt-in, outside the meta-package).
 - **Voxa Studio: Models tabs + provider filters (Models & Voices).** The **Models** page now groups the
   cache into tabs — **All / STT / TTS / Other** — and each tab has a **provider** dropdown (Whisper /
   Piper / Kokoro, scoped to what's in that tab) to narrow the list. The **Voices** library gains the same
