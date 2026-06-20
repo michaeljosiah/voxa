@@ -121,14 +121,23 @@ public class SpeechToTextProcessorInterimTests
         await using (runner)
         {
             await runner.StartAsync();
-            await engine.EmitAsync("a", isFinal: false);
-            await Task.Delay(25);
-            await engine.EmitAsync("ab", isFinal: false);
-            await Task.Delay(25);
-            await engine.EmitAsync("abc", isFinal: true);
 
-            await cap.WaitForAsync(f => f is TranscriptionFrame { IsFinal: true }, Timeout);
+            // Space the two interims reliably so neither is coalesced. Two timing facts make a naive
+            // `Task.Delay` between emits flaky, and this test must not depend on either:
+            //   1. The processor drains the engine channel on its own loop, so the delay between EmitAsync calls
+            //      doesn't bound the gap between the processor OBSERVING them — under load it can drain both
+            //      queued interims back-to-back inside one window. Waiting for each to surface forces the
+            //      processor to have observed (and time-stamped) it first.
+            //   2. The coalescing clock is a coarse monotonic tick (~15.6 ms quantum on Windows), so the
+            //      observed gap must comfortably exceed it, not just the nominal 1 ms window. A ~40 ms spacer
+            //      after the first interim guarantees the second's timestamp lands in a later quantum.
+            await engine.EmitAsync("a", isFinal: false);
+            await cap.WaitForAsync(f => f is TranscriptionFrame { IsFinal: false, Text: "a" }, Timeout);
             await Task.Delay(40);
+            await engine.EmitAsync("ab", isFinal: false);
+            await cap.WaitForAsync(f => f is TranscriptionFrame { IsFinal: false, Text: "ab" }, Timeout);
+            await engine.EmitAsync("abc", isFinal: true);
+            await cap.WaitForAsync(f => f is TranscriptionFrame { IsFinal: true }, Timeout);
 
             // Both spaced interims flowed — coalescing rate-limits, it does not suppress.
             Assert.True(Transcripts(cap).Count(t => !t.IsFinal) >= 2);
