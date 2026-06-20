@@ -31,6 +31,7 @@ public sealed partial class ModelRow : ObservableObject
     {
         "Whisper" => "STT",
         "Piper" or "Kokoro" => "TTS",
+        "Pyannote" => "Diarization",
         _ => "Other",
     };
 }
@@ -62,7 +63,7 @@ public sealed partial class ModelsViewModel : ObservableObject
     private const string AllProviders = "All providers";
 
     /// <summary>Logical tabs: All, then the pipeline stages, then foreign files.</summary>
-    public IReadOnlyList<string> Tabs { get; } = ["All", "STT", "TTS", "Other"];
+    public IReadOnlyList<string> Tabs { get; } = ["All", "STT", "TTS", "Diarization", "Other"];
     [ObservableProperty] private string _selectedTab = "All";
 
     /// <summary>Provider options for the current tab (always begins with "All providers").</summary>
@@ -150,7 +151,8 @@ public sealed partial class ModelsViewModel : ObservableObject
     private static string EngineFor(string id) =>
         id.StartsWith("whisper/", StringComparison.Ordinal) ? "Whisper" :
         id.StartsWith("piper/", StringComparison.Ordinal) ? "Piper" :
-        id.StartsWith("kokoro/", StringComparison.Ordinal) ? "Kokoro" : "—";
+        id.StartsWith("kokoro/", StringComparison.Ordinal) ? "Kokoro" :
+        id.StartsWith("pyannote/", StringComparison.Ordinal) ? "Pyannote" : "—";
 
     // ── actions ──────────────────────────────────────────────────────────────
 

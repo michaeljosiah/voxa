@@ -40,6 +40,9 @@
          "Smart turn detection" toggle can register a classifier; the package's bundled Python sidecar
          script copies into the output via this reference. -->
     <ProjectReference Include="..\..\src\Voxa.Audio.SmartTurn\Voxa.Audio.SmartTurn.csproj" />
+    <!-- Speaker segmentation (VLS-005 WS2): the Models page surfaces its pinned pyannote model for
+         download/verify. Not in the meta-package (opt-in ONNX engine) — referenced directly. -->
+    <ProjectReference Include="..\..\src\Voxa.Audio.Diarization.Onnx\Voxa.Audio.Diarization.Onnx.csproj" />
   </ItemGroup>
 
   <ItemGroup>
