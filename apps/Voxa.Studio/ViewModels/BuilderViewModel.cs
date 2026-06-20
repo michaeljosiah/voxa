@@ -619,6 +619,12 @@ public sealed partial class BuilderViewModel : ObservableObject
     private static string DeviceLabel(BuilderNode node) =>
         node.Options.GetValueOrDefault("Device", "") is { Length: > 0 } device ? device : "default device";
 
+    /// <summary>An option's value when it names a real engine — present, non-empty, and not the "None"
+    /// off-override (which is stored to round-trip the disabled state but never badged).</summary>
+    private static string? Enabled(BuilderNode node, string key) =>
+        node.Options.GetValueOrDefault(key, "") is { Length: > 0 } value
+        && !string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) ? value : null;
+
     /// <summary>The node card's mono meta line + cached badge — real state, not decoration.</summary>
     private void RefreshNodeBadges(BuilderNodeVm vm)
     {
@@ -630,9 +636,10 @@ public sealed partial class BuilderViewModel : ObservableObject
                 break;
             case BuilderNodeKind.Source:
                 // The mic node also carries any pre-VAD cleanup (AEC/denoise) so the chain shows it at a glance.
+                // An explicit "None" override is stored (to round-trip the off state) but isn't badged.
                 var cleanup = new List<string>();
-                if (node.Options.GetValueOrDefault("AecEngine", "") is { Length: > 0 } aec) cleanup.Add($"AEC {aec}");
-                if (node.Options.GetValueOrDefault("EnhanceEngine", "") is { Length: > 0 } den) cleanup.Add($"denoise {den}");
+                if (Enabled(node, "AecEngine") is { } aec) cleanup.Add($"AEC {aec}");
+                if (Enabled(node, "EnhanceEngine") is { } den) cleanup.Add($"denoise {den}");
                 vm.Meta = cleanup.Count > 0 ? $"{DeviceLabel(node)} · {string.Join(" · ", cleanup)}" : DeviceLabel(node);
                 break;
             case BuilderNodeKind.Vad:
@@ -644,7 +651,8 @@ public sealed partial class BuilderViewModel : ObservableObject
                 var thr = node.Options.GetValueOrDefault("ConfidenceThreshold",
                     vad.VadConfidenceThreshold.ToString("0.##", CultureInfo.InvariantCulture));
                 // A smart-turn classifier on the VAD shows in the badge — it changes how the turn ends.
-                vm.Meta = node.Options.ContainsKey("SmartTurnProvider")
+                // (An explicit "None" override is preserved for round-tripping but not badged.)
+                vm.Meta = Enabled(node, "SmartTurnProvider") is not null
                     ? $"stop {stop} ms · thr {thr} · smart turn"
                     : $"stop {stop} ms · thr {thr}";
                 break;
@@ -770,11 +778,13 @@ public sealed partial class BuilderViewModel : ObservableObject
         }
 
         var source = Add(BuilderNodeKind.Source, null);
-        // Pre-VAD input cleanup (AEC/denoise) rides the Source (mic) node — it cleans the mic signal.
-        var aecEngine = Get("Voxa:Aec:Engine", "None");
-        if (!string.Equals(aecEngine, "None", StringComparison.OrdinalIgnoreCase)) source.Options["AecEngine"] = aecEngine;
-        var enhanceEngine = Get("Voxa:Enhance:Engine", "None");
-        if (!string.Equals(enhanceEngine, "None", StringComparison.OrdinalIgnoreCase)) source.Options["EnhanceEngine"] = enhanceEngine;
+        // Pre-VAD input cleanup (AEC/denoise) rides the Source (mic) node. Carry the selection when the key
+        // is PRESENT — including an explicit "None", which Config emits to override a base/profile engine;
+        // dropping it would let the layered base config re-enable the stage on export/run (the smart-turn rule).
+        if (pairs.TryGetValue("Voxa:Aec:Engine", out var aecEngine) && !string.IsNullOrEmpty(aecEngine))
+            source.Options["AecEngine"] = aecEngine;
+        if (pairs.TryGetValue("Voxa:Enhance:Engine", out var enhanceEngine) && !string.IsNullOrEmpty(enhanceEngine))
+            source.Options["EnhanceEngine"] = enhanceEngine;
         var engine = Get("Voxa:Vad:Engine", "Silero");
         if (!string.Equals(engine, "None", StringComparison.OrdinalIgnoreCase))
         {
@@ -785,9 +795,10 @@ public sealed partial class BuilderViewModel : ObservableObject
                 vad.Options["ConfidenceThreshold"] = threshold;
             if (pairs.TryGetValue("Voxa:Vad:StopDurationMs", out var stopMs) && !string.IsNullOrEmpty(stopMs))
                 vad.Options["StopDurationMs"] = stopMs;
-            // Smart turn rides the VAD node — it's the silence-timeout "is the user actually done?" classifier.
-            var smartTurn = Get("Voxa:SmartTurn:Provider", "None");
-            if (!string.Equals(smartTurn, "None", StringComparison.OrdinalIgnoreCase))
+            // Smart turn rides the VAD node — the silence-timeout "is the user actually done?" classifier.
+            // Carry the provider when present, including an explicit "None" override (same reason as the
+            // cleanup engines above); the detail keys only apply to a real classifier.
+            if (pairs.TryGetValue("Voxa:SmartTurn:Provider", out var smartTurn) && !string.IsNullOrEmpty(smartTurn))
             {
                 vad.Options["SmartTurnProvider"] = smartTurn;
                 if (pairs.TryGetValue("Voxa:SmartTurn:Endpoint", out var ep) && !string.IsNullOrEmpty(ep))

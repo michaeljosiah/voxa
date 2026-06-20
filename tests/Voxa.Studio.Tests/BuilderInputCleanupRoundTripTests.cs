@@ -69,4 +69,42 @@ public class BuilderInputCleanupRoundTripTests
         Assert.False(vad.Model.Options.ContainsKey("SmartTurnProvider"));
         Assert.DoesNotContain("smart turn", vad.Meta);
     }
+
+    [Fact] // codex round 2: an explicit "None" override must survive Open-in-Builder → export, not be dropped.
+    public void Explicit_None_Override_Is_Preserved_But_Not_Badged()
+    {
+        // Config emits Voxa:Aec/Enhance:Engine = "None" (and SmartTurn:Provider = "None") to turn OFF a
+        // base-config engine. The Builder must carry that explicit off through to the export, or the layered
+        // base config would silently re-enable the stage on run/save.
+        var vm = new BuilderViewModel(TestSupport.Services());
+        vm.SeedFromPairs(new Dictionary<string, string?>
+        {
+            ["Voxa:Vad:Engine"] = "Silero",
+            ["Voxa:Aec:Engine"] = "None",
+            ["Voxa:Enhance:Engine"] = "None",
+            ["Voxa:SmartTurn:Provider"] = "None",
+            ["Voxa:Stt"] = "WhisperCpp",
+            ["Voxa:Agent:Provider"] = "Echo",
+            ["Voxa:Tts"] = "Piper",
+        });
+
+        // Preserved on the nodes…
+        var source = vm.Nodes.Single(n => n.Kind == BuilderNodeKind.Source);
+        Assert.Equal("None", source.Model.Options["AecEngine"]);
+        Assert.Equal("None", source.Model.Options["EnhanceEngine"]);
+        var vad = vm.Nodes.Single(n => n.Kind == BuilderNodeKind.Vad);
+        Assert.Equal("None", vad.Model.Options["SmartTurnProvider"]);
+
+        // …but an "off" stage is not badged (only real engines show on the card).
+        Assert.DoesNotContain("AEC", source.Meta);
+        Assert.DoesNotContain("denoise", source.Meta);
+        Assert.DoesNotContain("smart turn", vad.Meta);
+
+        // …and the export emits the explicit off so a base engine can't re-enable.
+        Assert.True(vm.IsDefaultShape);
+        vm.ExportAppSettingsCommand.Execute(null);
+        Assert.Contains("\"Aec\"", vm.ExportText);
+        Assert.Contains("\"Enhance\"", vm.ExportText);
+        Assert.Contains("\"SmartTurn\"", vm.ExportText);
+    }
 }
