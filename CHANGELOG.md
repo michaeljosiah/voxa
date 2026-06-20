@@ -171,7 +171,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   machines. The Config **Kokoro** card gains a **Device** picker with the same up-front compatibility indicator as
   Whisper — a red, package-naming warning when the selected provider isn't in the build (queried via
   `OnnxDeviceProbe`), a muted note for `auto` / an available-but-hardware-dependent GPU. DirectML stays opt-in
-  (its latest ORT release lags the pinned `1.26.0`); CUDA is NVIDIA + CUDA-toolkit only.
+  (its latest ORT release lags the pinned `1.26.0`); CUDA is NVIDIA + CUDA-toolkit only. Both the Kokoro and
+  whisper compute device **round-trip the Builder** (they ride the TTS / STT node through
+  `SeedFromPairs`/`BuilderChainCompiler`), and selecting `cpu` in Config emits an explicit `cpu` override when the
+  base config pinned a GPU device — so a GPU choice survives Config → "Open in Builder" → run/export, and the
+  picker can always turn GPU back off, instead of a layered base value silently winning.
 - **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
   input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
   **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they
