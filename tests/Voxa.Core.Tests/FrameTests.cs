@@ -20,6 +20,14 @@ public class FrameTests
         Assert.Equal(1000, ids.Count);
     }
 
+    [Fact] // CQ-004: Id is materialized on read from a stored ULID struct — it must be stable across reads.
+    public void Id_Is_Stable_Across_Reads_And_Well_Formed()
+    {
+        var f = new TextFrame("x");
+        Assert.Equal(f.Id, f.Id);       // same string each read (computed from the one stored struct, not regenerated)
+        Assert.Equal(26, f.Id.Length);  // canonical ULID length
+    }
+
     [Fact]
     public void With_Expression_Produces_Modified_Clone_Without_Mutating_Original()
     {
