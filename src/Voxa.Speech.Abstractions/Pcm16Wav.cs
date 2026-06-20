@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 namespace Voxa.Speech;
 
 /// <summary>
-/// Minimal shared PCM16 RIFF/WAVE helper (CQ-013/CQ-009): the canonical 44-byte mono/N-channel header writer
+/// Minimal shared PCM16 RIFF/WAVE helper (CQ-009): the canonical 44-byte mono/N-channel header writer
 /// and a robust chunk-walking reader, so the half-dozen sites that wrap or parse PCM16 WAV (REST STT, Piper,
 /// smart-turn, the CLI, MCP, Studio) don't each re-derive RIFF chunk padding / extensible-fmt handling.
 /// Not a codec — PCM16 only; readers keep their own copy/mix/resample logic on top of <see cref="FindData"/>.

@@ -52,6 +52,39 @@ public class Pcm16WavTests
         Assert.Throws<InvalidDataException>(() => Pcm16Wav.FindData(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7 }));
     }
 
+    [Fact]
+    public void FindData_Clamps_An_Over_Declared_Data_Chunk()
+    {
+        var wav = Pcm16Wav.Wrap(new byte[4], 16000);                    // 44-byte header + 4 data bytes
+        BinaryPrimitives.WriteUInt32LittleEndian(wav.AsSpan(40), 1000); // data chunk lies: claims 1000 bytes
+        var fmt = Pcm16Wav.FindData(wav);
+        Assert.Equal(4, fmt.DataLength);                               // clamped to the bytes actually present
+    }
+
+    [Fact]
+    public void FindData_Reads_Bit_Depth_Past_A_Fmt_Extension()
+    {
+        // fmt chunk of size 18 (16 standard fields + a 2-byte cbSize, as WAVEFORMATEX appends): the reader must
+        // read bits at the fixed offset and still advance past the full declared fmt size to reach `data`.
+        var pcm = new byte[] { 7, 8 };
+        var b = new byte[12 + (8 + 18) + (8 + pcm.Length)];
+        int o = 0;
+        o += Tag(b, o, "RIFF"u8); o += U32(b, o, (uint)(b.Length - 8)); o += Tag(b, o, "WAVE"u8);
+        o += Tag(b, o, "fmt "u8); o += U32(b, o, 18);
+        o += U16(b, o, 1); o += U16(b, o, 1); o += U32(b, o, 16000); o += U32(b, o, 32000); o += U16(b, o, 2); o += U16(b, o, 16);
+        o += U16(b, o, 0); // cbSize extension
+        o += Tag(b, o, "data"u8); o += U32(b, o, (uint)pcm.Length); pcm.CopyTo(b.AsSpan(o));
+
+        var fmt = Pcm16Wav.FindData(b);
+        Assert.Equal(16, fmt.Bits);
+        Assert.Equal(16000, fmt.SampleRate);
+        Assert.Equal(pcm, b.AsSpan(fmt.DataOffset, fmt.DataLength).ToArray());
+
+        static int Tag(byte[] d, int at, ReadOnlySpan<byte> t) { t.CopyTo(d.AsSpan(at)); return t.Length; }
+        static int U32(byte[] d, int at, uint v) { BinaryPrimitives.WriteUInt32LittleEndian(d.AsSpan(at), v); return 4; }
+        static int U16(byte[] d, int at, ushort v) { BinaryPrimitives.WriteUInt16LittleEndian(d.AsSpan(at), v); return 2; }
+    }
+
     // RIFF/WAVE → fmt(16) → an unknown "JUNK" chunk (odd size → word-aligned) → data. Exercises skip + alignment.
     private static byte[] BuildWavWithLeadingJunkChunk(byte[] pcm, int sampleRate, byte[] junk)
     {
