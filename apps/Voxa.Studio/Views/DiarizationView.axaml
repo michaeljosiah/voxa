@@ -1,0 +1,76 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Voxa.Studio.ViewModels"
+             xmlns:controls="using:Voxa.Studio.Controls"
+             x:Class="Voxa.Studio.Views.DiarizationView"
+             x:DataType="vm:DiarizationViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
+
+    <Border Grid.Row="0" Classes="vx-viewbar">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="vx-h1" Text="Diarization" />
+        <TextBlock Classes="vx-label"
+                   Text="SPEAKER SEGMENTATION · PYANNOTE ON THE SHARED ONNX HOST · OFFLINE AFTER FIRST DOWNLOAD" />
+      </StackPanel>
+    </Border>
+
+    <!-- source + run -->
+    <Border Grid.Row="1" Classes="vx-card" Margin="20,16,20,0">
+      <StackPanel Spacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="src" Content="Bundled sample (jfk.wav)" IsChecked="{Binding UseFixture}" />
+          <RadioButton GroupName="src" Content="WAV file" IsChecked="{Binding !UseFixture}" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !UseFixture}">
+          <TextBox Grid.Column="0" Text="{Binding FilePath}"
+                   Watermark="Path to a 16-bit PCM .wav (any rate — resampled to 16 kHz)" />
+          <Button Grid.Column="1" Classes="vx-ghost" Content="Browse…" Click="OnBrowseClicked" Margin="8,0,0,0" />
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="vx-primary" Content="Run segmentation" Command="{Binding RunCommand}" />
+          <TextBlock Classes="vx-sub" VerticalAlignment="Center" Text="{Binding StatusText}" />
+        </StackPanel>
+
+        <TextBlock Classes="vx-sub" Foreground="{StaticResource VxBadBrush}" TextWrapping="Wrap"
+                   IsVisible="{Binding HasError}" Text="{Binding ErrorText}" />
+      </StackPanel>
+    </Border>
+
+    <!-- timeline -->
+    <Border Grid.Row="2" Classes="vx-card" Margin="20,12,20,0">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="vx-label vx-accent" Text="SPEECH ACTIVITY" />
+        <controls:SegmentTimelineControl Height="52" Timeline="{Binding Timeline}" />
+        <TextBlock Classes="vx-sub" Text="{Binding SummaryText}" />
+        <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
+                   Text="Speech vs. silence from the pyannote segmentation model. Per-speaker labelling (who spoke when) needs the speaker-embedding model — a deferred follow-up." />
+      </StackPanel>
+    </Border>
+
+    <!-- regions -->
+    <Border Grid.Row="3" Classes="vx-card" Margin="20,12,20,16">
+      <Grid RowDefinitions="Auto,*">
+        <TextBlock Grid.Row="0" Classes="vx-label" Text="REGIONS" Margin="0,0,0,8" />
+        <ScrollViewer Grid.Row="1">
+          <ItemsControl ItemsSource="{Binding Segments}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SpeechSpan">
+                <Grid ColumnDefinitions="44,*,Auto" Margin="0,2">
+                  <TextBlock Grid.Column="0" Classes="vx-mono" Foreground="{StaticResource VxMutedBrush}"
+                             Text="{Binding Index, StringFormat='#{0}'}" />
+                  <TextBlock Grid.Column="1" Classes="vx-mono" Text="{Binding RangeText}" />
+                  <TextBlock Grid.Column="2" Classes="vx-mono" Foreground="{StaticResource VxMutedBrush}"
+                             Text="{Binding DurationText}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Border>
+
+  </Grid>
+</UserControl>

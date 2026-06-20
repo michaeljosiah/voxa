@@ -160,6 +160,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
   (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
   plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.
+- **Voxa Studio: Diarization analytics view (VLS-005).** A new top-level **Diarization** section runs the
+  pyannote **speech-segmentation** model on a clip — the bundled sample or any 16-bit PCM `.wav` (resampled to
+  16 kHz) — on the shared `Voxa.Audio.Onnx` host, and renders a **speech-activity timeline** (a track with a
+  block per detected speech region) plus a region list and a speech-vs-silence summary. The model downloads on
+  first run (the same pinned artifact the Models page surfaces) and is offline thereafter; the run is off the
+  UI thread. It's honest about scope: this is the **segmentation** stage (speech vs. silence) — per-speaker
+  labelling ("who spoke when") needs the speaker-embedding model, a deferred follow-up. The view model is
+  Avalonia-free and headless-tested via a fake `ISpeakerSegmentation` (no model, no network).
 - **Voxa Studio: Models page surfaces the diarization model (VLS-005).** The pinned **pyannote
   segmentation-3.0** model now appears in the **Models** page under a new **Diarization** tab — so it can be
   selected, prefetched (it joins "Prefetch full catalog" for air-gap provisioning), SHA-256-verified, and

@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\apps\Voxa.Studio\Voxa.Studio.csproj" />
+    <!-- The diarization seam types (ISpeakerSegmentation, SegmentationWindow) the Diarization VM tests
+         fake — transitive of Studio at runtime, but named directly here so they're compile-visible. -->
+    <ProjectReference Include="..\..\src\Voxa.Audio.Diarization\Voxa.Audio.Diarization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

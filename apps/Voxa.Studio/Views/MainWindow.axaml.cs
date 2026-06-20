@@ -37,6 +37,7 @@ public partial class MainWindow : Window
                         4 => NavMetrics,
                         5 => NavModels,
                         6 => NavConfig,
+                        7 => NavDiarization,
                         _ => NavTalk,
                     };
                     radio.IsChecked = true;
@@ -86,6 +87,7 @@ public partial class MainWindow : Window
             "Metrics" => 4,
             "Models" => 5,
             "Config" => 6,
+            "Diarization" => 7,
             _ => 0,
         };
 
@@ -99,5 +101,6 @@ public partial class MainWindow : Window
         MetricsHost.IsVisible = section == 4;
         ModelsHost.IsVisible = section == 5;
         ConfigHost.IsVisible = section == 6;
+        DiarizationHost.IsVisible = section == 7;
     }
 }
