@@ -153,8 +153,14 @@ public sealed record VoxaVadDescriptor(
     string Name,
     Func<IServiceProvider, VoxaVadSettings, FrameProcessor> CreateProcessor);
 
-/// <summary>Settings the composer resolves and hands the AEC factory (VRT-003; peer of <see cref="VoxaVadSettings"/>).</summary>
-public sealed record VoxaAecSettings(int SampleRate);
+/// <summary>
+/// Settings the composer resolves and hands the AEC factory (VRT-003; peer of <see cref="VoxaVadSettings"/>).
+/// <paramref name="SampleRate"/> is the near-end (mic / STT-input) rate the canceller runs at;
+/// <paramref name="FarEndSampleRate"/> is the far-end (bot / TTS-output) rate the reference tap feeds. They
+/// differ in mixed-rate pipelines (e.g. 16 kHz mic, 24 kHz TTS), so a real canceller needs both to resample and
+/// time-align the far-end against the near-end. PCM is 16-bit mono throughout the Voxa pipeline.
+/// </summary>
+public sealed record VoxaAecSettings(int SampleRate, int FarEndSampleRate);
 
 /// <summary>
 /// Self-description of an acoustic-echo-canceller provider (VRT-003), peer of <see cref="VoxaVadDescriptor"/>.

@@ -103,7 +103,9 @@ public sealed class DefaultVoicePipelineComposer
         {
             if (_registry.TryGetAec(o.Aec.Engine, out var aecDesc))
             {
-                var aecSettings = new VoxaAecSettings(SampleRate: inputSampleRate);
+                // Near-end = mic/STT-input rate; far-end = bot/TTS-output rate (they differ in mixed-rate
+                // pipelines, so the canceller gets both to align the reference it receives via the tap below).
+                var aecSettings = new VoxaAecSettings(SampleRate: inputSampleRate, FarEndSampleRate: outputSampleRate);
                 parts.Add(sp => aecDesc.CreateProcessor(sp, aecSettings)); // near-end, before the VAD
                 aecEnabled = true;
             }

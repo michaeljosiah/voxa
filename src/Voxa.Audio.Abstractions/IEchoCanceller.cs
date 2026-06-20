@@ -24,6 +24,11 @@ public interface IEchoCanceller
     /// Feed a chunk of the far-end reference — the audio being played to the user (bot/TTS PCM). Called from
     /// the TTS/writer thread, concurrently with <see cref="CancelEcho"/>. MUST be non-blocking and
     /// allocation-light; the implementation buffers and time-aligns it against the near-end internally.
+    /// <para>
+    /// The far-end PCM is at the session's fixed far-end (TTS-output) rate, which the composer supplies to the
+    /// canceller's factory at construction (it can differ from <see cref="SampleRate"/>, the near-end rate, in
+    /// mixed-rate pipelines) — so the implementation has both rates it needs to resample/align.
+    /// </para>
     /// </summary>
     void FeedReference(ReadOnlyMemory<byte> farEndPcm);
 
