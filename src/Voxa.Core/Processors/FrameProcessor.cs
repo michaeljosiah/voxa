@@ -224,7 +224,17 @@ public abstract class FrameProcessor : IAsyncDisposable
         }
         catch (OperationCanceledException) { }
 
+        // Derived cleanup runs here — after the loops have stopped, before the base CTS is disposed —
+        // so it executes even when a processor is disposed through a FrameProcessor-typed reference (as
+        // PipelineRunner does). Overriding this hook is the supported extension point; hiding DisposeAsync
+        // with `new` would be skipped on that base-typed path (CQ-001).
+        await DisposeAsyncCore().ConfigureAwait(false);
+
         _processorCts.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>Override to release resources a derived processor owns. Runs once, after the system/data
+    /// loops have stopped and before the base cancellation source is disposed.</summary>
+    protected virtual ValueTask DisposeAsyncCore() => ValueTask.CompletedTask;
 }

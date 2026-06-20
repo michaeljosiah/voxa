@@ -333,11 +333,26 @@ public sealed class AgentLoopProcessor : FrameProcessor
         }
     }
 
-    public new async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeAsyncCore()
     {
+        // Runs on every disposal path — including PipelineRunner's base-typed dispose, which the former
+        // `new DisposeAsync` silently skipped (CQ-001), leaking the turn worker + its CTS on abrupt
+        // teardown (no EndFrame). Idempotent: safe whether or not OnEndAsync already drained the worker.
+        _turnQueue.Writer.TryComplete();
         _processorCts.Cancel();
+
+        if (_turnWorker is not null)
+        {
+            try { await _turnWorker.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* worker observed the cancel during teardown */ }
+            _turnWorker = null;
+        }
+
+        foreach (var pending in _pendingFrontendTools.Values) pending.TrySetCanceled();
+        _pendingFrontendTools.Clear();
+
         _processorCts.Dispose();
-        await base.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsyncCore().ConfigureAwait(false);
     }
 
     // ── Internal gateway/emitter — exposed to the driver via VoiceTurnContext ────────────────

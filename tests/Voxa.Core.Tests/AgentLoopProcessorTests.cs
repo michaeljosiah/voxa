@@ -538,4 +538,50 @@ public class AgentLoopProcessorTests
         await ctx.Emitter.EmitAsync(new TextFrame("custom-from-emitter"), CancellationToken.None);
         yield return new LlmTextChunkFrame("yielded");
     }
+
+    // ── Disposal (CQ-001) ──────────────────────────────────────────────────
+
+    /// <summary>A driver whose turn blocks forever and records when its token is cancelled.</summary>
+    private sealed class CancellationObservingDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource TurnStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource TurnCancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run(ct);
+
+        private async IAsyncEnumerable<Frame> Run([EnumeratorCancellation] CancellationToken ct)
+        {
+            TurnStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                TurnCancelled.TrySetResult(); // the turn token fired — the processor CTS was cancelled
+                throw;
+            }
+            yield break;
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_Through_The_Base_Reference_Cancels_The_Turn_Worker_Without_An_EndFrame()
+    {
+        // CQ-001 regression: PipelineRunner disposes processors through a FrameProcessor-typed reference.
+        // The old `new DisposeAsync` (method hiding) was skipped on that base-typed path, leaking the turn
+        // worker and its CTS on abrupt teardown. The DisposeAsyncCore hook must run and cancel the worker.
+        var driver = new CancellationObservingDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.TurnStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)); // a turn is actively in flight
+
+        // Abrupt teardown: dispose the runner directly — no EndFrame is ever injected.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The in-flight turn must have been cancelled — proof the derived CTS was cancelled via DisposeAsyncCore.
+        await driver.TurnCancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    }
 }
