@@ -97,10 +97,11 @@ public class AudioEnhancerProcessorTests
     }
 
     [Fact]
-    public async Task Mismatched_Sample_Rate_Surfaces_An_Error_And_Forwards_Unenhanced()
+    public async Task Mismatched_Sample_Rate_Fails_Fast_Without_Enhancing_Or_Forwarding()
     {
-        // VLS-004 (Codex P2): never feed wrong-rate PCM to a fixed-rate denoiser. On a mismatch the processor
-        // surfaces an upstream ErrorFrame and forwards the frame UNENHANCED (not the XOR'd output) — no corruption.
+        // VLS-004 (Codex P2): a rate mismatch is a config error → fail fast. The processor surfaces an upstream
+        // ErrorFrame (PipelineRunner turns it into a session failure) and never feeds wrong-rate PCM to the
+        // model or forwards it onward (so the VAD/STT never see corrupted audio).
         var fake = new FakeAudioEnhancer(16000); // expects 16 kHz
         await using var upstream = new CapturingProcessor("up");
         await using var enh = new AudioEnhancerProcessor(fake);
@@ -111,16 +112,13 @@ public class AudioEnhancerProcessorTests
         enh.Start();
         sink.Start();
 
-        var pcm = new byte[] { 1, 2, 3, 4 };
-        await enh.QueueFrameAsync(new AudioRawFrame(pcm, 24000, 1)); // 24 kHz ≠ 16 kHz
+        await enh.QueueFrameAsync(new AudioRawFrame(new byte[] { 1, 2, 3, 4 }, 24000, 1)); // 24 kHz ≠ 16 kHz
 
-        await sink.WaitForAsync(f => f is AudioRawFrame, Timeout);
         await upstream.WaitForAsync(f => f is ErrorFrame, Timeout);
+        await Task.Delay(40);
 
-        var forwarded = (AudioRawFrame)sink.Captured.First(f => f is AudioRawFrame);
-        Assert.Equal(pcm, forwarded.Pcm.ToArray());                 // unenhanced (not XOR'd) — no corruption
-        Assert.Equal(24000, forwarded.SampleRate);                  // original envelope preserved
-        Assert.Contains(upstream.Captured, f => f is ErrorFrame);   // mismatch surfaced loudly
+        Assert.Contains(upstream.Captured, f => f is ErrorFrame);          // mismatch surfaced (fails the session)
+        Assert.DoesNotContain(sink.Captured, f => f is AudioRawFrame);     // wrong-rate audio never enhanced/forwarded
     }
 
     [Fact]

@@ -35,22 +35,23 @@ public sealed class AudioEnhancerProcessor : FrameProcessor
     {
         if (frame is AudioRawFrame audio)
         {
-            // The enhancer expects exactly _enhancer.SampleRate. Feeding a fixed-rate denoiser audio at a
-            // different rate would make it misread the timing and corrupt what the VAD/STT see, so on a mismatch
-            // we surface a clear error (once) and forward the frame UNENHANCED — never a silent resample, never
-            // corruption. (Resampling, if a real engine wants it, is the implementation's job behind its own rate.)
+            // A sample-rate mismatch is a configuration error: the chosen enhancer's rate doesn't match the
+            // route. Feeding a fixed-rate denoiser wrong-rate PCM would corrupt what the VAD/STT see, so we fail
+            // fast — surface a clear error and do NOT enhance, forward, or silently resample. PushErrorAsync
+            // emits an upstream ErrorFrame, which PipelineRunner turns into a session failure (the contract's
+            // "fail at session start"). The flag keeps a torn-down pipeline from emitting it on every frame.
+            // (An engine that accepts multiple rates resamples internally behind its own advertised SampleRate.)
             if (audio.SampleRate != _enhancer.SampleRate)
             {
                 if (!_rateMismatchReported)
                 {
                     _rateMismatchReported = true;
                     await PushErrorAsync(
-                        $"AudioEnhancer: input is {audio.SampleRate} Hz but the enhancer expects {_enhancer.SampleRate} Hz; " +
-                        "forwarding audio unenhanced. Configure a matching enhancer or input sample rate.",
+                        $"AudioEnhancer: input is {audio.SampleRate} Hz but the configured enhancer expects " +
+                        $"{_enhancer.SampleRate} Hz. Configure a matching enhancer or input sample rate.",
                         null, ct).ConfigureAwait(false);
                 }
-                await PushFrameAsync(frame, ct).ConfigureAwait(false); // unenhanced, original envelope
-                return;
+                return; // never feed wrong-rate PCM to the model, and don't propagate it onward
             }
 
             await PushFrameAsync(audio with { Pcm = _enhancer.Enhance(audio.Pcm) }, ct).ConfigureAwait(false);

@@ -16,10 +16,11 @@ public interface IAudioEnhancer : IDisposable
 {
     /// <summary>
     /// The PCM sample rate (Hz) the model/DSP expects — the near-end / input rate it runs at.
-    /// <see cref="AudioEnhancerProcessor"/> checks each inbound <c>AudioRawFrame.SampleRate</c> against this; on a
-    /// mismatch it surfaces a clear error (an upstream <c>ErrorFrame</c>) and forwards the frame <b>unenhanced</b>
-    /// — it never silently resamples or feeds wrong-rate PCM to a fixed-rate model (which would corrupt what the
-    /// VAD/STT see). Any internal resample an engine wants to do happens behind its own advertised rate.
+    /// <see cref="AudioEnhancerProcessor"/> checks each inbound <c>AudioRawFrame.SampleRate</c> against this; a
+    /// mismatch is a configuration error, so it <b>fails fast</b> — surfaces a clear error (an upstream
+    /// <c>ErrorFrame</c>, which fails the session) and never enhances, forwards, or silently resamples the
+    /// wrong-rate audio (feeding a fixed-rate model the wrong rate would corrupt what the VAD/STT see). An engine
+    /// that accepts multiple rates resamples internally behind its own advertised rate.
     /// </summary>
     int SampleRate { get; }
 
