@@ -189,6 +189,21 @@ public class AzureVoiceLiveProcessorTests
         Assert.NotNull(responseCreate);
     }
 
+    [Fact]
+    public async Task Disposing_Without_An_EndFrame_Releases_The_Transport()
+    {
+        // CQ-002: a client disconnect disposes the runner WITHOUT an EndFrame. The transport (which owns a
+        // ClientWebSocket + SemaphoreSlim) must still be released — via DisposeAsyncCore, not only OnEndAsync.
+        var h = BuildPipeline();
+        await h.Runner.StartAsync();
+        await h.Transport.WaitForSentEventAsync(s => s.Contains("session.update"), WaitTimeout); // connected
+
+        await h.Runner.DisposeAsync(); // abrupt: no EndFrame is ever injected
+
+        Assert.True(h.Transport.DisposeCount >= 1); // transport released on disposal, not leaked
+        Assert.False(h.Transport.Connected);
+    }
+
     private static async Task<T?> WaitForCapturedAsync<T>(CapturingProcessor captured, TimeSpan timeout) where T : Frame
     {
         var deadline = DateTime.UtcNow + timeout;
