@@ -96,6 +96,11 @@ public sealed class VoxaDefaultsGuard : IHostedService
                     await stt.WarmUpAsync(scoped, root, cancellationToken).ConfigureAwait(false);
                 if (o.Tts is not null && _registry.TryGetTts(o.Tts, out var tts) && tts.WarmUpAsync is not null)
                     await tts.WarmUpAsync(scoped, root, cancellationToken).ConfigureAwait(false);
+                // VLS-004: a local enhancer (e.g. DeepFilterNet3 ONNX) resolves + preloads its model here too,
+                // so the first session doesn't pay the download/load. None / cloud engines have no WarmUpAsync.
+                if (!string.Equals(o.Enhance.Engine, "None", StringComparison.OrdinalIgnoreCase)
+                    && _registry.TryGetEnhancer(o.Enhance.Engine, out var enh) && enh.WarmUpAsync is not null)
+                    await enh.WarmUpAsync(scoped, root, cancellationToken).ConfigureAwait(false);
             }
         }
     }
