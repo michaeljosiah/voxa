@@ -37,6 +37,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reference **ONNX impls** (Pyannote segmentation + WeSpeaker embedding, on the VLS-006 host) and the
   `voxa transcribe --diarize` CLI consumer are deferred follow-ups — they need real pinned models (SHA-256 +
   cleared licences). Real-time diarization and speaker *identification* are out of scope.
+- **Full-duplex speech-to-speech seam + composite (VRT-005).** Positions Voxa for a local Moshi/PersonaPlex-class
+  speech-to-speech model with a seam in the same family as the cloud realtime composites. A new
+  `ISpeechToSpeechSession` (in `Voxa.Speech.Abstractions`) models speech-core's `FullDuplexSpeechInterface` —
+  `AppendUserAudioAsync`, a `RespondAsync` stream of `SpeechToSpeechChunk` (agent audio + text + the model's own
+  speaking-edge events), `SetVoiceAsync`/`SetSystemPromptAsync`/`ResetSessionAsync`/`CancelAsync` — shaped
+  deliberately parallel to what `OpenAIRealtimeProcessor` does internally. A new **`Voxa.Services.SpeechToSpeech`**
+  package adds `SpeechToSpeechProcessor`, a `FrameProcessor` built to the same blueprint as the cloud composites
+  (bounded `DropOldest` channel, session on `OnStartAsync`, a read loop draining `RespondAsync`, teardown on
+  `OnEndAsync`) but driven by an in-process/sidecar session instead of a wire transport. It emits the **same frame
+  vocabulary** the cloud composites do — `AudioRawFrame`, `LlmTextChunkFrame`, `Bot`/`UserStarted`/`StoppedSpeakingFrame`,
+  `InterruptionFrame` (also calling `session.CancelAsync` on barge-in via the `OnInterruptionAsync` hook), upstream
+  `ErrorFrame` — so Studio / the diagnostics hub / a sink can't tell a third-party realtime API from a local model.
+  Frame parity is tested against a **fake session** (no model) through a real pipeline. **The model itself is
+  deferred** (WS3, spike-gated): a local S2S model is GB-scale and often GPU-only, so it lands behind a
+  feasibility spike on a GPU/sidecar host (a cloud S2S could validate the seam first). Config-driven selection
+  (`Voxa:Mode = SpeechToSpeech`) is a small follow-up; today the composite is reached by direct construction /
+  `MapVoxaVoice(...).UseProcessor(...)`.
 - **Local speech-enhancement / denoise seam (VLS-004 WS1).** A new `IAudioEnhancer` (in `Voxa.Audio.Abstractions`)
   + `NullAudioEnhancer` passthrough + `AudioEnhancerProcessor` that runs the denoiser per `AudioRawFrame`, placed
   by the composer **after the AEC stage (VRT-003) and before the VAD** so the VAD and STT see the cleaned mic
