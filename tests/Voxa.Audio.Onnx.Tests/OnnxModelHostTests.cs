@@ -48,6 +48,13 @@ public sealed class OnnxModelHostTests : IDisposable
         OnnxModelHost.EvictAll();
         var second = host.Load(ModelPath);
         Assert.NotSame(first, second);
+
+        // EvictAll also disposes each session (not just drops it) — see OnnxModelHost.EvictAll. We assert
+        // the cache-drop here and leave disposal to inspection on purpose: ORT has no safe managed probe for
+        // a disposed session — InputMetadata is cached (no throw) and Run aborts the process (native AV)
+        // rather than throwing, so any "is it disposed?" assertion would be unreliable or host-crashing.
+        var reloaded = host.Load(ModelPath);
+        Assert.Same(second, reloaded); // the post-evict session is itself cached normally
     }
 
     [Fact]

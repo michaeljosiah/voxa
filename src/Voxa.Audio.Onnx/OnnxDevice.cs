@@ -55,7 +55,11 @@ public static class OnnxDeviceParser
         }
     }
 
-    /// <summary>The valid <c>Device</c> spellings, for validators and error messages.</summary>
+    /// <summary>
+    /// The canonical <c>Device</c> spellings, for validators and error messages. <c>"dml"</c> is also
+    /// accepted by <see cref="TryParse"/> as an alias for <c>"directml"</c> but is intentionally not listed
+    /// here (one canonical spelling per provider).
+    /// </summary>
     public static IReadOnlyList<string> ValidValues { get; } =
         ["cpu", "auto", "cuda", "directml", "coreml"];
 }

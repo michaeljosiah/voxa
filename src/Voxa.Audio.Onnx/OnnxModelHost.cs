@@ -44,7 +44,9 @@ public sealed class OnnxModelHost
     /// resolved and verified (e.g. via <see cref="OnnxModelDescriptorExtensions.ResolveAsync"/> /
     /// <c>VoxaModelCache</c>); the host does not download. <paramref name="hook"/> runs after the device EP
     /// is applied and before the session is built, so a model can install a custom EP or tune
-    /// <see cref="SessionOptions"/>.
+    /// <see cref="SessionOptions"/> — but it runs only on the <b>first</b> load of a given
+    /// <c>(path, device)</c>; a cache hit returns the existing session and ignores the hook (the session is
+    /// configured once and shared).
     /// </summary>
     /// <exception cref="VoxaModelUnavailableException">An explicit GPU <paramref name="device"/> whose runtime isn't loaded.</exception>
     public IOnnxSession Load(
@@ -54,11 +56,16 @@ public sealed class OnnxModelHost
     {
         ArgumentException.ThrowIfNullOrEmpty(modelPath);
         var fullPath = Path.GetFullPath(modelPath);
-        var key = (fullPath, device);
+        // Windows filesystems are case-insensitive but case-preserving, so two differently-cased paths to
+        // the same file must map to ONE cache entry or the weights load twice. Normalise the key (not the
+        // load path) on Windows; keep it verbatim where the filesystem is case-sensitive (Linux/macOS).
+        var keyPath = OperatingSystem.IsWindows() ? fullPath.ToLowerInvariant() : fullPath;
+        var key = (keyPath, device);
 
         // The Lazy factory runs OUTSIDE the dictionary lock, so a slow model load doesn't block other
-        // keys, and the loser on the same key still receives the winner's single instance.
-        var lazy = Sessions.GetOrAdd(key, k => new Lazy<IOnnxSession>(() => CreateSession(k.Path, k.Device, hook)));
+        // keys, and the loser on the same key still receives the winner's single instance. The factory
+        // loads from the real-cased fullPath, not the normalised key path.
+        var lazy = Sessions.GetOrAdd(key, _ => new Lazy<IOnnxSession>(() => CreateSession(fullPath, device, hook)));
         try
         {
             return lazy.Value;
@@ -118,8 +125,11 @@ internal sealed class LoadedOnnxSession : IOnnxSession
     {
         Session = session;
         ActiveDevice = activeDevice;
-        InputNames = session.InputMetadata.Keys.ToArray();
-        OutputNames = session.OutputMetadata.Keys.ToArray();
+        // ORT's InputNames/OutputNames are IReadOnlyList<string> in the model's declared index order —
+        // unlike InputMetadata.Keys (a Dictionary key set, whose enumeration order isn't contractual). Copy
+        // so the handle's lists don't depend on the session's lifetime.
+        InputNames = session.InputNames.ToArray();
+        OutputNames = session.OutputNames.ToArray();
     }
 
     public InferenceSession Session { get; }
