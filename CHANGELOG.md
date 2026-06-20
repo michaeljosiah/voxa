@@ -175,7 +175,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   whisper compute device **round-trip the Builder** (they ride the TTS / STT node through
   `SeedFromPairs`/`BuilderChainCompiler`), and selecting `cpu` in Config emits an explicit `cpu` override when the
   base config pinned a GPU device — so a GPU choice survives Config → "Open in Builder" → run/export, and the
-  picker can always turn GPU back off, instead of a layered base value silently winning.
+  picker can always turn GPU back off, instead of a layered base value silently winning. The same
+  explicit-override rule now also covers the Config **profile** and **VAD-engine** pickers (selecting
+  `Default` / `Silero` emits them explicitly when the base config pinned a non-default value), so every Config
+  picker can revert a base/profile setting rather than silently inheriting it.
 - **Voxa Studio: Builder "Reset" now restores the fastest pipeline.** Reset-to-default seeds the **LowLatency**
   profile instead of the byte-identical Default one, so the canvas comes back tuned for the lowest latency using
   the work that's shipped — eager/speculative STT (~150 ms), an aggressive ~400 ms VAD stop, the utterance and

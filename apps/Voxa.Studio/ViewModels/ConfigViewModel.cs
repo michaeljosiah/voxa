@@ -40,6 +40,12 @@ public sealed partial class ConfigViewModel : ObservableObject
     private readonly bool _whisperDeviceInBaseConfig;
     private readonly bool _kokoroDeviceInBaseConfig;
 
+    // Same rule for the profile and VAD engine: if the base config pins a non-default value, selecting the
+    // default in the picker must emit it explicitly ("Default" / "Silero") to override — an omitted key would
+    // fall back to the base value through config layering, so the picker could never revert to the default.
+    private readonly bool _profileInBaseConfig;
+    private readonly bool _vadInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -66,11 +72,13 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedStt = voxa["Stt"] ?? "WhisperCpp";
         _selectedTts = voxa["Tts"] ?? "Piper";
         _selectedVad = voxa["Vad:Engine"] ?? "Silero";
+        _vadInBaseConfig = !string.Equals(_selectedVad, "Silero", StringComparison.OrdinalIgnoreCase);
         _selectedAecEngine = voxa["Aec:Engine"] ?? "None";
         _selectedEnhanceEngine = voxa["Enhance:Engine"] ?? "None";
         _aecInBaseConfig = !string.Equals(_selectedAecEngine, "None", StringComparison.OrdinalIgnoreCase);
         _enhanceInBaseConfig = !string.Equals(_selectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase);
         _selectedProfile = voxa["Profile"] ?? "Default";
+        _profileInBaseConfig = !string.Equals(_selectedProfile, "Default", StringComparison.OrdinalIgnoreCase);
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
         _selectedWhisperDevice = voxa["WhisperCpp:Device"] ?? "cpu";
@@ -462,10 +470,17 @@ public sealed partial class ConfigViewModel : ObservableObject
             ["Voxa:Tts"] = SelectedTts,
             ["Voxa:Agent:Provider"] = SelectedAgent,
         };
+        // Emit the selection; the default ("Default" / "Silero") is omitted to keep the export minimal UNLESS
+        // the base config pinned a non-default value, in which case emit the default explicitly so Apply/export
+        // overrides it — an omitted key would fall back to the base through config layering (the AEC/device rule).
         if (!string.Equals(SelectedProfile, "Default", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Profile"] = SelectedProfile;
+        else if (_profileInBaseConfig)
+            pairs["Voxa:Profile"] = "Default";
         if (!string.Equals(SelectedVad, "Silero", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Vad:Engine"] = SelectedVad;
+        else if (_vadInBaseConfig)
+            pairs["Voxa:Vad:Engine"] = "Silero";
         // Input cleanup runs before the VAD. Emit the selected engine; when it's "None" but the base
         // config named one, emit an explicit "None" so Apply/activation actually turns the stage off
         // (an omitted key would fall back to the base engine through config layering — the smart-turn rule).
