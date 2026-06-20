@@ -35,7 +35,13 @@ public sealed class TracingProcessor : FrameProcessor
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
-        using var activity = VoxaActivities.Source.StartActivity($"voxa.{_scope}.{frame.GetType().Name}");
+        // HasListeners() gate: when no exporter is subscribed, skip building the interpolated activity
+        // name (and the GetType().Name reflection) entirely. StartActivity returns null without a
+        // listener anyway — but only after its name argument is evaluated — so for this per-frame
+        // pass-through processor the gate keeps it ~free when left in a hot pipeline unobserved.
+        using var activity = VoxaActivities.Source.HasListeners()
+            ? VoxaActivities.Source.StartActivity($"voxa.{_scope}.{frame.GetType().Name}")
+            : null;
         if (activity is not null)
         {
             activity.SetTag("voxa.scope", _scope);
