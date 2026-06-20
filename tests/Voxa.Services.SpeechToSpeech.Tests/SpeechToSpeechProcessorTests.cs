@@ -70,8 +70,10 @@ public class SpeechToSpeechProcessorTests
             var pcm = new byte[] { 9, 9, 9, 9 };
             await h.Session.EmitAsync(new SpeechToSpeechChunk(pcm, null, IsFinal: false));
 
+            // BotStarted (a SystemFrame) and the AudioRawFrame (a DataFrame) ride separate channels, so wait for
+            // each explicitly rather than inferring one from the other's arrival.
+            Assert.NotNull(await WaitForCaptured<BotStartedSpeakingFrame>(h.Captured));
             var audio = await WaitForCaptured<AudioRawFrame>(h.Captured);
-            Assert.Contains(h.Captured.Captured, f => f is BotStartedSpeakingFrame);
             Assert.NotNull(audio);
             Assert.Equal(pcm, audio!.Pcm.ToArray());
             Assert.Equal(24000, audio.SampleRate); // the session's OutputSampleRate
@@ -175,6 +177,40 @@ public class SpeechToSpeechProcessorTests
             var ex = await Assert.ThrowsAsync<PipelineFailedException>(
                 async () => await h.Runner.WaitAsync().WaitAsync(WaitTimeout));
             Assert.Contains("s2s boom", ex.Message);
+        }
+    }
+
+    [Fact]
+    public async Task Emits_the_canonical_turn_frame_sequence()
+    {
+        // The golden parity check for a turn of [audio, text, audio+final]. Speaking edges (SystemFrames) and
+        // audio/text (DataFrames) ride SEPARATE channels — the priority and data channels — so their interleaving
+        // at a downstream observer is deliberately NOT ordered; only the order WITHIN each channel is. That
+        // per-channel ordering is the real parity contract (and is exactly what the cloud composites also give),
+        // so assert each channel's subsequence rather than a racy merged order.
+        var h = Build();
+        await using (h.Runner)
+        {
+            await h.Runner.StartAsync();
+            await h.Session.EmitAsync(new SpeechToSpeechChunk(new byte[] { 1 }, null, IsFinal: false));
+            await h.Session.EmitAsync(new SpeechToSpeechChunk(default, "hi", IsFinal: false));
+            await h.Session.EmitAsync(new SpeechToSpeechChunk(new byte[] { 2 }, null, IsFinal: true));
+
+            // Wait until all five frames have propagated (across both channels) before asserting.
+            await WaitUntil(
+                () => h.Captured.Captured.Count(f =>
+                    f is BotStartedSpeakingFrame or BotStoppedSpeakingFrame or AudioRawFrame or LlmTextChunkFrame) >= 5,
+                WaitTimeout);
+
+            var speakingEdges = h.Captured.Captured
+                .Where(f => f is BotStartedSpeakingFrame or BotStoppedSpeakingFrame)
+                .Select(f => f.GetType().Name).ToArray();
+            Assert.Equal([nameof(BotStartedSpeakingFrame), nameof(BotStoppedSpeakingFrame)], speakingEdges);
+
+            var dataFrames = h.Captured.Captured
+                .Where(f => f is AudioRawFrame or LlmTextChunkFrame)
+                .Select(f => f.GetType().Name).ToArray();
+            Assert.Equal([nameof(AudioRawFrame), nameof(LlmTextChunkFrame), nameof(AudioRawFrame)], dataFrames);
         }
     }
 

@@ -29,7 +29,9 @@ public interface ISpeechToSpeechSession : IAsyncDisposable
     /// <summary>
     /// The agent's output + session-event stream, mirroring <c>FullDuplexChunk</c> plus the speaking-edge events
     /// the realtime transports surface. Yields for the lifetime of the session and honours the per-frame
-    /// <see cref="CancellationToken"/> so an interruption aborts in-flight synthesis.
+    /// <see cref="CancellationToken"/> so an interruption aborts in-flight synthesis. <b>Teardown contract:</b>
+    /// <see cref="IAsyncDisposable.DisposeAsync"/> MUST complete this stream — the driving composite disposes the
+    /// session and then awaits its read loop, so a <c>RespondAsync</c> that ignores disposal would hang teardown.
     /// </summary>
     IAsyncEnumerable<SpeechToSpeechChunk> RespondAsync(CancellationToken ct);
 
@@ -39,7 +41,11 @@ public interface ISpeechToSpeechSession : IAsyncDisposable
     /// <summary>System prompt / persona (<c>set_system_prompt</c>).</summary>
     ValueTask SetSystemPromptAsync(string systemPrompt, CancellationToken ct);
 
-    /// <summary>Clear conversational state / KV-cache for a fresh turn (<c>reset_session</c>).</summary>
+    /// <summary>
+    /// Clear conversational state / KV-cache for a fresh turn (<c>reset_session</c>). A host-invoked control
+    /// (between conversations) — the composite does not call it automatically; it is on the seam so a real model
+    /// and its host have the standard FullDuplex control surface.
+    /// </summary>
     ValueTask ResetSessionAsync(CancellationToken ct);
 
     /// <summary>
@@ -70,10 +76,12 @@ public enum SpeechToSpeechEvent
 }
 
 /// <summary>
-/// One unit of agent output (mirrors <c>FullDuplexChunk</c>): agent audio PCM at the session's
-/// <see cref="ISpeechToSpeechSession.OutputSampleRate"/>, optional decoded text token(s), and an end-of-turn
-/// marker — or, when <see cref="Event"/> is not <see cref="SpeechToSpeechEvent.None"/>, a session event (its
-/// audio/text are then typically empty). Either output field may be empty in a given chunk.
+/// One unit from the session stream: <b>either</b> agent output (mirrors <c>FullDuplexChunk</c> — audio PCM at
+/// the session's <see cref="ISpeechToSpeechSession.OutputSampleRate"/>, optional decoded text token(s), and an
+/// end-of-turn marker) when <see cref="Event"/> is <see cref="SpeechToSpeechEvent.None"/>, <b>or</b> a session
+/// event when <see cref="Event"/> is set. The composite treats an event chunk as a pure control signal and
+/// ignores any audio/text on it, so a chunk should carry output <i>xor</i> an event. Either output field may be
+/// empty in an output chunk.
 /// </summary>
 public readonly record struct SpeechToSpeechChunk(
     ReadOnlyMemory<byte> AudioPcm,

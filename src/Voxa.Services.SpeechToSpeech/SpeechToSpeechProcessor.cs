@@ -68,10 +68,13 @@ public sealed class SpeechToSpeechProcessor : FrameProcessor
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
-        if (_session is not null && frame is AudioRawFrame audio)
+        if (frame is AudioRawFrame audio)
         {
-            // User audio is consumed by the model's full-duplex loop; agent audio returns via the read loop.
-            await _session.AppendUserAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
+            // User audio is consumed by the model's full-duplex loop and is NEVER forwarded downstream (the
+            // composite is the sink for the user direction). Agent audio returns via the read loop. Dropping it
+            // even in the brief no-session window (before start / after end) keeps that invariant absolute.
+            if (_session is not null)
+                await _session.AppendUserAudioAsync(audio.Pcm, ct).ConfigureAwait(false);
             return;
         }
 
@@ -82,10 +85,10 @@ public sealed class SpeechToSpeechProcessor : FrameProcessor
 
     protected override async ValueTask OnInterruptionAsync(InterruptionFrame frame, CancellationToken ct)
     {
-        // Barge-in reached us from upstream: abort the model's in-flight response and reset the speaking edge
-        // so the next turn re-announces BotStarted. The base then forwards the InterruptionFrame downstream via
-        // ProcessFrameAsync, so the sink purges queued bot audio.
-        _botSpeaking = false;
+        // Barge-in reached us from upstream: abort the model's in-flight response. The base then forwards the
+        // InterruptionFrame downstream via ProcessFrameAsync, so the sink purges queued bot audio. The speaking
+        // edge stays owned exclusively by the read loop (single-threaded) — matching both cloud composites; the
+        // model surfaces the turn's end via RespondAsync rather than this hook racing the flag across threads.
         if (_session is not null)
             await _session.CancelAsync(ct).ConfigureAwait(false);
     }
@@ -116,6 +119,12 @@ public sealed class SpeechToSpeechProcessor : FrameProcessor
                         await PushFrameAsync(new InterruptionFrame(), ct).ConfigureAwait(false);
                         break;
                 }
+
+                // An event chunk is a pure control signal — never an output carrier — so any audio/text on it is
+                // ignored (a chunk carries output XOR an event). This also stops an Interrupted chunk that happens
+                // to carry a trailing audio tail from immediately re-tripping BotStarted on the same chunk.
+                if (chunk.Event != SpeechToSpeechEvent.None)
+                    continue;
 
                 if (!chunk.AudioPcm.IsEmpty && !_botSpeaking)
                 {
