@@ -144,6 +144,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: Config scrolls instead of clipping.** When the Config page's stacked option cards (Whisper
+  + agent + cloud-voice + smart-turn, etc.) grew taller than the window, the lower cards and the **Apply**
+  button were simply cut off — you had to drag the window taller or maximize to reach them. The selection
+  column now sits in a vertical `ScrollViewer`, so it scrolls when it outgrows the window and shows nothing
+  when it fits. Scoped to the one page that overflowed at the body level; the fill-and-pan pages (Builder
+  canvas, Talk, Metrics) keep their own internal scrolling.
 - **Voxa Studio: Smart turn detection toggle (Config).** The Config view gains a **Smart turn detection**
   card — flip it on, pick a classifier (**Sidecar**, the real local `pipecat-ai/smart-turn-v3` via Python,
   or **Http**, a model server), and the next Talk session asks "is the user actually done?" at the silence
