@@ -30,6 +30,7 @@ public class TranscriptionFilterTests
     [InlineData(".")]
     [InlineData("Subscribe")]
     [InlineData("Thanks for watching!")]
+    [InlineData("Please SUBSCRIBE TO my channel")] // CQ-012: embedded, differently-cased substring match
     public async Task Drops_Common_Whisper_Hallucinations(string hallucination)
     {
         var (runner, captured, pipeline, filter) = Build();
