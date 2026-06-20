@@ -187,7 +187,13 @@ internal static class BuilderChainCompiler
                         MinRms:              tuning.VadMinRms,
                         StartDuration:       tuning.VadStartDuration,
                         StopDuration:        tuning.VadStopDuration,
-                        PrerollDuration:     tuning.VadPrerollDuration);
+                        PrerollDuration:     tuning.VadPrerollDuration)
+                    {
+                        // CQ-007: match DefaultVoicePipelineComposer — eager-STT delay + force-split cap (null in
+                        // Default ⇒ unchanged; applied under LowLatency/Quality so "run from canvas" == a server's run).
+                        EagerSttDelay        = tuning.VadEagerSttDelay,
+                        MaxUtteranceDuration = tuning.VadMaxUtteranceDuration,
+                    };
                     if (string.Equals(node.Provider, "SilenceGate", StringComparison.OrdinalIgnoreCase))
                         parts.Add(new(node.Id, sp => CreateSilenceGate(sp, settings)));
                     else if (registry.TryGetVad(node.Provider ?? "", out var vadDesc))
@@ -197,7 +203,15 @@ internal static class BuilderChainCompiler
                     break;
 
                 case BuilderNodeKind.Stt:
-                    parts.Add(new(node.Id, sp => stt.CreateProcessor(sp, root)));
+                    // CQ-007: match the composer's VRT-004 interim-coalescing (default ~150 ms) so a chatty
+                    // streaming engine can't flood the bounded channel under "run from canvas" either.
+                    var interimMinInterval = TimeSpan.FromMilliseconds(Math.Max(0, options.InterimMinIntervalMs ?? 150));
+                    parts.Add(new(node.Id, sp =>
+                    {
+                        var sttProcessor = stt.CreateProcessor(sp, root);
+                        sttProcessor.InterimMinInterval = interimMinInterval;
+                        return sttProcessor;
+                    }));
                     break;
 
                 case BuilderNodeKind.Filter:
@@ -208,7 +222,7 @@ internal static class BuilderChainCompiler
                     var history = options.Agent.ConversationMemory
                         ? new InMemoryChatHistory(options.Agent.MaxHistoryMessages)
                         : null;
-                    parts.Add(new(node.Id, sp => CreateAgentProcessor(sp, options.Agent, history)));
+                    parts.Add(new(node.Id, sp => CreateAgentProcessor(sp, options.Agent, history, tuning.MaxResponseDuration)));
                     break;
 
                 case BuilderNodeKind.Aggregator:
@@ -307,7 +321,7 @@ internal static class BuilderChainCompiler
     // non-default chain still gets exactly the agent a server would. Kept in lockstep with
     // DefaultVoicePipelineComposer.CreateAgentProcessor.
     private static FrameProcessor CreateAgentProcessor(
-        IServiceProvider sp, VoxaAgentOptions agentOpts, InMemoryChatHistory? history)
+        IServiceProvider sp, VoxaAgentOptions agentOpts, InMemoryChatHistory? history, TimeSpan? maxResponseDuration)
     {
         AIAgent? agent = sp.GetService<AIAgent>()
             ?? WrapChatClient(sp.GetService<IChatClient>(), agentOpts)
@@ -318,6 +332,7 @@ internal static class BuilderChainCompiler
 
         return MicrosoftAgentVoice.CreateProcessor(agent, opts =>
         {
+            opts.MaxResponseDuration = maxResponseDuration; // CQ-007: match the composer's VRT-002 WS2 §6.5 response cap
             if (history is null) return;
             opts.BuildMessages = (turnCtx, ct) =>
             {
