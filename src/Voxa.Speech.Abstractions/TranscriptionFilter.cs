@@ -14,8 +14,8 @@ namespace Voxa.Speech;
 /// </para>
 /// <list type="bullet">
 ///   <item>Trimmed text is shorter than <see cref="MinLengthChars"/>.</item>
-///   <item>Trimmed lower-cased text matches one of <see cref="ExactBlocklist"/> (case-insensitive).</item>
-///   <item>Trimmed lower-cased text contains one of <see cref="SubstringBlocklist"/>.</item>
+///   <item>Trimmed text matches one of <see cref="ExactBlocklist"/> (case-insensitive).</item>
+///   <item>Trimmed text contains one of <see cref="SubstringBlocklist"/> (case-insensitive).</item>
 /// </list>
 ///
 /// <para>
