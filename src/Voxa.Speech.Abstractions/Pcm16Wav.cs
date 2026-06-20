@@ -67,7 +67,10 @@ public static class Pcm16Wav
             var id = wav.Slice(offset, 4);
             int size = BinaryPrimitives.ReadInt32LittleEndian(wav.Slice(offset + 4, 4));
             int payload = offset + 8;
-            if (size < 0 || payload + size > wav.Length) size = wav.Length - payload; // truncated / over-declared final chunk
+            // Compare against the bytes remaining, never payload + size: a huge declared size overflows that
+            // sum, skips this clamp, and advances offset negative → ArgumentOutOfRangeException next iteration.
+            // payload <= wav.Length here (loop guard), so wav.Length - payload is a safe non-negative int.
+            if (size < 0 || size > wav.Length - payload) size = wav.Length - payload; // truncated / over-declared chunk
 
             if (id.SequenceEqual("fmt "u8) && size >= 16)
             {

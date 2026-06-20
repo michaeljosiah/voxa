@@ -61,6 +61,21 @@ public class Pcm16WavTests
         Assert.Equal(4, fmt.DataLength);                               // clamped to the bytes actually present
     }
 
+    [Fact] // Codex P2 (round 2): a huge declared size must clamp, not overflow payload+size into a negative offset.
+    public void FindData_Does_Not_Overflow_On_A_Huge_Chunk_Size()
+    {
+        var b = new byte[12 + 8]; // RIFF/WAVE + a single chunk header that lies about its length
+        int o = 0;
+        o += Tag(b, o, "RIFF"u8); o += U32(b, o, (uint)(b.Length - 8)); o += Tag(b, o, "WAVE"u8);
+        o += Tag(b, o, "JUNK"u8); U32(b, o, 0x7FFFFFFF); // claims int.MaxValue bytes; only 0 present
+
+        // Must surface the documented InvalidDataException (clamped, no 'data'), never ArgumentOutOfRangeException.
+        Assert.Throws<InvalidDataException>(() => Pcm16Wav.FindData(b));
+
+        static int Tag(byte[] d, int at, ReadOnlySpan<byte> t) { t.CopyTo(d.AsSpan(at)); return t.Length; }
+        static int U32(byte[] d, int at, uint v) { BinaryPrimitives.WriteUInt32LittleEndian(d.AsSpan(at), v); return 4; }
+    }
+
     [Fact] // Codex P2: a data chunk before fmt would otherwise return zeroed format fields.
     public void FindData_Throws_When_Data_Precedes_A_Valid_Fmt_Chunk()
     {
