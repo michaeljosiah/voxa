@@ -14,8 +14,8 @@ namespace Voxa.Speech;
 /// </para>
 /// <list type="bullet">
 ///   <item>Trimmed text is shorter than <see cref="MinLengthChars"/>.</item>
-///   <item>Trimmed lower-cased text matches one of <see cref="ExactBlocklist"/> (case-insensitive).</item>
-///   <item>Trimmed lower-cased text contains one of <see cref="SubstringBlocklist"/>.</item>
+///   <item>Trimmed text matches one of <see cref="ExactBlocklist"/> (case-insensitive).</item>
+///   <item>Trimmed text contains one of <see cref="SubstringBlocklist"/> (case-insensitive).</item>
 /// </list>
 ///
 /// <para>
@@ -81,10 +81,10 @@ public sealed class TranscriptionFilter : FrameProcessor
 
         if (ExactBlocklist.Contains(trimmed)) return true;
 
-        var lower = trimmed.ToLowerInvariant();
         for (int i = 0; i < SubstringBlocklist.Count; i++)
         {
-            if (lower.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
+            // OrdinalIgnoreCase already ignores case — no need to allocate a lowercased copy first.
+            if (trimmed.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
         }
 
         return false;
