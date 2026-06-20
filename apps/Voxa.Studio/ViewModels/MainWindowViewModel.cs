@@ -22,6 +22,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Metrics = new MetricsViewModel(services);
         Models = new ModelsViewModel(services);
         Config = new ConfigViewModel(services);
+        Diarization = new DiarizationViewModel(services);
 
         // One audio device — and one set of cores: a concurrent session would also make every
         // Metrics number a lie (the R4 contention rule), so live surfaces block each other.
@@ -141,8 +142,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public MetricsViewModel Metrics { get; }
     public ModelsViewModel Models { get; }
     public ConfigViewModel Config { get; }
+    public DiarizationViewModel Diarization { get; }
 
-    /// <summary>0 Talk, 1 Playgrounds, 2 Voices, 3 Builder, 4 Metrics, 5 Models, 6 Config — the nav rail.</summary>
+    /// <summary>0 Talk, 1 Playgrounds, 2 Voices, 3 Builder, 4 Metrics, 5 Models, 6 Config, 7 Diarization — the nav rail.</summary>
     [ObservableProperty] private int _selectedSection;
 
     public bool IsLive => Talk.IsRunning || Builder.IsRunning || Metrics.IsRunning;
