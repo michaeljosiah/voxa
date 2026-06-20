@@ -48,24 +48,15 @@ public sealed class PyannoteOnnxSegmentation : ISpeakerSegmentation
 
         int len = audio.Length;
         double totalSeconds = len / (double)sampleRate;
+        if (len == 0) return [new SegmentationWindow(0, 0, Array.Empty<SpeechRegion>())];
+
         int ws = _model.WindowSize, shift = _model.WindowShift;
 
-        // Sliding windows + a zero-padded last chunk, matching the reference's as_strided + pad.
+        // Sliding windows + a zero-padded last chunk, matching the reference's as_strided + pad. For len > 0 this
+        // is always ≥ 1 window (len < ws ⇒ one padded window), so totalChunks can't be 0.
         int numFull = len >= ws ? (len - ws) / shift + 1 : 0;
         bool hasLast = len < ws || (len - ws) % shift != 0;
         int totalChunks = numFull + (hasLast ? 1 : 0);
-        if (totalChunks == 0)
-            return [new SegmentationWindow(0, totalSeconds, Array.Empty<SpeechRegion>())];
-
-        var windows = new float[totalChunks * ws]; // last chunk's tail stays zero (padding)
-        for (int i = 0; i < numFull; i++)
-            audio.Slice(i * shift, ws).CopyTo(windows.AsSpan(i * ws, ws));
-        if (hasLast)
-        {
-            int off = numFull * shift;
-            int remain = Math.Clamp(len - off, 0, ws);
-            if (remain > 0) audio.Slice(off, remain).CopyTo(windows.AsSpan(numFull * ws, ws));
-        }
 
         var activity = new List<float[]>(totalChunks);
         using var runOptions = new RunOptions();
@@ -75,8 +66,24 @@ public sealed class PyannoteOnnxSegmentation : ISpeakerSegmentation
         for (int b = 0; b < totalChunks; b += BatchSize)
         {
             int n = Math.Min(BatchSize, totalChunks - b);
+            // Copy each window straight from `audio` into the batch buffer — no full overlap materialisation
+            // (windows overlap ~10×, so a global windows[] would be ~10× the audio).
             var batch = new float[n * ws];
-            Array.Copy(windows, b * ws, batch, 0, n * ws);
+            for (int j = 0; j < n; j++)
+            {
+                int chunk = b + j;
+                var dest = batch.AsSpan(j * ws, ws);
+                if (chunk < numFull)
+                {
+                    audio.Slice(chunk * shift, ws).CopyTo(dest);
+                }
+                else // the zero-padded last chunk; its tail stays zero
+                {
+                    int off = numFull * shift;
+                    int remain = Math.Clamp(len - off, 0, ws);
+                    if (remain > 0) audio.Slice(off, remain).CopyTo(dest);
+                }
+            }
 
             using var input = OrtValue.CreateTensorValueFromMemory(batch, [n, 1, ws]);
             var inputs = new Dictionary<string, OrtValue> { [inputName] = input };
@@ -84,6 +91,10 @@ public sealed class PyannoteOnnxSegmentation : ISpeakerSegmentation
 
             var data = results[0].GetTensorDataAsSpan<float>(); // [n, frames, num_classes] flattened
             int classes = _model.NumClasses;
+            if (data.Length % (n * classes) != 0)
+                throw new InvalidOperationException(
+                    $"Pyannote output length {data.Length} is not a multiple of batch {n} × {classes} classes — " +
+                    "the model's num_classes metadata disagrees with its output width.");
             int frames = data.Length / (n * classes);
             for (int c = 0; c < n; c++)
             {

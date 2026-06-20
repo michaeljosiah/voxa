@@ -28,7 +28,6 @@
     <!-- ORT directly: the host keeps its ORT ref behind PrivateAssets, and the engine binds OrtValues +
          reads InferenceSession.ModelMetadata, so this package brings its own ORT (same 1.26.0 pin). -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
   </ItemGroup>
 
   <ItemGroup>

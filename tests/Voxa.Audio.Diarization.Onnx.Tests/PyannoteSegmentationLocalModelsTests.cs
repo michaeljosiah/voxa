@@ -48,6 +48,10 @@ public class PyannoteSegmentationLocalModelsTests
             prevEnd = r.End;
         }
 
+        // Deterministic: the same audio yields the same segmentation (records → structural equality).
+        var again = seg.Segment(audio, sr);
+        Assert.Equal(w.Regions, again[0].Regions);
+
         OnnxModelHost.EvictAll();
     }
 

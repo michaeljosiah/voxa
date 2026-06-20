@@ -76,6 +76,31 @@ public class PowersetSegmentationDecoderTests
     }
 
     [Fact]
+    public void Form_regions_stitches_two_overlapping_chunks()
+    {
+        // Two windows overlapping by 200 samples (windowShift 200, windowSize 400, receptive_field_shift 100):
+        //   chunk 0 starts at global frame 0, chunk 1 at frame 2 (int(1*200/100 + 0.5)).
+        // numFramesGlobal = (400 + 1*200)/100 + 1 = 7; Hamming(4) = [0.08, 0.77, 0.77, 0.08].
+        var model = new PyannoteSegmentationModel(
+            SampleRate: 16000, WindowSize: 400, WindowShift: 200,
+            ReceptiveFieldSize: 0, ReceptiveFieldShift: 100,
+            NumSpeakers: 3, PowersetMaxClasses: 2, NumClasses: 7);
+        var chunks = new[]
+        {
+            new float[] { 0, 1, 1, 0 }, // frames 0..3
+            new float[] { 1, 1, 0, 0 }, // frames 2..5
+        };
+
+        var regions = PowersetSegmentationDecoder.FormRegions(chunks, model, totalSamples: 600, hasLastChunk: false);
+
+        // Stitched classification ≈ [0, 1, 1, 0.906, 0, 0, 0] (frame 3 = 0.77/0.85 from the overlap, > 0.5 → still
+        // speech), so a single region [frame 1 .. frame 4) = [0.00625, 0.025) at scale 100/16000.
+        Assert.Single(regions);
+        Assert.Equal(0.00625, regions[0].Start, 5);
+        Assert.Equal(0.025, regions[0].End, 5);
+    }
+
+    [Fact]
     public void Form_regions_all_silence_and_all_speech()
     {
         Assert.Empty(PowersetSegmentationDecoder.FormRegions([new float[] { 0, 0, 0, 0 }], TestModel(), 1000, false));
