@@ -618,4 +618,36 @@ public class AgentLoopProcessorTests
         // A hang here is the deadlock this guards against — must finish well within the timeout.
         await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
     }
+
+    /// <summary>A driver stuck on work that never observes the processor token (simulates a buggy/blocking driver).</summary>
+    private sealed class UncancellableDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource TurnStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run();
+
+        private async IAsyncEnumerable<Frame> Run()
+        {
+            TurnStarted.TrySetResult();
+            await new TaskCompletionSource().Task; // never completes, never observes any cancellation token
+            yield break;
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_With_A_Driver_Stuck_In_Uncancellable_Work_Still_Completes()
+    {
+        // CQ-001 (codex P2, round 2): the worker join must be BOUNDED. A driver stuck in work that never
+        // observes the processor token would otherwise make PipelineRunner.DisposeAsync hang forever; the
+        // bounded WaitAsync (mirroring OnEndAsync) gives up after the timeout so connection cleanup completes.
+        var driver = new UncancellableDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.TurnStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)); // worker is now stuck, ignoring the CTS
+
+        // Disposal must return despite the stuck worker. Bound is 5 s; allow generous margin for CI.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+    }
 }

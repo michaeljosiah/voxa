@@ -349,7 +349,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
 
         if (_turnWorker is not null)
         {
-            try { await _turnWorker.ConfigureAwait(false); }
+            // Bound the join (mirrors OnEndAsync): a driver stuck in work that never observes the processor
+            // token must not hang PipelineRunner.DisposeAsync forever — give up after the timeout and let the
+            // stuck task leak rather than blocking connection cleanup indefinitely (CQ-001, codex P2).
+            try { await _turnWorker.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (TimeoutException) { /* driver ignored cancellation; don't block teardown on it */ }
             catch (OperationCanceledException) { /* worker observed the cancel during teardown */ }
             _turnWorker = null;
         }
