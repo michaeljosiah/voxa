@@ -28,7 +28,7 @@ public class ComposerEnhancerTests
     private static VoxaEnhancerDescriptor Enhancer() => new(
         Name: "FakeEnhancer",
         Validate: _ => [],
-        CreateProcessor: (_, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(16000)));
+        CreateProcessor: (_, settings, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(settings.SampleRate)));
 
     private static VoxaAecDescriptor Aec() => new(
         Name: "FakeAec",
@@ -107,6 +107,30 @@ public class ComposerEnhancerTests
     }
 
     [Fact]
+    public void Enhancer_Factory_Receives_The_Effective_Input_Rate()
+    {
+        // VLS-004 (Codex P2): the composer passes the effective route rate to the enhancer factory (like
+        // VAD/AEC) so a provider builds its model at the right rate and the per-frame check matches.
+        int? seen = null;
+        var registry = new VoxaProviderRegistry();
+        registry.Add(Stt());
+        registry.Add(Tts());
+        registry.Add(new VoxaEnhancerDescriptor("FakeEnhancer", _ => [],
+            (_, settings, _) => { seen = settings.SampleRate; return new AudioEnhancerProcessor(new NullAudioEnhancer(settings.SampleRate)); }));
+
+        var composer = new DefaultVoicePipelineComposer(
+            Options.Create(OptionsWith("FakeEnhancer")),
+            registry,
+            new VoxaTuningResolver(NullLogger<VoxaTuningResolver>.Instance),
+            new ConfigurationBuilder().Build(),
+            NullLogger<DefaultVoicePipelineComposer>.Instance);
+
+        _ = composer.Compose(SessionServices()).Parts[0](SessionServices()); // materialize the enhancer
+
+        Assert.Equal(16000, seen); // FakeStt's PreferredInputSampleRate (no override in the empty config)
+    }
+
+    [Fact]
     public void Unknown_Engine_Warns_And_Runs_Without_Enhancement()
     {
         var logger = new ListLogger<DefaultVoicePipelineComposer>();
@@ -124,7 +148,7 @@ public class ComposerEnhancerTests
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(config);
         services.AddVoxa(config, b => b.AddProvider(new VoxaEnhancerDescriptor(
-            "DeepFilterNet3", _ => [], (_, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(16000)))));
+            "DeepFilterNet3", _ => [], (_, settings, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(settings.SampleRate)))));
 
         var registry = services.BuildServiceProvider().GetRequiredService<VoxaProviderRegistry>();
 
@@ -143,7 +167,7 @@ public class ComposerEnhancerTests
         registry.Add(new VoxaEnhancerDescriptor(
             "FakeEnhancer",
             Validate: _ => new[] { "Voxa:Enhance:ModelPath does not exist" },
-            CreateProcessor: (_, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(16000))));
+            CreateProcessor: (_, settings, _) => new AudioEnhancerProcessor(new NullAudioEnhancer(settings.SampleRate))));
 
         var validator = new VoxaOptionsValidator(registry, new ConfigurationBuilder().Build());
         var result = validator.Validate(null, new VoxaOptions { Enhance = new VoxaEnhanceOptions { Engine = "FakeEnhancer" } });

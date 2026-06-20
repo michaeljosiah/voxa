@@ -123,7 +123,10 @@ public sealed class DefaultVoicePipelineComposer
         {
             if (_registry.TryGetEnhancer(o.Enhance.Engine, out var enhDesc))
             {
-                parts.Add(sp => enhDesc.CreateProcessor(sp, root));
+                // Pass the effective route rate (honours STT overrides), like VAD/AEC, so a provider can match
+                // it — the processor's per-frame rate check fails fast otherwise. root carries the engine's config.
+                var enhSettings = new VoxaEnhancerSettings(inputSampleRate);
+                parts.Add(sp => enhDesc.CreateProcessor(sp, enhSettings, root));
             }
             else
             {
