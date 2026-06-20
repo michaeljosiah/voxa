@@ -139,8 +139,17 @@ public sealed class SpeechToTextProcessor : FrameProcessor
 
         // Speculative flush: transcribe the buffered utterance now, tagged with this id, overlapping the rest of
         // the hangover. Its result is HELD until the turn is confirmed or superseded (see ReadLoopAsync).
-        try { await _engine.FlushAsync(spec.UtteranceId).ConfigureAwait(false); }
-        catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: speculative FlushAsync threw"); }
+        try
+        {
+            await _engine.FlushAsync(spec.UtteranceId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // The speculative flush never started — clear the pending flag so the eventual UserStopped does a
+            // classic flush instead of promoting (discarding) a turn that was never transcribed.
+            _logger.LogWarning(ex, "SpeechToTextProcessor: speculative FlushAsync threw; falling back to classic flush");
+            lock (_specLock) { if (_activeSpecId == spec.UtteranceId) _speculativePending = false; }
+        }
     }
 
     private async Task HandleUserStoppedAsync(UserStoppedSpeakingFrame frame, CancellationToken ct)
@@ -155,6 +164,13 @@ public sealed class SpeechToTextProcessor : FrameProcessor
             // Confirm ⇒ promote: the speculative pass IS this turn's transcription. Release its held final (or
             // mark the id confirmed so the read loop forwards it when it arrives), and drop the engine buffer
             // without a second transcription (no double STT pass).
+            //
+            // Cross-channel note: this runs on the priority/system loop while a resume's supersede is a
+            // data/control frame. If that supersede were still queued when this stop arrives, a stale partial
+            // could be promoted — but that needs the STT data loop backlogged behind an entire resumed
+            // utterance, which the only eager-capable engine (whisper.cpp, non-blocking buffer-append
+            // WriteAudioAsync) never is. A fully order-independent fix would data-order the confirm signal too;
+            // tracked as a follow-up.
             lock (_specLock)
             {
                 if (!_heldFinals.Remove(specId, out promoted)) { _confirmed.Add(specId); PruneLocked(); }

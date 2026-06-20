@@ -154,6 +154,9 @@ public class EchoReferenceTapProcessorTests
         tap.Start();
         sink.Start();
 
+        await tap.QueueFrameAsync(new BotStartedSpeakingFrame()); // bot turn begins → far-end feeding enabled
+        await sink.WaitForAsync(f => f is BotStartedSpeakingFrame, Timeout);
+
         var bot = new AudioRawFrame(new byte[] { 7, 8, 9, 10 }, 24000, 1);
         await tap.QueueFrameAsync(bot);
 
@@ -194,6 +197,33 @@ public class EchoReferenceTapProcessorTests
         Assert.True(fake.Resets >= 1);                                   // canceller was reset
         Assert.Contains(sink.Captured, f => f.GetType() == markerType);  // marker still forwarded
     }
+
+    [Fact]
+    public async Task Stale_Bot_Audio_After_Barge_In_Is_Not_Fed()
+    {
+        // VRT-003 (Codex P2): after a barge-in the sink purges queued bot audio; the tap must not feed that
+        // now-stale audio as a far-end reference (it is never actually played to the user).
+        var fake = new FakeEchoCanceller();
+        await using var tap = new EchoReferenceTapProcessor(fake);
+        await using var sink = new CapturingProcessor();
+        tap.Link(sink);
+        tap.Start();
+        sink.Start();
+
+        await tap.QueueFrameAsync(new BotStartedSpeakingFrame());
+        await sink.WaitForAsync(f => f is BotStartedSpeakingFrame, Timeout);
+        await tap.QueueFrameAsync(new AudioRawFrame(new byte[] { 1, 2 }, 24000, 1));        // played → fed
+        await sink.WaitForAsync(f => f is AudioRawFrame, Timeout);
+
+        await tap.QueueFrameAsync(new UserStartedSpeakingFrame());                          // barge-in
+        await sink.WaitForAsync(f => f is UserStartedSpeakingFrame, Timeout);
+        await tap.QueueFrameAsync(new AudioRawFrame(new byte[] { 3, 4, 5, 6 }, 24000, 1));  // stale → NOT fed
+        await tap.QueueFrameAsync(new BotStoppedSpeakingFrame());
+        await sink.WaitForAsync(f => f is BotStoppedSpeakingFrame, Timeout);
+
+        Assert.Contains("feed:2", fake.Calls);       // the played frame was fed
+        Assert.DoesNotContain("feed:4", fake.Calls); // the post-barge-in stale frame was not
+    }
 }
 
 public class SharedCancellerTests
@@ -218,6 +248,9 @@ public class SharedCancellerTests
         farEnd.Link(farSink);
         farEnd.Start();
         farSink.Start();
+
+        await farEnd.QueueFrameAsync(new BotStartedSpeakingFrame()); // enable far-end feeding on the tap
+        await farSink.WaitForAsync(f => f is BotStartedSpeakingFrame, Timeout);
 
         await nearEnd.QueueFrameAsync(new AudioRawFrame(new byte[] { 1, 2 }, 16000, 1));     // mic
         await farEnd.QueueFrameAsync(new AudioRawFrame(new byte[] { 3, 4, 5 }, 16000, 1));   // bot

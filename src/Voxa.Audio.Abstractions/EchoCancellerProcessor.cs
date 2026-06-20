@@ -55,6 +55,11 @@ public sealed class EchoCancellerProcessor : FrameProcessor
 public sealed class EchoReferenceTapProcessor : FrameProcessor
 {
     private readonly IEchoCanceller _aec;
+    // Only feed far-end while the bot is actually speaking. Set on BotStartedSpeakingFrame (system/priority),
+    // read on the data loop for AudioRawFrame — volatile for cross-loop visibility. After a barge-in the
+    // priority marker clears this before the data loop drains the now-stale queued bot audio, so that audio
+    // (which the sink's epoch purge will drop and never play) is not fed as a reference.
+    private volatile bool _botSpeaking;
 
     public EchoReferenceTapProcessor(IEchoCanceller aec) : base("EchoReferenceTap")
         => _aec = aec ?? throw new ArgumentNullException(nameof(aec));
@@ -63,12 +68,17 @@ public sealed class EchoReferenceTapProcessor : FrameProcessor
     {
         switch (frame)
         {
-            case AudioRawFrame audio:
+            case AudioRawFrame audio when _botSpeaking:
                 _aec.FeedReference(audio.Pcm); // observe the bot's outbound audio as the far-end reference
+                break;
+            case BotStartedSpeakingFrame:
+                _botSpeaking = true;
+                _aec.Reset();                  // fresh far-end for the new bot turn
                 break;
             case UserStartedSpeakingFrame:  // barge-in marker the upstream near-end stage can't see
             case InterruptionFrame:         // explicit interruption epoch
             case BotStoppedSpeakingFrame:   // bot turn ended — the far-end stream is done
+                _botSpeaking = false;       // stop feeding now-stale queued bot audio
                 _aec.Reset();               // drop stale far-end so it isn't subtracted from the next turn's mic
                 break;
         }
