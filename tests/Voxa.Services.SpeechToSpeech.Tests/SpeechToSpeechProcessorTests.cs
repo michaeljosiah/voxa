@@ -157,6 +157,11 @@ public class SpeechToSpeechProcessorTests
         await using (h.Runner)
         {
             await h.Runner.StartAsync();
+            // The InterruptionFrame is a SystemFrame (priority channel), while the StartFrame that drives
+            // OnStartAsync is a data-channel frame — they race. Wait until OnStartAsync has created and
+            // configured the session (Voice set) before sending the interruption; otherwise OnInterruptionAsync
+            // can run while `_session` is still null and correctly no-op, leaving CancelCount at 0.
+            await WaitUntil(() => h.Session.Voice is not null, WaitTimeout);
             await h.Pipeline.Source.IngestAsync(new InterruptionFrame());
 
             await WaitUntil(() => h.Session.CancelCount > 0, WaitTimeout);
