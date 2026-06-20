@@ -76,3 +76,14 @@ AEC stage and no tap, so the composed pipeline is byte-identical to today. A rea
 separate opt-in `Voxa.Audio.Aec.*` package (WebRTC APM / SpeexDSP / managed); reference it and set
 `Voxa:Aec:Engine` to its registered name to enable it. Buffering, frame alignment, and resampling between the
 far-end and near-end streams are the implementation's responsibility — the seam stays deliberately simple.
+
+### Speech enhancement / denoise seam (VLS-004)
+
+On the **local** STT tier, a noisy fan or reverberant room degrades transcription (cloud vendors denoise
+server-side; the on-device path doesn't). Voxa ships the **seam**: `IAudioEnhancer` in `Voxa.Audio.Abstractions`
+(`Enhance(pcm) → pcm`, same length/rate/channels), a `NullAudioEnhancer` passthrough, and an
+`AudioEnhancerProcessor` placed **after the AEC stage and before the VAD** so detection and STT both see the
+cleaned signal. Default (`Voxa:Enhance:Engine` unset / `None`) inserts **no** stage — byte-identical to today,
+and zero cost. A real denoiser (the reference is DeepFilterNet3 on ONNX Runtime, in-process like Silero/Kokoro)
+ships as a separate opt-in `Voxa.Audio.Enhance` follow-up; enabling it adds a real per-frame denoise pass whose
+cost shows up directly in Studio's latency waterfall — you pay for it only when you turn it on.

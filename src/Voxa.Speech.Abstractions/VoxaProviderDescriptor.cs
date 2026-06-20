@@ -170,3 +170,28 @@ public sealed record VoxaAecSettings(int SampleRate, int FarEndSampleRate);
 public sealed record VoxaAecDescriptor(
     string Name,
     Func<IServiceProvider, VoxaAecSettings, FrameProcessor> CreateProcessor);
+
+/// <summary>
+/// Settings the composer resolves and hands the enhancer factory (VLS-004): the effective route
+/// (near-end / STT-input) sample rate the stage runs at — the composer's resolved <c>inputSampleRate</c>, which
+/// already honours per-provider STT overrides. A provider builds (or resamples) its model to this rate so the
+/// <c>AudioEnhancerProcessor</c>'s per-frame rate check matches instead of failing on the first mic frame.
+/// </summary>
+public sealed record VoxaEnhancerSettings(int SampleRate);
+
+/// <summary>
+/// Self-description of a speech-enhancement (denoise) provider (VLS-004). The <c>CreateProcessor(sp, settings,
+/// root)</c> factory builds the before-VAD <c>AudioEnhancerProcessor</c>: <paramref name="CreateProcessor"/>
+/// receives the resolved <see cref="VoxaEnhancerSettings"/> (the effective route rate, like VAD/AEC) AND the
+/// captured <c>"Voxa"</c> root section for its own config (model path/options) — never service-locate
+/// <see cref="IConfiguration"/>. <see cref="WarmUpAsync"/> is the optional startup hook a real ONNX engine uses
+/// to resolve + load its model so the first caller pays no download (cf. the local STT/TTS descriptors).
+/// </summary>
+public sealed record VoxaEnhancerDescriptor(
+    string Name,
+    Func<IConfigurationSection, IReadOnlyList<string>> Validate,
+    Func<IServiceProvider, VoxaEnhancerSettings, IConfigurationSection, FrameProcessor> CreateProcessor)
+{
+    /// <summary>Optional startup warm-up — see <see cref="VoxaSttDescriptor.WarmUpAsync"/>.</summary>
+    public Func<IServiceProvider, IConfigurationSection, CancellationToken, Task>? WarmUpAsync { get; init; }
+}
