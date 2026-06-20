@@ -154,9 +154,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   smart-turn rule). In the **Builder**, smart turn (a VAD modifier) and the pre-VAD cleanup now **round-trip**:
   "Open in Builder" and the appsettings export preserve `Voxa:SmartTurn:*` / `Voxa:Aec:Engine` /
   `Voxa:Enhance:Engine` (they ride the VAD and Mic nodes), the nodes show a `· smart turn` /
-  `· AEC … · denoise …` badge, and a **canvas run actually inserts** the AEC/denoise processors before the
-  VAD (with the far-end tap after TTS), mirroring `DefaultVoicePipelineComposer`, so the live experiment
-  matches the drawn chain instead of feeding raw mic audio.
+  `· AEC … · denoise …` badge, and both a **canvas run** and the **C# export** actually insert the
+  AEC/denoise processors before the VAD (with the far-end tap after TTS), mirroring
+  `DefaultVoicePipelineComposer`. Cleanup is read from the drawn graph (the Mic node), so the run follows the
+  canvas instead of inheriting a base-config engine or feeding raw mic audio.
 - **Voxa Studio: Config scrolls instead of clipping.** When the Config page's stacked option cards (Whisper
   + agent + cloud-voice + smart-turn, etc.) grew taller than the window, the lower cards and the **Apply**
   button were simply cut off — you had to drag the window taller or maximize to reach them. The selection

@@ -9,14 +9,15 @@ using Voxa.Studio.Services;
 namespace Voxa.Studio.Tests;
 
 /// <summary>
-/// The canvas-run compiler must apply the input cleanup it advertises (codex P2): when an AEC / denoise
-/// engine is registered and selected, <see cref="BuilderChainCompiler.Compile"/> inserts the near-end AEC
-/// + enhancer before the VAD and the far-end reference tap after TTS — mirroring DefaultVoicePipelineComposer
-/// — so the live experiment matches the drawn chain. With none configured it's byte-identical to before.
+/// The canvas-run compiler and C# exporter must apply the input cleanup the chain advertises (codex P2s):
+/// AEC/denoise are read from the DRAWN graph (the Source node) — not the layered config — so the near-end
+/// processors run before the VAD and the far-end tap after TTS (mirroring DefaultVoicePipelineComposer), a
+/// graph with no cleanup never inherits a base-config engine, and a custom-shape C# export carries it too.
 /// </summary>
 public class BuilderCleanupCompileTests
 {
-    private static IReadOnlyList<BuilderNode> DefaultChain()
+    // A default-shape chain; cleanup rides the Source (mic) node, the way SeedFromPairs places it.
+    private static IReadOnlyList<BuilderNode> Chain(string? aec = null, string? enhance = null)
     {
         var nodes = new List<BuilderNode>();
         BuilderNode Add(BuilderNodeKind kind, string? provider)
@@ -25,7 +26,9 @@ public class BuilderCleanupCompileTests
             nodes.Add(node);
             return node;
         }
-        Add(BuilderNodeKind.Source, null);
+        var source = Add(BuilderNodeKind.Source, null);
+        if (aec is not null) source.Options["AecEngine"] = aec;
+        if (enhance is not null) source.Options["EnhanceEngine"] = enhance;
         Add(BuilderNodeKind.Vad, "Silero");
         Add(BuilderNodeKind.Stt, "WhisperCpp").Options["Model"] = "tiny.en";
         Add(BuilderNodeKind.Filter, null);
@@ -34,6 +37,13 @@ public class BuilderCleanupCompileTests
         Add(BuilderNodeKind.Tts, "Piper").Options["Voice"] = "en_US-amy-low";
         Add(BuilderNodeKind.Sink, null);
         return nodes;
+    }
+
+    private static BuilderGraph GraphOf(IReadOnlyList<BuilderNode> chain)
+    {
+        var graph = new BuilderGraph();
+        graph.Nodes.AddRange(chain);
+        return graph;
     }
 
     private static ServiceProvider Provider(params (string Key, string? Value)[] extra)
@@ -66,9 +76,9 @@ public class BuilderCleanupCompileTests
     [Fact]
     public void Compile_Inserts_Aec_Denoise_Before_The_Vad_And_The_Far_End_Tap()
     {
-        using var provider = Provider(("Voxa:Aec:Engine", "WebRtc"), ("Voxa:Enhance:Engine", "FakeEnh"));
+        using var provider = Provider();
         var compiled = BuilderChainCompiler.Compile(
-            provider, provider.GetRequiredService<IConfiguration>(), DefaultChain());
+            provider, provider.GetRequiredService<IConfiguration>(), Chain("WebRtc", "FakeEnh"));
 
         using var scope = provider.CreateScope();
         var sp = scope.ServiceProvider;
@@ -80,13 +90,44 @@ public class BuilderCleanupCompileTests
     [Fact]
     public void Compile_Without_Cleanup_Adds_No_Extra_Parts()
     {
-        using var with = Provider(("Voxa:Aec:Engine", "WebRtc"), ("Voxa:Enhance:Engine", "FakeEnh"));
-        using var without = Provider();
-
-        var enabled = BuilderChainCompiler.Compile(with, with.GetRequiredService<IConfiguration>(), DefaultChain());
-        var plain = BuilderChainCompiler.Compile(without, without.GetRequiredService<IConfiguration>(), DefaultChain());
+        using var provider = Provider();
+        var enabled = BuilderChainCompiler.Compile(
+            provider, provider.GetRequiredService<IConfiguration>(), Chain("WebRtc", "FakeEnh"));
+        var plain = BuilderChainCompiler.Compile(
+            provider, provider.GetRequiredService<IConfiguration>(), Chain());
 
         // The default chain gains exactly three parts when cleanup is on: AEC + denoise + far-end tap.
         Assert.Equal(enabled.Parts.Count - 3, plain.Parts.Count);
+    }
+
+    [Fact] // codex round 3: a graph with no Source cleanup must follow the canvas, not inherit a base engine.
+    public void Compile_Reads_Cleanup_From_The_Source_Node_Not_The_Base_Config()
+    {
+        using var baseHasAec = Provider(("Voxa:Aec:Engine", "WebRtc"), ("Voxa:Enhance:Engine", "FakeEnh"));
+        using var noBase = Provider();
+
+        var inherited = BuilderChainCompiler.Compile(
+            baseHasAec, baseHasAec.GetRequiredService<IConfiguration>(), Chain()); // Source has no cleanup
+        var baseline = BuilderChainCompiler.Compile(
+            noBase, noBase.GetRequiredService<IConfiguration>(), Chain());
+
+        Assert.Equal(baseline.Parts.Count, inherited.Parts.Count); // base-config cleanup did not leak into the run
+    }
+
+    [Fact] // codex round 3: a custom-shape C# export must carry the Source node's cleanup.
+    public void GenerateCSharp_Emits_Source_Node_Cleanup()
+    {
+        var withCleanup = Chain("WebRtc", "FakeEnh");
+        var code = BuilderChainCompiler.GenerateCSharp(GraphOf(withCleanup), withCleanup);
+
+        Assert.Contains("TryGetAec(\"WebRtc\"", code);
+        Assert.Contains("TryGetEnhancer(\"FakeEnh\"", code);
+        Assert.Contains("EchoReferenceTapProcessor", code);   // far-end tap
+        Assert.Contains("using Voxa.Audio;", code);           // for the tap + IEchoCanceller
+
+        var plain = Chain();
+        var plainCode = BuilderChainCompiler.GenerateCSharp(GraphOf(plain), plain);
+        Assert.DoesNotContain("TryGetAec", plainCode);
+        Assert.DoesNotContain("EchoReferenceTapProcessor", plainCode);
     }
 }
