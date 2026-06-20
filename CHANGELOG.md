@@ -144,6 +144,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
+  input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
+  **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they
+  only ever offer engines that are actually registered — stock Studio bundles none, so the card shows just
+  **None** and a note on how to drop in an external `Voxa.Audio.Aec.*` / `Voxa.Audio.Enhance.*` provider; a
+  selected engine writes `Voxa:Aec:Engine` / `Voxa:Enhance:Engine`. In the **Builder**, smart turn (a VAD
+  modifier) and the pre-VAD cleanup now **round-trip**: "Open in Builder" and the appsettings export preserve
+  `Voxa:SmartTurn:*` / `Voxa:Aec:Engine` / `Voxa:Enhance:Engine` (they ride the VAD and Mic nodes), and the
+  nodes show a `· smart turn` / `· AEC … · denoise …` badge so the chain states what it does at a glance.
 - **Voxa Studio: Smart turn detection toggle (Config).** The Config view gains a **Smart turn detection**
   card — flip it on, pick a classifier (**Sidecar**, the real local `pipecat-ai/smart-turn-v3` via Python,
   or **Http**, a model server), and the next Talk session asks "is the user actually done?" at the silence

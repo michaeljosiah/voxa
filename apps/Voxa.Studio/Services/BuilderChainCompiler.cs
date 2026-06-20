@@ -43,6 +43,16 @@ internal static class BuilderChainCompiler
         if (!string.Equals(graph.Profile, "Default", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Profile"] = graph.Profile;
 
+        // Pre-VAD input cleanup rides the Source (mic) node — round-trips with the Config view's AEC/denoise.
+        var source = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Source);
+        if (source is not null)
+        {
+            if (source.Options.TryGetValue("AecEngine", out var aec) && !string.IsNullOrWhiteSpace(aec))
+                pairs["Voxa:Aec:Engine"] = aec;
+            if (source.Options.TryGetValue("EnhanceEngine", out var enhance) && !string.IsNullOrWhiteSpace(enhance))
+                pairs["Voxa:Enhance:Engine"] = enhance;
+        }
+
         var vad = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Vad);
         pairs["Voxa:Vad:Engine"] = vad?.Provider ?? "None";
         if (vad is not null)
@@ -51,6 +61,14 @@ internal static class BuilderChainCompiler
                 pairs["Voxa:Vad:ConfidenceThreshold"] = threshold;
             if (vad.Options.TryGetValue("StopDurationMs", out var stop))
                 pairs["Voxa:Vad:StopDurationMs"] = stop;
+            // Smart turn rides the VAD node — emit the classifier block so the export/profile carries it.
+            if (vad.Options.TryGetValue("SmartTurnProvider", out var stProvider) && !string.IsNullOrWhiteSpace(stProvider))
+            {
+                pairs["Voxa:SmartTurn:Provider"] = stProvider;
+                if (vad.Options.TryGetValue("SmartTurnEndpoint", out var ep)) pairs["Voxa:SmartTurn:Endpoint"] = ep;
+                if (vad.Options.TryGetValue("SmartTurnPythonExe", out var px)) pairs["Voxa:SmartTurn:PythonExe"] = px;
+                if (vad.Options.TryGetValue("SmartTurnPythonScript", out var ps)) pairs["Voxa:SmartTurn:PythonScript"] = ps;
+            }
         }
 
         foreach (var node in chain)
