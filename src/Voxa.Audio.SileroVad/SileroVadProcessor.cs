@@ -31,6 +31,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly ILogger _logger;
 
     private readonly List<float> _samples = new();
+    private int _sampleStart;           // read cursor into _samples; the consumed prefix is compacted lazily (CQ-005)
     private readonly float[] _window;   // reusable scratch for one inference window; never escapes into a frame
     private readonly TimeSpan _windowDuration;
     private bool _isSpeaking;
@@ -122,13 +123,13 @@ public sealed class SileroVadProcessor : FrameProcessor
             _samples.Add(s / 32768f);
         }
 
-        while (_samples.Count >= _windowSize)
+        while (_samples.Count - _sampleStart >= _windowSize)
         {
             // Reused scratch buffer — this window feeds inference + RMS only and never escapes
             // into a downstream frame, so it's safe to overwrite each iteration.
             var window = _window;
-            _samples.CopyTo(0, window, 0, _windowSize);
-            _samples.RemoveRange(0, _windowSize);
+            _samples.CopyTo(_sampleStart, window, 0, _windowSize);
+            _sampleStart += _windowSize; // advance the read cursor instead of memmoving the tail (CQ-005)
 
             float prob = _probabilityOverride?.Invoke(window) ?? _engine!.Probability(window);
             double rms = ComputeRms(window);
@@ -300,6 +301,15 @@ public sealed class SileroVadProcessor : FrameProcessor
                 _preroll.Enqueue(pcmOut);
                 while (_preroll.Count > _prerollWindows) _preroll.Dequeue();
             }
+        }
+
+        // Compact the consumed prefix in one shift, and only once it has grown past a few windows —
+        // instead of memmoving the tail on every window as the old RemoveRange(0, _windowSize) did (CQ-005).
+        // The pending leftover is always < _windowSize, so each compaction moves at most a bounded amount.
+        if (_sampleStart >= _windowSize * 8)
+        {
+            _samples.RemoveRange(0, _sampleStart);
+            _sampleStart = 0;
         }
     }
 
