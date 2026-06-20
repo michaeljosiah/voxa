@@ -35,6 +35,7 @@ public sealed class SileroVadProcessor : FrameProcessor
     private readonly float[] _window;   // reusable scratch for one inference window; never escapes into a frame
     private readonly TimeSpan _windowDuration;
     private bool _isSpeaking;
+    private bool _engineDisposed; // guard: dispose the engine exactly once across OnEndAsync + DisposeAsyncCore (CQ-003)
     private TimeSpan _voicedAccum = TimeSpan.Zero;
     private TimeSpan _unvoicedAccum = TimeSpan.Zero;
 
@@ -339,7 +340,23 @@ public sealed class SileroVadProcessor : FrameProcessor
 
     protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
     {
-        _engine?.Dispose();
+        DisposeEngine();
         return ValueTask.CompletedTask;
+    }
+
+    // Also release the ORT-owning engine on the actual disposal path (CQ-003): an abrupt teardown (client
+    // disconnect, no EndFrame) would otherwise leak the InferenceSession. The _engineDisposed guard makes this
+    // idempotent with OnEndAsync (the _engine field is readonly, so it can't be nulled out) — disposed once.
+    protected override ValueTask DisposeAsyncCore()
+    {
+        DisposeEngine();
+        return ValueTask.CompletedTask;
+    }
+
+    private void DisposeEngine()
+    {
+        if (_engineDisposed) return;
+        _engineDisposed = true;
+        _engine?.Dispose();
     }
 }

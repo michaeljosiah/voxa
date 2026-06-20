@@ -40,7 +40,14 @@ public sealed class TextToSpeechProcessor : FrameProcessor
         await _engine.StartAsync(ct).ConfigureAwait(false);
     }
 
-    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct) => DisposeEngineAsync();
+
+    // Release the engine on the actual disposal path too (CQ-003): an abrupt teardown (client disconnect, no
+    // EndFrame) would otherwise leak it. Idempotent (null-out), and runs after the loops stop so it never
+    // races OnEndAsync — the graceful path calls it twice, the second a no-op.
+    protected override ValueTask DisposeAsyncCore() => DisposeEngineAsync();
+
+    private async ValueTask DisposeEngineAsync()
     {
         if (_engine is not null)
         {

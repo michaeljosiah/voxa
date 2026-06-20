@@ -34,6 +34,22 @@ public class SpeechToTextProcessorTests
     }
 
     [Fact]
+    public async Task Disposing_Without_An_EndFrame_Stops_And_Disposes_The_Engine()
+    {
+        // CQ-003: an abrupt teardown (client disconnect, no EndFrame) must still stop + dispose the STT engine
+        // via DisposeAsyncCore — not only OnEndAsync — so whisper.cpp handles / sidecars / HTTP sessions don't leak.
+        var (runner, engine, _, _) = Build();
+        await runner.StartAsync();
+        await Task.Delay(60);
+        Assert.True(engine.Started); // OnStartAsync created + started the engine
+
+        await runner.DisposeAsync(); // abrupt: no EndFrame is ever injected
+
+        Assert.True(engine.Stopped);
+        Assert.True(engine.Disposed);
+    }
+
+    [Fact]
     public async Task AudioRawFrame_Is_Written_To_Engine_And_Not_Forwarded()
     {
         var (runner, engine, captured, pipeline) = Build();
