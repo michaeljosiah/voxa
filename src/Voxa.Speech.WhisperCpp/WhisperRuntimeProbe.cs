@@ -69,9 +69,13 @@ public static class WhisperRuntimeProbe
             : OperatingSystem.IsMacOS() ? "macos"
             : OperatingSystem.IsLinux() ? "linux"
             : null;
-        var arch = RuntimeInformation.OSArchitecture switch
+        // ProcessArchitecture, NOT OSArchitecture: native loadability follows the PROCESS bitness, not the OS's.
+        // A 32-bit process on x64 Windows must read win-x86 (and find a GPU runtime absent), and an x64 process
+        // emulated on Windows ARM64 must read win-x64 (matching the deployed assets) — OSArchitecture gets both wrong.
+        var arch = RuntimeInformation.ProcessArchitecture switch
         {
             Architecture.X64 => "x64",
+            Architecture.X86 => "x86",
             Architecture.Arm64 => "arm64",
             Architecture.Arm => "arm",
             _ => null,
