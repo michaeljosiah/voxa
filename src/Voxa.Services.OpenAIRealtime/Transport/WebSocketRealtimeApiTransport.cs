@@ -69,7 +69,7 @@ public sealed class WebSocketRealtimeApiTransport : IRealtimeApiTransport
     public async IAsyncEnumerable<string> ReadEventsAsync([EnumeratorCancellation] CancellationToken ct)
     {
         var buffer = new byte[16 * 1024];
-        var sb = new StringBuilder();
+        using var message = new MemoryStream();
 
         while (!ct.IsCancellationRequested && _ws.State == WebSocketState.Open)
         {
@@ -85,11 +85,14 @@ public sealed class WebSocketRealtimeApiTransport : IRealtimeApiTransport
 
             if (result.MessageType == WebSocketMessageType.Close) yield break;
 
-            sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+            // Accumulate raw bytes and decode the COMPLETE message once at EndOfMessage. Decoding each
+            // fragment separately (the old per-fragment GetString) corrupts a multi-byte UTF-8 sequence the
+            // transport splits across two receives — plausible for large base64 audio payloads (CQ-006).
+            message.Write(buffer, 0, result.Count);
             if (result.EndOfMessage)
             {
-                var msg = sb.ToString();
-                sb.Clear();
+                var msg = Encoding.UTF8.GetString(message.GetBuffer(), 0, (int)message.Length);
+                message.SetLength(0);
                 yield return msg;
             }
         }

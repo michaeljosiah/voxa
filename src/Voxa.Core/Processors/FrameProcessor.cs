@@ -33,6 +33,7 @@ public abstract class FrameProcessor : IAsyncDisposable
     private CancellationTokenSource? _currentFrameCts;
     private Task? _systemTask;
     private Task? _dataTask;
+    private CancellationTokenSource? _linkedCts; // links _processorCts + the external token; disposed in DisposeAsync (CQ-010)
     private int _started;
     private int _disposed;
 
@@ -82,8 +83,8 @@ public abstract class FrameProcessor : IAsyncDisposable
             throw new InvalidOperationException($"FrameProcessor '{Name}' is already started.");
         }
 
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(_processorCts.Token, externalCt);
-        var token = linked.Token;
+        _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_processorCts.Token, externalCt);
+        var token = _linkedCts.Token;
         _systemTask = Task.Run(() => RunSystemLoopAsync(token), token);
         _dataTask = Task.Run(() => RunDataLoopAsync(token), token);
     }
@@ -236,6 +237,9 @@ public abstract class FrameProcessor : IAsyncDisposable
         // with `new` would be skipped on that base-typed path (CQ-001).
         await DisposeAsyncCore().ConfigureAwait(false);
 
+        // Dispose the linked CTS created in Start (CQ-010): as a local it was never disposed, leaking its
+        // registration on the external token for the processor's lifetime. Safe now — the loops have stopped.
+        _linkedCts?.Dispose();
         _processorCts.Dispose();
         GC.SuppressFinalize(this);
     }
