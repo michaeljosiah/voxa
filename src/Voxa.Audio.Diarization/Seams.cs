@@ -50,8 +50,11 @@ public interface IDiarizer
 }
 
 /// <summary>
-/// A contiguous span attributed to one clustered speaker. <see cref="Speaker"/> is a 0-based id, stable per
-/// run (the earliest-starting speaker is 0) but arbitrary across recordings — diarization answers "same or
-/// different speaker", not "which named person" (that is speaker identification, a follow-up).
+/// One speaker's turn: a span <c>[Start, End)</c> in absolute seconds attributed to one clustered speaker.
+/// Consecutive same-speaker regions are merged, so a segment may contain internal pauses (silence or a dropped
+/// sub-<see cref="DiarizerConfig.MinSpeechDuration"/> blip) — it is a turn, not necessarily one uninterrupted
+/// utterance. <see cref="Speaker"/> is a 0-based id, stable per run (the earliest-starting speaker is 0) but
+/// arbitrary across recordings — diarization answers "same or different speaker", not "which named person"
+/// (that is speaker identification, a follow-up).
 /// </summary>
 public sealed record DiarizedSegment(double Start, double End, int Speaker);

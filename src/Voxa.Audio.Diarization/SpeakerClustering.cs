@@ -3,9 +3,13 @@ namespace Voxa.Audio.Diarization;
 /// <summary>
 /// Constrained agglomerative clustering of speaker embeddings by cosine distance (VLS-005 WS1) — the
 /// pure-vector-math core of <see cref="DiarizationPipeline"/>, with no model runtime and no I/O, so it is
-/// exercised directly on synthetic embeddings in the default test lane. Average-linkage: clusters merge while
-/// their mean pairwise cosine distance is below the threshold; the count bounds (when &gt; 0) override the
-/// threshold to guarantee a floor / cap.
+/// exercised directly on synthetic embeddings in the default test lane.
+///
+/// <para><b>Centroid linkage:</b> a cluster's representative is the mean of its member vectors, and two
+/// clusters' distance is the cosine distance between those means. This matches the linkage that speech-core /
+/// pyannote calibrate their default <see cref="DiarizerConfig.ClusteringThreshold"/> (0.715) against — so the
+/// borrowed threshold means what it does upstream. Clusters merge while the closest pair is below the
+/// threshold; the count bounds (when &gt; 0) override the threshold to guarantee a floor / cap.</para>
 /// </summary>
 internal static class SpeakerClustering
 {
@@ -18,6 +22,11 @@ internal static class SpeakerClustering
     /// <param name="threshold">Cosine-distance merge ceiling (<see cref="DiarizerConfig.ClusteringThreshold"/>).</param>
     /// <param name="minSpeakers">Lower bound on cluster count; never merge below it. <c>0</c> = no floor.</param>
     /// <param name="maxSpeakers">Upper bound on cluster count; keep merging past the threshold to reach it. <c>0</c> = no cap.</param>
+    /// <remarks>
+    /// If the bounds contradict (<c>0 &lt; maxSpeakers &lt; minSpeakers</c>) the floor wins — the loop stops at
+    /// <paramref name="minSpeakers"/> clusters even though that exceeds the cap (an impossible request resolves
+    /// to "at least minSpeakers" rather than throwing).
+    /// </remarks>
     public static int[] Cluster(
         IReadOnlyList<float[]> embeddings, double threshold, int minSpeakers, int maxSpeakers)
     {
@@ -26,45 +35,46 @@ internal static class SpeakerClustering
         if (n == 0) return [];
         if (n == 1) return [0];
 
-        // Precompute the symmetric pairwise cosine-distance matrix once.
-        var dist = new double[n, n];
+        // Active clusters: member indices (for labels) + the running centroid (for the linkage distance).
+        var members = new List<List<int>>(n);
+        var centroids = new List<float[]>(n);
         for (int i = 0; i < n; i++)
-            for (int j = i + 1; j < n; j++)
-                dist[i, j] = dist[j, i] = CosineDistance(embeddings[i], embeddings[j]);
-
-        // Active clusters as lists of original member indices; merge the closest pair each round.
-        var clusters = new List<List<int>>(n);
-        for (int i = 0; i < n; i++) clusters.Add([i]);
-
-        while (clusters.Count > 1)
         {
-            // Never merge below the requested floor.
-            if (minSpeakers > 0 && clusters.Count <= minSpeakers) break;
-
-            var (a, b, best) = ClosestPair(clusters, dist);
-
-            // Past the threshold we stop — unless we still exceed the cap, in which case we must keep merging.
-            bool overCap = maxSpeakers > 0 && clusters.Count > maxSpeakers;
-            if (best >= threshold && !overCap) break;
-
-            clusters[a].AddRange(clusters[b]);
-            clusters.RemoveAt(b);
+            members.Add([i]);
+            centroids.Add(embeddings[i]); // read-only until merged, which replaces the slot with a fresh array
         }
 
-        return AssignStableLabels(clusters, n);
+        while (members.Count > 1)
+        {
+            // Never merge below the requested floor (this is checked first, so it wins a contradictory cap).
+            if (minSpeakers > 0 && members.Count <= minSpeakers) break;
+
+            var (a, b, best) = ClosestPair(centroids);
+
+            // Past the threshold we stop — unless we still exceed the cap, in which case we must keep merging.
+            bool overCap = maxSpeakers > 0 && members.Count > maxSpeakers;
+            if (best >= threshold && !overCap) break;
+
+            centroids[a] = WeightedMean(centroids[a], members[a].Count, centroids[b], members[b].Count);
+            members[a].AddRange(members[b]);
+            members.RemoveAt(b);
+            centroids.RemoveAt(b);
+        }
+
+        return AssignStableLabels(members, n);
     }
 
-    // The two clusters with the smallest average-linkage distance. Ties resolve to the lexicographically
-    // smallest (a, b) because the scan is in index order and uses a strict "<", keeping merges deterministic.
-    private static (int A, int B, double Distance) ClosestPair(List<List<int>> clusters, double[,] dist)
+    // The two clusters whose centroids are closest. Ties resolve to the lexicographically smallest (a, b)
+    // because the scan is in index order and uses a strict "<", keeping merges deterministic.
+    private static (int A, int B, double Distance) ClosestPair(List<float[]> centroids)
     {
         double best = double.MaxValue;
         int bestA = 0, bestB = 1;
-        for (int a = 0; a < clusters.Count; a++)
+        for (int a = 0; a < centroids.Count; a++)
         {
-            for (int b = a + 1; b < clusters.Count; b++)
+            for (int b = a + 1; b < centroids.Count; b++)
             {
-                double d = AverageLinkage(clusters[a], clusters[b], dist);
+                double d = CosineDistance(centroids[a], centroids[b]);
                 if (d < best)
                 {
                     best = d;
@@ -76,13 +86,15 @@ internal static class SpeakerClustering
         return (bestA, bestB, best);
     }
 
-    private static double AverageLinkage(List<int> a, List<int> b, double[,] dist)
+    // The mean of the two clusters' combined members, computed as the count-weighted mean of their centroids
+    // (exact: centroid·count = the member sum, so this is the sum of all members over the total count).
+    private static float[] WeightedMean(float[] a, int countA, float[] b, int countB)
     {
-        double sum = 0;
-        foreach (int x in a)
-            foreach (int y in b)
-                sum += dist[x, y];
-        return sum / (a.Count * b.Count);
+        var merged = new float[a.Length];
+        int total = countA + countB;
+        for (int k = 0; k < merged.Length; k++)
+            merged[k] = (a[k] * countA + b[k] * countB) / total;
+        return merged;
     }
 
     // Label clusters 0..k-1 ordered by their earliest member index, then write each member's label.

@@ -117,6 +117,47 @@ public class DiarizationPipelineTests
         Assert.Throws<ArgumentOutOfRangeException>(() => pipeline.Diarize(audio, 0, new DiarizerConfig()));
     }
 
+    [Fact]
+    public void Min_speakers_floors_the_diarized_count()
+    {
+        // Two identical-marker regions would cluster to one speaker; MinSpeakers=2 forces two.
+        var audio = BuildAudio((1, 0.0, 1.0), (1, 1.0, 2.0));
+        var pipeline = Pipeline(Window(2.0, R(0, 1), R(1, 2)));
+
+        var result = pipeline.Diarize(audio, SampleRate, new DiarizerConfig { MinSpeakers = 2 });
+
+        Assert.Equal(2, result.Select(s => s.Speaker).Distinct().Count());
+    }
+
+    [Fact]
+    public void Same_speaker_regions_across_a_gap_merge_into_one_turn()
+    {
+        // [0,1] and [3,4] are one speaker with 2 s of silence between (no region there). The documented turn
+        // semantics collapse them into a single gap-spanning segment.
+        var audio = BuildAudio((1, 0.0, 1.0), (1, 3.0, 4.0));
+        var pipeline = Pipeline(Window(4.0, R(0, 1), R(3, 4)));
+
+        var result = pipeline.Diarize(audio, SampleRate, new DiarizerConfig());
+
+        Assert.Single(result);
+        Assert.Equal(0.0, result[0].Start, 3);
+        Assert.Equal(4.0, result[0].End, 3);
+    }
+
+    [Fact]
+    public void Regions_past_the_audio_buffer_are_dropped()
+    {
+        // The second region lands entirely past the 1 s of audio → zero-length slice → dropped, not embedded.
+        var audio = BuildAudio((1, 0.0, 1.0));
+        var pipeline = Pipeline(Window(6.0, R(0, 1), R(5, 6)));
+
+        var result = pipeline.Diarize(audio, SampleRate, new DiarizerConfig());
+
+        Assert.Single(result);
+        Assert.Equal(0.0, result[0].Start, 3);
+        Assert.Equal(1.0, result[0].End, 3);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static DiarizationPipeline Pipeline(params SegmentationWindow[] windows)

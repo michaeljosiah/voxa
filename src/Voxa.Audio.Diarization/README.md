@@ -9,7 +9,9 @@ This package ships the **seams + a pure-C# pipeline** — not a model:
 - **`ISpeakerEmbedding`** — a speech span → a fixed-width speaker vector (model-backed; e.g. WeSpeaker).
 - **`IDiarizer`** / **`DiarizationPipeline`** — the orchestrator. The pipeline composes a segmenter + an
   embedder and does the rest in **pure C#**: form regions → embed each → **constrained agglomerative
-  clustering by cosine distance** → stable speaker ids, with consecutive same-speaker regions merged.
+  clustering by cosine distance (centroid linkage)** → stable speaker ids, with consecutive same-speaker
+  regions merged into one turn. Centroid linkage matches what speech-core / pyannote calibrate the `0.715`
+  default threshold against.
 - **`DiarizerConfig`** — tunables, defaulted to speech-core's values. The one that matters is
   `ClusteringThreshold` (cosine-distance merge ceiling, default `0.715`); `MinSpeakers` / `MaxSpeakers`
   (`0` = auto) force a floor / cap.

@@ -30,20 +30,26 @@ public sealed class DiarizationPipeline : IDiarizer
         var regions = FormRegions(_segmentation.Segment(audio, sampleRate), config.MinSpeechDuration);
         if (regions.Count == 0) return [];
 
-        // 2. One embedding per region — slice the region's audio out of the full span.
+        // 2. One embedding per region — slice the region's audio out of the full span. A region whose rounded
+        //    sample range is empty (it lands at/past the end of the buffer) has nothing to embed, so drop it
+        //    here rather than hand the embedder a zero-length span; keptRegions stays aligned with the labels.
+        var keptRegions = new List<SpeechRegion>(regions.Count);
         var embeddings = new List<float[]>(regions.Count);
         foreach (var region in regions)
         {
             var (offset, length) = ToSampleRange(region, sampleRate, audio.Length);
+            if (length == 0) continue;
+            keptRegions.Add(region);
             embeddings.Add(_embedding.Embed(audio.Slice(offset, length), sampleRate));
         }
+        if (embeddings.Count == 0) return [];
 
         // 3. Cluster the embeddings into stable speaker labels.
         var labels = SpeakerClustering.Cluster(
             embeddings, config.ClusteringThreshold, config.MinSpeakers, config.MaxSpeakers);
 
         // 4. Collapse consecutive same-speaker regions into contiguous segments.
-        return MergeAdjacent(regions, labels);
+        return MergeAdjacent(keptRegions, labels);
     }
 
     // Flatten every window's regions, merge those that overlap or touch (sliding windows redundantly detect
@@ -87,7 +93,11 @@ public sealed class DiarizationPipeline : IDiarizer
         return (start, end - start);
     }
 
-    // Walk the (sorted) regions; while the next region shares this region's speaker label, absorb it.
+    // Collapse consecutive same-speaker regions into one segment. "Consecutive" is by list order (regions are
+    // time-sorted and disjoint), so the only things that can sit between two same-speaker regions are silence
+    // or a dropped sub-MinSpeechDuration blip — never another speaker, who would carry a different label. A
+    // DiarizedSegment is therefore a speaker's TURN (which may contain internal pauses), not a single
+    // uninterrupted utterance; a consumer needing per-utterance granularity splits on the source regions.
     private static List<DiarizedSegment> MergeAdjacent(List<SpeechRegion> regions, int[] labels)
     {
         var segments = new List<DiarizedSegment>();

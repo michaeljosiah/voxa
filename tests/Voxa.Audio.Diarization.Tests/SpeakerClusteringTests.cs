@@ -87,6 +87,17 @@ public class SpeakerClusteringTests
         Assert.Equal(first, second);
     }
 
+    [Fact]
+    public void Tied_distances_merge_the_lexicographically_smallest_pair()
+    {
+        // Three orthogonal one-hot vectors → every pairwise distance is EXACTLY 1.0 (dot 0, norm 1; no float
+        // rounding). A forced merge (cap 2) must pick the first pair (indices 0,1) by the deterministic
+        // tie-break, not an arbitrary one.
+        float[][] embeddings = [[1f, 0f, 0f], [0f, 1f, 0f], [0f, 0f, 1f]];
+        var labels = SpeakerClustering.Cluster(embeddings, threshold: 0.0, minSpeakers: 0, maxSpeakers: 2);
+        Assert.Equal([0, 0, 1], labels);
+    }
+
     [Theory]
     [InlineData(new[] { 1f, 0f }, new[] { 1f, 0f }, 0.0)]    // identical
     [InlineData(new[] { 1f, 0f }, new[] { 0f, 1f }, 1.0)]    // orthogonal
