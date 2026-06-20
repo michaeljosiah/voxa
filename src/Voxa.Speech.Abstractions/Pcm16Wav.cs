@@ -53,13 +53,15 @@ public static class Pcm16Wav
     /// (WAVE_FORMAT_EXTENSIBLE), and clamping an over-declared final chunk to what's present. Zero-copy: the
     /// caller slices <paramref name="wav"/> at <c>DataOffset</c>/<c>DataLength</c> and copies/mixes as it needs.
     /// </summary>
-    /// <exception cref="InvalidDataException">The input is not a RIFF/WAVE file or has no <c>data</c> chunk.</exception>
+    /// <exception cref="InvalidDataException">The input is not a RIFF/WAVE file, has no <c>data</c>
+    /// chunk, or reaches <c>data</c> before a valid <c>fmt </c> chunk.</exception>
     public static WavFormat FindData(ReadOnlySpan<byte> wav)
     {
         if (wav.Length < 12 || !wav[..4].SequenceEqual("RIFF"u8) || !wav.Slice(8, 4).SequenceEqual("WAVE"u8))
             throw new InvalidDataException("Not a RIFF/WAVE file.");
 
         int sampleRate = 0, channels = 0, bits = 0, format = 0;
+        bool sawFmt = false;
         for (int offset = 12; offset + 8 <= wav.Length;)
         {
             var id = wav.Slice(offset, 4);
@@ -73,9 +75,15 @@ public static class Pcm16Wav
                 channels   = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(payload + 2, 2));
                 sampleRate = BinaryPrimitives.ReadInt32LittleEndian(wav.Slice(payload + 4, 4));
                 bits       = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(payload + 14, 2));
+                sawFmt = true;
             }
             else if (id.SequenceEqual("data"u8))
             {
+                // A data chunk before a valid fmt (or after a too-short fmt this loop skipped) would
+                // yield zeroed SampleRate/Channels/Bits — reject rather than hand callers bogus metadata,
+                // matching how the concrete readers fail on malformed RIFF.
+                if (!sawFmt)
+                    throw new InvalidDataException("WAV 'data' chunk precedes a valid 'fmt ' chunk.");
                 return new WavFormat(sampleRate, channels, bits, format, payload, size);
             }
 

@@ -61,6 +61,24 @@ public class Pcm16WavTests
         Assert.Equal(4, fmt.DataLength);                               // clamped to the bytes actually present
     }
 
+    [Fact] // Codex P2: a data chunk before fmt would otherwise return zeroed format fields.
+    public void FindData_Throws_When_Data_Precedes_A_Valid_Fmt_Chunk()
+    {
+        var pcm = new byte[] { 1, 2 };
+        var b = new byte[12 + (8 + pcm.Length) + (8 + 16)]; // RIFF/WAVE → data (first!) → fmt
+        int o = 0;
+        o += Tag(b, o, "RIFF"u8); o += U32(b, o, (uint)(b.Length - 8)); o += Tag(b, o, "WAVE"u8);
+        o += Tag(b, o, "data"u8); o += U32(b, o, (uint)pcm.Length); pcm.CopyTo(b.AsSpan(o)); o += pcm.Length;
+        o += Tag(b, o, "fmt "u8); o += U32(b, o, 16);
+        o += U16(b, o, 1); o += U16(b, o, 1); o += U32(b, o, 16000); o += U32(b, o, 32000); o += U16(b, o, 2); o += U16(b, o, 16);
+
+        Assert.Throws<InvalidDataException>(() => Pcm16Wav.FindData(b));
+
+        static int Tag(byte[] d, int at, ReadOnlySpan<byte> t) { t.CopyTo(d.AsSpan(at)); return t.Length; }
+        static int U32(byte[] d, int at, uint v) { BinaryPrimitives.WriteUInt32LittleEndian(d.AsSpan(at), v); return 4; }
+        static int U16(byte[] d, int at, ushort v) { BinaryPrimitives.WriteUInt16LittleEndian(d.AsSpan(at), v); return 2; }
+    }
+
     [Fact]
     public void FindData_Reads_Bit_Depth_Past_A_Fmt_Extension()
     {
