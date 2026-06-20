@@ -64,7 +64,14 @@ public sealed class OpenAIRealtimeProcessor : FrameProcessor
         _readLoop = Task.Run(() => ReadEventsLoopAsync(ct));
     }
 
-    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct) => DisposeTransportAsync();
+
+    // Real-disposal path (CQ-002): a client disconnect disposes the runner WITHOUT delivering an EndFrame,
+    // so OnEndAsync alone would leak the transport's ClientWebSocket + SemaphoreSlim. Release on disposal too.
+    // Runs after the loops have stopped (so no race with OnEndAsync) and is idempotent via the null checks.
+    protected override ValueTask DisposeAsyncCore() => DisposeTransportAsync();
+
+    private async ValueTask DisposeTransportAsync()
     {
         if (_transport is not null)
         {

@@ -47,6 +47,20 @@ public class TextToSpeechProcessorTests
     }
 
     [Fact]
+    public async Task Disposing_Without_An_EndFrame_Disposes_The_Engine()
+    {
+        // CQ-003: an abrupt teardown (client disconnect, no EndFrame) must still dispose the TTS engine via
+        // DisposeAsyncCore — not only OnEndAsync.
+        var (runner, engine, _, _) = Build();
+        await runner.StartAsync();
+        await Task.Delay(60); // OnStartAsync created + started the engine
+
+        await runner.DisposeAsync(); // abrupt: no EndFrame is ever injected
+
+        Assert.True(engine.Disposed);
+    }
+
+    [Fact]
     public async Task TextFrame_Triggers_Synthesis_With_Speaking_Bookends()
     {
         var (runner, engine, captured, pipeline) = Build();

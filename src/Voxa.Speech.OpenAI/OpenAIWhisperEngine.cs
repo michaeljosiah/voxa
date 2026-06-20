@@ -63,12 +63,15 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
 
     public async Task StopAsync()
     {
+        // Drain the last buffered utterance while the session token is still live, so a graceful stop keeps
+        // the final utterance. FlushAsync uses _cts.Token, which is linked to the processor lifetime — so an
+        // aborted session cancels this final flush too rather than blocking teardown on it (CQ-008).
+        await FlushAsync(force: true).ConfigureAwait(false);
         _cts?.Cancel();
         if (_flushLoop is not null)
         {
             try { await _flushLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
-        await FlushAsync(force: true).ConfigureAwait(false);
         _transcripts.Writer.TryComplete();
     }
 
@@ -120,14 +123,18 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
             _buffer.SetLength(0);
         }
 
+        // Session token (linked to the processor lifetime in StartAsync): an aborted session / pipeline
+        // teardown cancels the in-flight HTTP call instead of blocking up to HttpClient.Timeout (~100 s) — CQ-008.
+        var ct = _cts?.Token ?? CancellationToken.None;
         try
         {
-            var text = await TranscribeAsync(wav).ConfigureAwait(false);
+            var text = await TranscribeAsync(wav, ct).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(text))
             {
                 _transcripts.Writer.TryWrite(new TranscriptionResult(text, IsFinal: true, _options.SttLanguage));
             }
         }
+        catch (OperationCanceledException) { /* session torn down mid-flush — teardown, not a transcription failure */ }
         catch (Exception ex)
         {
             _transcripts.Writer.TryComplete(new InvalidOperationException(
@@ -135,7 +142,7 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         }
     }
 
-    private async Task<string> TranscribeAsync(byte[] wav)
+    private async Task<string> TranscribeAsync(byte[] wav, CancellationToken ct)
     {
         using var form = new MultipartFormDataContent();
         var audioContent = new ByteArrayContent(wav);
@@ -152,10 +159,10 @@ public sealed class OpenAIWhisperEngine : ISpeechToTextEngine
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
         req.Content = form;
 
-        using var resp = await _http.SendAsync(req).ConfigureAwait(false);
+        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         resp.EnsureSuccessStatusCode();
 
-        var json = await resp.Content.ReadFromJsonAsync<JsonElement>().ConfigureAwait(false);
+        var json = await resp.Content.ReadFromJsonAsync<JsonElement>(ct).ConfigureAwait(false);
         return json.TryGetProperty("text", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
     }
 }

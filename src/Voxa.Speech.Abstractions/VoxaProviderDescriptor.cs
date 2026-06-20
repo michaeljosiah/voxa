@@ -16,6 +16,17 @@ public interface IVoxaHttpClientProvider
 }
 
 /// <summary>
+/// Resolves the host-configured <see cref="HttpClient"/> for a provider descriptor factory, or null when no
+/// <see cref="IVoxaHttpClientProvider"/> is registered (manual-composition hosts) — engines then fall back to
+/// <see cref="VoxaHttp.Shared"/>. Centralizes the resolver expression every provider descriptor repeated (CQ-013).
+/// </summary>
+public static class VoxaHttpClientResolution
+{
+    public static HttpClient? ResolveHttpClient(this IServiceProvider sp)
+        => (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve();
+}
+
+/// <summary>
 /// Self-description of an STT provider for config-driven composition ("Voxa:Stt": "OpenAI").
 /// Lives in abstractions so provider packages can describe themselves without referencing
 /// DI or ASP.NET. The factory runs once per connection — engines are per-session stateful.
