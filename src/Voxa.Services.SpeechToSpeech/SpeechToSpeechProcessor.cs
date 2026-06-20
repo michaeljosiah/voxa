@@ -150,7 +150,14 @@ public sealed class SpeechToSpeechProcessor : FrameProcessor
         }
     }
 
-    protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+    protected override ValueTask OnEndAsync(EndFrame frame, CancellationToken ct) => DisposeSessionAsync();
+
+    // Release the session + read loop on the actual disposal path too (CQ-003): an abrupt teardown (client
+    // disconnect, no EndFrame) would otherwise leak the in-process/sidecar session. Idempotent (null-out);
+    // runs after the loops stop so it never races OnEndAsync — the graceful path's second call is a no-op.
+    protected override ValueTask DisposeAsyncCore() => DisposeSessionAsync();
+
+    private async ValueTask DisposeSessionAsync()
     {
         if (_session is not null)
         {

@@ -331,6 +331,14 @@ public class BuilderViewModelTests
         Assert.Contains("options.Agent.ConversationMemory", code);
         Assert.Contains("new InMemoryChatHistory(options.Agent.MaxHistoryMessages)", code);
         Assert.Contains("opts.OnTurnCompleted", code);
+
+        // CQ-007 codex P2: the tuning knobs Compile() applies are emitted in the export too, so pasted
+        // code keeps the canvas behaviour under LowLatency/Cheap instead of drifting to server defaults.
+        Assert.Contains("tuning.VadEagerSttDelay", code);                       // VAD eager-STT delay
+        Assert.Contains("tuning.VadMaxUtteranceDuration", code);                // VAD force-split cap
+        Assert.Contains("sttProcessor.InterimMinInterval", code);              // STT interim coalescing
+        Assert.Contains("options.InterimMinIntervalMs ?? 150", code);
+        Assert.Contains("opts.MaxResponseDuration = tuning.MaxResponseDuration", code); // agent response cap
     }
 
     // ── the chain compiler (real container, factories never invoked) ────────

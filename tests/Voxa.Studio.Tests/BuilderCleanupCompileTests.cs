@@ -130,4 +130,24 @@ public class BuilderCleanupCompileTests
         Assert.DoesNotContain("TryGetAec", plainCode);
         Assert.DoesNotContain("EchoReferenceTapProcessor", plainCode);
     }
+
+    [Fact] // CQ-007: the canvas-run compiler must apply InterimMinIntervalMs like the composer (it was dropped → default 150).
+    public async Task Compile_Applies_The_Configured_Interim_Min_Interval_To_The_Stt_Stage()
+    {
+        using var provider = Provider(("Voxa:InterimMinIntervalMs", "300"));
+        var compiled = BuilderChainCompiler.Compile(
+            provider, provider.GetRequiredService<IConfiguration>(), Chain());
+
+        using var scope = provider.CreateScope();
+        var built = compiled.Parts.Select(p => p.Factory(scope.ServiceProvider)).ToList();
+        try
+        {
+            var stt = built.OfType<SpeechToTextProcessor>().Single();
+            Assert.Equal(TimeSpan.FromMilliseconds(300), stt.InterimMinInterval); // composer parity, not the 150 default
+        }
+        finally
+        {
+            foreach (var p in built) await p.DisposeAsync();
+        }
+    }
 }

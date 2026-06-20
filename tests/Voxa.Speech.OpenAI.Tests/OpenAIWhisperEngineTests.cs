@@ -145,4 +145,47 @@ public class OpenAIWhisperEngineTests
         Assert.NotNull(result);
         Assert.Equal("backstop fired", result!.Text);
     }
+
+    /// <summary>Blocks in SendAsync until its cancellation token fires — lets the test observe whether the
+    /// engine threads a real (session) token into the HTTP call.</summary>
+    private sealed class BlockingHandler : HttpMessageHandler
+    {
+        public readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public volatile bool WasCancelled;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) { WasCancelled = true; throw; }
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
+    [Fact]
+    public async Task Flush_Cancels_The_In_Flight_Request_When_The_Session_Is_Torn_Down()
+    {
+        // CQ-008: an aborted session must cancel the in-flight transcription, not block up to HttpClient.Timeout
+        // (~100 s). The engine threads its session token (linked to the StartAsync ct) into SendAsync.
+        var handler = new BlockingHandler();
+        var options = new OpenAISpeechOptions
+        {
+            ApiKey = "sk-test", SttModel = "whisper-1",
+            SttBufferSeconds = 30.0, // backstop timer won't fire during the test
+            InputSampleRate = 16000,
+        };
+        await using var engine = new OpenAIWhisperEngine(options, new HttpClient(handler));
+        using var session = new CancellationTokenSource();
+        await engine.StartAsync(session.Token);
+        await engine.WriteAudioAsync(new byte[16000], default);
+
+        var flush = engine.FlushAsync();                                  // in-flight; handler blocks on its ct
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(2));    // the request reached SendAsync
+
+        session.Cancel();                                                 // simulate pipeline teardown
+
+        // Must complete promptly (cancelled) instead of hanging on the ~100 s HttpClient timeout.
+        await flush.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(handler.WasCancelled);
+    }
 }

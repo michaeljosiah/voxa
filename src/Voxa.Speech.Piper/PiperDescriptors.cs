@@ -120,7 +120,7 @@ public static class PiperDescriptors
     internal static VoxaModelCache CacheFor(IServiceProvider sp, IConfigurationSection root)
         => new(
             VoxaModelCacheOptions.FromConfiguration(root),
-            (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve(),
+            sp.ResolveHttpClient(),
             LoggerFor<VoxaModelCache>(sp));
 
     internal static ILogger? LoggerFor<T>(IServiceProvider sp)
