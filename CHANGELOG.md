@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Speaker-segmentation ONNX engine (VLS-005 WS2).** A new opt-in **`Voxa.Audio.Diarization.Onnx`** package
+  ships `PyannoteOnnxSegmentation` — an `ISpeakerSegmentation` backed by the **MIT-licensed** pyannote
+  segmentation-3.0 model on the shared `Voxa.Audio.Onnx` host. It's a clean ONNX-on-host fit because the model's
+  SincNet front-end is **inside the graph** (raw 16 kHz audio in, powerset speaker-activity out — no external
+  STFT/mel), so the engine only frames the audio into the model's sliding windows (geometry read from the ONNX
+  **metadata**, nothing hard-coded), runs ORT, and decodes powerset → absolute-time speech regions in **pure C#**
+  (`PowersetSegmentationDecoder` — a faithful port of the sherpa-onnx reference: powerset→speech, Hamming-weighted
+  overlap-add, onset/offset @ 0.5). The model is pinned (`PyannoteSegmentationCatalog`) to the **ungated** sherpa
+  export with a real SHA-256, so it resolves through `VoxaModelCache` with no archive step or HF gate. The decoder
+  is unit-tested on synthetic logits (powerset layout, frame→time, region forming) and a `LocalModels` test runs
+  the real model end-to-end. Completes the segmentation half of VLS-005's deferred ONNX impls; the `ISpeakerEmbedding`
+  (WeSpeaker) impl and the `voxa transcribe --diarize` consumer are follow-ups.
 - **Shared ONNX Runtime model host (VLS-006).** A new **`Voxa.Audio.Onnx`** package ends the per-engine ORT
   session setup that SileroVad and Kokoro each re-implement today: `OnnxModelHost.Load(path, device, hook)`
   returns a shared `IOnnxSession` from a **process-wide `(path, device)` cache** (weights load once, shared by

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Audio.Diarization.Onnx</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Reference ONNX implementations for Voxa speaker diarization (VLS-005 WS2). Ships PyannoteOnnxSegmentation — an ISpeakerSegmentation backed by the MIT-licensed pyannote segmentation-3.0 model on the shared Voxa.Audio.Onnx host. The model takes raw 16 kHz audio (SincNet front-end is inside the graph) and emits speaker activity; the package decodes powerset → speech regions in pure C#. Pin is the sherpa-onnx export (MIT).</Description>
+    <PackageTags>voxa;voice;ai;diarization;pyannote;segmentation;onnx</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ORT directly: the host keeps its ORT ref behind PrivateAssets, and the engine binds OrtValues +
+         reads InferenceSession.ModelMetadata, so this package brings its own ORT (same 1.26.0 pin). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Audio.Diarization\Voxa.Audio.Diarization.csproj" />
+    <ProjectReference Include="..\Voxa.Audio.Onnx\Voxa.Audio.Onnx.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Audio.Diarization.Onnx.Tests" />
+  </ItemGroup>
+
+</Project>
