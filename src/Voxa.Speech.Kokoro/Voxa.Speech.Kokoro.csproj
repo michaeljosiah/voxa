@@ -35,6 +35,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+    <!-- The shared ONNX session host (VLS-006): Kokoro loads its InferenceSession through OnnxModelHost so
+         it honors Voxa:Kokoro:Device (CPU default; GPU opt-in via the app's own ORT.Gpu/DirectML package).
+         The host's own ORT ref is PrivateAssets, so Kokoro's ORT above remains the one this package carries. -->
+    <ProjectReference Include="..\Voxa.Audio.Onnx\Voxa.Audio.Onnx.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.ML.OnnxRuntime;
+using Voxa.Audio.Onnx;
 
 namespace Voxa.Speech.Kokoro;
 
@@ -14,9 +15,12 @@ namespace Voxa.Speech.Kokoro;
 /// call); there is no long-lived child process and no orphan surface at all.
 ///
 /// <para>
-/// Model weights load once per process: <see cref="InferenceSession"/>s are cached per model path
-/// with a shared semaphore capping parallel runs (<see cref="KokoroOptions.MaxConcurrentSyntheses"/>)
-/// so synthesis can't starve the audio pipeline's cores.
+/// Model weights load once per process through the shared <see cref="OnnxModelHost"/>: the
+/// <see cref="InferenceSession"/> is cached per <c>(model path, device)</c> on the host's process-wide cache
+/// (so cpu and a GPU device are distinct entries), with a shared semaphore capping parallel runs
+/// (<see cref="KokoroOptions.MaxConcurrentSyntheses"/>) so synthesis can't starve the audio pipeline's cores.
+/// <see cref="KokoroOptions.Device"/> selects the execution provider; an explicit GPU device whose runtime
+/// isn't loaded fails loud at <see cref="StartAsync"/> per the host's device contract.
 /// </para>
 /// </summary>
 public sealed class KokoroTtsEngine : ITextToSpeechEngine
@@ -32,10 +36,15 @@ public sealed class KokoroTtsEngine : ITextToSpeechEngine
         string SpeedName,
         string OutputName);
 
-    private static readonly ConcurrentDictionary<string, Lazy<SharedSession>> Sessions = new();
+    // The InferenceSession itself is owned + cached by OnnxModelHost (per (path, device)); this caches only
+    // the run gate per (path, device) so the parallel-run cap is process-wide across every connection — NOT
+    // the session, so OnnxModelHost.EvictAll() ("unload models") stays correct and a later StartAsync simply
+    // re-loads from the host.
+    private static readonly ConcurrentDictionary<(string Path, OnnxDevice Device), SemaphoreSlim> Gates = new();
 
     private readonly KokoroOptions _options;
     private readonly VoxaModelCache? _cache;
+    private readonly OnnxModelHost _host = new();
     private readonly ILogger _logger;
 
     // Test seams: G2P and inference are independently fakeable.
@@ -131,16 +140,19 @@ public sealed class KokoroTtsEngine : ITextToSpeechEngine
         var phonemizer = new EspeakPhonemizer(espeakPath, espeakDataParent, _options.ResolveEspeakVoice());
         _phonemize = phonemizer.PhonemizeAsync;
 
-        var shared = Sessions.GetOrAdd(
-            Path.GetFullPath(modelPath),
-            p => new Lazy<SharedSession>(() => CreateSession(p, _options.MaxConcurrentSyntheses))).Value;
+        if (!OnnxDeviceParser.TryParse(_options.Device, out var device))
+            throw new VoxaModelUnavailableException(
+                $"Unknown Voxa:Kokoro:Device '{_options.Device}'. " +
+                $"Valid values: {string.Join(", ", OnnxDeviceParser.ValidValues)}.");
+
+        var shared = CreateSession(_host, modelPath, device, _options.MaxConcurrentSyntheses);
 
         var speed = (float)_options.Speed;
         _infer = (tokens, token) => RunInferenceAsync(shared, tokens, styleRows, speed, token);
 
         _logger.LogInformation(
-            "Kokoro TTS ready: {Precision} model, voice {Voice}, espeak {Espeak}",
-            _options.Precision, _options.Voice, Path.GetFileName(espeakPath));
+            "Kokoro TTS ready: {Precision} model, voice {Voice}, espeak {Espeak}, device {Device}",
+            _options.Precision, _options.Voice, Path.GetFileName(espeakPath), device);
     }
 
     public async IAsyncEnumerable<ReadOnlyMemory<byte>> SynthesizeAsync(
@@ -176,17 +188,16 @@ public sealed class KokoroTtsEngine : ITextToSpeechEngine
 
     // ── internals ───────────────────────────────────────────────────────────
 
-    private static SharedSession CreateSession(string modelPath, int maxConcurrent)
+    private static SharedSession CreateSession(
+        OnnxModelHost host, string modelPath, OnnxDevice device, int maxConcurrent)
     {
-        var sessionOptions = new SessionOptions
-        {
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-        };
-        var session = new InferenceSession(modelPath, sessionOptions);
+        // The host applies the device EP (ORT_ENABLE_ALL, as before) and caches the session per (path, device);
+        // an explicit GPU device with no loaded provider throws VoxaModelUnavailableException here.
+        var loaded = host.Load(modelPath, device);
+        var inputs = loaded.InputNames;
 
         // Tolerate both published export flavors: onnx-community uses "input_ids"/"style"/"speed",
         // kokoro-onnx uses "tokens". Fail loudly with the actual names if neither matches.
-        var inputs = session.InputMetadata.Keys.ToArray();
         var inputIds = inputs.FirstOrDefault(n => n is "input_ids" or "tokens")
             ?? throw new InvalidOperationException(
                 $"Unrecognized Kokoro model inputs [{string.Join(", ", inputs)}] — expected input_ids/tokens, style, speed.");
@@ -197,11 +208,16 @@ public sealed class KokoroTtsEngine : ITextToSpeechEngine
             ?? throw new InvalidOperationException(
                 $"Kokoro model has no 'speed' input (found [{string.Join(", ", inputs)}]).");
 
-        return new SharedSession(
-            session,
-            new SemaphoreSlim(Math.Max(1, maxConcurrent), Math.Max(1, maxConcurrent)),
-            inputIds, style, speed,
-            session.OutputMetadata.Keys.First());
+        // One run gate per (path, device), shared across connections (the first caller's cap wins, matching
+        // the previous single-Lazy behavior). Key normalized like the host so case-variant paths share a gate.
+        var keyPath = OperatingSystem.IsWindows()
+            ? Path.GetFullPath(modelPath).ToLowerInvariant()
+            : Path.GetFullPath(modelPath);
+        var gate = Gates.GetOrAdd(
+            (keyPath, device),
+            _ => new SemaphoreSlim(Math.Max(1, maxConcurrent), Math.Max(1, maxConcurrent)));
+
+        return new SharedSession(loaded.Session, gate, inputIds, style, speed, loaded.OutputNames[0]);
     }
 
     private static float[] LoadStyleRows(string voicePath)

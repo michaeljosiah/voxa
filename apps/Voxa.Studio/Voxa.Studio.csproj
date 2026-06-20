@@ -36,6 +36,23 @@
          matching Whisper.net.Runtime.* package — the Device picker flags them as unavailable until you do). -->
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1"
                       Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <!-- GPU for the ONNX engines (Kokoro TTS) on Windows: the CUDA ORT runtime drives NVIDIA GPUs. The ONNX
+         engine packages (Kokoro / SileroVad / Diarization.Onnx) all reference the CPU ORT (same package id)
+         transitively; ExcludeAssets="all" on that id here keeps the CPU native out of THIS app's output so the
+         GPU native (same managed assembly, a native carrying both CUDA and CPU EPs) is the only onnxruntime.dll
+         — no duplicate. The CUDA EP needs the NVIDIA CUDA toolkit at runtime; the Config "Device" picker flags
+         availability up front (OnnxDeviceProbe) and the engine fails loud per the device contract if CUDA was
+         asked for but can't load. CPU still works without the toolkit (CUDA is a separate on-demand provider
+         dll), so the default Silero VAD path is unaffected. The .Gpu.Windows sub-package (not the meta .Gpu) ships
+         only the win-x64 ORT natives, dropping the Linux/macOS ORT .so/.dylib the meta package would add
+         (~700 MB, mostly its CUDA/TensorRT providers; a small win-x64 TensorRT dll rides along, unused).
+         PrivateAssets="all" keeps the
+         GPU native in Studio's own output but out of Voxa.Studio.Tests, which stays lean CPU-only. Windows-only
+         so the Linux CI lane stays CPU; on non-Windows the transitive CPU ORT flows normally (no exclude). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.26.0" PrivateAssets="all"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" ExcludeAssets="all"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,6 +67,10 @@
     <!-- Speaker segmentation (VLS-005 WS2): the Models page surfaces its pinned pyannote model for
          download/verify. Not in the meta-package (opt-in ONNX engine) — referenced directly. -->
     <ProjectReference Include="..\..\src\Voxa.Audio.Diarization.Onnx\Voxa.Audio.Diarization.Onnx.csproj" />
+    <!-- The ONNX device seam (OnnxDeviceParser / OnnxDeviceProbe) behind the Config "Device" picker's
+         Kokoro GPU compatibility indicator. Available transitively, but referenced directly so the
+         ViewModel's device types are unambiguously compile-visible. -->
+    <ProjectReference Include="..\..\src\Voxa.Audio.Onnx\Voxa.Audio.Onnx.csproj" />
   </ItemGroup>
 
   <ItemGroup>
