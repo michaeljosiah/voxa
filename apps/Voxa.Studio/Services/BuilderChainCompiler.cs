@@ -78,8 +78,13 @@ internal static class BuilderChainCompiler
             {
                 case BuilderNodeKind.Stt:
                     pairs["Voxa:Stt"] = node.Provider;
-                    if (Is(node, "WhisperCpp") && node.Options.TryGetValue("Model", out var model))
-                        pairs["Voxa:WhisperCpp:Model"] = model;
+                    if (Is(node, "WhisperCpp"))
+                    {
+                        if (node.Options.TryGetValue("Model", out var model))
+                            pairs["Voxa:WhisperCpp:Model"] = model;
+                        if (node.Options.TryGetValue("Device", out var sttDevice))
+                            pairs["Voxa:WhisperCpp:Device"] = sttDevice;
+                    }
                     break;
 
                 case BuilderNodeKind.Agent:
@@ -105,6 +110,8 @@ internal static class BuilderChainCompiler
                             pairs["Voxa:Kokoro:Voice"] = kokoroVoice;
                         if (node.Options.TryGetValue("Precision", out var precision))
                             pairs["Voxa:Kokoro:Precision"] = precision;
+                        if (node.Options.TryGetValue("Device", out var ttsDevice))
+                            pairs["Voxa:Kokoro:Device"] = ttsDevice;
                     }
                     break;
             }

@@ -742,12 +742,16 @@ public sealed partial class BuilderViewModel : ObservableObject
             ["Voxa:SmartTurn:PythonScript"] = voxa["SmartTurn:PythonScript"],
             ["Voxa:Stt"] = voxa["Stt"],
             ["Voxa:WhisperCpp:Model"] = voxa["WhisperCpp:Model"],
+            // Compute device (VLS-002 whisper / VLS-006 Kokoro) rides the STT/TTS node so a GPU selection
+            // survives Config → Open in Builder → run/export instead of silently reverting to CPU.
+            ["Voxa:WhisperCpp:Device"] = voxa["WhisperCpp:Device"],
             ["Voxa:Agent:Provider"] = voxa["Agent:Provider"],
             ["Voxa:Agent:Model"] = voxa["Agent:Model"],
             ["Voxa:Tts"] = voxa["Tts"],
             ["Voxa:Piper:Voice"] = voxa["Piper:Voice"],
             ["Voxa:Kokoro:Voice"] = voxa["Kokoro:Voice"],
             ["Voxa:Kokoro:Precision"] = voxa["Kokoro:Precision"],
+            ["Voxa:Kokoro:Device"] = voxa["Kokoro:Device"],
         };
     }
 
@@ -810,7 +814,14 @@ public sealed partial class BuilderViewModel : ObservableObject
             }
         }
         var stt = Add(BuilderNodeKind.Stt, Get("Voxa:Stt", "WhisperCpp"));
-        if (Is(stt.Provider, "WhisperCpp")) stt.Options["Model"] = Get("Voxa:WhisperCpp:Model", "tiny.en");
+        if (Is(stt.Provider, "WhisperCpp"))
+        {
+            stt.Options["Model"] = Get("Voxa:WhisperCpp:Model", "tiny.en");
+            // Carry the device when PRESENT (including an explicit "cpu" override), same rule as the cleanup
+            // engines — dropping it would let a layered base GPU device re-apply on export/run.
+            if (pairs.TryGetValue("Voxa:WhisperCpp:Device", out var wDevice) && !string.IsNullOrEmpty(wDevice))
+                stt.Options["Device"] = wDevice;
+        }
         Add(BuilderNodeKind.Filter, null);
         var agent = Add(BuilderNodeKind.Agent, Get("Voxa:Agent:Provider", "Echo"));
         if (Is(agent.Provider, "OpenAI")) agent.Options["Model"] = Get("Voxa:Agent:Model", "gpt-4o-mini");
@@ -821,6 +832,8 @@ public sealed partial class BuilderViewModel : ObservableObject
         {
             tts.Options["Voice"] = Get("Voxa:Kokoro:Voice", "af_heart");
             tts.Options["Precision"] = Get("Voxa:Kokoro:Precision", "int8");
+            if (pairs.TryGetValue("Voxa:Kokoro:Device", out var kDevice) && !string.IsNullOrEmpty(kDevice))
+                tts.Options["Device"] = kDevice;
         }
         Add(BuilderNodeKind.Sink, null);
 

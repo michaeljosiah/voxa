@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
+using Voxa.Audio.Onnx;
 using Voxa.Speech.Kokoro;
 using Voxa.Speech.Piper;
 using Voxa.Speech.WhisperCpp;
@@ -33,6 +34,18 @@ public sealed partial class ConfigViewModel : ObservableObject
     private readonly bool _aecInBaseConfig;
     private readonly bool _enhanceInBaseConfig;
 
+    // Same rule for the ONNX/whisper compute device: if the base config pins a non-CPU device, selecting "cpu"
+    // in the picker must emit an explicit "cpu" override — omitting the key would let the base GPU value win
+    // through config layering, so the picker could never turn GPU back off without hand-editing appsettings.
+    private readonly bool _whisperDeviceInBaseConfig;
+    private readonly bool _kokoroDeviceInBaseConfig;
+
+    // Same rule for the profile and VAD engine: if the base config pins a non-default value, selecting the
+    // default in the picker must emit it explicitly ("Default" / "Silero") to override — an omitted key would
+    // fall back to the base value through config layering, so the picker could never revert to the default.
+    private readonly bool _profileInBaseConfig;
+    private readonly bool _vadInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -59,17 +72,22 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedStt = voxa["Stt"] ?? "WhisperCpp";
         _selectedTts = voxa["Tts"] ?? "Piper";
         _selectedVad = voxa["Vad:Engine"] ?? "Silero";
+        _vadInBaseConfig = !string.Equals(_selectedVad, "Silero", StringComparison.OrdinalIgnoreCase);
         _selectedAecEngine = voxa["Aec:Engine"] ?? "None";
         _selectedEnhanceEngine = voxa["Enhance:Engine"] ?? "None";
         _aecInBaseConfig = !string.Equals(_selectedAecEngine, "None", StringComparison.OrdinalIgnoreCase);
         _enhanceInBaseConfig = !string.Equals(_selectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase);
         _selectedProfile = voxa["Profile"] ?? "Default";
+        _profileInBaseConfig = !string.Equals(_selectedProfile, "Default", StringComparison.OrdinalIgnoreCase);
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
         _selectedWhisperDevice = voxa["WhisperCpp:Device"] ?? "cpu";
+        _whisperDeviceInBaseConfig = !string.Equals(_selectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase);
         _selectedPiperVoice = voxa["Piper:Voice"] ?? "en_US-amy-low";
         _selectedKokoroVoice = voxa["Kokoro:Voice"] ?? "af_heart";
         _selectedKokoroPrecision = voxa["Kokoro:Precision"] ?? "int8";
+        _selectedKokoroDevice = voxa["Kokoro:Device"] ?? "cpu";
+        _kokoroDeviceInBaseConfig = !string.Equals(_selectedKokoroDevice, "cpu", StringComparison.OrdinalIgnoreCase);
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
         _agentBaseUrl = voxa["Agent:BaseUrl"] ?? "http://localhost:11434/v1";
 
@@ -82,6 +100,8 @@ public sealed partial class ConfigViewModel : ObservableObject
         _smartTurnPythonExe = voxa["SmartTurn:PythonExe"] ?? "python";
         _smartTurnPythonScript = voxa["SmartTurn:PythonScript"] ?? "sidecar/voxa_smart_turn_sidecar.py";
 
+        RefreshWhisperDeviceStatus();
+        RefreshKokoroDeviceStatus();
         Regenerate();
         // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
         // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
@@ -106,6 +126,8 @@ public sealed partial class ConfigViewModel : ObservableObject
     public IReadOnlyList<string> PiperVoices { get; } = PiperVoiceCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroVoices { get; } = KokoroCatalog.KnownVoices.ToList();
     public IReadOnlyList<string> KokoroPrecisions { get; } = KokoroCatalog.KnownPrecisions.ToList();
+    /// <summary>ONNX execution targets for Kokoro — the shared device vocabulary (cpu/auto/cuda/directml/coreml).</summary>
+    public IReadOnlyList<string> KokoroDevices { get; } = OnnxDeviceParser.ValidValues;
 
     [ObservableProperty] private string _selectedStt;
     [ObservableProperty] private string _selectedTts;
@@ -119,6 +141,7 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedPiperVoice;
     [ObservableProperty] private string _selectedKokoroVoice;
     [ObservableProperty] private string _selectedKokoroPrecision;
+    [ObservableProperty] private string _selectedKokoroDevice;
 
     // Agent providers aren't registry STT/TTS entries — they're DefaultAgentFactory's pair.
     private static readonly string[] AgentProviderNames = ["Echo", "OpenAI", "Ollama"];
@@ -224,6 +247,98 @@ public sealed partial class ConfigViewModel : ObservableObject
     /// <summary>No input-cleanup engine is bundled — show the how-to-enable note instead of dead pickers.</summary>
     public bool ShowAudioCleanupHint => !AecEngineAvailable && !EnhanceEngineAvailable;
 
+    // ── Whisper compute-device availability (VLS-002 GPU) ─────────────────────
+    // Whether the selected WhisperCpp Device's native runtime is actually bundled in THIS build — checked
+    // safely (no model load, no process-wide runtime lock) via WhisperRuntimeProbe. A GPU device with no
+    // bundled runtime would otherwise only fail at session start; this flags it in the picker up front.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWhisperDeviceWarning), nameof(ShowWhisperDeviceNote))]
+    private bool _whisperDeviceAvailable = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWhisperDeviceWarning), nameof(ShowWhisperDeviceNote))]
+    private string? _whisperDeviceStatus;
+
+    /// <summary>The selected GPU device's runtime is missing — show the red remediation.</summary>
+    public bool ShowWhisperDeviceWarning => !WhisperDeviceAvailable && !string.IsNullOrEmpty(WhisperDeviceStatus);
+    /// <summary>The selected device is available but worth a muted note (auto / GPU-needs-hardware).</summary>
+    public bool ShowWhisperDeviceNote => WhisperDeviceAvailable && !string.IsNullOrEmpty(WhisperDeviceStatus);
+
+    private void RefreshWhisperDeviceStatus()
+    {
+        if (!WhisperCppOptions.TryParseDevice(SelectedWhisperDevice, out var device))
+        {
+            WhisperDeviceAvailable = false;
+            WhisperDeviceStatus = $"Unknown device '{SelectedWhisperDevice}'. Valid: cpu, auto, cuda, vulkan, coreml.";
+        }
+        else if (device == WhisperDevice.Cpu)
+        {
+            WhisperDeviceAvailable = true;
+            WhisperDeviceStatus = null; // CPU is the unremarkable default — no note
+        }
+        else if (WhisperRuntimeProbe.IsAvailable(device))
+        {
+            WhisperDeviceAvailable = true;
+            WhisperDeviceStatus = device == WhisperDevice.Auto
+                ? "Auto — uses the best available GPU backend, falling back to CPU."
+                : "Runtime bundled — needs a compatible GPU/driver; a Talk run fails clearly if it can't load.";
+        }
+        else
+        {
+            WhisperDeviceAvailable = false;
+            WhisperDeviceStatus = WhisperRuntimeProbe.Remediation(device);
+        }
+    }
+
+    // ── Kokoro compute-device availability (VLS-006 ONNX GPU) ──────────────────
+    // Whether the selected Kokoro Device's ONNX execution provider is actually in THIS build's loaded ORT
+    // runtime — queried via OnnxDeviceProbe (OrtEnv.GetAvailableProviders, no model load). A GPU device with
+    // no provider would otherwise only fail at session start; this flags it in the picker up front. Studio
+    // bundles the CUDA provider on Windows; directml/coreml stay opt-in and read unavailable until added.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowKokoroDeviceWarning), nameof(ShowKokoroDeviceNote))]
+    private bool _kokoroDeviceAvailable = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowKokoroDeviceWarning), nameof(ShowKokoroDeviceNote))]
+    private string? _kokoroDeviceStatus;
+
+    /// <summary>The selected GPU device's execution provider is missing — show the red remediation.</summary>
+    public bool ShowKokoroDeviceWarning => !KokoroDeviceAvailable && !string.IsNullOrEmpty(KokoroDeviceStatus);
+    /// <summary>The selected device is available but worth a muted note (auto / GPU-needs-hardware).</summary>
+    public bool ShowKokoroDeviceNote => KokoroDeviceAvailable && !string.IsNullOrEmpty(KokoroDeviceStatus);
+
+    private void RefreshKokoroDeviceStatus()
+    {
+        if (!OnnxDeviceParser.TryParse(SelectedKokoroDevice, out var device))
+        {
+            KokoroDeviceAvailable = false;
+            KokoroDeviceStatus =
+                $"Unknown device '{SelectedKokoroDevice}'. Valid: {string.Join(", ", OnnxDeviceParser.ValidValues)}.";
+        }
+        else if (device == OnnxDevice.Cpu)
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus = null; // CPU is the unremarkable default — no note
+        }
+        else if (device == OnnxDevice.Auto)
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus = "Auto — uses the best available ONNX execution provider, falling back to CPU.";
+        }
+        else if (OnnxDeviceProbe.IsAvailable(device))
+        {
+            KokoroDeviceAvailable = true;
+            KokoroDeviceStatus =
+                "Provider present — needs a compatible GPU/driver; a Talk run fails clearly if it can't load.";
+        }
+        else
+        {
+            KokoroDeviceAvailable = false;
+            KokoroDeviceStatus = OnnxDeviceProbe.Remediation(device);
+        }
+    }
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
@@ -313,10 +428,11 @@ public sealed partial class ConfigViewModel : ObservableObject
         Regenerate();
     }
     partial void OnSelectedWhisperModelChanged(string value) => Regenerate();
-    partial void OnSelectedWhisperDeviceChanged(string value) => Regenerate();
+    partial void OnSelectedWhisperDeviceChanged(string value) { RefreshWhisperDeviceStatus(); Regenerate(); }
     partial void OnSelectedPiperVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroPrecisionChanged(string value) => Regenerate();
+    partial void OnSelectedKokoroDeviceChanged(string value) { RefreshKokoroDeviceStatus(); Regenerate(); }
     partial void OnAgentModelChanged(string value) => Regenerate();
     partial void OnAgentApiKeyChanged(string value) => Regenerate();
     partial void OnAgentBaseUrlChanged(string value) => Regenerate();
@@ -354,10 +470,17 @@ public sealed partial class ConfigViewModel : ObservableObject
             ["Voxa:Tts"] = SelectedTts,
             ["Voxa:Agent:Provider"] = SelectedAgent,
         };
+        // Emit the selection; the default ("Default" / "Silero") is omitted to keep the export minimal UNLESS
+        // the base config pinned a non-default value, in which case emit the default explicitly so Apply/export
+        // overrides it — an omitted key would fall back to the base through config layering (the AEC/device rule).
         if (!string.Equals(SelectedProfile, "Default", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Profile"] = SelectedProfile;
+        else if (_profileInBaseConfig)
+            pairs["Voxa:Profile"] = "Default";
         if (!string.Equals(SelectedVad, "Silero", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Vad:Engine"] = SelectedVad;
+        else if (_vadInBaseConfig)
+            pairs["Voxa:Vad:Engine"] = "Silero";
         // Input cleanup runs before the VAD. Emit the selected engine; when it's "None" but the base
         // config named one, emit an explicit "None" so Apply/activation actually turns the stage off
         // (an omitted key would fall back to the base engine through config layering — the smart-turn rule).
@@ -370,13 +493,24 @@ public sealed partial class ConfigViewModel : ObservableObject
         else if (_enhanceInBaseConfig)
             pairs["Voxa:Enhance:Engine"] = "None";
         if (ShowWhisperOptions) pairs["Voxa:WhisperCpp:Model"] = SelectedWhisperModel;
+        // Emit the selected device; cpu is omitted (minimal export) UNLESS the base config pinned a GPU device,
+        // in which case emit an explicit "cpu" so Apply/export actually turns GPU back off — an omitted key
+        // would fall back to the base value through config layering (the AEC / denoise / smart-turn rule).
         if (ShowWhisperOptions && !string.Equals(SelectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:WhisperCpp:Device"] = SelectedWhisperDevice;
+        else if (ShowWhisperOptions && _whisperDeviceInBaseConfig)
+            pairs["Voxa:WhisperCpp:Device"] = "cpu";
         if (ShowPiperOptions) pairs["Voxa:Piper:Voice"] = SelectedPiperVoice;
         if (ShowKokoroOptions)
         {
             pairs["Voxa:Kokoro:Voice"] = SelectedKokoroVoice;
             pairs["Voxa:Kokoro:Precision"] = SelectedKokoroPrecision;
+            // Same rule as the Whisper device just above: omit cpu unless the base config pinned a GPU device,
+            // then emit explicit "cpu" so the picker can turn Kokoro GPU back off.
+            if (!string.Equals(SelectedKokoroDevice, "cpu", StringComparison.OrdinalIgnoreCase))
+                pairs["Voxa:Kokoro:Device"] = SelectedKokoroDevice;
+            else if (_kokoroDeviceInBaseConfig)
+                pairs["Voxa:Kokoro:Device"] = "cpu";
         }
         // A library-backed cloud voice (ElevenLabs/Mistral/VoiceClone) writes its provider's key —
         // the voice id only, never an API key.

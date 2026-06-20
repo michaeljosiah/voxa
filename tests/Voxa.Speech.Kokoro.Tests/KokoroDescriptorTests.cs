@@ -57,6 +57,29 @@ public class KokoroDescriptorTests
         Assert.Contains(errors, e => e.Contains("Speed"));
     }
 
+    [Theory]                            // VLS-006: the shared ONNX device vocabulary, parsed (not availability-checked) at startup.
+    [InlineData("cpu")]
+    [InlineData("auto")]
+    [InlineData("cuda")]
+    [InlineData("directml")]
+    [InlineData("coreml")]
+    public void Valid_Device_Spellings_Validate_Clean(string device)
+        => Assert.Empty(KokoroDescriptors.Tts.Validate(VoxaRoot(("Kokoro:Device", device))));
+
+    [Fact]
+    public void Unknown_Device_Lists_The_Valid_Values()
+    {
+        var errors = KokoroDescriptors.Tts.Validate(VoxaRoot(("Kokoro:Device", "gpu")));
+        Assert.Contains(errors, e => e.Contains("gpu") && e.Contains("cuda") && e.Contains("cpu"));
+    }
+
+    [Fact]
+    public void Device_Is_Read_From_Configuration_Defaulting_Null()
+    {
+        Assert.Equal("cuda", KokoroOptions.FromConfiguration(VoxaRoot(("Kokoro:Device", "cuda"))).Device);
+        Assert.Null(KokoroOptions.FromConfiguration(VoxaRoot()).Device); // absent ⇒ null ⇒ OnnxDevice.Cpu
+    }
+
     [Fact]
     public void Explicit_Paths_Bypass_The_Catalog()
     {

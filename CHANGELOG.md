@@ -144,6 +144,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: GPU acceleration for whisper.cpp STT + an up-front device-compatibility check (VLS-002).**
+  Studio now bundles the **Vulkan** whisper runtime on Windows, so the Config **Device** picker's `vulkan` (and
+  `auto`) options actually run on any modern GPU — NVIDIA / AMD / Intel, no CUDA toolkit needed — accelerating
+  the heaviest pipeline stage. Whisper.net stages runtimes side-by-side, so this coexists with the CPU runtime;
+  `cuda` / `coreml` (whisper) and `Microsoft.ML.OnnxRuntime.Gpu` / `.DirectML` (the ONNX VAD/TTS) remain opt-in
+  add-a-package upgrades. And it's **clear when a GPU selection won't work**: the Device picker shows a live
+  status — a red warning naming the exact package to add when the selected backend's runtime isn't in this
+  build, a muted note when it is (and still depends on your GPU/driver). Detection is safe and pre-flight: a new
+  `WhisperRuntimeProbe` checks which whisper runtimes are deployed (no model load — Whisper.net locks the native
+  library on first load, so a probe-by-loading is avoided), and `OnnxDeviceProbe` reads
+  `OrtEnv.GetAvailableProviders()` for the ONNX engines. If a bundled backend still can't load on the hardware,
+  the run fails with the framework's copy-pasteable remediation rather than silently dropping to CPU.
+- **Kokoro TTS on GPU (CUDA) + Studio device picker (VLS-006).** `KokoroTtsEngine` now loads its
+  `InferenceSession` through the shared `OnnxModelHost` (`host.Load(modelPath, device)`) instead of constructing
+  one directly — the first of the original direct-ORT local engines migrated onto the host (the VLS-005 pyannote
+  segmentation engine was built on it from the start). A new **`Voxa:Kokoro:Device`** (`cpu` default / `auto` / `cuda` / `directml` /
+  `coreml`, parsed via `OnnxDeviceParser`) selects the ONNX execution provider — and an explicit GPU device whose
+  provider isn't in the loaded runtime **fails loud at startup** with the host's remediation rather than silently
+  running on CPU. The session is cached per `(path, device)` on the host's process-wide cache, with the parallel-run
+  gate kept process-wide per `(path, device)` so `EvictAll()` ("unload models") stays correct. **Voxa Studio bundles
+  the CUDA ONNX provider on Windows** (`Microsoft.ML.OnnxRuntime.Gpu.Windows`, with the transitive CPU ORT excluded
+  so there's exactly one `onnxruntime.dll` and no Linux/TensorRT dead weight; `PrivateAssets` keeps the GPU native
+  out of the test project, which stays CPU-only) — the base ORT native still carries the CPU EP, and the ~286 MB
+  CUDA provider loads only on demand, so the default Silero VAD path is byte-for-byte unaffected on non-NVIDIA
+  machines. The Config **Kokoro** card gains a **Device** picker with the same up-front compatibility indicator as
+  Whisper — a red, package-naming warning when the selected provider isn't in the build (queried via
+  `OnnxDeviceProbe`), a muted note for `auto` / an available-but-hardware-dependent GPU. DirectML stays opt-in
+  (its latest ORT release lags the pinned `1.26.0`); CUDA is NVIDIA + CUDA-toolkit only. Both the Kokoro and
+  whisper compute device **round-trip the Builder** (they ride the TTS / STT node through
+  `SeedFromPairs`/`BuilderChainCompiler`), and selecting `cpu` in Config emits an explicit `cpu` override when the
+  base config pinned a GPU device — so a GPU choice survives Config → "Open in Builder" → run/export, and the
+  picker can always turn GPU back off, instead of a layered base value silently winning. The same
+  explicit-override rule now also covers the Config **profile** and **VAD-engine** pickers (selecting
+  `Default` / `Silero` emits them explicitly when the base config pinned a non-default value), so every Config
+  picker can revert a base/profile setting rather than silently inheriting it.
 - **Voxa Studio: Builder "Reset" now restores the fastest pipeline.** Reset-to-default seeds the **LowLatency**
   profile instead of the byte-identical Default one, so the canvas comes back tuned for the lowest latency using
   the work that's shipped — eager/speculative STT (~150 ms), an aggressive ~400 ms VAD stop, the utterance and

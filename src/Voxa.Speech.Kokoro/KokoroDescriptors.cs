@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Voxa.Audio.Onnx;
 
 namespace Voxa.Speech.Kokoro;
 
@@ -58,6 +59,12 @@ public static class KokoroDescriptors
             errors.Add($"Voxa:Kokoro:Speed must be in (0, 3]; got {options.Speed}.");
         if (options.MaxConcurrentSyntheses < 1)
             errors.Add($"Voxa:Kokoro:MaxConcurrentSyntheses must be at least 1; got {options.MaxConcurrentSyntheses}.");
+        // Device is parsed (not availability-checked) at startup: a misspelling fails fast here; an explicit
+        // GPU device whose provider isn't in the loaded runtime fails loud at session creation per the host.
+        if (!OnnxDeviceParser.TryParse(options.Device, out _))
+            errors.Add(
+                $"Unknown Voxa:Kokoro:Device '{options.Device}'. " +
+                $"Valid values: {string.Join(", ", OnnxDeviceParser.ValidValues)}.");
 
         var modelKnown = true;
         if (!string.IsNullOrEmpty(options.ModelPath))

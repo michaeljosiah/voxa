@@ -32,6 +32,15 @@ public sealed class KokoroOptions
     /// <summary>Kokoro speed: &gt;1 faster speech. Valid range (0, 3].</summary>
     public double Speed { get; set; } = 1.0;
 
+    /// <summary>
+    /// ONNX execution target (VLS-006): <c>cpu</c> (default), <c>auto</c>, <c>cuda</c>, <c>directml</c>,
+    /// <c>coreml</c>. GPU EPs require the consuming app to bundle the matching
+    /// <c>Microsoft.ML.OnnxRuntime.*</c> package (Voxa never bundles GPU natives); an explicit GPU device
+    /// whose provider isn't in the loaded runtime fails loud at startup rather than silently running on CPU.
+    /// Parsed via <c>OnnxDeviceParser</c> so the spelling matches every other ONNX engine.
+    /// </summary>
+    public string? Device { get; set; }
+
     /// <summary>Process-wide cap on parallel ONNX runs so synthesis can't starve the audio pipeline.</summary>
     public int MaxConcurrentSyntheses { get; set; } = 2;
 
@@ -53,6 +62,7 @@ public sealed class KokoroOptions
             EspeakPath             = s["EspeakPath"],
             EspeakVoice            = s["EspeakVoice"],
             Speed                  = s.GetValue("Speed", 1.0),
+            Device                 = s["Device"],
             MaxConcurrentSyntheses = s.GetValue("MaxConcurrentSyntheses", 2),
         };
     }

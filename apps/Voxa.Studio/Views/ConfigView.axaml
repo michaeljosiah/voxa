@@ -57,14 +57,21 @@
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowWhisperOptions}">
-        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
-          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
-          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                    ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
-          <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
-          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
-                    ItemsSource="{Binding WhisperDevices}" SelectedItem="{Binding SelectedWhisperDevice}" />
-        </Grid>
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
+            <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding WhisperDevices}" SelectedItem="{Binding SelectedWhisperDevice}" />
+          </Grid>
+          <!-- GPU compatibility: a selected GPU device whose runtime isn't bundled is flagged here, up front. -->
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxWarnBrush}"
+                     IsVisible="{Binding ShowWhisperDeviceWarning}" Text="{Binding WhisperDeviceStatus}" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
+                     IsVisible="{Binding ShowWhisperDeviceNote}" Text="{Binding WhisperDeviceStatus}" />
+        </StackPanel>
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowPiperOptions}">
@@ -76,14 +83,24 @@
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowKokoroOptions}">
-        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
-          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Kokoro voice" />
-          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                    ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding SelectedKokoroVoice}" />
-          <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Precision" />
-          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
-                    ItemsSource="{Binding KokoroPrecisions}" SelectedItem="{Binding SelectedKokoroPrecision}" />
-        </Grid>
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Kokoro voice" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      ItemsSource="{Binding KokoroVoices}" SelectedItem="{Binding SelectedKokoroVoice}" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Precision" />
+            <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      ItemsSource="{Binding KokoroPrecisions}" SelectedItem="{Binding SelectedKokoroPrecision}" />
+            <TextBlock Grid.Row="2" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
+            <ComboBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding KokoroDevices}" SelectedItem="{Binding SelectedKokoroDevice}" />
+          </Grid>
+          <!-- GPU compatibility: a selected GPU device whose ONNX provider isn't in this build is flagged here. -->
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxWarnBrush}"
+                     IsVisible="{Binding ShowKokoroDeviceWarning}" Text="{Binding KokoroDeviceStatus}" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
+                     IsVisible="{Binding ShowKokoroDeviceNote}" Text="{Binding KokoroDeviceStatus}" />
+        </StackPanel>
       </Border>
 
       <!-- Cloud / cloned voice (VVL-001 WS6): the live library for the selected provider. -->
