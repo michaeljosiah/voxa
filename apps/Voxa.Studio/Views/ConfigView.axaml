@@ -57,14 +57,21 @@
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowWhisperOptions}">
-        <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
-          <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
-          <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                    ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
-          <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
-          <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
-                    ItemsSource="{Binding WhisperDevices}" SelectedItem="{Binding SelectedWhisperDevice}" />
-        </Grid>
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Whisper model" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      ItemsSource="{Binding WhisperModels}" SelectedItem="{Binding SelectedWhisperModel}" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Device" />
+            <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding WhisperDevices}" SelectedItem="{Binding SelectedWhisperDevice}" />
+          </Grid>
+          <!-- GPU compatibility: a selected GPU device whose runtime isn't bundled is flagged here, up front. -->
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxWarnBrush}"
+                     IsVisible="{Binding ShowWhisperDeviceWarning}" Text="{Binding WhisperDeviceStatus}" />
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap" Foreground="{StaticResource VxMutedBrush}"
+                     IsVisible="{Binding ShowWhisperDeviceNote}" Text="{Binding WhisperDeviceStatus}" />
+        </StackPanel>
       </Border>
 
       <Border Classes="vx-card" IsVisible="{Binding ShowPiperOptions}">

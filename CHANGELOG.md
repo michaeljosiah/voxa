@@ -144,6 +144,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: GPU acceleration for whisper.cpp STT + an up-front device-compatibility check (VLS-002).**
+  Studio now bundles the **Vulkan** whisper runtime on Windows, so the Config **Device** picker's `vulkan` (and
+  `auto`) options actually run on any modern GPU — NVIDIA / AMD / Intel, no CUDA toolkit needed — accelerating
+  the heaviest pipeline stage. Whisper.net stages runtimes side-by-side, so this coexists with the CPU runtime;
+  `cuda` / `coreml` (whisper) and `Microsoft.ML.OnnxRuntime.Gpu` / `.DirectML` (the ONNX VAD/TTS) remain opt-in
+  add-a-package upgrades. And it's **clear when a GPU selection won't work**: the Device picker shows a live
+  status — a red warning naming the exact package to add when the selected backend's runtime isn't in this
+  build, a muted note when it is (and still depends on your GPU/driver). Detection is safe and pre-flight: a new
+  `WhisperRuntimeProbe` checks which whisper runtimes are deployed (no model load — Whisper.net locks the native
+  library on first load, so a probe-by-loading is avoided), and `OnnxDeviceProbe` reads
+  `OrtEnv.GetAvailableProviders()` for the ONNX engines. If a bundled backend still can't load on the hardware,
+  the run fails with the framework's copy-pasteable remediation rather than silently dropping to CPU.
 - **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
   input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
   **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they

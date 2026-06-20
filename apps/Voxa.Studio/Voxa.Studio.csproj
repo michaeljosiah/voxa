@@ -29,6 +29,13 @@
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <!-- Transitive of Avalonia.FreeDesktop; 0.21.2 has GHSA-xrw6-gwf8-vvr9 (NU1903) — lift to the patched release. -->
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+    <!-- GPU acceleration for whisper.cpp STT (the heaviest stage). The Vulkan runtime drives any modern GPU
+         (NVIDIA / AMD / Intel) with no CUDA toolkit, so the Config "Device" picker's vulkan/auto options work
+         out of the box. Whisper.net deploys runtime natives side-by-side, so this coexists with the CPU runtime
+         (no conflict). Windows-only so the Linux CI lane stays CPU and lean; CUDA/CoreML remain opt-in (add the
+         matching Whisper.net.Runtime.* package — the Device picker flags them as unavailable until you do). -->
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1"
+                      Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
   <ItemGroup>

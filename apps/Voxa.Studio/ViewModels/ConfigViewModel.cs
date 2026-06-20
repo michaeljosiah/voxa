@@ -82,6 +82,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         _smartTurnPythonExe = voxa["SmartTurn:PythonExe"] ?? "python";
         _smartTurnPythonScript = voxa["SmartTurn:PythonScript"] ?? "sidecar/voxa_smart_turn_sidecar.py";
 
+        RefreshWhisperDeviceStatus();
         Regenerate();
         // NB: do NOT load cloud voices here. ConfigViewModel is constructed eagerly at shell
         // startup, and a cloud TTS + key would make a live HTTP call before the user acts (the
@@ -224,6 +225,49 @@ public sealed partial class ConfigViewModel : ObservableObject
     /// <summary>No input-cleanup engine is bundled — show the how-to-enable note instead of dead pickers.</summary>
     public bool ShowAudioCleanupHint => !AecEngineAvailable && !EnhanceEngineAvailable;
 
+    // ── Whisper compute-device availability (VLS-002 GPU) ─────────────────────
+    // Whether the selected WhisperCpp Device's native runtime is actually bundled in THIS build — checked
+    // safely (no model load, no process-wide runtime lock) via WhisperRuntimeProbe. A GPU device with no
+    // bundled runtime would otherwise only fail at session start; this flags it in the picker up front.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWhisperDeviceWarning), nameof(ShowWhisperDeviceNote))]
+    private bool _whisperDeviceAvailable = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowWhisperDeviceWarning), nameof(ShowWhisperDeviceNote))]
+    private string? _whisperDeviceStatus;
+
+    /// <summary>The selected GPU device's runtime is missing — show the red remediation.</summary>
+    public bool ShowWhisperDeviceWarning => !WhisperDeviceAvailable && !string.IsNullOrEmpty(WhisperDeviceStatus);
+    /// <summary>The selected device is available but worth a muted note (auto / GPU-needs-hardware).</summary>
+    public bool ShowWhisperDeviceNote => WhisperDeviceAvailable && !string.IsNullOrEmpty(WhisperDeviceStatus);
+
+    private void RefreshWhisperDeviceStatus()
+    {
+        if (!WhisperCppOptions.TryParseDevice(SelectedWhisperDevice, out var device))
+        {
+            WhisperDeviceAvailable = false;
+            WhisperDeviceStatus = $"Unknown device '{SelectedWhisperDevice}'. Valid: cpu, auto, cuda, vulkan, coreml.";
+        }
+        else if (device == WhisperDevice.Cpu)
+        {
+            WhisperDeviceAvailable = true;
+            WhisperDeviceStatus = null; // CPU is the unremarkable default — no note
+        }
+        else if (WhisperRuntimeProbe.IsAvailable(device))
+        {
+            WhisperDeviceAvailable = true;
+            WhisperDeviceStatus = device == WhisperDevice.Auto
+                ? "Auto — uses the best available GPU backend, falling back to CPU."
+                : "Runtime bundled — needs a compatible GPU/driver; a Talk run fails clearly if it can't load.";
+        }
+        else
+        {
+            WhisperDeviceAvailable = false;
+            WhisperDeviceStatus = WhisperRuntimeProbe.Remediation(device);
+        }
+    }
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
@@ -313,7 +357,7 @@ public sealed partial class ConfigViewModel : ObservableObject
         Regenerate();
     }
     partial void OnSelectedWhisperModelChanged(string value) => Regenerate();
-    partial void OnSelectedWhisperDeviceChanged(string value) => Regenerate();
+    partial void OnSelectedWhisperDeviceChanged(string value) { RefreshWhisperDeviceStatus(); Regenerate(); }
     partial void OnSelectedPiperVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroVoiceChanged(string value) => Regenerate();
     partial void OnSelectedKokoroPrecisionChanged(string value) => Regenerate();
