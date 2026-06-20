@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Shared ONNX Runtime model host (VLS-006).** A new **`Voxa.Audio.Onnx`** package ends the per-engine ORT
+  session setup that SileroVad and Kokoro each re-implement today: `OnnxModelHost.Load(path, device, hook)`
+  returns a shared `IOnnxSession` from a **process-wide `(path, device)` cache** (weights load once, shared by
+  every connection — the Kokoro/whisper.cpp cache shape, lifted), with `EvictAll()` for tests/Studio. A device
+  seam (`OnnxDevice` + `OnnxDeviceParser`, the shared `cpu`/`auto`/`cuda`/`directml`/`coreml` `Device`
+  convention) keeps **CPU the default and byte-identical** — the package references only the CPU
+  `Microsoft.ML.OnnxRuntime` (`1.26.0`, `PrivateAssets`, pinned to SileroVad/Kokoro), so **GPU is opt-in via a
+  user-added `Microsoft.ML.OnnxRuntime.Gpu`/`.DirectML` package and never bundled**; an explicit GPU device
+  without its runtime fails at session creation with a copy-pasteable remediation, while `auto` falls back to
+  CPU with a warning (never a throw). An `OnnxModelDescriptor` (graph + SHA-256-pinned sidecars) + `ResolveAsync`
+  lets a model self-describe and resolve through the unchanged `VoxaModelCache`. The package ships the **host +
+  seam + descriptor shape, not a model**: per-family catalogs (and their pinned hashes + cleared licences) ride
+  the consuming engines (VLS-004/005/007/008, VRT-005). Existing engines are unchanged — adopting the host is an
+  additive follow-up. The `OnnxTensors` convenience run-helper is deferred to the first consumer that pins its
+  dtype matrix.
 - **Full-duplex speech-to-speech seam + composite (VRT-005).** Positions Voxa for a local Moshi/PersonaPlex-class
   speech-to-speech model with a seam in the same family as the cloud realtime composites. A new
   `ISpeechToSpeechSession` (in `Voxa.Speech.Abstractions`) models speech-core's `FullDuplexSpeechInterface` —
