@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **STT vendor expansion — Pipecat-parity, batch tier (Groq, Together).** Two new packages,
+  **`Voxa.Speech.Groq`** and **`Voxa.Speech.Together`**, add their Whisper transcription endpoints as
+  `Voxa:Stt = "Groq"` / `"Together"`. Both vendors are OpenAI-compatible (`/audio/transcriptions`), so each
+  is a thin `VoxaSttDescriptor` reusing the proven `OpenAIWhisperEngine` pointed at the vendor's base URL —
+  only credentials, base URL and model name differ (Groq → `whisper-large-v3-turbo`, Together →
+  `openai/whisper-large-v3`). Registered automatically by the meta-package; config under `Voxa:Groq` /
+  `Voxa:Together`. First wave of broader STT coverage; streaming vendors (Deepgram, AssemblyAI, …) follow on
+  the same `ISpeechToTextEngine` seam.
 - **Speaker-segmentation ONNX engine (VLS-005 WS2).** A new opt-in **`Voxa.Audio.Diarization.Onnx`** package
   ships `PyannoteOnnxSegmentation` — an `ISpeakerSegmentation` backed by the **MIT-licensed** pyannote
   segmentation-3.0 model on the shared `Voxa.Audio.Onnx` host. It's a clean ONNX-on-host fit because the model's

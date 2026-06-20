@@ -30,11 +30,13 @@
     <Project Path="src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj" />
     <Project Path="src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj" />
     <Project Path="src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj" />
+    <Project Path="src/Voxa.Speech.Groq/Voxa.Speech.Groq.csproj" />
     <Project Path="src/Voxa.Speech.Mistral/Voxa.Speech.Mistral.csproj" />
     <Project Path="src/Voxa.Speech.Kokoro/Voxa.Speech.Kokoro.csproj" />
     <Project Path="src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj" />
     <Project Path="src/Voxa.Speech.Piper/Voxa.Speech.Piper.csproj" />
     <Project Path="src/Voxa.Speech.Sidecar/Voxa.Speech.Sidecar.csproj" />
+    <Project Path="src/Voxa.Speech.Together/Voxa.Speech.Together.csproj" />
     <Project Path="src/Voxa.Speech.WhisperCpp/Voxa.Speech.WhisperCpp.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
     <Project Path="src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj" />
@@ -59,11 +61,13 @@
     <Project Path="tests/Voxa.Speech.Abstractions.Tests/Voxa.Speech.Abstractions.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Azure.Tests/Voxa.Speech.Azure.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.ElevenLabs.Tests/Voxa.Speech.ElevenLabs.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Groq.Tests/Voxa.Speech.Groq.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Mistral.Tests/Voxa.Speech.Mistral.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Kokoro.Tests/Voxa.Speech.Kokoro.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.OpenAI.Tests/Voxa.Speech.OpenAI.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Piper.Tests/Voxa.Speech.Piper.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Sidecar.Tests/Voxa.Speech.Sidecar.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Together.Tests/Voxa.Speech.Together.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
     <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />

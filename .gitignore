@@ -4,6 +4,7 @@ obj/
 out/
 artifacts/
 fdb-out/
+publish/
 
 # IDE
 .vs/

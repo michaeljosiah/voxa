@@ -10,10 +10,12 @@ using Voxa.AspNetCore;
 using Voxa.Audio.SileroVad;
 using Voxa.Speech.Azure;
 using Voxa.Speech.ElevenLabs;
+using Voxa.Speech.Groq;
 using Voxa.Speech.Kokoro;
 using Voxa.Speech.Mistral;
 using Voxa.Speech.OpenAI;
 using Voxa.Speech.Piper;
+using Voxa.Speech.Together;
 using Voxa.Speech.WhisperCpp;
 
 namespace Voxa;
@@ -41,6 +43,8 @@ public static class VoxaDefaultsExtensions
         {
             voxa.AddProvider(OpenAISpeechDescriptors.Stt);
             voxa.AddProvider(OpenAISpeechDescriptors.Tts);
+            voxa.AddProvider(GroqSpeechDescriptors.Stt);       // Groq Whisper (OpenAI-compatible REST)
+            voxa.AddProvider(TogetherSpeechDescriptors.Stt);   // Together Whisper (OpenAI-compatible REST)
             voxa.AddProvider(AzureSpeechDescriptors.Stt);
             voxa.AddProvider(AzureSpeechDescriptors.Tts);
             voxa.AddProvider(ElevenLabsDescriptors.Tts);

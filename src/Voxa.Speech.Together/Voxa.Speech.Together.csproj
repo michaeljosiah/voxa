@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Speech.Together</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Together AI Whisper speech-to-text for the Voxa pipeline, via Together's OpenAI-compatible /audio/transcriptions API. A thin descriptor over the Voxa OpenAI Whisper engine pointed at Together.</Description>
+    <PackageTags>voxa;voice;ai;together;whisper;stt</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Speech.Together.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
+  </ItemGroup>
+
+</Project>
