@@ -1,3 +1,5 @@
+using Voxa.Studio.Audio;
+using Voxa.Studio.Services;
 using Voxa.Studio.ViewModels;
 
 namespace Voxa.Studio.Tests;
@@ -85,5 +87,43 @@ public class ConfigDeviceCompatTests
         Assert.False(vm.KokoroDeviceAvailable);
         Assert.True(vm.ShowKokoroDeviceWarning);
         Assert.Contains("Unknown device", vm.KokoroDeviceStatus);
+    }
+
+    // ── device override emission (codex P2): cpu must beat a base-config GPU device, not silently fall back ──
+
+    [Fact]
+    public async Task Selecting_Cpu_Overrides_A_Base_Config_Gpu_Device()
+    {
+        var config = TestSupport.LocalConfig(null,
+            ("Voxa:Stt", "WhisperCpp"), ("Voxa:Tts", "Kokoro"),
+            ("Voxa:WhisperCpp:Device", "cuda"), ("Voxa:Kokoro:Device", "cuda"));
+        await using var services = new StudioServices(config, new NullAudioDevice(),
+            new MemorySecretsStore(), new ProviderActivationStore(TestSupport.TempActivationsPath()),
+            new PipelineProfileStore(TestSupport.TempProfilesPath()));
+        var vm = new ConfigViewModel(services);
+
+        Assert.Equal("cuda", vm.SelectedWhisperDevice);   // seeded from the base config
+        Assert.Equal("cuda", vm.SelectedKokoroDevice);
+
+        vm.SelectedWhisperDevice = "cpu";                  // user turns GPU back off
+        vm.SelectedKokoroDevice = "cpu";
+
+        var pairs = vm.DraftPairs();
+        Assert.Equal("cpu", pairs["Voxa:WhisperCpp:Device"]);  // explicit cpu, beating the base cuda
+        Assert.Equal("cpu", pairs["Voxa:Kokoro:Device"]);
+    }
+
+    [Fact]
+    public void Selecting_Cpu_With_No_Base_Device_Omits_The_Key()
+    {
+        var vm = new ConfigViewModel(TestSupport.Services())
+        {
+            SelectedStt = "WhisperCpp", SelectedTts = "Kokoro",
+            SelectedWhisperDevice = "cpu", SelectedKokoroDevice = "cpu",
+        };
+
+        var pairs = vm.DraftPairs();
+        Assert.False(pairs.ContainsKey("Voxa:WhisperCpp:Device"));   // minimal export — cpu is the default
+        Assert.False(pairs.ContainsKey("Voxa:Kokoro:Device"));
     }
 }

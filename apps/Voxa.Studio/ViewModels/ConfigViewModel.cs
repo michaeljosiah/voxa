@@ -34,6 +34,12 @@ public sealed partial class ConfigViewModel : ObservableObject
     private readonly bool _aecInBaseConfig;
     private readonly bool _enhanceInBaseConfig;
 
+    // Same rule for the ONNX/whisper compute device: if the base config pins a non-CPU device, selecting "cpu"
+    // in the picker must emit an explicit "cpu" override — omitting the key would let the base GPU value win
+    // through config layering, so the picker could never turn GPU back off without hand-editing appsettings.
+    private readonly bool _whisperDeviceInBaseConfig;
+    private readonly bool _kokoroDeviceInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -68,10 +74,12 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
         _selectedWhisperDevice = voxa["WhisperCpp:Device"] ?? "cpu";
+        _whisperDeviceInBaseConfig = !string.Equals(_selectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase);
         _selectedPiperVoice = voxa["Piper:Voice"] ?? "en_US-amy-low";
         _selectedKokoroVoice = voxa["Kokoro:Voice"] ?? "af_heart";
         _selectedKokoroPrecision = voxa["Kokoro:Precision"] ?? "int8";
         _selectedKokoroDevice = voxa["Kokoro:Device"] ?? "cpu";
+        _kokoroDeviceInBaseConfig = !string.Equals(_selectedKokoroDevice, "cpu", StringComparison.OrdinalIgnoreCase);
         _agentModel = voxa["Agent:Model"] ?? "gpt-4o-mini";
         _agentBaseUrl = voxa["Agent:BaseUrl"] ?? "http://localhost:11434/v1";
 
@@ -470,16 +478,24 @@ public sealed partial class ConfigViewModel : ObservableObject
         else if (_enhanceInBaseConfig)
             pairs["Voxa:Enhance:Engine"] = "None";
         if (ShowWhisperOptions) pairs["Voxa:WhisperCpp:Model"] = SelectedWhisperModel;
+        // Emit the selected device; cpu is omitted (minimal export) UNLESS the base config pinned a GPU device,
+        // in which case emit an explicit "cpu" so Apply/export actually turns GPU back off — an omitted key
+        // would fall back to the base value through config layering (the AEC / denoise / smart-turn rule).
         if (ShowWhisperOptions && !string.Equals(SelectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:WhisperCpp:Device"] = SelectedWhisperDevice;
+        else if (ShowWhisperOptions && _whisperDeviceInBaseConfig)
+            pairs["Voxa:WhisperCpp:Device"] = "cpu";
         if (ShowPiperOptions) pairs["Voxa:Piper:Voice"] = SelectedPiperVoice;
         if (ShowKokoroOptions)
         {
             pairs["Voxa:Kokoro:Voice"] = SelectedKokoroVoice;
             pairs["Voxa:Kokoro:Precision"] = SelectedKokoroPrecision;
-            // Omit cpu (the default) so the exported block stays minimal — same rule as the Whisper device.
+            // Same rule as the Whisper device just above: omit cpu unless the base config pinned a GPU device,
+            // then emit explicit "cpu" so the picker can turn Kokoro GPU back off.
             if (!string.Equals(SelectedKokoroDevice, "cpu", StringComparison.OrdinalIgnoreCase))
                 pairs["Voxa:Kokoro:Device"] = SelectedKokoroDevice;
+            else if (_kokoroDeviceInBaseConfig)
+                pairs["Voxa:Kokoro:Device"] = "cpu";
         }
         // A library-backed cloud voice (ElevenLabs/Mistral/VoiceClone) writes its provider's key —
         // the voice id only, never an API key.
