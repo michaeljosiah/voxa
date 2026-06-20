@@ -87,9 +87,12 @@ jobs:
         with:
           path: .voxa-models
           # The key hashes the pinned catalogs; a model bump invalidates it, nothing else does.
+          # EVERY catalog a LocalModels test resolves a model from MUST be listed here — otherwise its
+          # key never changes, the warm-download step is skipped on a cache hit, and the network-blocked
+          # run can't find the model (this is how the pyannote segmentation model slipped through).
           # The vN prefix is a manual epoch — bump it to discard a cache saved by buggy plumbing
           # (v1 cached an incomplete dir because the tests ignored VOXA_MODEL_CACHE).
-          key: voxa-models-v2-${{ runner.os }}-${{ hashFiles('src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs', 'src/Voxa.Speech.Piper/PiperVoiceCatalog.cs', 'src/Voxa.Speech.Piper/PiperExecutableCatalog.cs', 'src/Voxa.Speech.Kokoro/KokoroCatalog.cs') }}
+          key: voxa-models-v2-${{ runner.os }}-${{ hashFiles('src/Voxa.Speech.WhisperCpp/WhisperCppModelCatalog.cs', 'src/Voxa.Speech.Piper/PiperVoiceCatalog.cs', 'src/Voxa.Speech.Piper/PiperExecutableCatalog.cs', 'src/Voxa.Speech.Kokoro/KokoroCatalog.cs', 'src/Voxa.Audio.Diarization.Onnx/PyannoteSegmentationCatalog.cs') }}
 
       - name: Restore
         run: dotnet restore Voxa.slnx
