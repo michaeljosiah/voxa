@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Services.SpeechToSpeech</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Full-duplex speech-to-speech composite for the Voxa pipeline (VRT-005). A SpeechToSpeechProcessor that slots in where the cloud realtime composites (OpenAI Realtime / Azure Voice Live) do — full-duplex, model-owned VAD/turn-taking, identical lifecycle/diagnostics frames — but driven by an in-process (or sidecar) ISpeechToSpeechSession instead of a wire transport. Ships the seam + composite; the local speech-to-speech model is deferred behind a feasibility spike.</Description>
+    <PackageTags>voxa;voice;ai;speech-to-speech;full-duplex;realtime;composite</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Voxa.Core: FrameProcessor + the frame vocabulary. Voxa.Speech.Abstractions: the ISpeechToSpeechSession seam. -->
+    <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Services.SpeechToSpeech.Tests" />
+  </ItemGroup>
+
+</Project>
