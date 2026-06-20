@@ -14,6 +14,7 @@ namespace Voxa.Audio;
 public sealed class AudioEnhancerProcessor : FrameProcessor
 {
     private readonly IAudioEnhancer _enhancer;
+    private bool _rateMismatchReported; // surface the rate-mismatch error once, not per frame
 
     public AudioEnhancerProcessor(IAudioEnhancer enhancer) : base("AudioEnhancer")
         => _enhancer = enhancer ?? throw new ArgumentNullException(nameof(enhancer));
@@ -33,8 +34,29 @@ public sealed class AudioEnhancerProcessor : FrameProcessor
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
         if (frame is AudioRawFrame audio)
+        {
+            // The enhancer expects exactly _enhancer.SampleRate. Feeding a fixed-rate denoiser audio at a
+            // different rate would make it misread the timing and corrupt what the VAD/STT see, so on a mismatch
+            // we surface a clear error (once) and forward the frame UNENHANCED — never a silent resample, never
+            // corruption. (Resampling, if a real engine wants it, is the implementation's job behind its own rate.)
+            if (audio.SampleRate != _enhancer.SampleRate)
+            {
+                if (!_rateMismatchReported)
+                {
+                    _rateMismatchReported = true;
+                    await PushErrorAsync(
+                        $"AudioEnhancer: input is {audio.SampleRate} Hz but the enhancer expects {_enhancer.SampleRate} Hz; " +
+                        "forwarding audio unenhanced. Configure a matching enhancer or input sample rate.",
+                        null, ct).ConfigureAwait(false);
+                }
+                await PushFrameAsync(frame, ct).ConfigureAwait(false); // unenhanced, original envelope
+                return;
+            }
+
             await PushFrameAsync(audio with { Pcm = _enhancer.Enhance(audio.Pcm) }, ct).ConfigureAwait(false);
-        else
-            await PushFrameAsync(frame, ct).ConfigureAwait(false); // forward Start/End/system/everything else
+            return;
+        }
+
+        await PushFrameAsync(frame, ct).ConfigureAwait(false); // forward Start/End/system/everything else
     }
 }

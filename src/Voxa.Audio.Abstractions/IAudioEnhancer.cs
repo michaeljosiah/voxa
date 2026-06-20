@@ -15,9 +15,11 @@ namespace Voxa.Audio;
 public interface IAudioEnhancer : IDisposable
 {
     /// <summary>
-    /// The PCM sample rate (Hz) the model/DSP expects — the near-end / input rate the chain runs at. The
-    /// processor asserts each inbound <c>AudioRawFrame.SampleRate</c> matches this and throws a clear error at
-    /// session start on a mismatch (no silent resample — that is the implementation's call, made explicit).
+    /// The PCM sample rate (Hz) the model/DSP expects — the near-end / input rate it runs at.
+    /// <see cref="AudioEnhancerProcessor"/> checks each inbound <c>AudioRawFrame.SampleRate</c> against this; on a
+    /// mismatch it surfaces a clear error (an upstream <c>ErrorFrame</c>) and forwards the frame <b>unenhanced</b>
+    /// — it never silently resamples or feeds wrong-rate PCM to a fixed-rate model (which would corrupt what the
+    /// VAD/STT see). Any internal resample an engine wants to do happens behind its own advertised rate.
     /// </summary>
     int SampleRate { get; }
 

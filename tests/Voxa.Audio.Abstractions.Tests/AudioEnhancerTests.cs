@@ -97,6 +97,33 @@ public class AudioEnhancerProcessorTests
     }
 
     [Fact]
+    public async Task Mismatched_Sample_Rate_Surfaces_An_Error_And_Forwards_Unenhanced()
+    {
+        // VLS-004 (Codex P2): never feed wrong-rate PCM to a fixed-rate denoiser. On a mismatch the processor
+        // surfaces an upstream ErrorFrame and forwards the frame UNENHANCED (not the XOR'd output) — no corruption.
+        var fake = new FakeAudioEnhancer(16000); // expects 16 kHz
+        await using var upstream = new CapturingProcessor("up");
+        await using var enh = new AudioEnhancerProcessor(fake);
+        await using var sink = new CapturingProcessor("down");
+        upstream.Link(enh);
+        enh.Link(sink);
+        upstream.Start();
+        enh.Start();
+        sink.Start();
+
+        var pcm = new byte[] { 1, 2, 3, 4 };
+        await enh.QueueFrameAsync(new AudioRawFrame(pcm, 24000, 1)); // 24 kHz ≠ 16 kHz
+
+        await sink.WaitForAsync(f => f is AudioRawFrame, Timeout);
+        await upstream.WaitForAsync(f => f is ErrorFrame, Timeout);
+
+        var forwarded = (AudioRawFrame)sink.Captured.First(f => f is AudioRawFrame);
+        Assert.Equal(pcm, forwarded.Pcm.ToArray());                 // unenhanced (not XOR'd) — no corruption
+        Assert.Equal(24000, forwarded.SampleRate);                  // original envelope preserved
+        Assert.Contains(upstream.Captured, f => f is ErrorFrame);   // mismatch surfaced loudly
+    }
+
+    [Fact]
     public async Task Null_Enhancer_Leaves_Audio_Byte_Identical()
     {
         await using var enh = new AudioEnhancerProcessor(new NullAudioEnhancer(16000));
