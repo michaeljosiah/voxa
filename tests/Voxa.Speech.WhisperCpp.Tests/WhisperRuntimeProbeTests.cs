@@ -29,4 +29,22 @@ public class WhisperRuntimeProbeTests
         Assert.DoesNotContain(WhisperDevice.Cuda, WhisperRuntimeProbe.AvailableDevices());
         Assert.Contains("Whisper.net.Runtime.Cuda", WhisperRuntimeProbe.Remediation(WhisperDevice.Cuda));
     }
+
+    [Fact] // codex P2: the Cuda12 opt-in package (runtimes/cuda12/…) also satisfies Device=cuda — no false warning.
+    public void Cuda12_Runtime_Satisfies_The_Cuda_Device()
+    {
+        if (WhisperRuntimeProbe.CurrentRid() is not { } rid) return; // unknown platform — nothing to assert
+
+        var root = Path.Combine(Path.GetTempPath(), "voxa-rtprobe", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "cuda12", rid)); // the engine accepts Cuda12 for Device=cuda
+        try
+        {
+            Assert.True(WhisperRuntimeProbe.IsAvailable(WhisperDevice.Cuda, root));
+            Assert.False(WhisperRuntimeProbe.IsAvailable(WhisperDevice.Vulkan, root)); // only cuda12 was deployed
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
