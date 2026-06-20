@@ -57,7 +57,7 @@ public static class SmartTurnServiceCollectionExtensions
                 // Honor a host-customized Voxa HTTP client (proxy / mTLS / retries / test handler), exactly
                 // as the STT/TTS providers do, falling back to the shared client when none is registered —
                 // otherwise the smart-turn endpoint alone would ignore the host's outbound settings.
-                (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve() ?? VoxaHttp.Shared,
+                sp.ResolveHttpClient() ?? VoxaHttp.Shared,
                 sp.GetService<ILoggerFactory>()?.CreateLogger("Voxa.Audio.SmartTurn")));
         }
         else if (!string.IsNullOrWhiteSpace(provider) && !string.Equals(provider, "None", StringComparison.OrdinalIgnoreCase))

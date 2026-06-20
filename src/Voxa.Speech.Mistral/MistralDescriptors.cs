@@ -61,5 +61,5 @@ public static class MistralDescriptors
     }
 
     private static HttpClient? ResolveHttpClient(IServiceProvider sp)
-        => (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve();
+        => sp.ResolveHttpClient();
 }

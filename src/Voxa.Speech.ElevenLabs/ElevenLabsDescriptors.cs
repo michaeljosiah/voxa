@@ -46,5 +46,5 @@ public static class ElevenLabsDescriptors
     }
 
     private static HttpClient? ResolveHttpClient(IServiceProvider sp)
-        => (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve();
+        => sp.ResolveHttpClient();
 }
