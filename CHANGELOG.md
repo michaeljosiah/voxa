@@ -154,6 +154,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Voxa Studio: tidier Builder toolbar.** The two export buttons collapse into one **Export ▾** dropdown
   (appsettings / C# compose), and Save collapses into one **Save ▾** dropdown — *Save to active profile*
   plus a *Save as a new profile* name field — reclaiming the always-on text box and three buttons.
+- **Voxa Studio: Models page surfaces the diarization model (VLS-005).** The pinned **pyannote
+  segmentation-3.0** model now appears in the **Models** page under a new **Diarization** tab — so it can be
+  selected, prefetched (it joins "Prefetch full catalog" for air-gap provisioning), SHA-256-verified, and
+  purged like any other artifact, instead of only downloading lazily on first programmatic use. A cached copy
+  is recognised as a **Pyannote** row (not an unknown "Other" file). Studio now references
+  `Voxa.Audio.Diarization.Onnx` directly (the engine is opt-in, outside the meta-package).
 - **Voxa Studio: Models tabs + provider filters (Models & Voices).** The **Models** page now groups the
   cache into tabs — **All / STT / TTS / Other** — and each tab has a **provider** dropdown (Whisper /
   Piper / Kokoro, scoped to what's in that tab) to narrow the list. The **Voices** library gains the same
