@@ -451,13 +451,21 @@ internal static class BuilderChainCompiler
                     sb.AppendLine("        MinRms:              tuning.VadMinRms,");
                     sb.AppendLine("        StartDuration:       tuning.VadStartDuration,");
                     sb.AppendLine("        StopDuration:        tuning.VadStopDuration,");
-                    sb.AppendLine("        PrerollDuration:     tuning.VadPrerollDuration)));");
+                    sb.AppendLine("        PrerollDuration:     tuning.VadPrerollDuration)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine("        // Eager-STT delay + force-split cap — match the composer (null under Default ⇒ unchanged).");
+                    sb.AppendLine("        EagerSttDelay        = tuning.VadEagerSttDelay,");
+                    sb.AppendLine("        MaxUtteranceDuration = tuning.VadMaxUtteranceDuration,");
+                    sb.AppendLine("    }));");
                     break;
 
                 case BuilderNodeKind.Stt:
                     sb.AppendLine();
                     sb.AppendLine($"    // {node.Provider} STT (resolved above; options from the Voxa:{node.Provider} config section)");
-                    sb.AppendLine("    builder.Then(stt.CreateProcessor(session, root));");
+                    sb.AppendLine("    var sttProcessor = stt.CreateProcessor(session, root);");
+                    sb.AppendLine("    // VRT-004 interim coalescing (default ~150 ms) — match the composer so a chatty engine can't flood the channel.");
+                    sb.AppendLine("    sttProcessor.InterimMinInterval = TimeSpan.FromMilliseconds(Math.Max(0, options.InterimMinIntervalMs ?? 150));");
+                    sb.AppendLine("    builder.Then(sttProcessor);");
                     break;
 
                 case BuilderNodeKind.Filter:
@@ -476,6 +484,7 @@ internal static class BuilderChainCompiler
                     sb.AppendLine("        ? new InMemoryChatHistory(options.Agent.MaxHistoryMessages) : null;");
                     sb.AppendLine("    builder.Then(MicrosoftAgentVoice.CreateProcessor(agent, opts =>");
                     sb.AppendLine("    {");
+                    sb.AppendLine("        opts.MaxResponseDuration = tuning.MaxResponseDuration; // VRT-002 WS2 §6.5 response cap — match the composer");
                     sb.AppendLine("        if (history is null) return;");
                     sb.AppendLine("        opts.BuildMessages = (turn, ct) => ValueTask.FromResult<IReadOnlyList<ChatMessage>>(");
                     sb.AppendLine("            new List<ChatMessage>(history.Snapshot()) { new(ChatRole.User, turn.UserText) });");
