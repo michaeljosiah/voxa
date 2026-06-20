@@ -538,4 +538,116 @@ public class AgentLoopProcessorTests
         await ctx.Emitter.EmitAsync(new TextFrame("custom-from-emitter"), CancellationToken.None);
         yield return new LlmTextChunkFrame("yielded");
     }
+
+    // ── Disposal (CQ-001) ──────────────────────────────────────────────────
+
+    /// <summary>A driver whose turn blocks forever and records when its token is cancelled.</summary>
+    private sealed class CancellationObservingDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource TurnStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource TurnCancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run(ct);
+
+        private async IAsyncEnumerable<Frame> Run([EnumeratorCancellation] CancellationToken ct)
+        {
+            TurnStarted.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                TurnCancelled.TrySetResult(); // the turn token fired — the processor CTS was cancelled
+                throw;
+            }
+            yield break;
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_Through_The_Base_Reference_Cancels_The_Turn_Worker_Without_An_EndFrame()
+    {
+        // CQ-001 regression: PipelineRunner disposes processors through a FrameProcessor-typed reference.
+        // The old `new DisposeAsync` (method hiding) was skipped on that base-typed path, leaking the turn
+        // worker and its CTS on abrupt teardown. The DisposeAsyncCore hook must run and cancel the worker.
+        var driver = new CancellationObservingDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.TurnStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)); // a turn is actively in flight
+
+        // Abrupt teardown: dispose the runner directly — no EndFrame is ever injected.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The in-flight turn must have been cancelled — proof the derived CTS was cancelled via DisposeAsyncCore.
+        await driver.TurnCancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>A driver that blocks on a frontend-tool result using a token NOT linked to the processor CTS.</summary>
+    private sealed class FrontendToolWaitingDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource ToolRequested = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run(ctx);
+
+        private async IAsyncEnumerable<Frame> Run(VoiceTurnContext ctx)
+        {
+            yield return new ToolCallRequestFrame("never-answered", "x", "{}");
+            ToolRequested.TrySetResult();
+            // CancellationToken.None: only a TCS cancel can release this, not the processor CTS.
+            await ctx.FrontendTools.AwaitToolResultAsync("never-answered", CancellationToken.None);
+            yield return new LlmTextChunkFrame("unreached");
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_While_A_Driver_Awaits_A_Frontend_Tool_Does_Not_Deadlock()
+    {
+        // CQ-001 (codex P2): a driver blocked in AwaitToolResultAsync on CancellationToken.None is released
+        // only by cancelling its pending TCS. DisposeAsyncCore must cancel pending waits BEFORE awaiting the
+        // worker, or PipelineRunner.DisposeAsync hangs forever on the un-released worker.
+        var driver = new FrontendToolWaitingDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.ToolRequested.Task.WaitAsync(TimeSpan.FromSeconds(2)); // worker is now blocked on the TCS
+
+        // A hang here is the deadlock this guards against — must finish well within the timeout.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>A driver stuck on work that never observes the processor token (simulates a buggy/blocking driver).</summary>
+    private sealed class UncancellableDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource TurnStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run();
+
+        private async IAsyncEnumerable<Frame> Run()
+        {
+            TurnStarted.TrySetResult();
+            await new TaskCompletionSource().Task; // never completes, never observes any cancellation token
+            yield break;
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_With_A_Driver_Stuck_In_Uncancellable_Work_Still_Completes()
+    {
+        // CQ-001 (codex P2, round 2): the worker join must be BOUNDED. A driver stuck in work that never
+        // observes the processor token would otherwise make PipelineRunner.DisposeAsync hang forever; the
+        // bounded WaitAsync (mirroring OnEndAsync) gives up after the timeout so connection cleanup completes.
+        var driver = new UncancellableDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.TurnStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)); // worker is now stuck, ignoring the CTS
+
+        // Disposal must return despite the stuck worker. Bound is 5 s; allow generous margin for CI.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+    }
 }

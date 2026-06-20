@@ -333,11 +333,40 @@ public sealed class AgentLoopProcessor : FrameProcessor
         }
     }
 
-    public new async ValueTask DisposeAsync()
+    /// <summary>Binary-compat shim: preserves the public <c>DisposeAsync</c> member this sealed type used to
+    /// declare, forwarding to the base whose <see cref="DisposeAsyncCore"/> hook performs the actual cleanup.</summary>
+    // A precompiled consumer may hold a member reference to AgentLoopProcessor.DisposeAsync; keeping the public
+    // member lets it bind after a Voxa.Core upgrade without recompiling. Unlike the original `new` method it carries
+    // NO cleanup logic (that lives in DisposeAsyncCore), so cleanup runs exactly once on every dispose path.
+    public new ValueTask DisposeAsync() => base.DisposeAsync();
+
+    protected override async ValueTask DisposeAsyncCore()
     {
+        // Runs on every disposal path — including PipelineRunner's base-typed dispose, which the former
+        // `new DisposeAsync` silently skipped (CQ-001), leaking the turn worker + its CTS on abrupt
+        // teardown (no EndFrame). Idempotent: safe whether or not OnEndAsync already drained the worker.
+        _turnQueue.Writer.TryComplete();
         _processorCts.Cancel();
+
+        // Cancel pending frontend-tool waits BEFORE awaiting the worker: a driver blocked in
+        // AwaitToolResultAsync on CancellationToken.None is released only by cancelling its TCS, not by
+        // the processor CTS — awaiting first would deadlock disposal. (Mirrors OnEndAsync's ordering.)
+        foreach (var pending in _pendingFrontendTools.Values) pending.TrySetCanceled();
+        _pendingFrontendTools.Clear();
+
+        if (_turnWorker is not null)
+        {
+            // Bound the join (mirrors OnEndAsync): a driver stuck in work that never observes the processor
+            // token must not hang PipelineRunner.DisposeAsync forever — give up after the timeout and let the
+            // stuck task leak rather than blocking connection cleanup indefinitely (CQ-001, codex P2).
+            try { await _turnWorker.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (TimeoutException) { /* driver ignored cancellation; don't block teardown on it */ }
+            catch (OperationCanceledException) { /* worker observed the cancel during teardown */ }
+            _turnWorker = null;
+        }
+
         _processorCts.Dispose();
-        await base.DisposeAsync().ConfigureAwait(false);
+        await base.DisposeAsyncCore().ConfigureAwait(false);
     }
 
     // ── Internal gateway/emitter — exposed to the driver via VoiceTurnContext ────────────────
