@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Speech.Deepgram</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Deepgram streaming speech-to-text for the Voxa pipeline (WebSocket, nova-3). Implements ISpeechToTextEngine over the shared WebSocketSttEngine base — pair with the generic SpeechToTextProcessor from Voxa.Speech.Abstractions.</Description>
+    <PackageTags>voxa;voice;ai;deepgram;stt;streaming</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Speech.Deepgram.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

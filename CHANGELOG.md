@@ -8,14 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **STT vendor expansion — Pipecat-parity, batch tier (Groq, Together).** Two new packages,
-  **`Voxa.Speech.Groq`** and **`Voxa.Speech.Together`**, add their Whisper transcription endpoints as
-  `Voxa:Stt = "Groq"` / `"Together"`. Both vendors are OpenAI-compatible (`/audio/transcriptions`), so each
-  is a thin `VoxaSttDescriptor` reusing the proven `OpenAIWhisperEngine` pointed at the vendor's base URL —
-  only credentials, base URL and model name differ (Groq → `whisper-large-v3-turbo`, Together →
-  `openai/whisper-large-v3`). Registered automatically by the meta-package; config under `Voxa:Groq` /
-  `Voxa:Together`. First wave of broader STT coverage; streaming vendors (Deepgram, AssemblyAI, …) follow on
-  the same `ISpeechToTextEngine` seam.
+- **STT vendor expansion toward Pipecat parity (Groq, Together, Deepgram).** New STT provider packages
+  broaden vendor coverage on the existing `ISpeechToTextEngine` seam:
+  - **Batch tier — `Voxa.Speech.Groq` + `Voxa.Speech.Together`** (`Voxa:Stt = "Groq"` / `"Together"`). Both
+    are OpenAI-compatible (`/audio/transcriptions`), so each is a thin `VoxaSttDescriptor` reusing the proven
+    `OpenAIWhisperEngine` pointed at the vendor base URL — only credentials, base URL and model differ
+    (Groq → `whisper-large-v3-turbo`, Together → `openai/whisper-large-v3`).
+  - **Streaming tier — `Voxa.Speech.Deepgram`** (`Voxa:Stt = "Deepgram"`), the first WebSocket STT engine.
+    A new shared **`WebSocketSttEngine`** base (in `Voxa.Speech.Abstractions`) owns the connect / receive /
+    binary-send / close plumbing; vendors describe only the endpoint, auth, and message parser. Because Voxa
+    fires one agent turn per `IsFinal:true` transcription, the base streams interims for live display,
+    **accumulates** the vendor's locked segments, and emits a single **VAD/smart-turn-gated final** per
+    utterance via `FlushAsync()` — so a streaming vendor drives exactly one turn per utterance (like a batch
+    engine) but with no post-speech round-trip. Reusable for AssemblyAI / Gladia / Speechmatics next.
+
+  All registered automatically by the meta-package; config under `Voxa:Groq` / `Voxa:Together` / `Voxa:Deepgram`.
 - **Speaker-segmentation ONNX engine (VLS-005 WS2).** A new opt-in **`Voxa.Audio.Diarization.Onnx`** package
   ships `PyannoteOnnxSegmentation` — an `ISpeakerSegmentation` backed by the **MIT-licensed** pyannote
   segmentation-3.0 model on the shared `Voxa.Audio.Onnx` host. It's a clean ONNX-on-host fit because the model's

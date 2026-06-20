@@ -1,0 +1,194 @@
+using System.Net.WebSockets;
+using System.Text;
+using System.Threading.Channels;
+
+namespace Voxa.Speech;
+
+/// <summary>One parsed fragment from a streaming STT vendor's message.</summary>
+/// <param name="Text">The (partial or finalized) transcript text for the current segment.</param>
+/// <param name="IsSegmentFinal">
+/// True when the vendor has locked this segment (it won't change). <see cref="WebSocketSttEngine"/>
+/// accumulates locked segments and emits a single VAD-gated final on <see cref="WebSocketSttEngine.FlushAsync()"/>;
+/// non-final fragments only update the live (<c>IsFinal:false</c>) transcript.
+/// </param>
+public readonly record struct SttFragment(string Text, bool IsSegmentFinal);
+
+/// <summary>
+/// Base for streaming (WebSocket) <see cref="ISpeechToTextEngine"/> vendors — Deepgram, AssemblyAI, Gladia,
+/// Speechmatics, etc. Owns the <see cref="ClientWebSocket"/> connect / receive loop / binary-audio send /
+/// graceful close; subclasses only describe the vendor: the endpoint, the auth header, how to parse one
+/// server message into <see cref="SttFragment"/>s, and an optional close control frame.
+///
+/// <para><b>Turn integration.</b> Streaming vendors emit many "final" segments per utterance, but Voxa fires an
+/// agent turn on every <c>IsFinal:true</c> transcription, so this base does NOT forward segment-finals as Voxa
+/// finals. Instead it streams interims (<c>IsFinal:false</c>) for live display, accumulates the locked segments,
+/// and emits ONE accumulated final when <see cref="SpeechToTextProcessor"/> calls <see cref="FlushAsync()"/> at
+/// the VAD/smart-turn speech-end — so a streaming engine drives exactly one turn per utterance, like a batch
+/// engine, but with no post-speech round-trip (the transcript is already computed).</para>
+/// </summary>
+public abstract class WebSocketSttEngine : ISpeechToTextEngine
+{
+    private readonly Channel<TranscriptionResult> _transcripts = Channel.CreateUnbounded<TranscriptionResult>();
+    private readonly object _accLock = new();
+    private readonly List<string> _finalSegments = new();
+    private string _interimTail = string.Empty;
+    private ClientWebSocket? _ws;
+    private CancellationTokenSource? _cts;
+    private Task? _receiveLoop;
+
+    /// <summary>Optional BCP-47 language tag stamped on emitted results.</summary>
+    protected virtual string? Language => null;
+
+    /// <summary>The vendor WebSocket URL (including query parameters: model, encoding, sample rate, …).</summary>
+    protected abstract Uri BuildEndpoint();
+
+    /// <summary>Set request headers (typically the auth header) before the socket connects.</summary>
+    protected virtual void ConfigureConnect(ClientWebSocket ws) { }
+
+    /// <summary>Parse one server text message into zero or more fragments. Must be pure (no I/O) and not throw —
+    /// a throw is swallowed and the message ignored so a single malformed frame can't kill the receive loop.</summary>
+    protected abstract IEnumerable<SttFragment> ParseMessage(string message);
+
+    /// <summary>Optional text control frame to send on graceful stop (e.g. Deepgram <c>{"type":"CloseStream"}</c>).</summary>
+    protected virtual ReadOnlyMemory<byte>? CloseMessage => null;
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        if (_ws is not null) return; // idempotent
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var ws = new ClientWebSocket();
+        ConfigureConnect(ws);
+        await ws.ConnectAsync(BuildEndpoint(), ct).ConfigureAwait(false);
+        _ws = ws;
+        _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
+    }
+
+    public async ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
+    {
+        var ws = _ws;
+        if (ws is null || ws.State != WebSocketState.Open) return;
+        try
+        {
+            await ws.SendAsync(pcm, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
+                                      or OperationCanceledException or InvalidOperationException)
+        {
+            // Socket dropped / closing / disposed — drop this chunk rather than fault the pipeline.
+        }
+    }
+
+    public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct)
+        => _transcripts.Reader.ReadAllAsync(ct);
+
+    /// <summary>
+    /// VAD-gated final: <see cref="SpeechToTextProcessor"/> calls this at <c>UserStoppedSpeakingFrame</c>. Emit
+    /// the accumulated utterance transcript as one <c>IsFinal:true</c> result and reset — one turn per utterance.
+    /// </summary>
+    public Task FlushAsync()
+    {
+        string full;
+        lock (_accLock)
+        {
+            full = BuildRunningText();
+            _finalSegments.Clear();
+            _interimTail = string.Empty;
+        }
+        if (!string.IsNullOrWhiteSpace(full))
+            _transcripts.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, Language));
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync()
+    {
+        var ws = _ws;
+        if (ws is not null && ws.State == WebSocketState.Open && CloseMessage is { } cm)
+        {
+            try { await ws.SendAsync(cm, WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false); }
+            catch { /* best-effort close signal */ }
+        }
+        _cts?.Cancel();
+        if (_receiveLoop is not null)
+        {
+            try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
+        }
+        _transcripts.Writer.TryComplete();
+    }
+
+    // caller holds _accLock
+    private string BuildRunningText()
+    {
+        var joined = string.Join(' ', _finalSegments);
+        if (_interimTail.Length == 0) return joined;
+        return joined.Length == 0 ? _interimTail : joined + " " + _interimTail;
+    }
+
+    private async Task ReceiveLoopAsync(CancellationToken ct)
+    {
+        var ws = _ws!;
+        var buffer = new byte[16 * 1024];
+        using var msg = new MemoryStream();
+        try
+        {
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+            {
+                ValueWebSocketReceiveResult result;
+                try { result = await ws.ReceiveAsync(buffer.AsMemory(), ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
+                catch (WebSocketException) { break; }
+
+                if (result.MessageType == WebSocketMessageType.Close) break;
+                msg.Write(buffer, 0, result.Count);
+                if (!result.EndOfMessage) continue;
+
+                if (result.MessageType == WebSocketMessageType.Text)
+                    Ingest(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length));
+                msg.SetLength(0);
+            }
+        }
+        catch (OperationCanceledException) { /* shutdown */ }
+    }
+
+    private void Ingest(string json)
+    {
+        List<SttFragment>? frags;
+        try { frags = ParseMessage(json).ToList(); }
+        catch { return; } // ignore a malformed frame rather than kill the loop
+
+        if (frags.Count == 0) return;
+
+        string running;
+        lock (_accLock)
+        {
+            foreach (var f in frags)
+            {
+                if (f.IsSegmentFinal)
+                {
+                    if (f.Text.Length > 0) _finalSegments.Add(f.Text);
+                    _interimTail = string.Empty;
+                }
+                else
+                {
+                    _interimTail = f.Text;
+                }
+            }
+            running = BuildRunningText();
+        }
+
+        if (!string.IsNullOrEmpty(running))
+            _transcripts.Writer.TryWrite(new TranscriptionResult(running, IsFinal: false, Language));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        if (_receiveLoop is not null)
+        {
+            try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
+        }
+        _ws?.Dispose();
+        _cts?.Dispose();
+        _transcripts.Writer.TryComplete();
+        GC.SuppressFinalize(this);
+    }
+}

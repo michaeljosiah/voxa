@@ -9,6 +9,7 @@ using OpenAI;
 using Voxa.AspNetCore;
 using Voxa.Audio.SileroVad;
 using Voxa.Speech.Azure;
+using Voxa.Speech.Deepgram;
 using Voxa.Speech.ElevenLabs;
 using Voxa.Speech.Groq;
 using Voxa.Speech.Kokoro;
@@ -45,6 +46,7 @@ public static class VoxaDefaultsExtensions
             voxa.AddProvider(OpenAISpeechDescriptors.Tts);
             voxa.AddProvider(GroqSpeechDescriptors.Stt);       // Groq Whisper (OpenAI-compatible REST)
             voxa.AddProvider(TogetherSpeechDescriptors.Stt);   // Together Whisper (OpenAI-compatible REST)
+            voxa.AddProvider(DeepgramSpeechDescriptors.Stt);   // Deepgram (streaming WebSocket)
             voxa.AddProvider(AzureSpeechDescriptors.Stt);
             voxa.AddProvider(AzureSpeechDescriptors.Tts);
             voxa.AddProvider(ElevenLabsDescriptors.Tts);
