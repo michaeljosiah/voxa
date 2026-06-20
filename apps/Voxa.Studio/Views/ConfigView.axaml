@@ -125,6 +125,28 @@
         </StackPanel>
       </Border>
 
+      <!-- Input audio cleanup: echo cancellation (VRT-003) + denoise (VLS-004). Real composer stages,
+           inserted before the VAD; both ship as seams, so a concrete engine arrives as an external
+           Voxa.Audio.Aec.* / Voxa.Audio.Enhance.* provider. The pickers read the live registry. -->
+      <Border Classes="vx-card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="vx-label vx-accent" Text="INPUT AUDIO CLEANUP" />
+          <Grid ColumnDefinitions="130,*" RowDefinitions="Auto,Auto">
+            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Echo cancel" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                      ItemsSource="{Binding AecEngines}" SelectedItem="{Binding SelectedAecEngine}"
+                      IsEnabled="{Binding AecEngineAvailable}" />
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" Foreground="{StaticResource VxMutedBrush}" Text="Denoise" />
+            <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding EnhanceEngines}" SelectedItem="{Binding SelectedEnhanceEngine}"
+                      IsEnabled="{Binding EnhanceEngineAvailable}" />
+          </Grid>
+          <TextBlock Classes="vx-sub" TextWrapping="Wrap"
+                     Text="Cleans the mic signal before the VAD/STT see it. Voxa ships the seams; a concrete engine drops in as an external Voxa.Audio.Aec.* / Voxa.Audio.Enhance.* provider — none is bundled in Studio yet, so only “None” is offered."
+                     IsVisible="{Binding ShowAudioCleanupHint}" />
+        </StackPanel>
+      </Border>
+
       <!-- Smart turn (P0): a classifier above the silence VAD so a mid-sentence pause doesn't end the turn. -->
       <Border Classes="vx-card">
         <StackPanel Spacing="8">

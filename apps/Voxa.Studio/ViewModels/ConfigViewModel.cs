@@ -27,6 +27,12 @@ public sealed partial class ConfigViewModel : ObservableObject
     // emit an explicit "off" override rather than silently falling back to that base value.
     private readonly bool _smartTurnInBaseConfig;
 
+    // Same rule for the input-cleanup stages: if the base config already names an AEC / denoise engine,
+    // selecting "None" must emit an explicit Voxa:Aec:Engine/Voxa:Enhance:Engine = "None" override —
+    // omitting the key would let the base value win through config layering and keep the stage active.
+    private readonly bool _aecInBaseConfig;
+    private readonly bool _enhanceInBaseConfig;
+
     public ConfigViewModel(StudioServices services)
     {
         _services = services;
@@ -36,6 +42,16 @@ public sealed partial class ConfigViewModel : ObservableObject
             .Union(services.Registry.VadNames, StringComparer.OrdinalIgnoreCase)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        // Input-cleanup engines come straight from the live registry, so the pickers can never claim an
+        // engine that isn't actually registered. VRT-003 (AEC) and VLS-004 (denoise) ship the SEAMS;
+        // a concrete engine arrives as an external Voxa.Audio.Aec.* / Voxa.Audio.Enhance.* provider, so
+        // stock Studio offers just "None" and the card shows a how-to-enable hint.
+        AecEngines = new[] { "None" }
+            .Union(services.Registry.AecNames, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        EnhanceEngines = new[] { "None" }
+            .Union(services.Registry.EnhancerNames, StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         RefreshProviderLists();   // VST-003: the dropdowns are the registry filtered to activated-or-local
 
         // Seed from the running config so "Config" opens showing what Talk is using.
@@ -43,6 +59,10 @@ public sealed partial class ConfigViewModel : ObservableObject
         _selectedStt = voxa["Stt"] ?? "WhisperCpp";
         _selectedTts = voxa["Tts"] ?? "Piper";
         _selectedVad = voxa["Vad:Engine"] ?? "Silero";
+        _selectedAecEngine = voxa["Aec:Engine"] ?? "None";
+        _selectedEnhanceEngine = voxa["Enhance:Engine"] ?? "None";
+        _aecInBaseConfig = !string.Equals(_selectedAecEngine, "None", StringComparison.OrdinalIgnoreCase);
+        _enhanceInBaseConfig = !string.Equals(_selectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase);
         _selectedProfile = voxa["Profile"] ?? "Default";
         _selectedAgent = voxa["Agent:Provider"] ?? "Echo";
         _selectedWhisperModel = voxa["WhisperCpp:Model"] ?? "tiny.en";
@@ -76,6 +96,10 @@ public sealed partial class ConfigViewModel : ObservableObject
     public ObservableCollection<string> TtsProviders { get; } = new();
     public ObservableCollection<string> AgentProviders { get; } = new();
     public IReadOnlyList<string> VadEngines { get; }
+    /// <summary>Echo-cancellation engines from the live registry — always at least "None" (VRT-003 seam).</summary>
+    public IReadOnlyList<string> AecEngines { get; }
+    /// <summary>Denoise / speech-enhancement engines from the live registry — always at least "None" (VLS-004 seam).</summary>
+    public IReadOnlyList<string> EnhanceEngines { get; }
     public IReadOnlyList<string> Profiles { get; } = ["Default", "LowLatency", "Quality", "Cheap"];
     public IReadOnlyList<string> WhisperModels { get; } = WhisperCppModelCatalog.KnownModels.ToList();
     public IReadOnlyList<string> WhisperDevices { get; } = Enum.GetNames<WhisperDevice>().Select(n => n.ToLowerInvariant()).ToList();
@@ -86,6 +110,8 @@ public sealed partial class ConfigViewModel : ObservableObject
     [ObservableProperty] private string _selectedStt;
     [ObservableProperty] private string _selectedTts;
     [ObservableProperty] private string _selectedVad;
+    [ObservableProperty] private string _selectedAecEngine;
+    [ObservableProperty] private string _selectedEnhanceEngine;
     [ObservableProperty] private string _selectedProfile;
     [ObservableProperty] private string _selectedAgent;
     [ObservableProperty] private string _selectedWhisperModel;
@@ -192,6 +218,12 @@ public sealed partial class ConfigViewModel : ObservableObject
     public bool SmartTurnIncomplete => SmartTurnEnabled &&
         (ShowSmartTurnHttp ? string.IsNullOrWhiteSpace(SmartTurnEndpoint) : string.IsNullOrWhiteSpace(SmartTurnPythonScript));
 
+    /// <summary>True when the registry actually offers an AEC engine beyond "None" — picker vs. hint.</summary>
+    public bool AecEngineAvailable => AecEngines.Count > 1;
+    public bool EnhanceEngineAvailable => EnhanceEngines.Count > 1;
+    /// <summary>No input-cleanup engine is bundled — show the how-to-enable note instead of dead pickers.</summary>
+    public bool ShowAudioCleanupHint => !AecEngineAvailable && !EnhanceEngineAvailable;
+
     public bool ShowWhisperOptions => string.Equals(SelectedStt, "WhisperCpp", StringComparison.OrdinalIgnoreCase);
     public bool ShowPiperOptions => string.Equals(SelectedTts, "Piper", StringComparison.OrdinalIgnoreCase);
     public bool ShowKokoroOptions => string.Equals(SelectedTts, "Kokoro", StringComparison.OrdinalIgnoreCase);
@@ -262,6 +294,8 @@ public sealed partial class ConfigViewModel : ObservableObject
         _ = ReloadCloudVoicesAsync();
     }
     partial void OnSelectedVadChanged(string value) => Regenerate();
+    partial void OnSelectedAecEngineChanged(string value) => Regenerate();
+    partial void OnSelectedEnhanceEngineChanged(string value) => Regenerate();
     partial void OnSelectedProfileChanged(string value) => Regenerate();
     partial void OnSelectedAgentChanged(string value)
     {
@@ -324,6 +358,17 @@ public sealed partial class ConfigViewModel : ObservableObject
             pairs["Voxa:Profile"] = SelectedProfile;
         if (!string.Equals(SelectedVad, "Silero", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Vad:Engine"] = SelectedVad;
+        // Input cleanup runs before the VAD. Emit the selected engine; when it's "None" but the base
+        // config named one, emit an explicit "None" so Apply/activation actually turns the stage off
+        // (an omitted key would fall back to the base engine through config layering — the smart-turn rule).
+        if (!string.Equals(SelectedAecEngine, "None", StringComparison.OrdinalIgnoreCase))
+            pairs["Voxa:Aec:Engine"] = SelectedAecEngine;
+        else if (_aecInBaseConfig)
+            pairs["Voxa:Aec:Engine"] = "None";
+        if (!string.Equals(SelectedEnhanceEngine, "None", StringComparison.OrdinalIgnoreCase))
+            pairs["Voxa:Enhance:Engine"] = SelectedEnhanceEngine;
+        else if (_enhanceInBaseConfig)
+            pairs["Voxa:Enhance:Engine"] = "None";
         if (ShowWhisperOptions) pairs["Voxa:WhisperCpp:Model"] = SelectedWhisperModel;
         if (ShowWhisperOptions && !string.Equals(SelectedWhisperDevice, "cpu", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:WhisperCpp:Device"] = SelectedWhisperDevice;

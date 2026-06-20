@@ -616,16 +616,31 @@ public sealed partial class BuilderViewModel : ObservableObject
     private static double ParseDouble(string? s, double fallback) =>
         double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
+    private static string DeviceLabel(BuilderNode node) =>
+        node.Options.GetValueOrDefault("Device", "") is { Length: > 0 } device ? device : "default device";
+
+    /// <summary>An option's value when it names a real engine — present, non-empty, and not the "None"
+    /// off-override (which is stored to round-trip the disabled state but never badged).</summary>
+    private static string? Enabled(BuilderNode node, string key) =>
+        node.Options.GetValueOrDefault(key, "") is { Length: > 0 } value
+        && !string.Equals(value, "None", StringComparison.OrdinalIgnoreCase) ? value : null;
+
     /// <summary>The node card's mono meta line + cached badge — real state, not decoration.</summary>
     private void RefreshNodeBadges(BuilderNodeVm vm)
     {
         var node = vm.Model;
         switch (node.Kind)
         {
-            case BuilderNodeKind.Source:
             case BuilderNodeKind.Sink:
-                vm.Meta = node.Options.GetValueOrDefault("Device", "") is { Length: > 0 } device
-                    ? device : "default device";
+                vm.Meta = DeviceLabel(node);
+                break;
+            case BuilderNodeKind.Source:
+                // The mic node also carries any pre-VAD cleanup (AEC/denoise) so the chain shows it at a glance.
+                // An explicit "None" override is stored (to round-trip the off state) but isn't badged.
+                var cleanup = new List<string>();
+                if (Enabled(node, "AecEngine") is { } aec) cleanup.Add($"AEC {aec}");
+                if (Enabled(node, "EnhanceEngine") is { } den) cleanup.Add($"denoise {den}");
+                vm.Meta = cleanup.Count > 0 ? $"{DeviceLabel(node)} · {string.Join(" · ", cleanup)}" : DeviceLabel(node);
                 break;
             case BuilderNodeKind.Vad:
                 // Show the profile's resolved values when no explicit override — the card never
@@ -635,7 +650,11 @@ public sealed partial class BuilderViewModel : ObservableObject
                     ((int)vad.VadStopDuration.TotalMilliseconds).ToString(CultureInfo.InvariantCulture));
                 var thr = node.Options.GetValueOrDefault("ConfidenceThreshold",
                     vad.VadConfidenceThreshold.ToString("0.##", CultureInfo.InvariantCulture));
-                vm.Meta = $"stop {stop} ms · thr {thr}";
+                // A smart-turn classifier on the VAD shows in the badge — it changes how the turn ends.
+                // (An explicit "None" override is preserved for round-tripping but not badged.)
+                vm.Meta = Enabled(node, "SmartTurnProvider") is not null
+                    ? $"stop {stop} ms · thr {thr} · smart turn"
+                    : $"stop {stop} ms · thr {thr}";
                 break;
             case BuilderNodeKind.Stt when Is(node.Provider, "WhisperCpp"):
                 var model = node.Options.GetValueOrDefault("Model", "tiny.en");
@@ -713,6 +732,14 @@ public sealed partial class BuilderViewModel : ObservableObject
         {
             ["Voxa:Profile"] = voxa["Profile"],
             ["Voxa:Vad:Engine"] = voxa["Vad:Engine"],
+            // Input cleanup (pre-VAD) + smart turn (a VAD modifier) round-trip so "Open in Builder"
+            // and the appsettings export preserve them; they ride the Source / VAD node respectively.
+            ["Voxa:Aec:Engine"] = voxa["Aec:Engine"],
+            ["Voxa:Enhance:Engine"] = voxa["Enhance:Engine"],
+            ["Voxa:SmartTurn:Provider"] = voxa["SmartTurn:Provider"],
+            ["Voxa:SmartTurn:Endpoint"] = voxa["SmartTurn:Endpoint"],
+            ["Voxa:SmartTurn:PythonExe"] = voxa["SmartTurn:PythonExe"],
+            ["Voxa:SmartTurn:PythonScript"] = voxa["SmartTurn:PythonScript"],
             ["Voxa:Stt"] = voxa["Stt"],
             ["Voxa:WhisperCpp:Model"] = voxa["WhisperCpp:Model"],
             ["Voxa:Agent:Provider"] = voxa["Agent:Provider"],
@@ -750,7 +777,14 @@ public sealed partial class BuilderViewModel : ObservableObject
             return node;
         }
 
-        Add(BuilderNodeKind.Source, null);
+        var source = Add(BuilderNodeKind.Source, null);
+        // Pre-VAD input cleanup (AEC/denoise) rides the Source (mic) node. Carry the selection when the key
+        // is PRESENT — including an explicit "None", which Config emits to override a base/profile engine;
+        // dropping it would let the layered base config re-enable the stage on export/run (the smart-turn rule).
+        if (pairs.TryGetValue("Voxa:Aec:Engine", out var aecEngine) && !string.IsNullOrEmpty(aecEngine))
+            source.Options["AecEngine"] = aecEngine;
+        if (pairs.TryGetValue("Voxa:Enhance:Engine", out var enhanceEngine) && !string.IsNullOrEmpty(enhanceEngine))
+            source.Options["EnhanceEngine"] = enhanceEngine;
         var engine = Get("Voxa:Vad:Engine", "Silero");
         if (!string.Equals(engine, "None", StringComparison.OrdinalIgnoreCase))
         {
@@ -761,6 +795,19 @@ public sealed partial class BuilderViewModel : ObservableObject
                 vad.Options["ConfidenceThreshold"] = threshold;
             if (pairs.TryGetValue("Voxa:Vad:StopDurationMs", out var stopMs) && !string.IsNullOrEmpty(stopMs))
                 vad.Options["StopDurationMs"] = stopMs;
+            // Smart turn rides the VAD node — the silence-timeout "is the user actually done?" classifier.
+            // Carry the provider when present, including an explicit "None" override (same reason as the
+            // cleanup engines above); the detail keys only apply to a real classifier.
+            if (pairs.TryGetValue("Voxa:SmartTurn:Provider", out var smartTurn) && !string.IsNullOrEmpty(smartTurn))
+            {
+                vad.Options["SmartTurnProvider"] = smartTurn;
+                if (pairs.TryGetValue("Voxa:SmartTurn:Endpoint", out var ep) && !string.IsNullOrEmpty(ep))
+                    vad.Options["SmartTurnEndpoint"] = ep;
+                if (pairs.TryGetValue("Voxa:SmartTurn:PythonExe", out var px) && !string.IsNullOrEmpty(px))
+                    vad.Options["SmartTurnPythonExe"] = px;
+                if (pairs.TryGetValue("Voxa:SmartTurn:PythonScript", out var ps) && !string.IsNullOrEmpty(ps))
+                    vad.Options["SmartTurnPythonScript"] = ps;
+            }
         }
         var stt = Add(BuilderNodeKind.Stt, Get("Voxa:Stt", "WhisperCpp"));
         if (Is(stt.Provider, "WhisperCpp")) stt.Options["Model"] = Get("Voxa:WhisperCpp:Model", "tiny.en");

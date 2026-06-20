@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
+using Voxa.Audio;
 using Voxa.Diagnostics;
 using Voxa.Processors;
 using Voxa.Services.MicrosoftAgents;
@@ -43,6 +44,16 @@ internal static class BuilderChainCompiler
         if (!string.Equals(graph.Profile, "Default", StringComparison.OrdinalIgnoreCase))
             pairs["Voxa:Profile"] = graph.Profile;
 
+        // Pre-VAD input cleanup rides the Source (mic) node — round-trips with the Config view's AEC/denoise.
+        var source = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Source);
+        if (source is not null)
+        {
+            if (source.Options.TryGetValue("AecEngine", out var aec) && !string.IsNullOrWhiteSpace(aec))
+                pairs["Voxa:Aec:Engine"] = aec;
+            if (source.Options.TryGetValue("EnhanceEngine", out var enhance) && !string.IsNullOrWhiteSpace(enhance))
+                pairs["Voxa:Enhance:Engine"] = enhance;
+        }
+
         var vad = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Vad);
         pairs["Voxa:Vad:Engine"] = vad?.Provider ?? "None";
         if (vad is not null)
@@ -51,6 +62,14 @@ internal static class BuilderChainCompiler
                 pairs["Voxa:Vad:ConfidenceThreshold"] = threshold;
             if (vad.Options.TryGetValue("StopDurationMs", out var stop))
                 pairs["Voxa:Vad:StopDurationMs"] = stop;
+            // Smart turn rides the VAD node — emit the classifier block so the export/profile carries it.
+            if (vad.Options.TryGetValue("SmartTurnProvider", out var stProvider) && !string.IsNullOrWhiteSpace(stProvider))
+            {
+                pairs["Voxa:SmartTurn:Provider"] = stProvider;
+                if (vad.Options.TryGetValue("SmartTurnEndpoint", out var ep)) pairs["Voxa:SmartTurn:Endpoint"] = ep;
+                if (vad.Options.TryGetValue("SmartTurnPythonExe", out var px)) pairs["Voxa:SmartTurn:PythonExe"] = px;
+                if (vad.Options.TryGetValue("SmartTurnPythonScript", out var ps)) pairs["Voxa:SmartTurn:PythonScript"] = ps;
+            }
         }
 
         foreach (var node in chain)
@@ -121,6 +140,31 @@ internal static class BuilderChainCompiler
         var outputSampleRate = tts.GetEffectiveOutputSampleRate(root);
 
         var parts = new List<CompiledPart>();
+
+        // Input cleanup (VRT-003 AEC / VLS-004 denoise), mirroring DefaultVoicePipelineComposer §0/§0.6 but
+        // sourced from the DRAWN graph (the Source node), NOT the layered options — so a graph with no cleanup
+        // (Reset to Default, an older saved graph) never inherits a base-config engine, and the run always
+        // follows the canvas. A resolved engine runs before the VAD; None ⇒ no parts, byte-identical to before.
+        var sourceNode = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Source);
+        var aecEngine = sourceNode?.Options.GetValueOrDefault("AecEngine", "None") ?? "None";
+        var enhanceEngine = sourceNode?.Options.GetValueOrDefault("EnhanceEngine", "None") ?? "None";
+        var aecEnabled = false;
+        if (!string.Equals(aecEngine, "None", StringComparison.OrdinalIgnoreCase)
+            && registry.TryGetAec(aecEngine, out var aecDesc))
+        {
+            var aecSettings = new VoxaAecSettings(inputSampleRate, outputSampleRate);
+            parts.Add(new(null, sp => aecDesc.CreateProcessor(sp, aecSettings))); // near-end, before the VAD
+            aecEnabled = true;
+        }
+        if (!string.Equals(enhanceEngine, "None", StringComparison.OrdinalIgnoreCase)
+            && registry.TryGetEnhancer(enhanceEngine, out var enhDesc))
+        {
+            var enhSettings = new VoxaEnhancerSettings(inputSampleRate);
+            parts.Add(new(null, sp => enhDesc.CreateProcessor(sp, enhSettings, root)));
+        }
+        // The diagnostics taps index off the chain NODES; offset their inserts past these pre-VAD parts.
+        var leadingCleanup = parts.Count;
+
         foreach (var node in chain)
         {
             switch (node.Kind)
@@ -174,7 +218,14 @@ internal static class BuilderChainCompiler
             }
         }
 
-        InsertTaps(parts, chain);
+        InsertTaps(parts, chain, leadingCleanup);
+
+        // Far-end (bot-audio) reference tap — added only when an AEC engine resolved, matching the
+        // composer's §7. It feeds each outbound bot frame into the session's shared IEchoCanceller and
+        // forwards every frame unchanged; with no AEC the chain has no tap (default = byte-identical).
+        if (aecEnabled)
+            parts.Add(new(null, sp => new EchoReferenceTapProcessor(sp.GetRequiredService<IEchoCanceller>())));
+
         return new CompiledChain(parts, inputSampleRate, outputSampleRate);
     }
 
@@ -183,7 +234,7 @@ internal static class BuilderChainCompiler
     /// transcription stage, after the agent, after TTS. Live mode is the builder's whole point,
     /// so taps are unconditional here (the run container forces diagnostics on).
     /// </summary>
-    private static void InsertTaps(List<CompiledPart> parts, IReadOnlyList<BuilderNode> chain)
+    private static void InsertTaps(List<CompiledPart> parts, IReadOnlyList<BuilderNode> chain, int leadingOffset = 0)
     {
         var middle = chain.Where(n => n.Kind is not (BuilderNodeKind.Source or BuilderNodeKind.Sink)).ToList();
 
@@ -203,7 +254,7 @@ internal static class BuilderChainCompiler
             (After(n => BuilderGraph.Flow(n.Kind).Out == BuilderPortType.Audio), DiagnosticsTapScope.Vad),
         };
         foreach (var (index, scope) in taps.OrderByDescending(t => t.Index))
-            parts.Insert(index, new(null, sp => new DiagnosticsTapProcessor(
+            parts.Insert(index + leadingOffset, new(null, sp => new DiagnosticsTapProcessor(
                 sp.GetRequiredService<VoxaDiagnosticsHub>(), scope)));
     }
 
@@ -294,6 +345,14 @@ internal static class BuilderChainCompiler
     /// </summary>
     internal static string GenerateCSharp(BuilderGraph graph, IReadOnlyList<BuilderNode> chain)
     {
+        // Pre-VAD input cleanup is a property of the Source (mic) node — read it from the DRAWN graph (the
+        // same place Compile() reads), so a custom-shape C# export carries exactly the cleanup the canvas shows.
+        var cleanupSource = chain.FirstOrDefault(n => n.Kind == BuilderNodeKind.Source);
+        var aecEngine = cleanupSource?.Options.GetValueOrDefault("AecEngine", "None") ?? "None";
+        var enhanceEngine = cleanupSource?.Options.GetValueOrDefault("EnhanceEngine", "None") ?? "None";
+        var aecEnabled = !string.Equals(aecEngine, "None", StringComparison.OrdinalIgnoreCase);
+        var enhanceEnabled = !string.Equals(enhanceEngine, "None", StringComparison.OrdinalIgnoreCase);
+
         var sb = new StringBuilder();
         sb.AppendLine("// Generated by Voxa Studio — Builder canvas export.");
         sb.AppendLine("// This chain deviates from UseDefaults(), so it composes explicitly. Call once per");
@@ -303,6 +362,7 @@ internal static class BuilderChainCompiler
         sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
         sb.AppendLine("using Microsoft.Extensions.Options;");
         sb.AppendLine("using Voxa.AspNetCore;");
+        if (aecEnabled) sb.AppendLine("using Voxa.Audio;"); // EchoReferenceTapProcessor + IEchoCanceller (far-end tap)
         sb.AppendLine("using Voxa.Pipelines;");
         sb.AppendLine("using Voxa.Processors;");
         sb.AppendLine("using Voxa.Services.MicrosoftAgents;");
@@ -325,6 +385,28 @@ internal static class BuilderChainCompiler
         sb.AppendLine("    var inputSampleRate = stt.GetEffectiveInputSampleRate(root);");
         sb.AppendLine();
         sb.AppendLine("    var builder = Pipeline.Build().Source(new PipelineSource(\"source\"));");
+
+        // Input cleanup (AEC/denoise) from the Source node — before the VAD, mirroring the composer's §0/§0.6.
+        if (aecEnabled)
+        {
+            var ttsNode = chain.First(n => n.Kind == BuilderNodeKind.Tts);
+            sb.AppendLine();
+            sb.AppendLine($"    // {aecEngine} echo cancellation — near-end, before the VAD (far-end tap added after TTS)");
+            sb.AppendLine($"    if (!registry.TryGetTts(\"{ttsNode.Provider}\", out var ttsForAec))");
+            sb.AppendLine($"        throw new InvalidOperationException(\"TTS '{ttsNode.Provider}' is not registered.\");");
+            sb.AppendLine($"    if (!registry.TryGetAec(\"{aecEngine}\", out var aec))");
+            sb.AppendLine($"        throw new InvalidOperationException(\"AEC '{aecEngine}' is not registered.\");");
+            sb.AppendLine("    builder.Then(aec.CreateProcessor(session, new VoxaAecSettings(");
+            sb.AppendLine("        SampleRate: inputSampleRate, FarEndSampleRate: ttsForAec.GetEffectiveOutputSampleRate(root))));");
+        }
+        if (enhanceEnabled)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    // {enhanceEngine} speech enhancement / denoise — before the VAD");
+            sb.AppendLine($"    if (!registry.TryGetEnhancer(\"{enhanceEngine}\", out var enhancer))");
+            sb.AppendLine($"        throw new InvalidOperationException(\"Enhancer '{enhanceEngine}' is not registered.\");");
+            sb.AppendLine("    builder.Then(enhancer.CreateProcessor(session, new VoxaEnhancerSettings(inputSampleRate), root));");
+        }
 
         foreach (var node in chain)
         {
@@ -401,6 +483,14 @@ internal static class BuilderChainCompiler
                     sb.AppendLine("    builder.Then(tts.CreateProcessor(session, root));");
                     break;
             }
+        }
+
+        // Far-end (bot-audio) reference tap — only with an AEC engine, matching the composer's §7.
+        if (aecEnabled)
+        {
+            sb.AppendLine();
+            sb.AppendLine("    // Far-end reference tap — feeds outbound bot audio into the session's IEchoCanceller.");
+            sb.AppendLine("    builder.Then(new EchoReferenceTapProcessor(session.GetRequiredService<IEchoCanceller>()));");
         }
 
         sb.AppendLine();
