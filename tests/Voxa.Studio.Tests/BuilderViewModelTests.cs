@@ -188,6 +188,7 @@ public class BuilderViewModelTests
         Assert.Equal("Silero", NodeOf(vm, BuilderNodeKind.Vad).Model.Provider);
         Assert.Equal("Piper", NodeOf(vm, BuilderNodeKind.Tts).Model.Provider);
         Assert.Equal("tiny.en", NodeOf(vm, BuilderNodeKind.Stt).Model.Options["Model"]);
+        Assert.Equal("LowLatency", vm.SelectedProfile); // reset targets the fastest no-setup pipeline
 
         vm.Undo(); // a fat-fingered reset is recoverable
         Assert.Equal(7, vm.Nodes.Count);

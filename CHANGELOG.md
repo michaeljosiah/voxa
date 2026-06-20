@@ -144,6 +144,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Smart turn stays **opt-in** and Python-free unless you choose the sidecar: the core, the pipeline, and
   the local speech tier need no interpreter, and the HTTP path needs no *local* Python. The in-process
   ONNX classifier (no network, no Python on the turn path) is the documented next step. See the README.
+- **Voxa Studio: Builder "Reset" now restores the fastest pipeline.** Reset-to-default seeds the **LowLatency**
+  profile instead of the byte-identical Default one, so the canvas comes back tuned for the lowest latency using
+  the work that's shipped — eager/speculative STT (~150 ms), an aggressive ~400 ms VAD stop, the utterance and
+  response caps, and an early first-sentence flush — over the fastest local models (whisper `tiny.en`, Piper
+  `en_US-amy-low` at 16 kHz). Smart turn and GPU are deliberately left out of the reset: each needs external
+  setup (a Python/HTTP classifier; a GPU runtime package), so seeding them would yield a default that can't run
+  out of the box. Switch to Quality/Default any time from the profile selector.
 - **Voxa Studio: AEC + denoise pickers (Config) and smart-turn in the Builder graph.** The delivered
   input-cleanup seams now have a home in the composer UIs. Config gains an **Input audio cleanup** card with
   **Echo cancel** (VRT-003) and **Denoise** (VLS-004) engine pickers, populated from the live registry so they
