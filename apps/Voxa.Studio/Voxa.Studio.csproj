@@ -43,8 +43,10 @@
          — no duplicate. The CUDA EP needs the NVIDIA CUDA toolkit at runtime; the Config "Device" picker flags
          availability up front (OnnxDeviceProbe) and the engine fails loud per the device contract if CUDA was
          asked for but can't load. CPU still works without the toolkit (CUDA is a separate on-demand provider
-         dll), so the default Silero VAD path is unaffected. The .Gpu.Windows sub-package (not the meta .Gpu)
-         keeps only win-x64 natives — no ~700 MB of Linux/TensorRT dead weight. PrivateAssets="all" keeps the
+         dll), so the default Silero VAD path is unaffected. The .Gpu.Windows sub-package (not the meta .Gpu) ships
+         only the win-x64 ORT natives, dropping the Linux/macOS ORT .so/.dylib the meta package would add
+         (~700 MB, mostly its CUDA/TensorRT providers; a small win-x64 TensorRT dll rides along, unused).
+         PrivateAssets="all" keeps the
          GPU native in Studio's own output but out of Voxa.Studio.Tests, which stays lean CPU-only. Windows-only
          so the Linux CI lane stays CPU; on non-Windows the transitive CPU ORT flows normally (no exclude). -->
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.26.0" PrivateAssets="all"

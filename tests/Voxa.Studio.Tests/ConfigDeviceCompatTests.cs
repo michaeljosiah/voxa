@@ -66,8 +66,9 @@ public class ConfigDeviceCompatTests
     [Fact]
     public void Kokoro_Unavailable_Gpu_Device_Shows_A_Clear_Warning()
     {
-        // DirectML is never bundled in Studio (only the CUDA provider is), and the test host's ONNX runtime is
-        // CPU-only besides — so selecting it flags an up-front warning naming the fix, not a silent CPU fallback.
+        // Deterministic by PACKAGE LAYOUT, not host hardware: DirectML is never bundled in Studio (only the CUDA
+        // provider is, and that's PrivateAssets so it never reaches this test project), so DmlExecutionProvider
+        // is absent on every machine — selecting it flags an up-front warning naming the fix, not a CPU fallback.
         var vm = new ConfigViewModel(TestSupport.Services()) { SelectedKokoroDevice = "directml" };
 
         Assert.False(vm.KokoroDeviceAvailable);

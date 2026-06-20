@@ -156,9 +156,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   library on first load, so a probe-by-loading is avoided), and `OnnxDeviceProbe` reads
   `OrtEnv.GetAvailableProviders()` for the ONNX engines. If a bundled backend still can't load on the hardware,
   the run fails with the framework's copy-pasteable remediation rather than silently dropping to CPU.
-- **Kokoro TTS on GPU (CUDA) + Studio device picker (VLS-006).** `KokoroTtsEngine` is the first engine to adopt
-  the shared `OnnxModelHost`: it now loads its `InferenceSession` through `host.Load(modelPath, device)` instead
-  of constructing one directly, so a new **`Voxa:Kokoro:Device`** (`cpu` default / `auto` / `cuda` / `directml` /
+- **Kokoro TTS on GPU (CUDA) + Studio device picker (VLS-006).** `KokoroTtsEngine` now loads its
+  `InferenceSession` through the shared `OnnxModelHost` (`host.Load(modelPath, device)`) instead of constructing
+  one directly — the first of the original direct-ORT local engines migrated onto the host (the VLS-005 pyannote
+  segmentation engine was built on it from the start). A new **`Voxa:Kokoro:Device`** (`cpu` default / `auto` / `cuda` / `directml` /
   `coreml`, parsed via `OnnxDeviceParser`) selects the ONNX execution provider — and an explicit GPU device whose
   provider isn't in the loaded runtime **fails loud at startup** with the host's remediation rather than silently
   running on CPU. The session is cached per `(path, device)` on the host's process-wide cache, with the parallel-run
