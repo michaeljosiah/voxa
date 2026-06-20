@@ -70,6 +70,13 @@ internal sealed class VoxaOptionsValidator : IValidateOptions<VoxaOptions>
             errors.Add($"Voxa:Aec:Engine '{o.Aec.Engine}' is not a registered acoustic echo canceller. " +
                        $"Valid values: {string.Join(", ", new[] { "None" }.Union(_registry.AecNames, StringComparer.OrdinalIgnoreCase))}.");
 
+        // Enhancement (VLS-004): "None" (default, no stage) or a registered engine. Unknown → fail fast.
+        var knownEnhancer = string.Equals(o.Enhance.Engine, "None", StringComparison.OrdinalIgnoreCase)
+            || _registry.EnhancerNames.Contains(o.Enhance.Engine, StringComparer.OrdinalIgnoreCase);
+        if (!knownEnhancer)
+            errors.Add($"Voxa:Enhance:Engine '{o.Enhance.Engine}' is not a registered speech enhancer. " +
+                       $"Valid values: {string.Join(", ", new[] { "None" }.Union(_registry.EnhancerNames, StringComparer.OrdinalIgnoreCase))}.");
+
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);

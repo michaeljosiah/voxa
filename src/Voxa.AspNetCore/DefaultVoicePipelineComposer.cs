@@ -117,6 +117,22 @@ public sealed class DefaultVoicePipelineComposer
             }
         }
 
+        // 0.6 Speech enhancement / denoise (VLS-004) — after AEC, before the VAD. Inserted only when configured,
+        //     so the default chain is byte-identical to today. The enhancer runs at inputSampleRate, like the VAD.
+        if (!string.Equals(o.Enhance.Engine, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_registry.TryGetEnhancer(o.Enhance.Engine, out var enhDesc))
+            {
+                parts.Add(sp => enhDesc.CreateProcessor(sp, root));
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Voxa:Enhance:Engine '{Engine}' not found in registry; running without speech enhancement.",
+                    o.Enhance.Engine);
+            }
+        }
+
         // 1. VAD (engine names are case-insensitive, matching Profile and provider lookups)
         if (!string.Equals(o.Vad.Engine, "None", StringComparison.OrdinalIgnoreCase))
         {

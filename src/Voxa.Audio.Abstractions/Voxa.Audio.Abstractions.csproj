@@ -14,8 +14,8 @@
     <PackageId>Voxa.Audio.Abstractions</PackageId>
     <Version>0.1.0-alpha</Version>
     <Authors>Voxa contributors</Authors>
-    <Description>Audio-stage abstractions for the Voxa pipeline. Defines the IEchoCanceller seam (VRT-003) — an acoustic echo canceller placed before the VAD for barge-in over speakers — plus a NullEchoCanceller passthrough default and the EchoCancellerProcessor. Ships the seam, not a DSP.</Description>
-    <PackageTags>voxa;voice;ai;audio;aec;echo-cancellation;abstractions</PackageTags>
+    <Description>Audio-stage abstractions for the Voxa pipeline — the seams that sit on the mic path before the VAD. Defines IEchoCanceller (VRT-003, acoustic echo cancellation for barge-in over speakers) and IAudioEnhancer (VLS-004, spectral denoise), each with a passthrough default and a FrameProcessor. Ships the seams, not the DSPs/models.</Description>
+    <PackageTags>voxa;voice;ai;audio;aec;echo-cancellation;denoise;enhancement;abstractions</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
