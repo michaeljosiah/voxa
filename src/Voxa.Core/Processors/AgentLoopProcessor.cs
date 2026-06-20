@@ -341,15 +341,18 @@ public sealed class AgentLoopProcessor : FrameProcessor
         _turnQueue.Writer.TryComplete();
         _processorCts.Cancel();
 
+        // Cancel pending frontend-tool waits BEFORE awaiting the worker: a driver blocked in
+        // AwaitToolResultAsync on CancellationToken.None is released only by cancelling its TCS, not by
+        // the processor CTS — awaiting first would deadlock disposal. (Mirrors OnEndAsync's ordering.)
+        foreach (var pending in _pendingFrontendTools.Values) pending.TrySetCanceled();
+        _pendingFrontendTools.Clear();
+
         if (_turnWorker is not null)
         {
             try { await _turnWorker.ConfigureAwait(false); }
             catch (OperationCanceledException) { /* worker observed the cancel during teardown */ }
             _turnWorker = null;
         }
-
-        foreach (var pending in _pendingFrontendTools.Values) pending.TrySetCanceled();
-        _pendingFrontendTools.Clear();
 
         _processorCts.Dispose();
         await base.DisposeAsyncCore().ConfigureAwait(false);

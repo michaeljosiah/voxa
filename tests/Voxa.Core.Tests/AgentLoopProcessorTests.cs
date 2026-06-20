@@ -584,4 +584,38 @@ public class AgentLoopProcessorTests
         // The in-flight turn must have been cancelled — proof the derived CTS was cancelled via DisposeAsyncCore.
         await driver.TurnCancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
     }
+
+    /// <summary>A driver that blocks on a frontend-tool result using a token NOT linked to the processor CTS.</summary>
+    private sealed class FrontendToolWaitingDriver : IAgentTurnDriver
+    {
+        public readonly TaskCompletionSource ToolRequested = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IAsyncEnumerable<Frame> RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct) => Run(ctx);
+
+        private async IAsyncEnumerable<Frame> Run(VoiceTurnContext ctx)
+        {
+            yield return new ToolCallRequestFrame("never-answered", "x", "{}");
+            ToolRequested.TrySetResult();
+            // CancellationToken.None: only a TCS cancel can release this, not the processor CTS.
+            await ctx.FrontendTools.AwaitToolResultAsync("never-answered", CancellationToken.None);
+            yield return new LlmTextChunkFrame("unreached");
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_While_A_Driver_Awaits_A_Frontend_Tool_Does_Not_Deadlock()
+    {
+        // CQ-001 (codex P2): a driver blocked in AwaitToolResultAsync on CancellationToken.None is released
+        // only by cancelling its pending TCS. DisposeAsyncCore must cancel pending waits BEFORE awaiting the
+        // worker, or PipelineRunner.DisposeAsync hangs forever on the un-released worker.
+        var driver = new FrontendToolWaitingDriver();
+        var (runner, _, pipeline) = Build(driver);
+
+        await runner.StartAsync();
+        await pipeline.Source.IngestAsync(new TranscriptionFrame("go", IsFinal: true));
+        await driver.ToolRequested.Task.WaitAsync(TimeSpan.FromSeconds(2)); // worker is now blocked on the TCS
+
+        // A hang here is the deadlock this guards against — must finish well within the timeout.
+        await runner.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+    }
 }
