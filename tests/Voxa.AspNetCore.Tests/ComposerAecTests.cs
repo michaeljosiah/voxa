@@ -110,6 +110,23 @@ public class ComposerAecTests
             e.Level == LogLevel.Warning && e.Message.Contains("Nope", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Public_Builder_Registers_An_Aec_Descriptor_Through_AddVoxa()
+    {
+        // VRT-003 (Codex P2): an external Voxa.Audio.Aec.* package must be able to register its descriptor
+        // through the public VoxaBuilder, or Voxa:Aec:Engine would always be rejected as unregistered.
+        var config = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(config);
+        services.AddVoxa(config, b => b.AddProvider(new VoxaAecDescriptor(
+            "WebRtc", (sp, _) => new EchoCancellerProcessor(NullEchoCanceller.Instance))));
+
+        var registry = services.BuildServiceProvider().GetRequiredService<VoxaProviderRegistry>();
+
+        Assert.True(registry.TryGetAec("WebRtc", out _));
+        Assert.Contains("WebRtc", registry.AecNames, StringComparer.OrdinalIgnoreCase);
+    }
+
     private sealed class ListLogger<T> : ILogger<T>
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = new();

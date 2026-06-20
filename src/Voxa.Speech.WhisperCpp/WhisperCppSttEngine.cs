@@ -195,6 +195,9 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
         return Task.CompletedTask;
     }
 
+    /// <summary>whisper.cpp batches per utterance, so it can peek-transcribe + discard for eager STT.</summary>
+    public bool SupportsEagerSttFlush => true;
+
     public Task FlushAsync(long utteranceId)
     {
         lock (_gate)

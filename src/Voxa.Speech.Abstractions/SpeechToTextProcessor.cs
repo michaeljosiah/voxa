@@ -98,7 +98,10 @@ public sealed class SpeechToTextProcessor : FrameProcessor
 
     private async Task HandleSpeculativeAsync(SpeculativeUtteranceFrame spec)
     {
-        if (_engine is null) return;
+        // If the engine doesn't implement eager STT, ignore the marker entirely — no speculative flush and no
+        // held/superseded state, so the turn just flushes normally at speech-end. This prevents a non-eager
+        // batch engine from emitting an untagged speculative final the processor could neither hold nor drop.
+        if (_engine is null || !_engine.SupportsEagerSttFlush) return;
 
         if (spec.Superseded)
         {

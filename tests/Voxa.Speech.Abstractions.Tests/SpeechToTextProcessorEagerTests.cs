@@ -21,6 +21,11 @@ public class SpeechToTextProcessorEagerTests
             Channel.CreateUnbounded<TranscriptionResult>(new UnboundedChannelOptions { SingleReader = true });
         private readonly object _lock = new();
         private readonly List<string> _calls = new();
+        private readonly bool _supportsEager;
+
+        public FakeSttEngine(bool supportsEager = true) => _supportsEager = supportsEager;
+
+        public bool SupportsEagerSttFlush => _supportsEager;
 
         public Task StartAsync(CancellationToken ct) { Record("start"); return Task.CompletedTask; }
         public ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct) { Record($"write:{pcm.Length}"); return ValueTask.CompletedTask; }
@@ -195,6 +200,29 @@ public class SpeechToTextProcessorEagerTests
             // Promote drops the buffer; it must NOT issue a second (plain) flush for this turn.
             Assert.Contains("discard", engine.Calls);
             Assert.DoesNotContain("flush", engine.Calls); // bare parameterless flush never happened
+        }
+    }
+
+    [Fact]
+    public async Task NonEager_Engine_Ignores_Speculative_And_Flushes_At_Speech_End()
+    {
+        // An engine that doesn't advertise SupportsEagerSttFlush must never see a speculative flush (which
+        // would emit an untagged final + clear its buffer). The marker is ignored; the turn flushes normally.
+        var engine = new FakeSttEngine(supportsEager: false);
+        var (runner, cap, pipeline) = Build(engine);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(7));
+            await Task.Delay(80);
+            Assert.DoesNotContain("flush:7", engine.Calls); // no speculative flush issued
+
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());
+            await WaitUntilAsync(() => engine.Calls.Contains("flush"), Timeout);
+            Assert.Contains("flush", engine.Calls);          // classic flush at speech-end
+            Assert.DoesNotContain("discard", engine.Calls);  // nothing speculative to promote
         }
     }
 

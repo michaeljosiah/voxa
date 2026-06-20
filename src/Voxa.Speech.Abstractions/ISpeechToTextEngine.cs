@@ -31,18 +31,30 @@ public interface ISpeechToTextEngine : IAsyncDisposable
     Task FlushAsync() => Task.CompletedTask;
 
     /// <summary>
-    /// Speculative variant of <see cref="FlushAsync()"/> for eager STT (VRT-002 WS1): flush the buffered audio
-    /// now and tag the resulting final <see cref="TranscriptionResult"/> with <paramref name="utteranceId"/>, so
-    /// <see cref="SpeechToTextProcessor"/> can drop that final if the VAD later marks the utterance superseded
-    /// (the user resumed, or a smart-turn confirmer rejected the end-of-turn) before it becomes a
-    /// <see cref="Voxa.Frames.TranscriptionFrame"/>.
+    /// True only if this engine implements eager/speculative STT (VRT-002 WS1) — i.e. it overrides
+    /// <see cref="FlushAsync(long)"/> to peek-transcribe (stamp the id, do NOT clear the buffer) and
+    /// <see cref="DiscardBufferedAudioAsync"/> to drop a promoted buffer. <see cref="SpeechToTextProcessor"/>
+    /// engages the eager path (speculative flush + hold/suppress/promote) only when this is true; otherwise a
+    /// <c>SpeculativeUtteranceFrame</c> is ignored by the engine and the turn flushes normally at speech-end.
     ///
-    /// <para>Default forwards to <see cref="FlushAsync()"/> (no id). Streaming engines don't batch, so they
-    /// never produce a speculative final to suppress; only batch engines (e.g. whisper.cpp) override this to
-    /// stamp the id onto the result. The per-frame <c>CancellationToken</c> deliberately does not reach here —
-    /// it governs LLM/TTS work, not STT inference — so suppression by id, not cancellation, is the guarantee.</para>
+    /// <para>Default <c>false</c>. An engine whose <see cref="FlushAsync(long)"/> would do a normal flush MUST
+    /// leave this false — otherwise it would emit an <em>untagged</em> final the processor can neither hold nor
+    /// drop and would clear its buffer, defeating supersession.</para>
     /// </summary>
-    Task FlushAsync(long utteranceId) => FlushAsync();
+    bool SupportsEagerSttFlush => false;
+
+    /// <summary>
+    /// Speculative variant of <see cref="FlushAsync()"/> for eager STT (VRT-002 WS1): flush the buffered audio
+    /// now and tag the resulting final <see cref="TranscriptionResult"/> with <paramref name="utteranceId"/> so
+    /// <see cref="SpeechToTextProcessor"/> can drop it if the VAD later supersedes the utterance. Called only
+    /// when <see cref="SupportsEagerSttFlush"/> is true.
+    ///
+    /// <para>Default is a NO-OP (deliberately not a normal flush): a non-participating engine must never emit an
+    /// untagged speculative final or clear its buffer here. Batch engines that opt in (e.g. whisper.cpp) override
+    /// this to peek-transcribe-without-clearing + stamp the id. The per-frame <c>CancellationToken</c> does not
+    /// reach here — suppression by id, not cancellation, is the guarantee.</para>
+    /// </summary>
+    Task FlushAsync(long utteranceId) => Task.CompletedTask;
 
     /// <summary>
     /// Discard buffered audio WITHOUT transcribing it (VRT-002 WS1). Called by
