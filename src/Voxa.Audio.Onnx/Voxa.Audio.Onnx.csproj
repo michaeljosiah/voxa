@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Audio.Onnx</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Shared ONNX Runtime session host for the Voxa local-speech tier (VLS-006). Owns the InferenceSession lifecycle so every ONNX model (VAD, TTS, ASR, enhancement) loads its weights once per (path, device) on a process-wide cache, behind a CPU-default execution-provider seam — GPU is opt-in via a user-added Microsoft.ML.OnnxRuntime.Gpu/DirectML package and never bundled by Voxa. Ships the host + the device seam + the model-descriptor shape; consuming engines bring their own pinned catalogs.</Description>
+    <PackageTags>voxa;voice;ai;onnx;onnxruntime;inference;local;speech</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      CPU ORT only, PrivateAssets so it is NOT re-flowed onto consumers (VLS-006 §6): the ORT CPU and
+      GPU NuGet packages ship the same managed assembly + native entry points and conflict if both land
+      in one process. Pinned to the SAME 1.26.0 as Voxa.Audio.SileroVad / Voxa.Speech.Kokoro so the
+      meta-package carries ONE onnxruntime native. A consuming app enables GPU by adding the matching
+      ORT package itself (e.g. Microsoft.ML.OnnxRuntime.Gpu for CUDA) — Voxa never bundles GPU natives.
+    -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.26.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- VoxaModelArtifact / VoxaModelCache for the WS3 descriptor, and VoxaModelUnavailableException
+         for the execution-provider remediation error. (Pulls in Voxa.Core transitively.) -->
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Audio.Onnx.Tests" />
+  </ItemGroup>
+
+</Project>

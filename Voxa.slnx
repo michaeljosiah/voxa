@@ -14,6 +14,7 @@
     <Project Path="src/Voxa/Voxa.csproj" />
     <Project Path="src/Voxa.AspNetCore/Voxa.AspNetCore.csproj" />
     <Project Path="src/Voxa.Audio.Abstractions/Voxa.Audio.Abstractions.csproj" />
+    <Project Path="src/Voxa.Audio.Onnx/Voxa.Audio.Onnx.csproj" />
     <Project Path="src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj" />
     <Project Path="src/Voxa.Audio.SmartTurn/Voxa.Audio.SmartTurn.csproj" />
     <Project Path="src/Voxa.Cli/Voxa.Cli.csproj" />
@@ -38,6 +39,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Voxa.AspNetCore.Tests/Voxa.AspNetCore.Tests.csproj" />
     <Project Path="tests/Voxa.Audio.Abstractions.Tests/Voxa.Audio.Abstractions.Tests.csproj" />
+    <Project Path="tests/Voxa.Audio.Onnx.Tests/Voxa.Audio.Onnx.Tests.csproj" />
     <Project Path="tests/Voxa.Audio.SileroVad.Tests/Voxa.Audio.SileroVad.Tests.csproj" />
     <Project Path="tests/Voxa.Audio.SmartTurn.Tests/Voxa.Audio.SmartTurn.Tests.csproj" />
     <Project Path="tests/Voxa.Cli.Tests/Voxa.Cli.Tests.csproj" />
