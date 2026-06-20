@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Speaker diarization — seams + pure-C# pipeline (VLS-005 WS1).** A new **`Voxa.Audio.Diarization`** package
+  adds *"who spoke when"* to fill the long-present but always-null `TranscriptionFrame.SpeakerId`. It ships the
+  seams — `ISpeakerSegmentation` (audio → speech regions) and `ISpeakerEmbedding` (a span → a speaker vector),
+  both model-backed — and the orchestrating `IDiarizer` whose reference implementation, **`DiarizationPipeline`**,
+  does everything else in **pure C# with no ML runtime** (and no `Voxa.Core` dependency): form regions → embed →
+  **constrained agglomerative clustering by cosine distance** → stable 0-based speaker ids, with consecutive
+  same-speaker regions merged. `DiarizerConfig` exposes the knobs (default to speech-core's values), the
+  load-bearing one being `ClusteringThreshold` (cosine-distance merge ceiling, `0.715`); `MinSpeakers` /
+  `MaxSpeakers` (`0` = auto) force a floor / cap past the threshold. Because the clustering takes `float[]`
+  embeddings and emits segments with no I/O, it's exercised on **synthetic embeddings** in the default lane
+  (N tight clusters → N speakers, threshold sensitivity, speaker-count caps, label stability, determinism). The
+  reference **ONNX impls** (Pyannote segmentation + WeSpeaker embedding, on the VLS-006 host) and the
+  `voxa transcribe --diarize` CLI consumer are deferred follow-ups — they need real pinned models (SHA-256 +
+  cleared licences). Real-time diarization and speaker *identification* are out of scope.
 - **Streaming STT — interim-transcript coalescing (VRT-004 WS1).** Interim (`IsFinal:false`) transcripts already
   propagate end-to-end for streaming engines and the agent already ignores them; VRT-004 adds
   `SpeechToTextProcessor.InterimMinInterval` (config `Voxa:InterimMinIntervalMs`, default ~150 ms) which throttles
