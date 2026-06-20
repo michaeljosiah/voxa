@@ -18,8 +18,17 @@ public enum FrameDirection
 /// </summary>
 public abstract record Frame
 {
-    /// <summary>Lexicographically sortable unique id (ULID, time-prefixed).</summary>
-    public string Id { get; init; } = Ulid.NewUlid().ToString();
+    // Stored as the ULID struct (no heap allocation), generated once per frame and copied by `with`.
+    // The 26-char string is materialized only on read — and the only production reader is tracing — so the
+    // hot path no longer allocates a string per frame, keeping the data loop allocation-free (CQ-004).
+    private readonly Ulid _id = Ulid.NewUlid();
+
+    /// <summary>Lexicographically sortable unique id (ULID, time-prefixed). Materialized on read; set with a valid ULID.</summary>
+    public string Id
+    {
+        get => _id.ToString();
+        init => _id = Ulid.Parse(value);
+    }
 
     /// <summary>Direction of travel through the pipeline.</summary>
     public FrameDirection Direction { get; init; } = FrameDirection.Downstream;
