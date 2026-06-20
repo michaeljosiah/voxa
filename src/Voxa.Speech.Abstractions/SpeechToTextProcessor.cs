@@ -27,6 +27,7 @@ public sealed class SpeechToTextProcessor : FrameProcessor
     private readonly Dictionary<long, TranscriptionResult> _heldFinals = new();  // final arrived before its verdict
     private bool _speculativePending;
     private long _activeSpecId;
+    private bool _inUtterance; // true between UserStarted and UserStopped; gates stale (backlogged) arms
 
     /// <summary>Construct with an existing engine instance (one-shot use).</summary>
     public SpeechToTextProcessor(ISpeechToTextEngine engine, ILogger? logger = null)
@@ -80,8 +81,15 @@ public sealed class SpeechToTextProcessor : FrameProcessor
                     break; // also forward — the sink reads the marker (continuation, not barge-in)
 
                 case UserStartedSpeakingFrame:
-                    // A new utterance is starting; no speculative pass is pending for it yet.
-                    lock (_specLock) _speculativePending = false;
+                    // A new utterance is starting: mark it active and clear any stale eager state — a held final
+                    // or pending arm left by a misordered prior utterance — so it can't promote into this turn.
+                    lock (_specLock)
+                    {
+                        _inUtterance = true;
+                        _speculativePending = false;
+                        _activeSpecId = 0;
+                        _heldFinals.Clear();
+                    }
                     break;
 
                 case UserStoppedSpeakingFrame stopped:
@@ -118,10 +126,19 @@ public sealed class SpeechToTextProcessor : FrameProcessor
             return;
         }
 
-        lock (_specLock) { _speculativePending = true; _activeSpecId = spec.UtteranceId; }
+        bool arm;
+        lock (_specLock)
+        {
+            // Ignore a stale arm that (under data-loop backlog) arrives after the utterance already stopped:
+            // otherwise it would set _speculativePending after the stop and a later stop would promote the wrong
+            // utterance id. An arm is valid only between UserStarted and UserStopped.
+            arm = _inUtterance;
+            if (arm) { _speculativePending = true; _activeSpecId = spec.UtteranceId; }
+        }
+        if (!arm) return;
+
         // Speculative flush: transcribe the buffered utterance now, tagged with this id, overlapping the rest of
-        // the hangover. Its result is HELD until the turn is confirmed or superseded (see ReadLoopAsync). Engines
-        // that don't batch treat FlushAsync(id) as a no-op (no speculative final to hold).
+        // the hangover. Its result is HELD until the turn is confirmed or superseded (see ReadLoopAsync).
         try { await _engine.FlushAsync(spec.UtteranceId).ConfigureAwait(false); }
         catch (Exception ex) { _logger.LogWarning(ex, "SpeechToTextProcessor: speculative FlushAsync threw"); }
     }
@@ -130,7 +147,7 @@ public sealed class SpeechToTextProcessor : FrameProcessor
     {
         bool promote;
         long specId;
-        lock (_specLock) { promote = _speculativePending; specId = _activeSpecId; _speculativePending = false; }
+        lock (_specLock) { promote = _speculativePending; specId = _activeSpecId; _speculativePending = false; _inUtterance = false; }
 
         TranscriptionResult? promoted = null;
         if (promote && _engine is not null)

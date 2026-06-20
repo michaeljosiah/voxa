@@ -43,6 +43,14 @@ public sealed class EchoCancellerProcessor : FrameProcessor
 /// feeds each bot <see cref="AudioRawFrame"/> into the session's shared <see cref="IEchoCanceller"/> via
 /// <see cref="IEchoCanceller.FeedReference"/> as it is produced (speech-core's "auto far-end feed"), then
 /// forwards the frame unchanged — it only observes, so the sink is never modified and never stalled by it.
+/// <para>
+/// It also <see cref="IEchoCanceller.Reset"/>s the shared canceller on the downstream turn-edge markers — a
+/// barge-in (<see cref="UserStartedSpeakingFrame"/>, the granular pipeline's barge-in signal, which emits no
+/// <see cref="InterruptionFrame"/>), an explicit interruption, or the bot finishing
+/// (<see cref="BotStoppedSpeakingFrame"/>). The near-end <see cref="EchoCancellerProcessor"/> sits upstream of
+/// the VAD and never sees those markers, so without this the canceller would apply stale bot far-end to the
+/// user's next mic frames.
+/// </para>
 /// </summary>
 public sealed class EchoReferenceTapProcessor : FrameProcessor
 {
@@ -53,8 +61,17 @@ public sealed class EchoReferenceTapProcessor : FrameProcessor
 
     protected override async ValueTask ProcessFrameAsync(Frame frame, CancellationToken ct)
     {
-        if (frame is AudioRawFrame audio)
-            _aec.FeedReference(audio.Pcm); // observe the bot's outbound audio as the far-end reference
+        switch (frame)
+        {
+            case AudioRawFrame audio:
+                _aec.FeedReference(audio.Pcm); // observe the bot's outbound audio as the far-end reference
+                break;
+            case UserStartedSpeakingFrame:  // barge-in marker the upstream near-end stage can't see
+            case InterruptionFrame:         // explicit interruption epoch
+            case BotStoppedSpeakingFrame:   // bot turn ended — the far-end stream is done
+                _aec.Reset();               // drop stale far-end so it isn't subtracted from the next turn's mic
+                break;
+        }
         await PushFrameAsync(frame, ct).ConfigureAwait(false); // forward unchanged
     }
 }

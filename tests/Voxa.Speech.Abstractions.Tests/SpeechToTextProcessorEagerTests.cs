@@ -63,16 +63,25 @@ public class SpeechToTextProcessorEagerTests
         while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(10);
     }
 
+    // A speculative arm is only honored between UserStarted and UserStopped. Begin an utterance and wait until
+    // the STT processor has marked it active (the frame reaching the capturing sink means _inUtterance is set).
+    private static async Task BeginUtteranceAsync(Pipeline pipeline, CapturingProcessor cap)
+    {
+        await pipeline.Source.IngestAsync(new UserStartedSpeakingFrame());
+        await cap.WaitForAsync(f => f is UserStartedSpeakingFrame, Timeout);
+    }
+
     [Fact]
     public async Task Speculative_Frame_Triggers_An_Id_Tagged_Flush()
     {
         var engine = new FakeSttEngine();
-        var (runner, _, pipeline) = Build(engine);
+        var (runner, cap, pipeline) = Build(engine);
 
         await using (runner)
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout); // engine ready before frames
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(7));
 
             await WaitUntilAsync(() => engine.Calls.Contains("flush:7"), Timeout);
@@ -90,6 +99,7 @@ public class SpeechToTextProcessorEagerTests
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout); // engine ready before frames
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(5));               // arm
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(5, Superseded: true)); // supersede
             await WaitUntilAsync(() => engine.Calls.Contains("flush:5"), Timeout);
@@ -117,6 +127,7 @@ public class SpeechToTextProcessorEagerTests
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(9)); // arm
             await WaitUntilAsync(() => engine.Calls.Contains("flush:9"), Timeout);
 
@@ -141,6 +152,7 @@ public class SpeechToTextProcessorEagerTests
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(9));  // arm
             await WaitUntilAsync(() => engine.Calls.Contains("flush:9"), Timeout);
             await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());    // confirm before the final
@@ -164,6 +176,7 @@ public class SpeechToTextProcessorEagerTests
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(5));            // arm
             await WaitUntilAsync(() => engine.Calls.Contains("flush:5"), Timeout);
 
@@ -186,12 +199,13 @@ public class SpeechToTextProcessorEagerTests
     public async Task Confirm_After_Speculative_Discards_Buffer_Instead_Of_Reflushing()
     {
         var engine = new FakeSttEngine();
-        var (runner, _, pipeline) = Build(engine);
+        var (runner, cap, pipeline) = Build(engine);
 
         await using (runner)
         {
             await runner.StartAsync();
             await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout); // engine ready before frames
+            await BeginUtteranceAsync(pipeline, cap);
             await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(3));       // pending speculative
             await WaitUntilAsync(() => engine.Calls.Contains("flush:3"), Timeout);
             await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());          // confirm ⇒ promote
@@ -200,6 +214,34 @@ public class SpeechToTextProcessorEagerTests
             // Promote drops the buffer; it must NOT issue a second (plain) flush for this turn.
             Assert.Contains("discard", engine.Calls);
             Assert.DoesNotContain("flush", engine.Calls); // bare parameterless flush never happened
+        }
+    }
+
+    [Fact]
+    public async Task Stale_Arm_After_Stop_Is_Ignored()
+    {
+        // VRT-002 (Codex P2): a speculative arm that lands after the utterance already stopped (data-loop
+        // backlog reordering it past the priority UserStopped) must NOT arm — else a later stop promotes it.
+        var engine = new FakeSttEngine();
+        var (runner, cap, pipeline) = Build(engine);
+
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await WaitUntilAsync(() => engine.Calls.Contains("start"), Timeout);
+            await BeginUtteranceAsync(pipeline, cap);
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());   // utterance ends (classic flush)
+            await WaitUntilAsync(() => engine.Calls.Contains("flush"), Timeout); // _inUtterance is now false
+
+            await pipeline.Source.IngestAsync(new SpeculativeUtteranceFrame(99)); // late arm for the ended turn
+            await Task.Delay(80);
+            Assert.DoesNotContain("flush:99", engine.Calls); // ignored — not in an active utterance
+
+            // It left no pending state: the next turn's stop is a plain flush, never a promote/discard.
+            await BeginUtteranceAsync(pipeline, cap);
+            await pipeline.Source.IngestAsync(new UserStoppedSpeakingFrame());
+            await Task.Delay(80);
+            Assert.DoesNotContain("discard", engine.Calls);
         }
     }
 

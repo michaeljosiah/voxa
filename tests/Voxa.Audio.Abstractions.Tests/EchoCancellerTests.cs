@@ -165,6 +165,35 @@ public class EchoReferenceTapProcessorTests
         var forwarded = (AudioRawFrame)sink.Captured.First(f => f is AudioRawFrame);
         Assert.True(forwarded.Pcm.Equals(bot.Pcm)); // same buffer, observe-only
     }
+
+    [Theory]
+    [InlineData("userStarted")]
+    [InlineData("interruption")]
+    [InlineData("botStopped")]
+    public async Task Tap_Resets_The_Shared_Canceller_On_TurnEdge_Markers(string kind)
+    {
+        // The near-end stage is upstream of the VAD and never sees these downstream markers, so the tap must
+        // reset the shared canceller on a barge-in / interruption / bot-stop (else stale far-end is reused).
+        var fake = new FakeEchoCanceller();
+        await using var tap = new EchoReferenceTapProcessor(fake);
+        await using var sink = new CapturingProcessor();
+        tap.Link(sink);
+        tap.Start();
+        sink.Start();
+
+        Frame marker = kind switch
+        {
+            "userStarted" => new UserStartedSpeakingFrame(),
+            "interruption" => new InterruptionFrame(),
+            _ => new BotStoppedSpeakingFrame(),
+        };
+        var markerType = marker.GetType();
+        await tap.QueueFrameAsync(marker);
+
+        await sink.WaitForAsync(f => f.GetType() == markerType, Timeout);
+        Assert.True(fake.Resets >= 1);                                   // canceller was reset
+        Assert.Contains(sink.Captured, f => f.GetType() == markerType);  // marker still forwarded
+    }
 }
 
 public class SharedCancellerTests
