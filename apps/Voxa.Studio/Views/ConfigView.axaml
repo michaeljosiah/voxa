@@ -8,7 +8,7 @@
 
     <Border Grid.Row="0" Classes="vx-viewbar">
       <StackPanel Spacing="4">
-        <TextBlock Classes="vx-h1" Text="Config" />
+        <TextBlock Classes="vx-viewtitle" Text="Config" />
         <TextBlock Classes="vx-label"
                    Text="LIVE PROVIDER REGISTRY · SAME VALIDATOR A SERVER BOOTS WITH · EXPORT NEVER CARRIES SECRETS" />
       </StackPanel>
