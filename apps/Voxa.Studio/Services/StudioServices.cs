@@ -154,7 +154,13 @@ public sealed class StudioServices : IAsyncDisposable
             .Build();
 
         var services = new ServiceCollection();
-        services.AddLogging(b => b.AddDebug().SetMinimumLevel(LogLevel.Information));
+        // Studio has no console, and AddDebug only reaches an attached debugger — so add a file sink too,
+        // or component failures (e.g. a smart-turn sidecar that can't start) would be logged nowhere a
+        // user can see. The file also captures positive Information signals (e.g. "Smart turn: held open").
+        services.AddLogging(b => b
+            .AddDebug()
+            .AddProvider(new FileLoggerProvider(LogLevel.Information))
+            .SetMinimumLevel(LogLevel.Information));
         // A WebApplicationBuilder registers IConfiguration implicitly; a bare ServiceCollection
         // does not — and the meta-package's DefaultAgentFactory resolves it.
         services.AddSingleton<IConfiguration>(configuration);

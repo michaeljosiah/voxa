@@ -94,6 +94,7 @@ internal sealed class ProcessSidecarChannel : ISidecarChannel
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            CreateNoWindow = true,   // no flashing console window on Windows when the TTS sidecar launches
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
         psi.ArgumentList.Add("--model");

@@ -59,7 +59,8 @@ public sealed class HttpSmartTurnClassifier : ISmartTurnClassifier
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             // Endpoint error or our own timeout — fail safe to "turn over" so the bot still responds.
-            _logger.LogDebug(ex, "Smart-turn endpoint failed; defaulting to turn-complete.");
+            // Warn (not Debug): a silent drop to classic silence detection is a degraded state worth seeing.
+            _logger.LogWarning(ex, "Smart-turn endpoint failed; falling back to classic silence detection (turn-complete).");
             return true;
         }
     }

@@ -89,8 +89,9 @@ public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier, IDisposab
         {
             // A crashed / erroring / timed-out sidecar must never hold the turn open — fail to "complete"
             // and let the next turn relaunch it (the process was reset above / StartAsync relaunches it).
+            // Warn (not Debug): a silent drop to classic silence detection is a degraded state worth seeing.
             _started = false;
-            _logger.LogDebug(ex, "Smart-turn sidecar failed or timed out; defaulting to turn-complete.");
+            _logger.LogWarning(ex, "Smart-turn sidecar failed or timed out; falling back to classic silence detection (turn-complete).");
             return true;
         }
         finally
@@ -145,6 +146,7 @@ internal sealed class ProcessSmartTurnSidecar : ISmartTurnSidecar
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            CreateNoWindow = true,   // no flashing console window on Windows each time the sidecar (re)launches
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
         psi.ArgumentList.Add("--model");
