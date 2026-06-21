@@ -184,11 +184,8 @@ public sealed class DefaultVoicePipelineComposer
         parts.Add(_ => new TranscriptionFilter());
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Stt);
 
-        // 4. Agent with built-in conversation memory
-        var history = o.Agent.ConversationMemory
-            ? new InMemoryChatHistory(o.Agent.MaxHistoryMessages)
-            : null;
-        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, history, tuning.MaxResponseDuration));
+        // 4. Agent. Built-in conversation memory unless a host IVoiceAgentConfigurator owns it (VDX-006).
+        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, tuning.MaxResponseDuration));
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Agent);
 
         // 5. Sentence aggregator (profile-tuned)
@@ -277,7 +274,6 @@ public sealed class DefaultVoicePipelineComposer
     private FrameProcessor CreateAgentProcessor(
         IServiceProvider sp,
         VoxaAgentOptions agentOpts,
-        InMemoryChatHistory? history,
         TimeSpan? maxResponseDuration)
     {
         // Resolution order: AIAgent (DI) → IChatClient (DI) → IVoiceAgentFactory (provider-backed)
@@ -289,6 +285,20 @@ public sealed class DefaultVoicePipelineComposer
             throw new InvalidOperationException(
                 "UseDefaults() needs an agent. Either register an AIAgent or IChatClient in DI, " +
                 "or set Voxa:Agent:Provider (requires the Voxa meta-package). See docs/getting-started.md.");
+
+        // VDX-006: a host-supplied configurator owns the agent's per-turn options (a durable conversation
+        // store, frontend tools, lifecycle hooks). When one is registered the composer skips its built-in
+        // InMemoryChatHistory — the host owns memory. Absent ⇒ the built-in wiring runs exactly as before,
+        // so a configurator-free pipeline composes byte-identically to pre-VDX-006.
+        var configurator = sp.GetService<IVoiceAgentConfigurator>();
+        var history = (configurator is null && agentOpts.ConversationMemory)
+            ? new InMemoryChatHistory(agentOpts.MaxHistoryMessages)
+            : null;
+
+        if (configurator is not null && agentOpts.ConversationMemory)
+            _logger.LogDebug(
+                "Voxa: an IVoiceAgentConfigurator is registered; it owns conversation memory, so the " +
+                "built-in InMemoryChatHistory is skipped (Voxa:Agent:ConversationMemory does not apply).");
 
         return MicrosoftAgentVoice.CreateProcessor(agent, opts =>
         {
@@ -312,6 +322,9 @@ public sealed class DefaultVoicePipelineComposer
                     return ValueTask.CompletedTask;
                 };
             }
+
+            // Host has the last word: it sees (and may replace) the composer's defaults.
+            configurator?.Configure(sp, opts);
         });
     }
 
