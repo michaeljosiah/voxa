@@ -38,9 +38,10 @@ public sealed class TelephonyMediaStreamSink : PipelineSink
             SingleReader = true,
         });
 
-    private int _epoch;        // bumped on barge-in; the writer drops older-epoch (purgeable) audio
+    private int _epoch;             // bumped on barge-in; the writer drops older-epoch (purgeable) audio
+    private int _lastResampleEpoch = -1; // data-loop-only: the epoch the resampler last produced for
     private Task? _writerTask;
-    private long _turnT0;      // UserStoppedSpeaking timestamp for the TTFB metric
+    private long _turnT0;          // UserStoppedSpeaking timestamp for the TTFB metric
 
     /// <param name="webSocket">Open media WebSocket. Caller owns lifetime; the sink does NOT dispose it.</param>
     /// <param name="codec">The vendor wire codec (shared with the matching source).</param>
@@ -137,6 +138,18 @@ public sealed class TelephonyMediaStreamSink : PipelineSink
     {
         var pcm = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(audio.Pcm.Span);
         if (pcm.IsEmpty) return null;
+
+        // Barge-in (epoch bump) happened since the last audio frame ⇒ reset the resampler's boundary
+        // state so the new utterance doesn't interpolate from the purged utterance's last sample. Done
+        // here on the DATA loop (not in the system-loop barge-in branch) to keep the resampler single-
+        // threaded — the resampler is not thread-safe. Epoch is read via Volatile; _lastResampleEpoch
+        // is touched only here.
+        var epoch = Volatile.Read(ref _epoch);
+        if (epoch != _lastResampleEpoch)
+        {
+            _resampler.Reset();
+            _lastResampleEpoch = epoch;
+        }
 
         short[] src;
         int count;

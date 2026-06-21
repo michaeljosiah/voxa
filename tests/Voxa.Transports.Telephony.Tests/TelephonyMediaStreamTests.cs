@@ -107,6 +107,33 @@ public class TelephonyMediaStreamTests
     }
 
     [Fact]
+    public async Task InboundMedia_Reassembles_A_Fragmented_Message()
+    {
+        // A JSON message split across two ReceiveAsync calls must be reassembled by the read loop's
+        // pooled accumulator (slow path) before the codec parses it.
+        var ws = new FakeWebSocket();
+        var source = new TelephonyMediaStreamSource(ws, new FakeMediaCodec(TelephonyMediaFormat.MuLaw8k), inputSampleRate: 8000);
+        var sink = new PipelineSink();
+        var pipeline = Pipeline.Build().Source(source).Sink(sink);
+
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+
+        var chunk = new byte[160];
+        Array.Fill(chunk, (byte)0x80);
+        var media = MediaMsg(chunk);
+        var half = media.Length / 2;
+        await ws.QueueIncomingTextAsync(media[..half], endOfMessage: false);
+        await ws.QueueIncomingTextAsync(media[half..], endOfMessage: true);
+        await ws.QueueIncomingTextAsync(StopMsg);
+
+        var frames = await DrainSinkAsync(sink, Timeout);
+        var pcm = MemoryMarshal.Cast<byte, short>(frames.OfType<AudioRawFrame>().Single().Pcm.Span);
+        Assert.Equal(160, pcm.Length);
+        Assert.Equal((short)32124, pcm[0]);
+    }
+
+    [Fact]
     public async Task InboundDtmf_Is_Routed_To_Hook()
     {
         var ws = new FakeWebSocket();
