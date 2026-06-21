@@ -23,6 +23,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
     <ProjectReference Include="..\Voxa.Speech.OpenAI\Voxa.Speech.OpenAI.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.AssemblyAI\Voxa.Speech.AssemblyAI.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Aws\Voxa.Speech.Aws.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Deepgram\Voxa.Speech.Deepgram.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Gladia\Voxa.Speech.Gladia.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Google\Voxa.Speech.Google.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Groq\Voxa.Speech.Groq.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Speechmatics\Voxa.Speech.Speechmatics.csproj" />
+    <ProjectReference Include="..\Voxa.Speech.Together\Voxa.Speech.Together.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Azure\Voxa.Speech.Azure.csproj" />
     <ProjectReference Include="..\Voxa.Speech.ElevenLabs\Voxa.Speech.ElevenLabs.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Mistral\Voxa.Speech.Mistral.csproj" />

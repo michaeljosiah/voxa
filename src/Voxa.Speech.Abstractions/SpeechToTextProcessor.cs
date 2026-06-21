@@ -106,6 +106,8 @@ public sealed class SpeechToTextProcessor : FrameProcessor
                         _activeSpecId = 0;
                         _heldFinals.Clear();
                     }
+                    // Tell streaming engines a new utterance began so they reset their late-final anti-bleed window.
+                    await _engine.OnUserStartedSpeakingAsync().ConfigureAwait(false);
                     break;
 
                 case UserStoppedSpeakingFrame stopped:

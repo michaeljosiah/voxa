@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **STT vendor expansion toward Pipecat parity — 8 new providers.** New STT provider packages
+  broaden vendor coverage on the existing `ISpeechToTextEngine` seam:
+  - **Batch tier — `Voxa.Speech.Groq` + `Voxa.Speech.Together`** (`Voxa:Stt = "Groq"` / `"Together"`). Both
+    are OpenAI-compatible (`/audio/transcriptions`), so each is a thin `VoxaSttDescriptor` reusing the proven
+    `OpenAIWhisperEngine` pointed at the vendor base URL — only credentials, base URL and model differ
+    (Groq → `whisper-large-v3-turbo`, Together → `openai/whisper-large-v3`).
+  - **Streaming tier — `Voxa.Speech.Deepgram`, `Voxa.Speech.AssemblyAI`, `Voxa.Speech.Gladia`,
+    `Voxa.Speech.Speechmatics`** (`Voxa:Stt = "Deepgram"` / `"AssemblyAI"` / `"Gladia"` / `"Speechmatics"`),
+    WebSocket STT engines on a new shared **`WebSocketSttEngine`** base (in `Voxa.Speech.Abstractions`) that
+    owns the connect / receive / binary-send / close plumbing; vendors describe only the endpoint, auth, an
+    optional post-connect handshake (Speechmatics `StartRecognition`) or async session-init (Gladia's
+    `POST /v2/live` → socket URL), and a message parser. Because Voxa fires one agent turn per `IsFinal:true`
+    transcription, the base streams interims for live display, **accumulates** the vendor's locked segments,
+    and emits a single **VAD/smart-turn-gated final** per utterance via `FlushAsync()` — so a streaming
+    vendor drives exactly one turn per utterance (like a batch engine) but with no post-speech round-trip.
+  - **Cloud-SDK tier — `Voxa.Speech.Google` + `Voxa.Speech.Aws`** (`Voxa:Stt = "Google"` / `"Aws"`), built on
+    the official vendor SDKs (`Google.Cloud.Speech.V2` gRPC bidi-streaming; `AWSSDK.TranscribeStreaming` v4
+    event-stream). Both are standalone `ISpeechToTextEngine`s sharing a small `StreamingTranscriptAccumulator`
+    that mirrors the WebSocket base's one-final-per-utterance turn integration. Google takes a `ProjectId` +
+    service-account credentials (or ADC); AWS takes a region + the default credential chain (or explicit keys).
+
+  All registered automatically by the meta-package; config under `Voxa:{Groq,Together,Deepgram,AssemblyAI,Gladia,Speechmatics,Google,Aws}`.
+  Note: the streaming/SDK engines are unit-tested at the parser/descriptor seam but the live wire protocols have
+  not been validated against the real services — verify against a real key/credentials before relying on them.
 - **Speaker-segmentation ONNX engine (VLS-005 WS2).** A new opt-in **`Voxa.Audio.Diarization.Onnx`** package
   ships `PyannoteOnnxSegmentation` — an `ISpeakerSegmentation` backed by the **MIT-licensed** pyannote
   segmentation-3.0 model on the shared `Voxa.Audio.Onnx` host. It's a clean ONNX-on-host fit because the model's
