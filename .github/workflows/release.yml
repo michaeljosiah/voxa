@@ -47,25 +47,16 @@ jobs:
         run: dotnet test Voxa.slnx --configuration Release --no-build
 
       - name: Pack
+        # Pack EVERY packable project under src/ (auto-discovered) rather than a hand-maintained list —
+        # the old explicit list silently went stale (missing Audio.Abstractions, the telephony transports,
+        # and the streaming STT vendors), so the meta-package shipped with NuGet dependencies on packages
+        # that were never published. Projects marked <IsPackable>false> no-op; apps/samples/bench/tests
+        # live outside src/ and are excluded.
         run: |
-          dotnet pack src/Voxa.Core/Voxa.Core.csproj                                       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.AspNetCore/Voxa.AspNetCore.csproj                           --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Testing/Voxa.Testing.csproj                                 --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Services.AzureVoiceLive/Voxa.Services.AzureVoiceLive.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Services.MicrosoftAgents/Voxa.Services.MicrosoftAgents.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Services.OpenAIRealtime/Voxa.Services.OpenAIRealtime.csproj --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Observability/Voxa.Observability.csproj                     --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.Abstractions/Voxa.Speech.Abstractions.csproj         --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.Azure/Voxa.Speech.Azure.csproj                       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.OpenAI/Voxa.Speech.OpenAI.csproj                     --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.ElevenLabs/Voxa.Speech.ElevenLabs.csproj             --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.Mistral/Voxa.Speech.Mistral.csproj                   --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Audio.SileroVad/Voxa.Audio.SileroVad.csproj                 --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.WhisperCpp/Voxa.Speech.WhisperCpp.csproj             --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.Piper/Voxa.Speech.Piper.csproj                       --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa.Speech.Kokoro/Voxa.Speech.Kokoro.csproj                     --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
-          dotnet pack src/Voxa/Voxa.csproj                                                 --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          shopt -s nullglob
+          for proj in src/*/*.csproj; do
+            dotnet pack "$proj" --configuration Release --no-build --output ./artifacts -p:Version=${{ steps.version.outputs.version }}
+          done
 
       - name: Push to NuGet
         run: |
