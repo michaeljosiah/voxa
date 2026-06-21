@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VDX-006 — IVoiceAgentConfigurator: custom conversation memory under UseDefaults()</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  pre .del { color: #e0857c; }
+  pre .add { color: #a5d6a7; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-006 — <code>IVoiceAgentConfigurator</code>: custom conversation memory under <code>UseDefaults()</code><span class="badge additive">additive</span></h1>
+  <div class="sub">A one-interface host seam so an app with its <em>own</em> durable conversation store keeps the
+    default composer — the real VAD, the latency profile, the diagnostics taps — instead of hand-rolling the whole
+    pipeline to swap one stage. Today, wanting per-thread voice memory forces a host off <code>.UseDefaults()</code>
+    entirely and silently forfeits everything else the composer wires. VDX-006 makes the agent stage the <em>only</em>
+    thing a memory-owning host has to touch.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-006 v1.0</div>
+    <div><b>Date</b> 2026-06-21</div>
+    <div><b>Status</b> Draft — ready to implement</div>
+    <div><b>Target</b> <code>Voxa.AspNetCore</code> (+ <code>Voxa.Services.MicrosoftAgents</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P5 — Developer experience</div>
+    <div><b>Depends on</b> nothing — purely additive seam</div>
+    <div><b>Motivating consumer</b> Ada M6.1 (retires its manual voice stages)</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals &amp; non-goals</a></li>
+    <li><a href="#s4">Architecture context — the agent stage today</a></li>
+    <li><a href="#s5">The seam — <code>IVoiceAgentConfigurator</code></a></li>
+    <li><a href="#s6">Composer change &amp; the byte-identity guarantee</a></li>
+    <li><a href="#s7">Host usage — the Ada migration</a></li>
+    <li><a href="#s8">Alternatives considered</a></li>
+    <li><a href="#s9">Plan of action — phases</a></li>
+    <li><a href="#s10">Progress checklist</a></li>
+    <li><a href="#s11">Verification protocol</a></li>
+    <li><a href="#s12">Risk register</a></li>
+    <li><a href="#s13">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VDX-006 add, in one sentence?</b>
+    <p>A single optional interface — <code>IVoiceAgentConfigurator</code> — that a host registers in DI to take over
+    the voice agent's per-turn options (conversation memory, frontend tools, turn-lifecycle hooks) <em>while staying on</em>
+    <code>app.MapVoxaVoice("/voice").UseDefaults()</code>.</p>
+  </div>
+  <div class="qa">
+    <b>Why does it matter?</b>
+    <p>The composer (<code>DefaultVoicePipelineComposer</code>) is where Voxa's "optimal default" lives: it reads the
+    latency <b>profile</b>, selects the registered <b>VAD</b>, wires <b>interim-coalescing</b>, and inserts the
+    <b>diagnostics taps</b>. The only way to reach all of that is <code>.UseDefaults()</code>. But the composer also forces
+    its own in-memory chat history — so any host that needs a <em>durable</em> store (persist turns, key by a thread id,
+    show voice turns next to text) has had to abandon <code>.UseDefaults()</code> and re-build the entire pipeline by hand
+    just to replace that one stage. In practice they forfeit the real VAD and the profile by accident.</p>
+  </div>
+  <div class="qa">
+    <b>Who hit this?</b>
+    <p>Ada (a downstream consumer) did, exactly. Its voice plane hand-builds the chain to get per-thread persistence and, as
+    a side effect, runs an energy gate instead of the Silero VAD it registered and ignores the <code>LowLatency</code> profile
+    it set — documented in Ada's <code>M6.1</code> fidelity spec. VDX-006 is the upstream fix that makes Ada's <code>M6.1</code>
+    workarounds unnecessary: with the seam, Ada registers one class and switches its route to <code>.UseDefaults()</code>.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>Add a public interface <code>IVoiceAgentConfigurator</code> to <code>Voxa.AspNetCore</code>. The composer resolves it from
+the per-connection service scope (the same scope it already uses to resolve the <code>AIAgent</code>,
+<code>ISmartTurnClassifier</code>, <code>IEchoCanceller</code>, and the diagnostics hub). When present, the host owns the
+agent's <code>MicrosoftAgentVoiceOptions</code> and the composer skips its built-in <code>InMemoryChatHistory</code>. When
+absent — the overwhelmingly common case — <strong>nothing changes</strong>: the composed pipeline is byte-identical to
+pre-VDX-006, preserving the existing golden gate.</p>
+
+<table>
+  <thead><tr><th>Capability via <code>.UseDefaults()</code></th><th>Before VDX-006</th><th>After VDX-006</th></tr></thead>
+  <tbody>
+    <tr><td>Registered VAD + latency profile + diagnostics taps</td><td>only if you accept built-in memory</td><td>always</td></tr>
+    <tr><td>Built-in in-memory chat history</td><td>forced (when <code>ConversationMemory=true</code>)</td><td>default; opt-out by registering a configurator</td></tr>
+    <tr><td>Durable / custom conversation store</td><td>requires abandoning the composer</td><td>register one <code>IVoiceAgentConfigurator</code></td></tr>
+    <tr><td>Frontend tools / turn-lifecycle hooks under defaults</td><td>not reachable</td><td>same seam</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals &amp; non-goals</h2>
+
+<h4>Goals</h4>
+<ul>
+  <li>Let a host fully customise the voice agent's <code>MicrosoftAgentVoiceOptions</code> (<code>BuildMessages</code>,
+  <code>OnTurnCompleted</code>, <code>OnTurnStarted</code>, <code>OnTurnFailed</code>, <code>IsFrontendTool</code>,
+  <code>BuildRunOptions</code>) without leaving <code>.UseDefaults()</code>.</li>
+  <li>Be <strong>transport-agnostic</strong> — work identically for the WebSocket host and Studio's in-process transport, via
+  the per-connection <code>IServiceProvider</code> the composer already threads.</li>
+  <li>Be <strong>zero-impact when unused</strong> — preserve the defaults-byte-identity golden gate.</li>
+  <li>Keep the public surface to a single interface (plus one optional convenience extension).</li>
+</ul>
+
+<h4>Non-goals</h4>
+<ul>
+  <li>A provider-neutral memory abstraction. The seam intentionally exposes the existing MAF
+  <code>MicrosoftAgentVoiceOptions</code>; the composer's agent stage is already Microsoft-Agent-Framework-specific.</li>
+  <li>Persisting memory <em>for</em> the host. Voxa supplies the seam and the per-connection scope; the store is the host's.</li>
+  <li>Changing the granular interruption / barge-in model (unrelated).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — the agent stage today</h2>
+
+<p>The composer builds the agent stage in two places. The call site decides whether to allocate a history; the factory wires
+it into the per-turn options:</p>
+
+<div class="filelabel">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs — today</div>
+<pre><code><span class="cm">// 4. Agent with built-in conversation memory</span>
+var history = o.Agent.ConversationMemory
+    ? new InMemoryChatHistory(o.Agent.MaxHistoryMessages)
+    : null;
+parts.Add(sp =&gt; CreateAgentProcessor(sp, o.Agent, history, tuning.MaxResponseDuration));
+
+<span class="cm">// …</span>
+
+private FrameProcessor CreateAgentProcessor(
+    IServiceProvider sp, VoxaAgentOptions agentOpts,
+    InMemoryChatHistory? history, TimeSpan? maxResponseDuration)
+{
+    AIAgent? agent = sp.GetService&lt;AIAgent&gt;()
+        ?? WrapChatClient(sp.GetService&lt;IChatClient&gt;(), agentOpts)
+        ?? sp.GetService&lt;IVoiceAgentFactory&gt;()?.Create(sp, agentOpts);
+    if (agent is null) throw new InvalidOperationException(/* … */);
+
+    return MicrosoftAgentVoice.CreateProcessor(agent, opts =&gt;
+    {
+        opts.MaxResponseDuration = maxResponseDuration;
+        if (history is not null)
+        {
+            opts.BuildMessages  = (turnCtx, ct) =&gt; /* Snapshot() + user text */;
+            opts.OnTurnCompleted = (turnCtx, summary, ct) =&gt; /* history.AddUser / AddAssistant */;
+        }
+    });
+}</code></pre>
+
+<p><code>InMemoryChatHistory</code> (in <code>Voxa.Services.MicrosoftAgents</code>) is a sealed class with
+<code>AddUser(string)</code>, <code>AddAssistant(string)</code>, and <code>Snapshot()</code>. There is no seam to substitute
+it, and <code>MicrosoftAgentVoiceOptions</code> is constructed and consumed entirely inside the factory — so a host cannot
+reach it without replacing the whole stage, which means leaving the composer.</p>
+
+<div class="callout"><b>The pivot.</b> The agent already resolves from DI (<code>sp.GetService&lt;AIAgent&gt;()</code>). VDX-006 adds
+exactly one more optional DI lookup next to it, and lets that collaborator have the last word on <code>opts</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>The seam — <code>IVoiceAgentConfigurator</code></h2>
+
+<div class="filelabel">src/Voxa.AspNetCore/IVoiceAgentConfigurator.cs — new</div>
+<pre><code>using Microsoft.Extensions.DependencyInjection;
+using Voxa.Services.MicrosoftAgents;
+
+namespace Voxa.AspNetCore;
+
+<span class="cm">/// &lt;summary&gt;</span>
+<span class="cm">/// Host seam (VDX-006) for customising the voice agent's per-turn options under &lt;c&gt;UseDefaults()&lt;/c&gt; —</span>
+<span class="cm">/// a durable conversation store, frontend tools, or turn-lifecycle hooks — without abandoning</span>
+<span class="cm">/// &lt;see cref="DefaultVoicePipelineComposer"/&gt;. Resolved per connection from the session scope; when none</span>
+<span class="cm">/// is registered the composer keeps its built-in &lt;c&gt;InMemoryChatHistory&lt;/c&gt; (byte-identical default).</span>
+<span class="cm">/// &lt;/summary&gt;</span>
+public interface IVoiceAgentConfigurator
+{
+    <span class="cm">/// &lt;param name="connection"&gt;The per-connection service provider — HTTP &lt;c&gt;RequestServices&lt;/c&gt;, or the</span>
+    <span class="cm">/// in-proc session scope under Studio. Use it to resolve scoped state, e.g. the active thread id.&lt;/param&gt;</span>
+    <span class="cm">/// &lt;param name="options"&gt;The agent options to mutate. The composer's defaults are already applied;</span>
+    <span class="cm">/// the host has the last word.&lt;/param&gt;</span>
+    void Configure(IServiceProvider connection, MicrosoftAgentVoiceOptions options);
+}
+
+<span class="cm">/// &lt;summary&gt;Delegate-backed configurator for hosts that prefer a lambda to a class (VDX-006).&lt;/summary&gt;</span>
+public static class VoiceAgentConfiguratorExtensions
+{
+    public static IServiceCollection AddVoxaVoiceAgentConfigurator(
+        this IServiceCollection services,
+        Action&lt;IServiceProvider, MicrosoftAgentVoiceOptions&gt; configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        return services.AddSingleton&lt;IVoiceAgentConfigurator&gt;(new DelegateVoiceAgentConfigurator(configure));
+    }
+
+    private sealed class DelegateVoiceAgentConfigurator(
+        Action&lt;IServiceProvider, MicrosoftAgentVoiceOptions&gt; configure) : IVoiceAgentConfigurator
+    {
+        public void Configure(IServiceProvider connection, MicrosoftAgentVoiceOptions options)
+            =&gt; configure(connection, options);
+    }
+}</code></pre>
+
+<p>The method is a void mutator over <code>MicrosoftAgentVoiceOptions</code> — deliberately the same shape as the
+<code>Action&lt;MicrosoftAgentVoiceOptions&gt;</code> already accepted by <code>UseMicrosoftAgent(agent, configure)</code>, so the
+mental model is identical whether a host is on the manual builder or the composer.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>Composer change &amp; the byte-identity guarantee</h2>
+
+<p>Move the history decision inside the factory so it can defer to a configurator, then invoke the configurator last:</p>
+
+<div class="filelabel">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs — patch</div>
+<pre><code> <span class="cm">// 4. Agent. Built-in conversation memory unless a host configurator owns it (VDX-006).</span>
+<span class="del">-var history = o.Agent.ConversationMemory</span>
+<span class="del">-    ? new InMemoryChatHistory(o.Agent.MaxHistoryMessages)</span>
+<span class="del">-    : null;</span>
+<span class="del">-parts.Add(sp =&gt; CreateAgentProcessor(sp, o.Agent, history, tuning.MaxResponseDuration));</span>
+<span class="add">+parts.Add(sp =&gt; CreateAgentProcessor(sp, o.Agent, tuning.MaxResponseDuration));</span>
+
+ private FrameProcessor CreateAgentProcessor(
+<span class="del">-    IServiceProvider sp, VoxaAgentOptions agentOpts,</span>
+<span class="del">-    InMemoryChatHistory? history, TimeSpan? maxResponseDuration)</span>
+<span class="add">+    IServiceProvider sp, VoxaAgentOptions agentOpts, TimeSpan? maxResponseDuration)</span>
+ {
+     AIAgent? agent = sp.GetService&lt;AIAgent&gt;()
+         ?? WrapChatClient(sp.GetService&lt;IChatClient&gt;(), agentOpts)
+         ?? sp.GetService&lt;IVoiceAgentFactory&gt;()?.Create(sp, agentOpts);
+     if (agent is null) throw new InvalidOperationException(/* … */);
+
+<span class="add">+    // VDX-006: a host configurator owns conversation memory (and may add tools / lifecycle hooks).</span>
+<span class="add">+    // Absent ⇒ keep the built-in InMemoryChatHistory exactly as before, so the composed options are</span>
+<span class="add">+    // byte-identical to pre-VDX-006 (the defaults-byte-identity golden gate).</span>
+<span class="add">+    var configurator = sp.GetService&lt;IVoiceAgentConfigurator&gt;();</span>
+<span class="add">+    var history = (configurator is null &amp;&amp; agentOpts.ConversationMemory)</span>
+<span class="add">+        ? new InMemoryChatHistory(agentOpts.MaxHistoryMessages)</span>
+<span class="add">+        : null;</span>
++
+     return MicrosoftAgentVoice.CreateProcessor(agent, opts =&gt;
+     {
+         opts.MaxResponseDuration = maxResponseDuration;
+         if (history is not null)
+         {
+             opts.BuildMessages  = (turnCtx, ct) =&gt; /* unchanged */;
+             opts.OnTurnCompleted = (turnCtx, summary, ct) =&gt; /* unchanged */;
+         }
+<span class="add">+        configurator?.Configure(sp, opts); // host has the last word</span>
+     });
+ }</code></pre>
+
+<div class="callout good"><b>Byte-identity proof.</b> With no <code>IVoiceAgentConfigurator</code> registered,
+<code>configurator</code> is <code>null</code>: <code>history</code> is built on exactly the prior condition,
+the built-in <code>BuildMessages</code>/<code>OnTurnCompleted</code> wiring runs identically, and
+<code>configurator?.Configure</code> is a no-op. The only added work on the default path is one
+<code>GetService</code> that returns <code>null</code> — it does not touch the composed processor. The existing
+golden test (composed pipeline equality with diagnostics off) continues to pass unchanged; a new test pins the
+"no configurator ⇒ identical options" case explicitly.</div>
+
+<div class="callout warn"><b>Precedence.</b> When a configurator <em>is</em> registered, the composer skips its built-in
+history (the host owns memory) and the configurator runs <em>after</em> <code>MaxResponseDuration</code> is set — so a host
+may also override that if it wishes. If both <code>Voxa:Agent:ConversationMemory=true</code> and a configurator are present,
+the configurator wins; log this at <code>Debug</code> so the choice is visible.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>Host usage — the Ada migration</h2>
+
+<p>Today Ada hand-builds the whole chain to host its <code>IConversationStore</code> keyed by <code>?thread=</code>. With
+VDX-006 that closure moves verbatim into a configurator, and the route collapses to the defaults:</p>
+
+<div class="filelabel">Ada — AdaVoiceConfigurator.cs (the old inline closure, now a class)</div>
+<pre><code>internal sealed class AdaVoiceConfigurator(IConversationStore convos) : IVoiceAgentConfigurator
+{
+    public void Configure(IServiceProvider connection, MicrosoftAgentVoiceOptions opts)
+    {
+        var http = connection.GetRequiredService&lt;IHttpContextAccessor&gt;().HttpContext;
+        var threadId = ResolveThread(http, convos);           <span class="cm">// the ?thread= logic, unchanged</span>
+        opts.BuildMessages   = (ctx, _) =&gt; /* VoiceContextTail + user text */;
+        opts.OnTurnCompleted = (ctx, summary, _) =&gt; /* persist into convos, set title */;
+    }
+}</code></pre>
+
+<div class="filelabel">Ada — registration + route</div>
+<pre><code>builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton&lt;IVoiceAgentConfigurator, AdaVoiceConfigurator&gt;();
+<span class="cm">// …</span>
+app.MapVoxaVoice("/voice").UseDefaults();   <span class="cm">// VAD + LowLatency profile + diagnostics, for free</span></code></pre>
+
+<div class="callout good"><b>What Ada deletes.</b> The manual <code>UseSilenceGate</code>, the hand-built
+<code>SileroVad</code>/<code>SentenceAggregator</code> stages, and the 16&nbsp;kHz rate-tag workaround from
+<code>M6.1</code> — all gone, because the composer now provides them and announces the session sample rate itself. VDX-006
+turns Ada's "faithful workaround" into "use the defaults."</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Alternatives considered</h2>
+
+<table>
+  <thead><tr><th>Option</th><th>Why not</th></tr></thead>
+  <tbody>
+    <tr><td>Extract an <code>IChatHistory</code> (Snapshot/AddUser/AddAssistant) and resolve it from DI</td>
+        <td>Too narrow. It covers load+append but loses per-turn metadata real stores want (route, timestamp, lazily-created
+        thread title) and cannot touch frontend tools or lifecycle hooks. The options-configurator is strictly more capable
+        at the same surface.</td></tr>
+    <tr><td>Register a raw <code>Action&lt;IServiceProvider, MicrosoftAgentVoiceOptions&gt;</code> in DI</td>
+        <td>Non-idiomatic for Voxa (delegates in the container are undiscoverable and awkward to test). Offered anyway as the
+        <em>optional</em> <code>AddVoxaVoiceAgentConfigurator(…)</code> convenience that wraps a lambda into the interface.</td></tr>
+    <tr><td>Always wire built-in memory, let the configurator override</td>
+        <td>Allocates a dead <code>InMemoryChatHistory</code> for replace-style hosts and invites confusing mixed behaviour
+        (built-in <code>BuildMessages</code> + custom <code>OnTurnCompleted</code>). "Skip built-in when a configurator is
+        present" is the predictable rule: the host fully owns the agent options.</td></tr>
+    <tr><td>A new <code>UseDefaults(Action&lt;…&gt;)</code> overload on the route</td>
+        <td>The route handler runs per request and only assembles processor factories; the agent options live one layer down in
+        the composer. A DI-resolved collaborator reaches the right layer and stays transport-agnostic (Studio has no route).</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Plan of action — phases</h2>
+
+<div class="callout"><b>Phase 1 — the seam</b> <span class="badge p1">core</span><br>
+Add <code>IVoiceAgentConfigurator</code>; patch <code>CreateAgentProcessor</code> (resolve + skip-built-in + invoke-last);
+keep the call site one-arg. Tests: byte-identity (no configurator), configurator-invoked, built-in-skipped-when-present,
+precedence + Debug log.</div>
+
+<div class="callout"><b>Phase 2 — ergonomics</b> <span class="badge p2">convenience</span><br>
+Add <code>AddVoxaVoiceAgentConfigurator(Action&lt;…&gt;)</code> + the internal delegate wrapper. Test the lambda path reaches
+<code>opts</code>.</div>
+
+<div class="callout"><b>Phase 3 — docs &amp; consumers</b> <span class="badge p2">docs</span><br>
+<code>docs/getting-started.md</code> note ("custom conversation memory under the defaults"); <code>CHANGELOG.md</code>
+<code>[Unreleased]</code>; a one-line ROADMAP P5 update; cross-reference Ada <code>M6.1</code> as the migration example
+(informational — the Ada edit ships in the Ada repo).</div>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><input type="checkbox"><span class="tid">VDX-006-1</span>New public <code>IVoiceAgentConfigurator</code> in <code>Voxa.AspNetCore</code>.
+    <span class="ac">Acceptance: interface compiles; XML doc on type + both params; no new package reference.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-2</span>Composer resolves the configurator and skips built-in memory when present; invokes it last.
+    <span class="ac">Acceptance: <code>CreateAgentProcessor</code> is one-arg; history gated on <code>configurator is null &amp;&amp; ConversationMemory</code>.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-3</span>Golden byte-identity test: no configurator ⇒ composed options unchanged.
+    <span class="ac">Acceptance: existing defaults-identity golden still green; new test asserts the no-configurator option set equals the pre-patch one.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-4</span>Behaviour tests: configurator's <code>BuildMessages</code>/<code>OnTurnCompleted</code> are used and supersede built-in; built-in <code>InMemoryChatHistory</code> not constructed when a configurator is registered.
+    <span class="ac">Acceptance: a fake configurator's delegates fire across a turn; a memory-construction spy shows zero allocations.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-5</span>Precedence: <code>ConversationMemory=true</code> + configurator ⇒ configurator wins, logged at Debug.
+    <span class="ac">Acceptance: assert the log + that built-in wiring is absent.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-6</span><code>AddVoxaVoiceAgentConfigurator(Action&lt;…&gt;)</code> convenience + wrapper.
+    <span class="ac">Acceptance: lambda registration reaches <code>opts</code> end-to-end.</span></li>
+  <li><input type="checkbox"><span class="tid">VDX-006-7</span>Docs + CHANGELOG + ROADMAP; Ada <code>M6.1</code> cross-reference.
+    <span class="ac">Acceptance: getting-started shows the 3-line host recipe; <code>[Unreleased]</code> entry present.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Verification protocol</h2>
+<ul>
+  <li><code>dotnet build Voxa.slnx --configuration Release</code> — clean, warnings-as-errors.</li>
+  <li><code>dotnet test Voxa.slnx --filter "Category!=LocalModels"</code> — full inner loop green, including the byte-identity golden gate.</li>
+  <li>Manual: a Studio (in-proc transport) session and a WebSocket session both reach a registered configurator — proves transport-agnosticism via the per-connection <code>IServiceProvider</code>.</li>
+  <li>Diff audit: with diagnostics off and no configurator, the composed processor list and the agent options are unchanged from <code>main</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Risk register</h2>
+<table>
+  <thead><tr><th>#</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>A throwing <code>Configure</code> fails composition.</td><td class="sev-med">Med</td>
+        <td>It runs once per connection at compose time, before the socket is accepted — the existing handler turns a compose
+        failure into HTTP 500 with logs, not an aborted socket. Document: <code>Configure</code> must not throw; it sets
+        delegates, it does not do per-turn work.</td></tr>
+    <tr><td>R2</td><td>Singleton configurator needs per-connection state (thread id).</td><td class="sev-med">Med</td>
+        <td>It receives the per-connection <code>IServiceProvider</code> at <code>Configure</code> time (called once per
+        connection), so even a singleton resolves scoped state from <code>connection</code>. Documented in the XML doc and
+        getting-started.</td></tr>
+    <tr><td>R3</td><td>Silent loss of built-in memory surprises a host.</td><td class="sev-low">Low</td>
+        <td>The Debug log on precedence makes it visible; the getting-started note states the rule plainly.</td></tr>
+    <tr><td>R4</td><td>Seam couples the composer to the MAF options type.</td><td class="sev-low">Low</td>
+        <td>The composer's agent stage is already MAF-only (<code>MicrosoftAgentVoice.CreateProcessor</code>). A future
+        non-MAF agent path would introduce its own seam; no new coupling is created here.</td></tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Provider-neutral memory.</b> If a second agent runtime ever lands, factor a runtime-agnostic options seam then —
+  not speculatively now.</li>
+  <li><b>Augment-without-replace.</b> Keeping built-in memory <em>and</em> adding a tool is not a first-class mode; a host that
+  wants it re-creates the (public) <code>InMemoryChatHistory</code> wiring in its own configurator. Revisit only on demand.</li>
+  <li><b>Voxa-side persistence helpers.</b> A shipped SQLite/file conversation store is a separate product decision, not this
+  seam.</li>
+</ul>
+
+<div style="margin-top:48px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted);font-size:0.85rem;">
+VDX-006 · One public interface, one composer factory edit, zero default-path behaviour change. The point is narrow: a host
+that owns its conversation memory should not have to give up the composer to keep it. Upstream of — and the reason for — Ada's
+<code>M6.1</code> manual stages.
+</div>
+
+</div>
+</body>
+</html>

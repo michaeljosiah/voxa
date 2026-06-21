@@ -30,6 +30,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - A runnable **`samples/Voxa.Samples.TwilioServer`** (five-line setup + tunnel/number-config instructions).
   - Both transports are bundled by the meta-package. **Live-wire caveat:** like the streaming STT vendors, the
     Twilio wire protocol is **parser/spec-tested only** until validated on a real call (see the package README).
+- **Custom conversation memory under `UseDefaults()` — `IVoiceAgentConfigurator` (VDX-006).** A host
+  seam so an app with its own durable conversation store (persist turns, key by a thread id, show voice
+  turns next to text) keeps the default composer — the registered VAD, the latency profile, the
+  diagnostics taps — instead of hand-rolling the whole pipeline to replace one stage. Register an
+  `IVoiceAgentConfigurator` (or a lambda via `AddVoxaVoiceAgentConfigurator(...)`); the composer resolves
+  it from the per-connection scope, hands it the agent's `MicrosoftAgentVoiceOptions` after applying its
+  own defaults, and skips its built-in `InMemoryChatHistory` so the host owns memory. With none
+  registered the composed pipeline is **byte-identical** to before (one `GetService` returning null), so
+  the defaults-byte-identity golden gate is unchanged. Surfaced by the Ada voice-agent review; see
+  `docs/specifications/vdx-006-custom-conversation-memory-spec.html`.
 
 - **Voxa Studio UI overhaul to 1:1 with the reference prototype (VST-005).** A view-layer pass that
   realizes the VST-002 design brief end-to-end:
