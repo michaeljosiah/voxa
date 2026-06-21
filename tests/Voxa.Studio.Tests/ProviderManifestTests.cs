@@ -5,12 +5,14 @@ namespace Voxa.Studio.Tests;
 /// <summary>VST-003 WS2: the manifest catalog is well-formed and stays in lock-step with the registry.</summary>
 public class ProviderManifestTests
 {
-    [Fact] // WS2-A1
-    public void Catalog_Has_Eight_Distinct_Identities()
+    [Fact] // WS2-A1 — identities are distinct (count grows as providers are added; don't pin it)
+    public void Catalog_Identities_Are_Distinct()
     {
         var names = ProviderManifestCatalog.All.Select(m => m.Name).ToList();
-        Assert.Equal(8, names.Count);
         Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        // sanity: the #71 streaming/batch STT vendors are catalogued so Config gates them by activation.
+        Assert.Contains("Deepgram", names);
+        Assert.Contains("Aws", names);
     }
 
     [Fact] // WS2-A2
