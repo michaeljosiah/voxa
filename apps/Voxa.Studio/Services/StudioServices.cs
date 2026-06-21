@@ -157,10 +157,15 @@ public sealed class StudioServices : IAsyncDisposable
         // Studio has no console, and AddDebug only reaches an attached debugger — so add a file sink too,
         // or component failures (e.g. a smart-turn sidecar that can't start) would be logged nowhere a
         // user can see. The file also captures positive Information signals (e.g. "Smart turn: held open").
-        services.AddLogging(b => b
-            .AddDebug()
-            .AddProvider(new FileLoggerProvider(LogLevel.Information))
-            .SetMinimumLevel(LogLevel.Information));
+        // Only the real desktop app gets the file sink: unit tests construct StudioServices directly and
+        // must not write to the user's app-data (or contend on the file across parallel runs).
+        var isDesktopApp = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "Voxa.Studio";
+        services.AddLogging(b =>
+        {
+            b.AddDebug();
+            if (isDesktopApp) b.AddProvider(new FileLoggerProvider(LogLevel.Information));
+            b.SetMinimumLevel(LogLevel.Information);
+        });
         // A WebApplicationBuilder registers IConfiguration implicitly; a bare ServiceCollection
         // does not — and the meta-package's DefaultAgentFactory resolves it.
         services.AddSingleton<IConfiguration>(configuration);
