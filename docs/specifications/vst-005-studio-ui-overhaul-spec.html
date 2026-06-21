@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VST-005 — Voxa Studio UI Overhaul (1:1 with the reference prototype)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.86rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 6px; border: 1px solid rgba(255,255,255,.15); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.p3 { background: #2a2150; color: #b39ddb; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; column-count: 2; column-gap: 36px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 4px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VST-005 — Voxa Studio UI Overhaul (1:1 with the reference prototype)</h1>
+  <div class="sub">A view-layer overhaul that brings the Avalonia Studio app to <b>1:1 fidelity</b> with the
+    interactive reference prototype — the VST-002 design brief, fully realized. Studio already ships every view and the
+    shell scaffolding (VST-001…004); this is a <b>design-system + layout fidelity pass</b>: one token set, one component
+    library, the exact shell chrome, and each view rebuilt to the prototype's layout — <em>without</em> touching the
+    Avalonia-free view models, services, or pipeline composition.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VST-005 v1.0</div>
+    <div><b>Date</b> 2026-06-21</div>
+    <div><b>Status</b> Draft — for review (spec only; no app code lands with this item)</div>
+    <div><b>Target framework</b> .NET 10 · Avalonia 11 (Windows-first)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Builds on</b> VST-001 (Studio), VST-002 (design brief / playgrounds / builder / metrics), VST-003 (settings), VST-004 (dictation / polish)</div>
+    <div><b>Source of truth</b> the reference prototype (decoded React/Babel; design tokens + 16 view modules)</div>
+    <div><b>Design source</b> <code>.claude/skills/voxa-design</code> + <code>docs/specifications/voxa-studio-design-brief.html</code></div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Source of truth &amp; method</a></li>
+    <li><a href="#s5">Architectural guardrails (do not break)</a></li>
+    <li><a href="#s6">WS1 — Design tokens &amp; themes</a></li>
+    <li><a href="#s7">WS2 — Component library</a></li>
+    <li><a href="#s8">WS3 — The shell</a></li>
+    <li><a href="#s9">WS4 — The views, 1:1</a></li>
+    <li><a href="#s10">WS5 — Splash</a></li>
+    <li><a href="#s11">WS6 — Dialogs &amp; toasts</a></li>
+    <li><a href="#s12">WS7 — Motion</a></li>
+    <li><a href="#s13">Plan of action — phases</a></li>
+    <li><a href="#s14">Progress checklist</a></li>
+    <li><a href="#s15">Verification protocol</a></li>
+    <li><a href="#s16">Risk register</a></li>
+    <li><a href="#s17">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VST-005 do, in one sentence?</b>
+    <p>It rebuilds Voxa Studio's <em>look and feel</em> to match the reference prototype exactly — same colors,
+    typography, spacing, components, shell chrome, and per-view layouts — turning today's functional-but-uneven UI into
+    the polished, coherent product the VST-002 design brief described.</p>
+  </div>
+  <div class="qa">
+    <b>Is this a rewrite of Studio?</b>
+    <p>No. Studio already has all eight views, the nav shell, the splash, the settings dialog, themes, and the pipeline
+    plumbing (VST-001 through VST-004). VST-005 is a <b>view-layer fidelity pass</b>. The Avalonia-free view models, the
+    audio device seam, the <code>AddVoxa</code> composition, and every service stay put. We change <code>.axaml</code>,
+    add a shared style/control library, add a dialog/toast service, and align each screen to the prototype.</p>
+  </div>
+  <div class="qa">
+    <b>Where does the "1:1" target come from?</b>
+    <p>From the attached interactive prototype — a self-contained React/Babel build that <em>is</em> the VST-002 design
+    brief realized. It carries a complete token system (the same Ink / Pulse / Halo palette and Cascadia/Inter type the
+    design skill already mandates), a component library, and 16 view modules. §4 records exactly what it contains; the
+    rest of this spec translates it into Avalonia work.</p>
+  </div>
+  <div class="qa">
+    <b>What actually changes for a developer using Studio?</b>
+    <p>Every surface gets tighter and more consistent: one calm dark surface ramp with a single cyan accent (switchable
+    to warm/slate), data in Cascadia mono everywhere, the five pipeline stages color-coded identically across Talk,
+    Builder, Metrics, Models and Config, a real toast/dialog system instead of ad-hoc message surfaces, the "watch it
+    think" Talk experience (orb + live waveform + running pipeline flow), and a Builder/Metrics/Voices/Diarization that
+    look like the prototype rather than approximations.</p>
+  </div>
+  <div class="qa">
+    <b>What ships in VST-005, and what's deferred?</b>
+    <p><b>This item is a spec only</b> — no app code lands with it. It defines the token set, the component library, the
+    shell, every view's target layout, the splash, the dialog/toast system, and motion, plus a phased implementation
+    plan (§13). Implementation lands as a sequence of small PRs behind this spec. <b>Deferred</b> (already deferred in
+    the prototype too): the voice <em>clone wizard</em>, per-speaker diarization labelling, and any new pipeline
+    capability — VST-005 is purely presentation.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>The reference prototype defines a single, coherent design system and a precise layout for every Studio surface.
+Today's Studio implements the same <em>information</em> (VST-001…004) but with drift in tokens, components, and
+composition. VST-005 closes that gap in seven additive workstreams, each a small PR:</p>
+
+<ul>
+  <li><b>WS1 — Design tokens &amp; themes <span class="badge p1">P1</span>.</b> One Avalonia resource layer mirroring the
+    prototype's tokens (Ink neutral ramp, Pulse cyan accent, Halo violet, the five stage colors, surfaces, text, lines,
+    spacing, radii, typography, elevation, glow, motion) + three dark accent themes (<b>cool</b> default · warm · slate)
+    that re-tint only the accent ramp. Foundation for everything else.</li>
+  <li><b>WS2 — Component library <span class="badge p1">P1</span>.</b> The <code>vx-*</code> set as reusable Avalonia
+    styles/controls: buttons (4 variants × 3 sizes), icon buttons, badges (7 tones), cards, tabs, inputs/selects,
+    switches, status pills, waveform, voice orb, pipeline node + animated flow, transcript line, metric stat, code block.
+    Consumed by every view so a label or pill looks identical everywhere.</li>
+  <li><b>WS3 — The shell <span class="badge p1">P1</span>.</b> The 44px custom titlebar (mark + wordmark + live clock +
+    replay-splash + window controls), the 82px icon nav rail (8 items + settings gear + avatar, active-accent bar), the
+    global 52px Pipeline-Profile bar, the per-view <code>ViewBar</code>, and the "surface busy" <code>BlockedOverlay</code>
+    for the live-session-contended views (Talk / Builder / Metrics).</li>
+  <li><b>WS4 — The views, 1:1 <span class="badge p2">P2</span>.</b> Talk, Playgrounds (STT lab | TTS lab), STT
+    Playground, TTS Playground, Voices, Builder, Metrics, Models, Config, Diarization — each rebuilt to the prototype's
+    exact layout against the existing view models.</li>
+  <li><b>WS5 — Splash <span class="badge p2">P2</span>.</b> The 480×320 borderless launch animation (mark draws on, bars
+    spring, wordmark settles, stage ticker, progress bar), reduced-motion aware.</li>
+  <li><b>WS6 — Dialogs &amp; toasts <span class="badge p1">P1</span>.</b> An imperative, tone-driven dialog + toast
+    service (confirm / danger / warn / alert / prompt / toast) behind an interface, so views raise consistent modals and
+    notifications without each rolling their own — and view models stay Avalonia-free.</li>
+  <li><b>WS7 — Motion <span class="badge p3">P3</span>.</b> The four motion tokens (fast 120 · standard 240 · draw 1100
+    · pulse 2600) applied consistently, honoring OS reduced-motion.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> Studio goes from "all the right views, uneven execution" to a single,
+brand-coherent product that matches the prototype pixel-for-pixel — built on the view models and services that already
+exist, with no change to how the pipeline runs.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Reproduce the reference prototype's <b>visual design and per-view layout 1:1</b> in the Avalonia app: tokens,
+    components, shell chrome, splash, dialogs, and every view.</li>
+  <li>Land <b>one token resource layer and one component library</b> that every view consumes — no per-view hard-coded
+    colors, spacings, or fonts (the prototype's discipline: "all values come from tokens").</li>
+  <li>Ship the three dark accent themes (<b>cool</b> default / warm / slate), switchable from Appearance settings and
+    persisted, re-tinting only the accent ramp.</li>
+  <li>Add the imperative <b>dialog + toast</b> system so confirmations, destructive prompts, and notifications are
+    consistent app-wide.</li>
+  <li>Keep every architectural guardrail (§5): Avalonia-free, headless-testable view models; plain
+    <code>ServiceCollection</code> + <code>AddVoxa</code> (no Generic Host); audio behind <code>IStudioAudioDevice</code>;
+    the diagnostics/pipeline paths untouched.</li>
+  <li>One logical change per PR with a CHANGELOG entry; this spec lands <b>before</b> any app code.</li>
+</ul>
+
+<h3>Non-goals (this overhaul)</h3>
+<ul>
+  <li><b>New pipeline capability.</b> No new STT/TTS/agent/transport behavior. VST-005 is presentation only; the
+    composed pipeline and its config are unchanged.</li>
+  <li><b>View-model / service redesign.</b> View models, stores (profiles, voices, secrets, preferences), and the audio
+    device stay. We re-skin their views and, where a view model lacks a property the layout needs, add a
+    <em>presentation-only</em> property (e.g. a derived label) — not new domain logic.</li>
+  <li><b>The clone wizard &amp; per-speaker diarization.</b> Deferred in the prototype; deferred here. The Voices "Clone
+    voice" button shows the "coming soon" dialog; Diarization stays segmentation-only.</li>
+  <li><b>Light mode.</b> Studio is dark-only by design (the brief: "VOXA stays dark"). Themes vary the accent, not the
+    surface polarity.</li>
+  <li><b>Web/HTML shipping.</b> The prototype is the reference, not an artifact we ship. No React, no WebView — this is
+    native Avalonia.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>View-model surface</td><td><b>No behavioral change.</b> View models stay Avalonia-free and headless-testable; only presentation-only members may be added. Existing VM tests stay green.</td></tr>
+  <tr><td>Pipeline / composition</td><td><b>Zero change</b> to <code>AddVoxa</code>, the composer, diagnostics, or audio. Studio still boots on a plain <code>ServiceCollection</code> with no Generic Host and touches no network before the user acts.</td></tr>
+  <tr><td>Token coverage</td><td>Every color/spacing/radius/font in a view resolves to a <b>named resource</b> from the WS1 layer. A lint/review check: no raw <code>#RRGGBB</code> in view <code>.axaml</code> except inside the token dictionary itself.</td></tr>
+  <tr><td>Theme switch</td><td>Switching cool/warm/slate re-tints only the accent ramp + glows at runtime; surfaces, text, and stage colors are identical across themes.</td></tr>
+  <tr><td>Test lanes</td><td>Headless Avalonia (ubuntu) + the windows-latest Studio lane both stay green. New visual structure is covered by headless boot/render tests + the Skia capture trick (VST-002).</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Source of truth &amp; method</h2>
+
+<p>The reference is a Claude-artifact bundle (a single HTML whose readable design lives in a JSON-encoded template plus
+16 gzipped React/Babel modules). It was decoded for this spec; the salient contents:</p>
+
+<table>
+  <tr><th>Reference module</th><th>Defines</th><th>Lands in (Avalonia)</th></tr>
+  <tr><td>template <code>&lt;style&gt;</code></td><td>The full token system + <code>vx-*</code> component CSS</td><td>WS1 tokens, WS2 styles</td></tr>
+  <tr><td>component primitives (<code>VOXADesignSystem</code>)</td><td>Button, Select, Badge, Card, Switch, Input, IconButton, MetricStat, StatusPill, Waveform, VoiceOrb, PipelineFlow, TranscriptLine</td><td>WS2 controls/styles</td></tr>
+  <tr><td>shell module</td><td>Titlebar, nav rail, ProfileBar, ViewBar, BlockedOverlay</td><td>WS3</td></tr>
+  <tr><td>app-shell module</td><td>Routing, live-session blocking, splash gate, profile state</td><td>WS3 (maps to <code>MainWindow</code> + VM)</td></tr>
+  <tr><td>splash module</td><td>480×320 launch animation + stage ticker</td><td>WS5</td></tr>
+  <tr><td>dialog/toast module</td><td>Imperative <code>VoxaUI</code> confirm/danger/warn/alert/prompt/toast</td><td>WS6</td></tr>
+  <tr><td>view modules ×10</td><td>Talk, Playgrounds, STT, TTS, Voices, Builder (+canvas), Metrics, Models, Config, Diarization</td><td>WS4</td></tr>
+</table>
+
+<div class="callout"><b>Method.</b> Each WS section below states the prototype's exact spec (sizes, colors-by-token,
+controls, copy) and the target Avalonia file(s). Numeric values (heights, widths, paddings, font sizes) are taken
+<em>verbatim</em> from the prototype so "1:1" is checkable, not interpretive. Where the prototype hard-codes a value
+that equals a token, the Avalonia side uses the <b>token</b> (e.g. a 44px titlebar is literal; a cyan dot is
+<code>--stage-stt</code>).</div>
+
+<div class="callout warn"><b>One correction to carry.</b> The prototype's About tab reads "v0.4.0 · Avalonia 11 · .NET
+9". Voxa targets <b>.NET 10</b> — the Avalonia About view must read .NET 10 and the live assembly version, not the
+prototype's placeholder string.</div>
+
+<div class="callout warn"><b>Source caveat — component primitives.</b> The decoded bundle carries the <code>vx-*</code>
+<em>CSS</em> and all 16 view modules, but <b>not</b> the module that defines the React primitives the views call
+(<code>VOXADesignSystem.*</code> — Button, Card, Switch, VoiceOrb, PipelineFlow, …). So §7's component contracts
+(variants, sizes, render details) are <b>reconstructed from the <code>vx-*</code> CSS + the views' call sites</b>, not
+copied from a primitive source — confirm exact prop behavior against the call sites when building each control.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>Architectural guardrails (do not break)</h2>
+
+<p>From <code>CLAUDE.md</code> / the Studio specs. VST-005 is a view-layer change and must preserve all of these:</p>
+<ul>
+  <li><b>View models are Avalonia-free and headless-testable.</b> A 33 ms <code>DispatcherTimer</code> calls
+    <code>DrainPending()</code>; tests call it directly. No view model may take an Avalonia dependency. UI-only concerns
+    (dialogs, toasts, theme application) go behind interfaces the VM can call without referencing Avalonia.</li>
+  <li><b>Plain <code>ServiceCollection</code> + <code>AddVoxa</code>, not the Generic Host.</b> Hosted services (eager
+    model warm-up) must not run in Studio; Studio never touches the network before the user acts.</li>
+  <li><b>Audio behind <code>IStudioAudioDevice</code></b> (WASAPI/NAudio on Windows, <code>NullAudioDevice</code>
+    elsewhere/tests). Unchanged.</li>
+  <li><b>Tests run in both lanes</b> — the ubuntu default headless suite and the windows-latest Studio lane. New visual
+    structure must boot headless (<code>Avalonia.Headless.XUnit</code>).</li>
+  <li><b>No emojis in code; records for config; one short doc-comment line explaining <em>why</em>.</b> House style.</li>
+</ul>
+
+<div class="callout good"><b>Consequence for this overhaul.</b> The redesign is almost entirely <code>.axaml</code> +
+a new <code>Theme/</code> token/style layer + a handful of new <code>Controls/</code> + one
+<code>IDialogService</code>/<code>IToastService</code> pair. View models change only to expose presentation-only
+members the new layouts bind to (and those stay Avalonia-free).</p></div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS1 — Design tokens &amp; themes</h2>
+
+<div class="ws-head">
+  <span><b>Files</b> App.axaml (token brushes) · Theme/Studio.axaml · Theme/StudioThemes.cs · ThemeManager</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (foundation)</span>
+  <span><b>Mode</b> dark-only · 3 accents</span>
+  <span><b>Rule</b> every value is a token</span>
+</div>
+
+<p><b>A token layer already exists</b> — VST-005 re-tones it, it does not build it from scratch.
+<a href="apps/Voxa.Studio/App.axaml">App.axaml</a> defines the full <code>Vx*</code> token set as
+<code>Color</code> + <code>{token}Brush</code> resources (<code>VxBg</code>, <code>VxPanel</code>, <code>VxAccent</code>,
+<code>VxHalo</code>, the <code>VxStageVad/Stt/Agent/Tts/Out</code> palette, <code>VxGood/Warn/Bad</code>, <code>VxUi</code> =
+Inter, <code>VxMono</code> = Cascadia); <a href="apps/Voxa.Studio/Theme/StudioThemes.cs">StudioThemes.cs</a> +
+<code>ThemeManager.Apply</code> already switch themes at runtime by mutating those shared brush instances (every view binds
+the same brush via <code>StaticResource</code>, so a mutation repaints live). <b>The five stage colors already equal the
+prototype values</b> (<code>#76849B / #4FC3F7 / #CE93D8 / #FFB74D / #66BB6A</code>) and are correctly never themed — keep
+them. So WS1 is three concrete changes against that existing layer (below), not a green-field token system. Keep the
+<code>Vx*</code> resource keys (no app-wide rename); the §6 tables give the canonical hex each key must hold. Mapping:
+<code>ink-950→VxBg</code>, <code>ink-900→VxPanel</code>, <code>ink-850→VxPanel2</code>, <code>pulse-400→VxAccent</code>,
+<code>pulse-300→VxAccent2</code>, <code>pulse-500→VxAccentPressed</code>, <code>halo-400→VxHalo</code>,
+<code>stage-*→VxStage*</code>.</p>
+
+<div class="callout danger"><b>Headline change — rebrand warm → cool.</b> Today's Studio ships the <b>warm "Claude-coral"</b>
+palette as its base/default (<code>VxBg #1C1C19</code>, <code>VxAccent #C96442</code>, warm inks/text; the default theme
+is <b>Warm</b>). The prototype — the 1:1 target — is the <b>cool "Voxa-cyan" Pulse</b> brand (<code>ink-950 #0B0F14</code>,
+<code>pulse-400 #4FC3F7</code>). VST-005's single most visible change is making the <b>cool/cyan</b> palette the base and
+default. The values below are the prototype's; the existing "Cool" theme already carries most of them, so this is largely
+"promote Cool to the base, re-tone Warm/Slate to accent-only variants of it." Concretely: replace
+<a href="apps/Voxa.Studio/App.axaml">App.axaml</a>'s warm base palette with the cool/Ink values, change
+<code>StudioPreferences.ThemeId</code>'s default from <code>"warm"</code> to <code>"cool"</code>, and flip
+<code>StudioThemes.ById</code>'s fallback from Warm to Cool.</div>
+
+<h3>Color tokens (exact)</h3>
+<table>
+  <tr><th>Group</th><th>Tokens → values</th></tr>
+  <tr><td><b>Ink</b> (neutral blue-grey ramp)</td><td>
+    <span class="swatch" style="background:#0B0F14"></span><code>ink-950 #0B0F14</code> (page) ·
+    <span class="swatch" style="background:#11161D"></span><code>ink-900 #11161D</code> (panel) ·
+    <span class="swatch" style="background:#161C26"></span><code>ink-850 #161C26</code> (card) ·
+    <span class="swatch" style="background:#1C2330"></span><code>ink-800 #1C2330</code> (raised) ·
+    <code>ink-700 #222B36</code> · <code>ink-600 #2C3645</code> · <code>ink-500 #3A4656</code> · <code>ink-400 #4E5C70</code> ·
+    <span class="swatch" style="background:#76849B"></span><code>ink-300 #76849B</code> (muted text / VAD) ·
+    <code>ink-200 #A6B2C2</code> · <code>ink-100 #CDD5E0</code> · <code>ink-50 #EAEEF4</code></td></tr>
+  <tr><td><b>Pulse</b> (cyan accent — the only brand color)</td><td>
+    <code>pulse-200 #BBE6FB</code> · <span class="swatch" style="background:#81D4FA"></span><code>pulse-300 #81D4FA</code> (micro-labels) ·
+    <span class="swatch" style="background:#4FC3F7"></span><code>pulse-400 #4FC3F7</code> (THE accent) ·
+    <span class="swatch" style="background:#29A8E0"></span><code>pulse-500 #29A8E0</code> (pressed/focus) · <code>pulse-600 #1E86B8</code> · <code>pulse-700 #155F82</code></td></tr>
+  <tr><td><b>Halo</b> (agent/LLM violet — semantic, sparing)</td><td><code>halo-300 #E2B8E9</code> · <span class="swatch" style="background:#CE93D8"></span><code>halo-400 #CE93D8</code> · <code>halo-500 #B670C4</code> · <code>halo-600 #9450A6</code></td></tr>
+  <tr><td><b>Signal</b> (semantic)</td><td><span class="swatch" style="background:#66BB6A"></span><code>ok #66BB6A</code> · <span class="swatch" style="background:#FFB74D"></span><code>warn #FFB74D</code> · <span class="swatch" style="background:#EF5350"></span><code>danger #EF5350</code> · <code>info = pulse-400</code></td></tr>
+  <tr><td><b>Stage</b> (the five fixed pipeline stages — same five colors everywhere)</td><td>
+    <span class="swatch" style="background:#76849B"></span><code>stage-vad #76849B</code> (grey · audio/gate) ·
+    <span class="swatch" style="background:#4FC3F7"></span><code>stage-stt #4FC3F7</code> (cyan · transcription) ·
+    <span class="swatch" style="background:#CE93D8"></span><code>stage-agent #CE93D8</code> (violet · LLM) ·
+    <span class="swatch" style="background:#FFB74D"></span><code>stage-tts #FFB74D</code> (amber · synth) ·
+    <span class="swatch" style="background:#66BB6A"></span><code>stage-out #66BB6A</code> (green · output/live)</td></tr>
+  <tr><td><b>Surfaces / text / lines</b></td><td><code>surface-1..4 = ink-900/850/800/700</code> · <code>surface-card = ink-850</code> · <code>text-1 #EAF1F8</code> · <code>text-2 = ink-200</code> · <code>text-3 / text-muted = ink-300</code> · <code>text-on-pulse = ink-950</code> · lines <code>line-1/2/3 = rgba(166,178,194, .10/.16/.28)</code></td></tr>
+</table>
+
+<h3>Type, spacing, radii, elevation, motion (exact)</h3>
+<table>
+  <tr><td><b>Fonts</b></td><td><code>font-ui = Inter</code> (Segoe UI fallback) · <code>font-mono = Cascadia Code</code> (Consolas fallback). "If it's data, it's mono." Inter is already shipped via <code>Avalonia.Fonts.Inter</code>; Cascadia is the Windows default.</td></tr>
+  <tr><td><b>Size scale</b></td><td>11 / 12 / 13 (body) / 14 (UI base) / 15 (section) / 20 (view title) / 26 / 34 / 44 / 60 px</td></tr>
+  <tr><td><b>Weights / tracking</b></td><td>400/500/600/700 · label tracking <code>0.08em</code> · mono-label <code>0.06em</code> · wordmark <code>0.42em</code> · display <code>-0.02em</code></td></tr>
+  <tr><td><b>Spacing</b></td><td>4px grid: <code>4 8 12 16 20 24 32 40 48 64 80 96</code></td></tr>
+  <tr><td><b>Radii</b></td><td><code>sm 6</code> · <code>md 10</code> · <code>lg 14</code> · <code>xl 20</code> · <code>full 999</code></td></tr>
+  <tr><td><b>Elevation / glow</b></td><td>shadow-1/2/3 (ambient black) · <code>glow-pulse</code>, <code>glow-pulse-soft</code> (cyan), <code>glow-halo</code>, <code>glow-danger</code> · <code>edge-light</code> inner top highlight · <code>ring-focus</code> 2px accent</td></tr>
+  <tr><td><b>Motion</b></td><td><code>fast 120ms</code> · <code>standard 240ms</code> (view/card/panel) · <code>draw 1100ms</code> (logo/first paint) · <code>pulse 2600ms</code> ease-in-out infinite (the ONLY idle loops). Eases: out <code>cubic-bezier(.2,.8,.2,1)</code>, in-out/draw <code>cubic-bezier(.6,0,.2,1)</code>.</td></tr>
+  <tr><td><b>Layout</b></td><td>titlebar 44 · nav rail 82 · profile bar 52 · control heights sm 30 / md 38 / lg 46</td></tr>
+</table>
+
+<h3>The three accent themes</h3>
+<table>
+  <tr><th>Theme</th><th>pulse-400 → ramp</th><th>Note</th></tr>
+  <tr><td><b>cool</b> (default)</td><td><span class="swatch" style="background:#4FC3F7"></span><code>#4FC3F7</code> (200 #BBE6FB → 600 #1E86B8)</td><td>Pulse cyan — brand default</td></tr>
+  <tr><td><b>warm</b></td><td><span class="swatch" style="background:#E27A4E"></span><code>#E27A4E</code> (200 #F6CBB0 → 600 #9E4A29)</td><td>Terracotta accent</td></tr>
+  <tr><td><b>slate</b></td><td><span class="swatch" style="background:#8AA2CE"></span><code>#8AA2CE</code> (200 #CBD7EC → 600 #54698F)</td><td>Cool periwinkle</td></tr>
+</table>
+<p><b>Behavior change.</b> Today the three themes (<b>Warm</b> default / Cool / Slate) each re-tint the <em>whole</em>
+chrome — ink scale, text, and hairlines all shift per theme (<code>StudioThemes.cs</code>). The prototype narrows this:
+only the <code>pulse-*</code> ramp + the cyan glows re-tint; ink, text, lines, and the five stage colors are identical in
+every theme, and <b>Cool</b> is the default. VST-005 adopts the prototype's model — promote the cool base to all themes
+and reduce Warm/Slate to accent-only variants (warm accent <code>#E27A4E</code>, slate <code>#8AA2CE</code>; the current
+warm coral <code>#C96442</code> is retired with the rebrand). Persist the choice in
+<a href="apps/Voxa.Studio/Services/StudioPreferences.cs">StudioPreferences</a> (the prototype uses <code>localStorage
+'voxa.theme'</code>) and apply at boot via the existing <code>ThemeManager</code>.</p>
+
+<div class="callout"><b>Implementation note.</b> Express the accent ramp as a small swappable
+<code>ResourceDictionary</code> (one per theme) merged over the base token dictionary, so a theme switch is a single
+dictionary swap at runtime — the Avalonia equivalent of the prototype's <code>data-voxa-theme</code> attribute. Stage
+colors and the neutral ramp live in the base dictionary and never change.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS2 — Component library</h2>
+
+<div class="ws-head">
+  <span><b>Files</b> Theme/Components.axaml (styles) + Controls/*.cs</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span></span>
+  <span><b>Rule</b> tokens only — no hard-coded values</span>
+</div>
+
+<p>The prototype's <code>vx-*</code> classes + React primitives become reusable Avalonia styles (classes) and a few
+custom-drawn controls. Build these once; every view consumes them. Existing controls map where noted.</p>
+
+<table>
+  <tr><th>Component</th><th>Spec (from prototype)</th><th>Avalonia</th></tr>
+  <tr><td><b>Button</b></td><td>variants <code>primary</code> (pulse bg, ink text, glow on hover) · <code>secondary</code> (surface-3, hairline, edge-light) · <code>ghost</code> · <code>danger</code> (red outline → soft+glow); sizes sm 30 / md 38 / lg 46; <code>:active</code> translateY(1); disabled 0.45</td><td><code>Button</code> style classes <code>.primary/.secondary/.ghost/.danger</code> + <code>.sm/.md/.lg</code></td></tr>
+  <tr><td><b>IconButton</b></td><td>square (md/sm), transparent → surface-3 hover; <code>outline</code> variant</td><td><code>Button.icon</code> style</td></tr>
+  <tr><td><b>Badge</b></td><td>pill, mono 11px uppercase, 7 tones (neutral/pulse/halo/ok/warn/danger/info) each color+soft-bg+border</td><td><code>Border.badge</code> + tone classes</td></tr>
+  <tr><td><b>Card</b></td><td>surface-card, line-1, radius-lg, shadow-1+edge-light; <code>interactive</code> (hover lift) &amp; <code>glow</code> variants</td><td><code>Border.card</code> styles</td></tr>
+  <tr><td><b>Tabs</b></td><td>bottom-border row; selected = text-1 + 2px pulse underline; (also a "segmented" pill variant used by Playgrounds / STT source)</td><td><code>TabControl</code> style + a segmented <code>ToggleButton</code> group style</td></tr>
+  <tr><td><b>Input / Select</b></td><td>height 38, ink-900 bg, line-2 border, focus = pulse-500 border + 3px ring; <code>mono</code> variant; select caret</td><td><code>TextBox.field</code>, <code>ComboBox.field</code> styles</td></tr>
+  <tr><td><b>Switch</b></td><td>38×22 track, knob ink-200 → ink-950, checked = pulse-500</td><td><code>ToggleSwitch.vx</code> style</td></tr>
+  <tr><td><b>StatusPill</b></td><td>mono uppercase + dot; states live (cyan, blink) / connecting (warn, fast blink) / idle / ended / error</td><td><code>Controls/StatusPillControl</code> or styled <code>Border</code></td></tr>
+  <tr><td><b>Waveform</b></td><td>bar row, pulse-400; <code>live</code> bounce, <code>muted</code> grey, level-driven</td><td>existing <a href="apps/Voxa.Studio/Controls/WaveformStripControl.cs">WaveformStripControl</a> — align to token colors + levels API</td></tr>
+  <tr><td><b>VoiceOrb</b></td><td>radial-gradient sphere + cyan glow; <code>live</code> = two ripple rings (2.4s)</td><td>new <code>Controls/VoiceOrbControl</code> (custom-drawn)</td></tr>
+  <tr><td><b>Pipeline node + flow</b></td><td>node: surface-2, left 2–3px stage border, mono kind label, name, mono meta, <code>active</code> glow; flow link: dashed, animated frame dot when active</td><td>new <code>Controls/PipelineFlowControl</code>; Builder canvas reuses <a href="apps/Voxa.Studio/Controls/BuilderEdgesControl.cs">BuilderEdgesControl</a></td></tr>
+  <tr><td><b>TranscriptLine</b></td><td>grid <code>64px / 1fr / auto</code>: role (user=info, agent=pulse, system=muted-mono) · text · mono time; <code>partial</code> = muted + blinking caret</td><td><code>DataTemplate</code> + style classes</td></tr>
+  <tr><td><b>MetricStat</b></td><td>mono value (26px) + small unit + delta (good/bad/flat)</td><td>style + template</td></tr>
+  <tr><td><b>CodeBlock</b></td><td>ink-900, file bar, mono pre, token colors (kw=halo, ty=pulse-300, str=warn, cm=ink-400, num=info)</td><td>used by Config appsettings pane &amp; Builder C#-compose</td></tr>
+</table>
+
+<p>Existing controls to keep and re-token: <a href="apps/Voxa.Studio/Controls/VoxaMarkControl.cs">VoxaMarkControl</a>
+(the mark), <a href="apps/Voxa.Studio/Controls/VadTraceControl.cs">VadTraceControl</a>,
+<a href="apps/Voxa.Studio/Controls/WaterfallControl.cs">WaterfallControl</a>,
+<a href="apps/Voxa.Studio/Controls/StageTrendControl.cs">StageTrendControl</a>,
+<a href="apps/Voxa.Studio/Controls/RunStacksControl.cs">RunStacksControl</a>,
+<a href="apps/Voxa.Studio/Controls/SegmentTimelineControl.cs">SegmentTimelineControl</a>,
+<a href="apps/Voxa.Studio/Controls/TurnTickerControl.cs">TurnTickerControl</a>,
+<a href="apps/Voxa.Studio/Controls/StagePalette.cs">StagePalette</a> — each must draw with the WS1 stage tokens so
+colors match the rest of the app.</p>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>WS3 — The shell</h2>
+
+<div class="ws-head">
+  <span><b>Files</b> Views/MainWindow.axaml(.cs) · ViewModels/MainWindowViewModel.cs</span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (window chrome)</span>
+  <span><b>Pieces</b> titlebar · nav rail · profile bar · view bar · blocked overlay</span>
+</div>
+
+<h3>Titlebar (44px)</h3>
+<p>Custom chrome (Avalonia <code>ExtendClientAreaToDecorationsHint</code>): the mark (18px) + wordmark
+"<b>VOXA</b> STUDIO" (Inter 700, tracking 0.28em — the titlebar uses 0.28em, not the 0.42em wordmark token; "STUDIO" in text-3) on the left; on the right a live status pill
+(mono clock, only while a session runs), a "replay launch" sparkles button, a hairline divider, then minimize / maximize
+/ close window controls (close hovers <code>danger</code>). Drag-move on the bar.</p>
+
+<h3>Nav rail (82px)</h3>
+<p>Vertical icon+label rail. Eight items in this exact order, with these icons (lucide names → Avalonia icon set):</p>
+<table>
+  <tr><th>#</th><th>id</th><th>label</th><th>icon</th></tr>
+  <tr><td>1</td><td>talk</td><td>Talk</td><td>mic</td></tr>
+  <tr><td>2</td><td>playgrounds</td><td>Playgrounds</td><td>flask-conical</td></tr>
+  <tr><td>3</td><td>voices</td><td>Voices</td><td>audio-lines</td></tr>
+  <tr><td>4</td><td>builder</td><td>Builder</td><td>workflow</td></tr>
+  <tr><td>5</td><td>metrics</td><td>Metrics</td><td>bar-chart-3</td></tr>
+  <tr><td>6</td><td>models</td><td>Models</td><td>box</td></tr>
+  <tr><td>7</td><td>config</td><td>Config</td><td>settings-2</td></tr>
+  <tr><td>8</td><td>diarization</td><td>Diarization</td><td>scan-line</td></tr>
+</table>
+<div class="callout warn"><b>Reordering needed.</b> The current rail renders <b>Diarization before Config</b>
+(<a href="apps/Voxa.Studio/Views/MainWindow.axaml">MainWindow.axaml</a>; section indices Config=6 / Diarization=7 in
+<code>MainWindow.axaml.cs</code>). The order above (config=7, diarization=8) matches the prototype — reorder the rail and
+keep the <code>SelectedSection</code> index mapping consistent.</div>
+
+<p>Active item: surface-2 bg, line-1 border, pulse-400 icon + label, and a 2px pulse accent bar inset on the left edge.
+At the foot: a settings gear (opens the Settings dialog) and a circular user-initials avatar. (Appearance setting "Nav
+labels" can hide the text under the icons.)</p>
+
+<h3>Pipeline Profile bar (52px, global)</h3>
+<p>Pinned at the top of every view's main column: a <code>pulse-300</code> "Pipeline profile" micro-label, a profile
+<code>Select</code> (240 wide), then either the active chain as stage-colored chips (dot in <code>stage-*</code> + mono
+node name, chevrons between) or a hint when the profile is "— Custom —". This already exists (VST-002 builder overhaul);
+align it to the exact layout + chips.</p>
+
+<h3>ViewBar (per-view header)</h3>
+<p>Shared header used by every view: title (Inter 700, 20px) + uppercase mono sub-label on the left; right-aligned action
+slot for that view's controls. Padding <code>12px 20px</code>, bottom hairline, panel bg.</p>
+
+<h3>BlockedOverlay (contended surfaces)</h3>
+<p><b>Net-new</b> (today the shell only disables the profile bar via <code>IsEnabled="{Binding !IsLive}"</code> and lets
+the user freely switch surfaces while live — there is no overlay). A live Talk session holds the audio device + CPU; while
+it runs, switching to <b>Builder</b> or <b>Metrics</b> shows a centered <code>min(420px)</code> "Surface is busy" card
+(warn lock icon; copy: "A <b>Talk</b> session is holding the audio device and CPU. One real pipeline runs at a time, so
+live surfaces block each other."; "Go to Talk" + a danger "End session" button) over a blurred view. The contended set is
+<code>{ talk, builder, metrics }</code> with Talk the owner. Confirm the Talk view model exposes the live-ownership state
+the overlay binds to, or add a presentation-only member for it.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>WS4 — The views, 1:1</h2>
+
+<p>Each view is rebuilt to the prototype layout against its existing view model. Existing axaml in
+<code>apps/Voxa.Studio/Views/</code>.</p>
+
+<h3>9.1 Talk <span class="badge p1">P1</span></h3>
+<p><b>Idle:</b> centered voice orb (132) + "No live session" + explanatory copy + a primary "Start session" (mic icon).
+<b>Live:</b> <code>ViewBar</code> shows a live status pill (clock) + danger "End session". Body splits: <em>left</em> a
+scrolling transcript (TranscriptLine: agent / user / system / partial roles) with the running
+<code>PipelineFlow</code> pinned along the bottom (animated frame dots); <em>right</em> a 280-wide aside with a big live
+orb (132), a live waveform (20 bars), an "agent speaking" micro-label, and mono stats (TTFB / turns / barge-in). The
+"watch it think" experience. Target: <a href="apps/Voxa.Studio/Views/TalkView.axaml">TalkView.axaml</a>.</p>
+
+<h3>9.2 Playgrounds wrapper <span class="badge p2">P2</span></h3>
+<p>A thin top tab strip "STT lab | TTS lab" (segmented) hosting the two playgrounds.
+<a href="apps/Voxa.Studio/Views/PlaygroundsView.axaml">PlaygroundsView.axaml</a>.</p>
+
+<h3>9.3 STT Playground <span class="badge p2">P2</span></h3>
+<p>Input strip: source segmented toggle (Live mic / Drop WAV / Fixtures) + model <code>Select</code> + size badge +
+cached badge + a primary "Transcribe" button. Below, two columns: <em>left</em> transcript "final cards" (each a
+waveform + text + mono "utterance Xs · final +Y ms"); <em>right</em> an "Accuracy harness · WER" card (big mono % + op
+counts + a token diff coloring substitutions <code>warn</code> and insertions <code>info</code>, with a legend). A
+"side-by-side" switch in the ViewBar. <a href="apps/Voxa.Studio/Views/SttPlaygroundView.axaml">SttPlaygroundView.axaml</a>.</p>
+
+<h3>9.4 TTS Playground <span class="badge p2">P2</span></h3>
+<p>The text is the hero: a large editor card (focus glow, word/char counter, a row of "stress phrase" chips that append,
+Sample/Clear). Below: an "enabled voices" list (from the shared voice store, each with mono TTFB/RTF), a synthesis card
+with a waveform <em>scrubber</em> + "take history", an A/B/X blind-test card, and a batch-bench table. ViewBar: Export
+WAV + Synthesize. <a href="apps/Voxa.Studio/Views/TtsPlaygroundView.axaml">TtsPlaygroundView.axaml</a>.</p>
+
+<h3>9.5 Voices <span class="badge p2">P2</span></h3>
+<p>ViewBar: provider filter + "Clone voice" (shows coming-soon dialog) + "Reconcile". Two layouts (a
+preference/toggle): <em>split</em> — a 320 left rail with three status lanes (<b>live</b> ok · <b>stale</b> warn ·
+<b>discovered</b> pulse), each listing voice rows (origin icon, name, provider, enabled dot), and a detail pane (header
+with status badge, locale/rate/last-seen meta grid, style chips, an enable switch card, an audition card with play +
+strip, a reason callout, and status-specific actions Import/Re-sync/Use/Remove); <em>gallery</em> — status-grouped
+cards. <a href="apps/Voxa.Studio/Views/VoicesView.axaml">VoicesView.axaml</a>.</p>
+
+<h3>9.6 Builder <span class="badge p2">P2</span></h3>
+<p>ViewBar: a Builder profile bar (profile <code>Select</code> 178 + a "Save profile" split menu: update current / save
+as new) + "appsettings" + "C# compose" + "Run graph" (toggles to danger "Stop"). Body: <em>palette</em> (collapsible
+188↔46; node sets with stage dots + counts, draggable processors) → <em>canvas</em> (40px dot grid; positioned nodes
+with left stage border, mono kind/name/meta, typed ports colored by frame type — audio grey / transcription cyan /
+agent-text violet / synth-audio amber; bezier edges with an animated frame dot when running; a glass "last turn" ticker
+pinned bottom) → <em>inspector</em> (264; node header + per-node param sliders/selects + the node's in/out frame types).
+<a href="apps/Voxa.Studio/Views/BuilderView.axaml">BuilderView.axaml</a>. Honesty constraint preserved: single-in /
+single-out, chain-only.</p>
+
+<h3>9.7 Metrics <span class="badge p2">P2</span></h3>
+<p>ViewBar: run-source <code>Select</code> + "Run". A top row of three cards: a voice-to-voice <b>TTFB percentile</b>
+card (big mono p50 + p95/max + a delta), a <b>stage-breakdown</b> card (per-turn horizontal stacked bars in the five
+stage colors + legend), and a <b>run list</b> (checkboxes, compare-selected, export CSV/JSON). Below: a "Takeaway"
+callout (warn left-border + lightbulb, plain-language tuning hint) and a 4-up metric grid (RTF / Turns / Interruptions /
+Errors). <a href="apps/Voxa.Studio/Views/MetricsView.axaml">MetricsView.axaml</a>.</p>
+
+<h3>9.8 Models <span class="badge p2">P2</span></h3>
+<p>ViewBar: provider filter + "Prefetch all" + "Purge". A type tab row (All / STT / TTS / VAD with stage dots + counts,
+pulse underline). A card of rows: stage dot + model name/provider + type chip + size + (cached badge + verify icon) or a
+"Download" button. <a href="apps/Voxa.Studio/Views/ModelsView.axaml">ModelsView.axaml</a>.</p>
+
+<h3>9.9 Config <span class="badge p2">P2</span></h3>
+<p>Two columns. <em>Left</em> composer card: five rows, each a stage-dot label + <code>Select</code> (Speech to text /
+Text to speech / Voice activity / Agent / Latency profile), then a smart-turn checkbox card, a validity pill ("Valid — a
+server boots with this block" / "Incomplete…"), and Apply / Open-in-Builder. <em>Right</em>: a <b>460-wide</b> live
+<code>appsettings.json</code> pane (mono, ink-950) with Copy / Save-to-file. Export never carries secrets.
+<a href="apps/Voxa.Studio/Views/ConfigView.axaml">ConfigView.axaml</a>.</p>
+
+<h3>9.10 Diarization <span class="badge p2">P2</span></h3>
+<p>ViewBar: clip <code>Select</code> + "Load clip" + "Run segmentation". A waveform card (click-to-seek; a sweep line +
+progressive coloring while running; speech = pulse, silence = grey/ink) + an "activity timeline" track + a time ruler +
+legend. A 4-up stat grid (Speech / Silence / Regions / Model). A segments table (split layout). An info callout:
+segmentation-only, per-speaker labelling deferred.
+<a href="apps/Voxa.Studio/Views/DiarizationView.axaml">DiarizationView.axaml</a>.</p>
+
+<h3>9.11 Settings dialog <span class="badge p2">P2</span></h3>
+<p>Modal <code>min(760, 100vw-48) × min(560, 100vh-64)</code>, left nav <b>184</b> wide (Providers / Appearance / About). <b>Providers:</b> a DPAPI reassurance banner + a list of
+providers (cloud = expandable with credential fields + Save-encrypted/Clear; local = on-device, no fields), each with a
+status badge (off / active / needs key) and an activation switch. <b>Appearance:</b> the three-theme picker (swatch +
+label + hint + check), plus toggles for idle animations / nav labels / replay-splash. <b>About:</b> mark + "VOXA STUDIO"
++ <b>.NET 10</b> + the live version + the AddVoxa note. <a href="apps/Voxa.Studio/Views/SettingsDialog.axaml">SettingsDialog.axaml</a>
+(VST-003 already implements activation + DPAPI; this is a layout/fidelity pass).</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>WS5 — Splash</h2>
+
+<div class="ws-head">
+  <span><b>Files</b> Views/SplashWindow.axaml(.cs)</span>
+  <span><b>Size</b> 480×320 borderless</span>
+  <span><b>Motion</b> draw-on, reduced-motion aware</span>
+</div>
+<p>The launch animation: a radial-gradient stage; the mark's "V" draws on (stroke-dash, 1.1s draw ease); three signal
+bars spring up (staggered); the wordmark settles from wide tracking to 0.42em; a mono stage ticker steps through
+<code>configuration → providers → devices → model cache → ready</code>; a bottom progress bar fills. Click to skip;
+honors OS reduced-motion (jump to end state). The existing <code>SplashWindow</code> + <code>VoxaMarkControl</code> are
+the home; align timing/copy to the prototype. Keep the existing splash min-hold (VST-003) and cached-only warm-up
+behavior.</p>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>WS6 — Dialogs &amp; toasts</h2>
+
+<div class="ws-head">
+  <span><b>Files</b> Services/IDialogService.cs · Services/IToastService.cs (+ impls) · Controls/ToastHost</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span></span>
+  <span><b>API</b> imperative, tone-driven</span>
+</div>
+<p>The prototype's <code>VoxaUI</code> imperative API becomes a pair of injected services so views (and view models, via
+the interface) raise consistent modals/notifications:</p>
+<pre><code><span class="cm">// Avalonia-free interfaces — view models depend on these, never on Avalonia.</span>
+public interface IDialogService {
+    Task&lt;bool&gt; ConfirmAsync(DialogOptions o);   <span class="cm">// tone: confirm (cyan)</span>
+    Task&lt;bool&gt; DangerAsync(DialogOptions o);    <span class="cm">// red destructive</span>
+    Task&lt;bool&gt; WarnAsync(DialogOptions o);
+    Task AlertAsync(DialogOptions o);           <span class="cm">// one button</span>
+    Task&lt;string?&gt; PromptAsync(PromptOptions o); <span class="cm">// text input, null = cancelled</span>
+}
+public interface IToastService {
+    IDisposable Show(ToastOptions o);           <span class="cm">// tone: info/success/warning/danger; auto-dismiss ~3.6s</span>
+}</code></pre>
+<p><b>Modal</b> (460 wide): tone icon + soft-bg square, title, body, optional mono detail or text input, Cancel/Confirm
+(Confirm = danger red for destructive). Esc cancels, Enter confirms. <b>Toasts:</b> bottom-right stack, left border in
+the tone color, icon + title + optional (mono) message, auto-dismiss. The six tones map to the brief's icon+color set
+(confirm/info/success/warning/danger/error). The Avalonia impls live in the view layer; the interfaces keep view models
+clean (§5).</p>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>WS7 — Motion</h2>
+<p>Apply the four motion tokens consistently: <b>fast 120</b> (hover/press color shifts), <b>standard 240</b> (view /
+card / panel transitions, palette collapse), <b>draw 1100</b> (splash mark, first chart paint), <b>pulse 2600</b>
+ease-in-out infinite — the <em>only</em> idle loops (live status dot, logo glow, orb ripple). Everything honors the OS
+reduced-motion setting and the Appearance "Idle animations" toggle: when off, no infinite loops run and draw-ons jump to
+end state. No bespoke easings beyond the two token curves.</p>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Plan of action — phases</h2>
+<ol>
+  <li><b>Phase A — tokens + themes (WS1) <span class="badge p1">P1</span>.</b> Land the token resource layer + the three
+    accent dictionaries + theme switch/persist. Re-point existing controls to stage tokens. No layout change yet; the app
+    just gets correct colors/type. Independently mergeable.</li>
+  <li><b>Phase B — component library (WS2) <span class="badge p1">P1</span>.</b> Button/badge/card/tabs/input/switch/
+    status-pill styles + new VoiceOrb / PipelineFlow controls + transcript/metric/code templates. Add a small
+    "components gallery" debug view (or headless test page) to prove each in isolation.</li>
+  <li><b>Phase C — shell (WS3) + dialogs (WS6) <span class="badge p1">P1</span>.</b> Titlebar, nav rail, profile bar,
+    ViewBar, BlockedOverlay; the dialog/toast services. After this the frame around the views matches the prototype.</li>
+  <li><b>Phase D — high-traffic views <span class="badge p2">P2</span>.</b> Talk, Builder, Metrics (the contended trio)
+    + Config — the views a developer lives in.</li>
+  <li><b>Phase E — remaining views <span class="badge p2">P2</span>.</b> Playgrounds (STT/TTS), Voices, Models,
+    Diarization, Settings fidelity pass.</li>
+  <li><b>Phase F — splash + motion polish (WS5/WS7) <span class="badge p3">P3</span>.</b> Launch animation + the motion
+    pass + reduced-motion verification.</li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING). Each phase is one or more PRs with a CHANGELOG entry; this spec lands
+<b>before</b> any app code. Phases A→C are the load-bearing foundation; D→F can interleave once the library exists.</p>
+
+<!-- ============================================================ -->
+<h2 id="s14"><span class="secno">14.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">A1</span> Token <code>ResourceDictionary</code>: Ink/Pulse/Halo/Signal/Stage colors, surfaces, text, lines (exact hex from §6).
+    <span class="ac">AC: every token named; no view references a raw hex.</span></li>
+  <li><span class="tid">A2</span> Type/spacing/radii/elevation/glow/motion tokens; Inter + Cascadia wired.</li>
+  <li><span class="tid">A3</span> Three accent dictionaries (cool/warm/slate) + runtime swap + persist in <code>StudioPreferences</code> + apply-at-boot.
+    <span class="ac">AC: switch re-tints only the accent ramp + glows; headless test asserts stage colors unchanged across themes.</span></li>
+  <li><span class="tid">B1</span> Button (4×3), IconButton, Badge (7), Card (3) styles.</li>
+  <li><span class="tid">B2</span> Tabs + segmented group, Input/Select, Switch, StatusPill styles.</li>
+  <li><span class="tid">B3</span> VoiceOrb + PipelineFlow controls; Waveform re-tokenized; TranscriptLine / MetricStat / CodeBlock templates.</li>
+  <li><span class="tid">B4</span> Existing controls re-tokenized to stage colors (VadTrace/Waterfall/StageTrend/RunStacks/SegmentTimeline/TurnTicker/StagePalette).</li>
+  <li><span class="tid">C1</span> Titlebar (44) — mark + wordmark + live clock + replay + window controls; drag-move.</li>
+  <li><span class="tid">C2</span> Nav rail (82) — 8 items + icons + active accent bar + settings gear + avatar; nav-labels toggle.</li>
+  <li><span class="tid">C3</span> Profile bar (52) align + ViewBar shared header + BlockedOverlay for {talk,builder,metrics}.</li>
+  <li><span class="tid">C4</span> <code>IDialogService</code> / <code>IToastService</code> + impls + ToastHost; wire a few call sites.
+    <span class="ac">AC: interfaces are Avalonia-free; a VM can call them in a headless test with a fake.</span></li>
+  <li><span class="tid">D1</span> Talk idle + live (orb / transcript / pipeline flow / aside stats).</li>
+  <li><span class="tid">D2</span> Builder (palette / canvas / inspector / profile bar / turn ticker).</li>
+  <li><span class="tid">D3</span> Metrics (percentile / stage stacks / run list / takeaway / metric grid).</li>
+  <li><span class="tid">D4</span> Config (composer / smart-turn / validity / live appsettings pane).</li>
+  <li><span class="tid">E1</span> Playgrounds wrapper + STT Playground (source toggle / cards / WER harness).</li>
+  <li><span class="tid">E2</span> TTS Playground (hero editor / voices / scrubber / takes / A·B·X / bench).</li>
+  <li><span class="tid">E3</span> Voices (split + gallery, detail pane, audition).</li>
+  <li><span class="tid">E4</span> Models (type tabs + provider filter + rows) &amp; Diarization (waveform / timeline / stats / segments).</li>
+  <li><span class="tid">E5</span> Settings dialog fidelity (Providers / Appearance / About — About reads .NET 10 + live version).</li>
+  <li><span class="tid">F1</span> Splash launch animation + stage ticker; reduced-motion path.</li>
+  <li><span class="tid">F2</span> Motion pass (4 tokens) + idle-animations toggle honored app-wide.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s15"><span class="secno">15.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Headless boot (ubuntu)</b></td><td>The app + each view boots headless (<code>Avalonia.Headless.XUnit</code>) with the new styles applied; no exceptions; the existing view-model tests stay green (no VM behavior changed).</td></tr>
+  <tr><td><b>Token / theme tests</b></td><td>Assert the three accent dictionaries change only the <code>pulse-*</code> ramp + glows (stage + ink tokens identical); theme persists + reapplies at boot.</td></tr>
+  <tr><td><b>Visual capture</b></td><td>Headless Skia capture (the VST-002 trick) of each view → compared against the prototype layout for 1:1 review (manual sign-off per view; captures attached to each phase PR).</td></tr>
+  <tr><td><b>Dialog/toast</b></td><td>A fake <code>IDialogService</code>/<code>IToastService</code> lets a headless test drive a VM call site; the Avalonia impl is smoke-tested for open/confirm/cancel/auto-dismiss.</td></tr>
+  <tr><td><b>Windows lane</b></td><td>The windows-latest Studio CI lane runs (WASAPI device, real chrome); titlebar window controls + splash verified on Windows.</td></tr>
+  <tr><td><b>Guardrail check</b></td><td>No view model references Avalonia; Studio still boots on a plain <code>ServiceCollection</code> with no Generic Host and no pre-action network. Token lint: no raw hex outside the token dictionary.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s16"><span class="secno">16.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Scope blow-up — "rebuild every view" becomes an unbounded effort.</td><td class="sev-high">High</td><td>Phased (§13), one view per PR, foundation (A–C) first so each view PR is small. The views already exist functionally; this is re-skinning, not new logic.</td></tr>
+  <tr><td>R2</td><td>A view model gets an Avalonia dependency to satisfy a layout (breaks headless tests + the guardrail).</td><td class="sev-high">High</td><td>UI concerns go behind <code>IDialogService</code>/<code>IToastService</code>/theme interfaces; presentation-only VM members stay primitive. The "no Avalonia in VMs" check gates every PR.</td></tr>
+  <tr><td>R3</td><td>CSS→Avalonia translation drift — flex/grid/pseudo-element tricks don't map 1:1, so layouts approximate.</td><td class="sev-med">Med</td><td>Numeric values are taken verbatim (§4); Skia capture review per view; the component library centralizes the hard parts (orb, flow, pills) so they're solved once.</td></tr>
+  <tr><td>R4</td><td>Custom titlebar / window controls misbehave (maximize, snap, multi-DPI) on Windows.</td><td class="sev-med">Med</td><td>Use Avalonia's extend-client-area hints + caption buttons; verify on the windows lane; keep a standard-chrome fallback behind a flag if needed.</td></tr>
+  <tr><td>R5</td><td>Icon set mismatch — lucide names don't all exist in the chosen Avalonia icon source.</td><td class="sev-low">Low</td><td>Pick one icon source up front (Phase B) and map the 8 nav + per-view glyphs; missing ones drawn as small paths (the mark already is).</td></tr>
+  <tr><td>R6</td><td>Theme swap flicker / unstyled flash on switch.</td><td class="sev-low">Low</td><td>Swap a single merged accent dictionary (base stays); test the swap is atomic; default cool applied before first paint.</td></tr>
+  <tr><td>R7</td><td>Token churn breaks the existing custom controls' drawing.</td><td class="sev-low">Low</td><td>Re-token controls in Phase A/B with their own tests; stage colors are the only ones they consume.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s17"><span class="secno">17.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Voice clone wizard</b> — recording capture, consent, the Azure Custom Neural Voice handoff. The "Clone voice"
+    button shows the coming-soon dialog (as in the prototype). Cloned voices still reconcile into the library.</li>
+  <li><b>Per-speaker diarization labelling</b> — Diarization stays segmentation-only (speech vs silence).</li>
+  <li><b>Light mode / extra themes</b> beyond cool/warm/slate — dark-only by design.</li>
+  <li><b>New pipeline / provider capability</b> — VST-005 is presentation only.</li>
+  <li><b>Shipping the prototype</b> — it is the reference, not a deliverable; no React/WebView in the app.</li>
+  <li><b>The "Tweaks" panel</b> from the prototype — that is the design-tool's live-edit harness, not a product surface;
+    its layout toggles (Voices split/gallery, Diarization split/timeline, profile-bar chips/hint) become real Appearance
+    options only where they add value, otherwise the default layout ships.</li>
+</ul>
+
+</div>
+</body>
+</html>

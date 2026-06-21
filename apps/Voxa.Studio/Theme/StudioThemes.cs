@@ -5,10 +5,11 @@ using Avalonia.Styling;
 namespace Voxa.Studio.Theme;
 
 /// <summary>
-/// A selectable palette (VST-003). Each theme overrides the chrome tokens — ink scale, text,
-/// hairlines, the single accent. The five semantic stage colours and ok/warn/danger are NOT
-/// themed (they encode meaning in charts/traces and must stay constant). Token keys match the
-/// resource names in App.axaml without the "Brush" suffix.
+/// A selectable palette (VST-003; VST-005 = accent-only). Every theme shares the cool Ink base —
+/// only the single accent ramp (VxAccent/VxAccent2/VxAccentPressed/VxAccentDim) differs, so the
+/// chrome stays calm and constant and just the accent re-tints. The five semantic stage colours and
+/// ok/warn/danger are NOT themed (they encode meaning in charts/traces and must stay constant).
+/// Token keys match the resource names in App.axaml without the "Brush" suffix.
 /// </summary>
 public sealed record StudioTheme(string Id, string Name, IReadOnlyDictionary<string, string> Tokens)
 {
@@ -19,40 +20,37 @@ public sealed record StudioTheme(string Id, string Name, IReadOnlyDictionary<str
     private IBrush Swatch(string token) => new SolidColorBrush(Color.Parse(Tokens[token]));
 }
 
-/// <summary>The built-in palettes offered in Settings → Appearance.</summary>
+/// <summary>
+/// The built-in palettes offered in Settings → Appearance. <b>Cool</b> (Voxa Pulse cyan) is the
+/// default; Warm and Slate re-tint only the accent ramp over the same cool base.
+/// </summary>
 public static class StudioThemes
 {
-    public static readonly StudioTheme Warm = new("warm", "Warm", new Dictionary<string, string>
-    {
-        ["VxBg"] = "#1C1C19", ["VxPanel"] = "#232320", ["VxPanel2"] = "#2A2A26", ["VxRaised"] = "#33322E",
-        ["VxInk700"] = "#3C3B36", ["VxInk600"] = "#47463F", ["VxInk500"] = "#57564D", ["VxInk400"] = "#6E6C61",
-        ["VxText"] = "#ECEAE3", ["VxText2"] = "#C0BCB1", ["VxMuted"] = "#8B877B", ["VxOnAccent"] = "#FCFAF6",
-        ["VxLine1"] = "#12D8D2C4", ["VxLine2"] = "#20D8D2C4", ["VxLine3"] = "#3CD8D2C4", ["VxBorder"] = "#12D8D2C4",
-        ["VxAccent"] = "#C96442", ["VxAccent2"] = "#D97757", ["VxAccentPressed"] = "#AE5536", ["VxAccentDim"] = "#24C96442",
-    });
-
-    public static readonly StudioTheme Cool = new("cool", "Cool", new Dictionary<string, string>
+    // The shared cool Ink base (matches App.axaml). Identical across every theme, so applying a
+    // theme only ever re-tints the accent — the surfaces, text, and hairlines never move.
+    private static readonly Dictionary<string, string> CoolBase = new()
     {
         ["VxBg"] = "#0B0F14", ["VxPanel"] = "#11161D", ["VxPanel2"] = "#161C26", ["VxRaised"] = "#1C2330",
         ["VxInk700"] = "#222B36", ["VxInk600"] = "#2C3645", ["VxInk500"] = "#3A4656", ["VxInk400"] = "#4E5C70",
         ["VxText"] = "#EAF1F8", ["VxText2"] = "#A6B2C2", ["VxMuted"] = "#76849B", ["VxOnAccent"] = "#0B0F14",
         ["VxLine1"] = "#1AA6B2C2", ["VxLine2"] = "#29A6B2C2", ["VxLine3"] = "#47A6B2C2", ["VxBorder"] = "#1AA6B2C2",
-        ["VxAccent"] = "#4FC3F7", ["VxAccent2"] = "#81D4FA", ["VxAccentPressed"] = "#29A8E0", ["VxAccentDim"] = "#1F4FC3F7",
-    });
+    };
 
-    public static readonly StudioTheme Slate = new("slate", "Slate", new Dictionary<string, string>
-    {
-        ["VxBg"] = "#15171A", ["VxPanel"] = "#1B1E22", ["VxPanel2"] = "#20242A", ["VxRaised"] = "#282D34",
-        ["VxInk700"] = "#313740", ["VxInk600"] = "#3C434E", ["VxInk500"] = "#4C5563", ["VxInk400"] = "#5F6B7C",
-        ["VxText"] = "#E7EAEE", ["VxText2"] = "#B3BAC4", ["VxMuted"] = "#7E8794", ["VxOnAccent"] = "#15171A",
-        ["VxLine1"] = "#16AEB8C6", ["VxLine2"] = "#24AEB8C6", ["VxLine3"] = "#40AEB8C6", ["VxBorder"] = "#16AEB8C6",
-        ["VxAccent"] = "#7AA2C9", ["VxAccent2"] = "#97B7D6", ["VxAccentPressed"] = "#5E89B4", ["VxAccentDim"] = "#267AA2C9",
-    });
+    private static StudioTheme Accent(string id, string name, string a, string a2, string pressed, string dim) =>
+        new(id, name, new Dictionary<string, string>(CoolBase)
+        {
+            ["VxAccent"] = a, ["VxAccent2"] = a2, ["VxAccentPressed"] = pressed, ["VxAccentDim"] = dim,
+        });
 
+    public static readonly StudioTheme Cool  = Accent("cool",  "Cool",  "#4FC3F7", "#81D4FA", "#29A8E0", "#1F4FC3F7");
+    public static readonly StudioTheme Warm  = Accent("warm",  "Warm",  "#E27A4E", "#F0A87E", "#C25E36", "#21E27A4E");
+    public static readonly StudioTheme Slate = Accent("slate", "Slate", "#8AA2CE", "#AEC0E2", "#6B83B3", "#218AA2CE");
+
+    // Display order in the Appearance picker (matches the reference prototype): Warm · Cool · Slate.
     public static readonly IReadOnlyList<StudioTheme> All = [Warm, Cool, Slate];
 
     public static StudioTheme ById(string? id) =>
-        All.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase)) ?? Warm;
+        All.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase)) ?? Cool;
 }
 
 /// <summary>

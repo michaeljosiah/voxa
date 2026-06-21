@@ -61,6 +61,78 @@ public static class ProviderManifestCatalog
             DocsUrl: "https://console.mistral.ai/api-keys",
             Fields: [ApiKey("Mistral")]),
 
+        // ── streaming / batch cloud STT (the vendors added in #71) — registered here so the
+        //    Config filter gates them by activation instead of treating them as always-available. ──
+        new ProviderManifest(
+            Name: "Deepgram", DisplayName: "Deepgram",
+            Roles: [ProviderRole.Stt],
+            Description: "Nova streaming speech-to-text over WebSocket.",
+            IsLocal: false, DocsUrl: "https://console.deepgram.com/",
+            Fields: [ApiKey("Deepgram", "dg-…")]),
+
+        new ProviderManifest(
+            Name: "AssemblyAI", DisplayName: "AssemblyAI",
+            Roles: [ProviderRole.Stt],
+            Description: "Universal-Streaming speech-to-text over WebSocket.",
+            IsLocal: false, DocsUrl: "https://www.assemblyai.com/app/account",
+            Fields: [ApiKey("AssemblyAI", "your AssemblyAI key")]),
+
+        new ProviderManifest(
+            Name: "Gladia", DisplayName: "Gladia",
+            Roles: [ProviderRole.Stt],
+            Description: "Real-time speech-to-text over WebSocket.",
+            IsLocal: false, DocsUrl: "https://app.gladia.io/",
+            Fields: [ApiKey("Gladia", "your Gladia key")]),
+
+        new ProviderManifest(
+            Name: "Speechmatics", DisplayName: "Speechmatics",
+            Roles: [ProviderRole.Stt],
+            Description: "Real-time speech-to-text over WebSocket.",
+            IsLocal: false, DocsUrl: "https://portal.speechmatics.com/",
+            Fields: [ApiKey("Speechmatics", "your Speechmatics key")]),
+
+        new ProviderManifest(
+            Name: "Groq", DisplayName: "Groq",
+            Roles: [ProviderRole.Stt],
+            Description: "Whisper-large-v3-turbo batch transcription (OpenAI-compatible).",
+            IsLocal: false, DocsUrl: "https://console.groq.com/keys",
+            Fields: [ApiKey("Groq", "gsk_…")]),
+
+        new ProviderManifest(
+            Name: "Together", DisplayName: "Together AI",
+            Roles: [ProviderRole.Stt],
+            Description: "Whisper-large-v3 batch transcription (OpenAI-compatible).",
+            IsLocal: false, DocsUrl: "https://api.together.xyz/settings/api-keys",
+            Fields: [ApiKey("Together", "your Together key")]),
+
+        new ProviderManifest(
+            Name: "Aws", DisplayName: "AWS Transcribe",
+            Roles: [ProviderRole.Stt],
+            Description: "Amazon Transcribe streaming speech-to-text.",
+            IsLocal: false, DocsUrl: "https://console.aws.amazon.com/iam/",
+            Fields:
+            [
+                new ProviderFieldDescriptor("AccessKeyId", "Access Key ID", "AKIA…",
+                    IsSecret: true, ConfigKey: "Voxa:Aws:AccessKeyId"),
+                new ProviderFieldDescriptor("SecretAccessKey", "Secret Access Key", "your AWS secret",
+                    IsSecret: true, ConfigKey: "Voxa:Aws:SecretAccessKey"),
+                new ProviderFieldDescriptor("Region", "Region", "e.g. us-east-1",
+                    IsSecret: false, ConfigKey: "Voxa:Aws:Region"),
+            ]),
+
+        new ProviderManifest(
+            Name: "Google", DisplayName: "Google Cloud Speech",
+            Roles: [ProviderRole.Stt],
+            Description: "Google Cloud Speech-to-Text v2 streaming (gRPC).",
+            IsLocal: false, DocsUrl: "https://console.cloud.google.com/apis/credentials",
+            Fields:
+            [
+                new ProviderFieldDescriptor("ProjectId", "GCP Project ID", "my-gcp-project",
+                    IsSecret: false, ConfigKey: "Voxa:Google:ProjectId"),
+                new ProviderFieldDescriptor("CredentialsJson", "Service-Account JSON", "paste the service-account key JSON",
+                    IsSecret: true, ConfigKey: "Voxa:Google:CredentialsJson"),
+            ]),
+
         // ── local tier: always available, no credentials ──────────────────────────
         new ProviderManifest(
             Name: "WhisperCpp",

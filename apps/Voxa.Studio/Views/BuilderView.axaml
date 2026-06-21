@@ -64,7 +64,7 @@
     <Border Grid.Row="0" Classes="vx-viewbar">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Grid.Column="0" Spacing="4">
-          <TextBlock Classes="vx-h1" Text="Builder" />
+          <TextBlock Classes="vx-viewtitle" Text="Builder" />
           <TextBlock Classes="vx-label" Text="WIRE THE CHAIN · PORTS ONLY ACCEPT MATCHING FRAME TYPES" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">

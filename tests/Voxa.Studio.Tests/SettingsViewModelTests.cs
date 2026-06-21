@@ -19,7 +19,10 @@ public class SettingsViewModelTests
         Assert.Equal(["Echo", "Kokoro", "Piper", "WhisperCpp"], localNames);
 
         var available = vm.Available.Select(m => m.Name).OrderBy(n => n);
-        Assert.Equal(["Azure", "ElevenLabs", "Mistral", "OpenAI"], available);
+        Assert.Equal(
+            ["AssemblyAI", "Aws", "Azure", "Deepgram", "ElevenLabs", "Gladia", "Google", "Groq",
+             "Mistral", "OpenAI", "Speechmatics", "Together"],
+            available);
     }
 
     [Fact] // WS4-A2

@@ -12,7 +12,7 @@
     <Border Grid.Row="0" Classes="vx-viewbar">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
-          <TextBlock Classes="vx-h1" Text="Voices" />
+          <TextBlock Classes="vx-viewtitle" Text="Voices" />
           <TextBlock Classes="vx-sub"
                      Text="Discover, clone, and manage the voices your pipeline can use." />
         </StackPanel>

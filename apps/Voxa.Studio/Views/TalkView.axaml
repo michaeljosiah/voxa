@@ -6,149 +6,195 @@
              x:Class="Voxa.Studio.Views.TalkView"
              x:DataType="vm:TalkViewModel">
 
-  <UserControl.Styles>
-    <!-- in-progress phases breathe; the colour + label carry the state if motion is reduced -->
-    <Style Selector="Ellipse.pulse">
-      <Style.Animations>
-        <Animation Duration="0:0:1.3" IterationCount="INFINITE" Easing="SineEaseInOut">
-          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1" /></KeyFrame>
-          <KeyFrame Cue="50%"><Setter Property="Opacity" Value="0.3" /></KeyFrame>
-          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
-        </Animation>
-      </Style.Animations>
-    </Style>
-  </UserControl.Styles>
+  <!-- VST-005 strict-1:1: idle → centred orb + Start; live → role transcript + running pipeline-flow
+       + right stats aside (orb, waveform, phase, TTFB/turns/barge-in). The VAD trace, turn waterfall
+       and event log of the old Talk view are intentionally dropped (they live in Metrics/Diarization). -->
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Panel>
 
-    <!-- ── view bar: title + provider chain (data → mono) · devices · session control ── -->
-    <Border Grid.Row="0" Classes="vx-viewbar">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Grid.Column="0" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Classes="vx-h1" Text="Talk" />
-          <!-- the live pipeline, always visible — "exactly what's running" -->
-          <Border CornerRadius="6" Padding="8,3" HorizontalAlignment="Left"
-                  Background="{StaticResource VxPanel2Brush}"
-                  BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Classes="vx-label vx-accent" Text="PIPELINE" VerticalAlignment="Center" />
-              <TextBlock Classes="vx-mono" FontSize="11" VerticalAlignment="Center"
-                         Foreground="{StaticResource VxText2Brush}" Text="{Binding ProviderChain}" />
-            </StackPanel>
-          </Border>
-        </StackPanel>
-
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <ComboBox Width="210" ItemsSource="{Binding Microphones}"
-                    SelectedItem="{Binding SelectedMicrophone}"
-                    PlaceholderText="Microphone" />
-          <ComboBox Width="210" ItemsSource="{Binding Speakers}"
-                    SelectedItem="{Binding SelectedSpeaker}"
-                    PlaceholderText="Speaker" />
-          <Button Classes="vx-primary" Content="● Start session"
-                  Command="{Binding StartCommand}"
-                  IsVisible="{Binding !IsRunning}" />
-          <Button Classes="vx-danger" Content="■ Stop"
-                  Command="{Binding StopCommand}"
-                  IsVisible="{Binding IsRunning}" />
-        </StackPanel>
-      </Grid>
-    </Border>
-
-    <!-- ── body: transcript | trace + waterfall ── -->
-    <Grid Grid.Row="1" ColumnDefinitions="5*,12,4*" Margin="20,16,20,0">
-
-      <!-- transcript -->
-      <Border Grid.Column="0" Classes="vx-card-flush">
-        <Grid RowDefinitions="*,Auto">
-          <!-- empty state teaches instead of leaving a void (P4) -->
-          <TextBlock Grid.Row="0" Classes="vx-sub" HorizontalAlignment="Center" VerticalAlignment="Center"
-                     IsVisible="{Binding !Transcript.Count}"
-                     Text="Start a session and say something — the conversation lands here." />
-          <ScrollViewer Grid.Row="0" x:Name="TranscriptScroll" Padding="16">
-            <ItemsControl ItemsSource="{Binding Transcript}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ChatBubble">
-                  <Border MaxWidth="520" Margin="0,4"
-                          Padding="12,8" CornerRadius="10"
-                          HorizontalAlignment="{Binding IsUser, Converter={x:Static conv:Converters.BubbleAlign}}"
-                          Background="{Binding IsUser, Converter={x:Static conv:Converters.BubbleBrush}}">
-                    <StackPanel Spacing="2">
-                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                 Foreground="{StaticResource VxText2Brush}" />
-                      <TextBlock Text="⊘ interrupted" FontSize="10"
-                                 FontFamily="{StaticResource VxMono}"
-                                 Foreground="{StaticResource VxWarnBrush}"
-                                 IsVisible="{Binding IsInterrupted}" />
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </ScrollViewer>
-
-          <!-- live pipeline state — the single, prominent "what's happening" cue (also tells you
-               when the mic is actually live: Listening = your turn) -->
-          <Border Grid.Row="1" Margin="16,8,16,12" Padding="13,7" CornerRadius="20"
-                  HorizontalAlignment="Left" IsVisible="{Binding ShowPhasePill}"
-                  Background="{StaticResource VxPanel2Brush}"
-                  BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1">
-            <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
-              <Ellipse Width="10" Height="10" VerticalAlignment="Center"
-                       Classes.pulse="{Binding PhasePulse}"
-                       Fill="{Binding Phase, Converter={x:Static conv:Converters.PhaseBrush}}" />
-              <TextBlock FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
-                         Foreground="{Binding Phase, Converter={x:Static conv:Converters.PhaseBrush}}"
-                         Text="{Binding PhaseLabel}" />
-            </StackPanel>
-          </Border>
+    <!-- ════ IDLE ════ -->
+    <Grid RowDefinitions="Auto,*" IsVisible="{Binding !ShowPhasePill}">
+      <Border Grid.Row="0" Classes="vx-viewbar">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Classes="vx-viewtitle" Text="Talk" />
+            <TextBlock Classes="vx-label" Text="live conversation · watch it think" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <ComboBox Width="190" ItemsSource="{Binding Microphones}"
+                      SelectedItem="{Binding SelectedMicrophone}" PlaceholderText="Microphone" />
+            <ComboBox Width="190" ItemsSource="{Binding Speakers}"
+                      SelectedItem="{Binding SelectedSpeaker}" PlaceholderText="Speaker" />
+          </StackPanel>
         </Grid>
       </Border>
 
-      <!-- trace + waterfalls + event log -->
-      <Grid Grid.Column="2" RowDefinitions="Auto,170,12,Auto,*">
-        <TextBlock Grid.Row="0" Classes="vx-label vx-accent" Text="VAD PROBABILITY" Margin="2,0,0,6" />
-        <Border Grid.Row="1" Classes="vx-card-flush" Padding="8">
-          <controls:VadTraceControl Samples="{Binding TraceSnapshot}"
-                                    Threshold="{Binding VadThreshold}" />
-        </Border>
-
-        <!-- the heading appears with the first measured turn — no header over nothing -->
-        <TextBlock Grid.Row="3" Classes="vx-label vx-accent" Text="TURN WATERFALL" Margin="2,12,0,6"
-                   IsVisible="{Binding !!Waterfalls.Count}" />
-        <Grid Grid.Row="4" RowDefinitions="Auto,*">
-          <ItemsControl Grid.Row="0" ItemsSource="{Binding Waterfalls}" MaxHeight="220">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:TurnWaterfall">
-                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
-                  <controls:WaterfallControl Grid.Column="0" Height="30" Waterfall="{Binding}" />
-                  <TextBlock Grid.Column="1" Classes="vx-mono" FontSize="11" Margin="10,0,0,0"
-                             VerticalAlignment="Top" Text="{Binding TotalText}"
-                             Foreground="{StaticResource VxTextBrush}" />
-                </Grid>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-
-          <Grid Grid.Row="1" RowDefinitions="Auto,*" Margin="0,10,0,0">
-            <CheckBox Grid.Row="0" Content="Event log" FontSize="11"
-                      Foreground="{StaticResource VxMutedBrush}"
-                      IsChecked="{Binding ShowEventLog}" />
-            <Border Grid.Row="1" Classes="vx-card-flush" IsVisible="{Binding ShowEventLog}">
-              <ListBox ItemsSource="{Binding EventLog}" FontSize="10"
-                       FontFamily="{StaticResource VxMono}" />
-            </Border>
-          </Grid>
-        </Grid>
-      </Grid>
+      <StackPanel Grid.Row="1" Spacing="22" VerticalAlignment="Center" HorizontalAlignment="Center">
+        <controls:VoiceOrb Width="132" Height="132" HorizontalAlignment="Center" />
+        <StackPanel Spacing="8" HorizontalAlignment="Center" MaxWidth="380">
+          <TextBlock Text="No live session" FontSize="16" FontWeight="SemiBold"
+                     HorizontalAlignment="Center" Foreground="{StaticResource VxTextBrush}" />
+          <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="13.5"
+                     Foreground="{StaticResource VxMutedBrush}"
+                     Text="Start a session to talk against your mic through the active pipeline. The audio device and CPU are held for the duration — Builder and Metrics pause while you talk." />
+        </StackPanel>
+        <Button Classes="vx-primary" Command="{Binding StartCommand}" HorizontalAlignment="Center">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Width="15" Height="15" Foreground="{StaticResource VxOnAccentBrush}"
+                      Data="M12,14 A3,3 0 0 0 15,11 L15,5 A3,3 0 0 0 9,5 L9,11 A3,3 0 0 0 12,14 Z M17,11 A5,5 0 0 1 7,11 L5,11 A7,7 0 0 0 11,17.92 L11,21 L13,21 L13,17.92 A7,7 0 0 0 19,11 Z" />
+            <TextBlock Text="Start session" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
     </Grid>
 
-    <!-- ── status strip ── -->
-    <StackPanel Grid.Row="2" Spacing="4" Margin="20,10,20,14">
-      <TextBlock Classes="vx-sub" Text="{Binding StatusText}" />
-      <TextBlock Foreground="{StaticResource VxBadBrush}" FontSize="12" TextWrapping="Wrap"
-                 Text="{Binding ErrorText}" IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
-    </StackPanel>
+    <!-- ════ ACTIVE (warming or live) ════ -->
+    <Grid RowDefinitions="Auto,*" IsVisible="{Binding ShowPhasePill}">
+      <Border Grid.Row="0" Classes="vx-viewbar">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Classes="vx-viewtitle" Text="Talk" />
+            <TextBlock Classes="vx-label" Text="live conversation · watch it think" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <StackPanel Classes="vx-status vx-live">
+              <Ellipse Classes="vx-dot vx-live" />
+              <TextBlock Text="{Binding PhaseLabel}" VerticalAlignment="Center" />
+            </StackPanel>
+            <Button Classes="vx-danger" Content="End session" Command="{Binding StopCommand}" />
+          </StackPanel>
+        </Grid>
+      </Border>
 
-  </Grid>
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+
+        <!-- left: transcript (role · text · time) over the running pipeline-flow strip -->
+        <Grid Grid.Column="0" RowDefinitions="*,Auto">
+          <Panel Grid.Row="0">
+            <!-- before the first line: surface warm-up / download progress instead of a void -->
+            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420"
+                       TextAlignment="Center" TextWrapping="Wrap" FontSize="13"
+                       Foreground="{StaticResource VxMutedBrush}"
+                       IsVisible="{Binding !Transcript.Count}" Text="{Binding StatusText}" />
+            <ScrollViewer x:Name="TranscriptScroll" Padding="28,18"
+                          IsVisible="{Binding !!Transcript.Count}">
+              <ItemsControl ItemsSource="{Binding Transcript}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ChatBubble">
+                    <Border BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,0,0,1" Padding="0,9">
+                      <Grid ColumnDefinitions="58,*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding RoleLabel}" VerticalAlignment="Top"
+                                   FontFamily="{StaticResource VxMono}" FontSize="10" FontWeight="SemiBold"
+                                   LetterSpacing="0.8" Foreground="{StaticResource VxAccentBrush}" />
+                        <StackPanel Grid.Column="1" Spacing="3">
+                          <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                     Foreground="{StaticResource VxTextBrush}" />
+                          <TextBlock Text="interrupted" FontFamily="{StaticResource VxMono}" FontSize="10"
+                                     Foreground="{StaticResource VxWarnBrush}" IsVisible="{Binding IsInterrupted}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="{Binding Time}" VerticalAlignment="Top" Margin="12,0,0,0"
+                                   FontFamily="{StaticResource VxMono}" FontSize="10"
+                                   Foreground="{StaticResource VxMutedBrush}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+
+          <!-- running pipeline-flow: Mic → VAD → STT → Agent → TTS → Speaker; active node glows -->
+          <Border Grid.Row="1" Background="{StaticResource VxPanelBrush}"
+                  BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,1,0,0" Padding="28,14">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+              <ItemsControl ItemsSource="{Binding ProviderNodes}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PipelineNode">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border MinWidth="120" CornerRadius="10" ClipToBounds="True"
+                              Background="{StaticResource VxPanel2Brush}" BorderThickness="1">
+                        <Border.BorderBrush>
+                          <MultiBinding Converter="{x:Static conv:Converters.NodeRing}">
+                            <Binding Path="IsActive" /><Binding Path="Stage" />
+                          </MultiBinding>
+                        </Border.BorderBrush>
+                        <Border.BoxShadow>
+                          <MultiBinding Converter="{x:Static conv:Converters.NodeGlow}">
+                            <Binding Path="IsActive" /><Binding Path="Stage" />
+                          </MultiBinding>
+                        </Border.BoxShadow>
+                        <Grid ColumnDefinitions="2,*">
+                          <Rectangle Grid.Column="0" Fill="{Binding Stage, Converter={x:Static conv:Converters.StageBrush}}" />
+                          <StackPanel Grid.Column="1" Margin="12,10" Spacing="3">
+                            <TextBlock Text="{Binding Kind}" FontFamily="{StaticResource VxMono}" FontSize="10"
+                                       LetterSpacing="0.8"
+                                       Foreground="{Binding Stage, Converter={x:Static conv:Converters.StageBrush}}" />
+                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource VxTextBrush}" />
+                            <TextBlock Text="{Binding Meta}" FontFamily="{StaticResource VxMono}" FontSize="10"
+                                       Foreground="{StaticResource VxMutedBrush}" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                      <!-- dashed connector to the next node (hidden on the sink) -->
+                      <Line StartPoint="0,0" EndPoint="30,0" Margin="6,0" VerticalAlignment="Center"
+                            Stroke="{StaticResource VxInk500Brush}" StrokeThickness="1" StrokeDashArray="4,4"
+                            IsVisible="{Binding ShowLink}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </Grid>
+
+        <!-- right: live aside — orb, waveform, phase, session stats -->
+        <Border Grid.Column="1" Width="280" Background="{StaticResource VxPanelBrush}"
+                BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1,0,0,0">
+          <Grid Margin="24,36" RowDefinitions="Auto,Auto,Auto,*,Auto">
+            <controls:VoiceOrb Grid.Row="0" Width="132" Height="132" HorizontalAlignment="Center"
+                               Margin="0,0,0,18" IsLive="{Binding ShowPhasePill}" />
+            <controls:LiveWaveformControl Grid.Row="1" Width="160" Height="32" Bars="20"
+                                          HorizontalAlignment="Center" Margin="0,0,0,16"
+                                          IsLive="{Binding ShowPhasePill}" />
+            <TextBlock Grid.Row="2" Classes="vx-label" HorizontalAlignment="Center"
+                       Foreground="{StaticResource VxAccent2Brush}" Text="{Binding PhaseLabel}" />
+
+            <StackPanel Grid.Row="4" Spacing="12">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="TTFB" FontFamily="{StaticResource VxMono}" FontSize="12"
+                           Foreground="{StaticResource VxMutedBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding TtfbText}" FontFamily="{StaticResource VxMono}"
+                           FontSize="12" Foreground="{StaticResource VxText2Brush}" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="turns" FontFamily="{StaticResource VxMono}" FontSize="12"
+                           Foreground="{StaticResource VxMutedBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding TurnCount}" FontFamily="{StaticResource VxMono}"
+                           FontSize="12" Foreground="{StaticResource VxText2Brush}" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="barge-in" FontFamily="{StaticResource VxMono}" FontSize="12"
+                           Foreground="{StaticResource VxMutedBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding BargeInCount}" FontFamily="{StaticResource VxMono}"
+                           FontSize="12" Foreground="{StaticResource VxText2Brush}" />
+              </Grid>
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- error surfaces as a danger strip without stealing the layout -->
+      <Border IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
+              VerticalAlignment="Bottom" Margin="28,0,308,14" Padding="12,8" CornerRadius="10"
+              Background="{StaticResource VxBadSoftBrush}" BorderBrush="#4DEF5350" BorderThickness="1">
+        <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" FontSize="12"
+                   Foreground="{StaticResource VxBadBrush}" />
+      </Border>
+    </Grid>
+
+  </Panel>
 </UserControl>

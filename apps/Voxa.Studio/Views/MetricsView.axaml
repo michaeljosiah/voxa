@@ -11,7 +11,7 @@
     <!-- ── view bar ── -->
     <Border Grid.Row="0" Classes="vx-viewbar">
       <StackPanel Spacing="4">
-        <TextBlock Classes="vx-h1" Text="Metrics" />
+        <TextBlock Classes="vx-viewtitle" Text="Metrics" />
         <TextBlock Classes="vx-label"
                    Text="RUNS ARE EVIDENCE · SAME INPUT, TWO CONFIGS, HONEST COMPARISON" />
       </StackPanel>

@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voxa Studio UI overhaul to 1:1 with the reference prototype (VST-005).** A view-layer pass that
+  realizes the VST-002 design brief end-to-end:
+  - **Rebrand warm → cool.** Studio now wears the cool "Voxa-cyan" Pulse identity by default
+    (`#0B0F14` ink, `#4FC3F7` accent) instead of the warm Claude-coral; the three appearance themes
+    re-tint **accent-only** over a shared cool ink base (Cool is the new default).
+  - **Talk rebuilt** to the reference layout: an idle `VoiceOrb` + Start, then a live role·text·time
+    transcript over a running pipeline-flow strip (Mic→VAD→STT→Agent→TTS→Speaker, active node glows)
+    and a right stats aside (live orb, bouncing waveform, phase, TTFB/turns/barge-in).
+  - **Shell + feedback layer:** titlebar replay-launch (splash) button, rail account chip, profile-bar
+    stage chips, a "Surface is busy" overlay on contended views (one device + CPU), bottom-right
+    **toasts** (`ToastService`/`ToastHost`), and a **confirm dialog** for destructive actions.
+  - **Component scale** aligned to the brief radii (6 badges · 10 controls · 14 cards · 20 modals)
+    plus reusable `vx-badge` tones, the `vx-status` pill, and an 18/700 ViewBar title across all views.
+  View-layer only; the Avalonia-free view models, the no-Generic-Host boot, and `IStudioAudioDevice`
+  guardrails are unchanged.
+
 - **STT vendor expansion toward Pipecat parity — 8 new providers.** New STT provider packages
   broaden vendor coverage on the existing `ISpeechToTextEngine` seam:
   - **Batch tier — `Voxa.Speech.Groq` + `Voxa.Speech.Together`** (`Voxa:Stt = "Groq"` / `"Together"`). Both

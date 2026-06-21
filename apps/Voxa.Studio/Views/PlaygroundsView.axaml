@@ -11,7 +11,7 @@
     <Border Grid.Row="0" Classes="vx-viewbar">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Grid.Column="0" Spacing="4">
-          <TextBlock Classes="vx-h1" Text="Playgrounds" />
+          <TextBlock Classes="vx-viewtitle" Text="Playgrounds" />
           <TextBlock Classes="vx-label"
                      Text="REAL ENGINES · STANDALONE · NUMBERS MEASURED ON THIS MACHINE" />
         </StackPanel>

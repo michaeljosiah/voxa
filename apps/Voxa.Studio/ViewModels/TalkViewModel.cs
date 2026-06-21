@@ -17,12 +17,31 @@ public readonly record struct VadSample(float Probability, bool Voiced, bool Gat
 /// </summary>
 public enum TalkPhase { Idle, WarmingUp, Listening, Hearing, Transcribing, Thinking, Speaking }
 
-/// <summary>A transcript bubble. Bot bubbles stream — Text grows as agent deltas arrive.</summary>
+/// <summary>A transcript line. Agent lines stream — Text grows as agent deltas arrive. Rendered as the
+/// reference's role · text · time row (VST-005 strict-1:1); only user/agent roles ever appear here.</summary>
 public sealed partial class ChatBubble : ObservableObject
 {
     [ObservableProperty] private string _text = string.Empty;
     [ObservableProperty] private bool _isInterrupted;
     public bool IsUser { get; init; }
+
+    /// <summary>The mono caps role label in the left column ("you" / "agent").</summary>
+    public string RoleLabel => IsUser ? "you" : "agent";
+
+    /// <summary>Session-relative timestamp (mm:ss.fff) shown in the right column; "" before the first stamp.</summary>
+    [ObservableProperty] private string _time = string.Empty;
+}
+
+/// <summary>One node in the Talk pipeline-flow strip (the reference's running chain). The active node
+/// glows; <see cref="ShowLink"/> draws the dashed connector to the next node (false on the sink).</summary>
+public sealed partial class PipelineNode : ObservableObject
+{
+    public required string Stage { get; init; }   // vad | stt | agent | tts | out — drives the stage colour
+    public required string Kind { get; init; }    // source | vad | stt | agent | tts | sink (the mono micro-label)
+    public required string Name { get; init; }
+    public required string Meta { get; init; }
+    public bool ShowLink { get; init; } = true;
+    [ObservableProperty] private bool _isActive;
 }
 
 /// <summary>One measured stage in a turn's waterfall.</summary>
@@ -69,6 +88,7 @@ public sealed partial class TalkViewModel : ObservableObject
     private long _lastBotTick;     // debounces the per-sentence Bot edges so Speaking doesn't flicker
     private long _phaseSinceTick;  // when Transcribing/Thinking began — a timeout safety net
     private long _lastTraceTick;   // throttles the VAD-trace snapshot (render-jank reduction)
+    private long _sessionStartTick; // 0 until Start; stamps transcript line timestamps relative to it
 
     /// <summary>Test seam for the time-based phase debounce/throttle (Environment.TickCount64).</summary>
     internal Func<long> NowTick = () => Environment.TickCount64;
@@ -96,15 +116,44 @@ public sealed partial class TalkViewModel : ObservableObject
                   : string.Equals(tts, "Kokoro", StringComparison.OrdinalIgnoreCase) ? voxa["Kokoro:Voice"]
                   : null;
 
-        ProviderChain = string.Join("  ·  ", new[]
-        {
-            voxa["Vad:Engine"] ?? "Silero",
-            voxa["Stt"] ?? "?",
-            agent,
-            $"{tts}{(voice is null ? "" : $" / {voice}")}",
-        });
+        var vad = voxa["Vad:Engine"] ?? "Silero";
+        var stt = voxa["Stt"] ?? "?";
+        var ttsLabel = $"{tts}{(voice is null ? "" : $" / {voice}")}";
+
+        ProviderChain = string.Join("  ·  ", new[] { vad, stt, agent, ttsLabel });
+
+        // The running pipeline-flow strip (reference Talk): Mic → VAD → STT → Agent → TTS → Speaker.
+        // Stage colours and the active glow come from these; rebuilt whenever the config changes.
+        var agentName = agent.Contains('/') ? agent[(agent.LastIndexOf('/') + 1)..].Trim() : agent;
+        ProviderNodes.Clear();
+        ProviderNodes.Add(new PipelineNode { Stage = "vad", Kind = "source", Name = "Mic", Meta = "16 kHz" });
+        ProviderNodes.Add(new PipelineNode { Stage = "vad", Kind = "vad", Name = vad, Meta = "gate" });
+        ProviderNodes.Add(new PipelineNode { Stage = "stt", Kind = "stt", Name = stt, Meta = "speech→text" });
+        ProviderNodes.Add(new PipelineNode { Stage = "agent", Kind = "agent", Name = agentName, Meta = "llm" });
+        ProviderNodes.Add(new PipelineNode { Stage = "tts", Kind = "tts", Name = tts, Meta = voice ?? "text→speech" });
+        ProviderNodes.Add(new PipelineNode { Stage = "out", Kind = "sink", Name = "Speaker", Meta = "live", ShowLink = false });
+        ApplyActiveNode();
+
         VadThreshold = float.TryParse(voxa["Vad:ConfidenceThreshold"], out var t) ? t : 0.5f;
     }
+
+    /// <summary>Light the flow node that matches the current phase (Hearing→VAD, Transcribing→STT,
+    /// Thinking→Agent, Speaking→TTS); nothing glows while Idle/WarmingUp/Listening.</summary>
+    private void ApplyActiveNode()
+    {
+        var active = Phase switch
+        {
+            TalkPhase.Hearing => 1,
+            TalkPhase.Transcribing => 2,
+            TalkPhase.Thinking => 3,
+            TalkPhase.Speaking => 4,
+            _ => -1,
+        };
+        for (int i = 0; i < ProviderNodes.Count; i++)
+            ProviderNodes[i].IsActive = i == active;
+    }
+
+    partial void OnPhaseChanged(TalkPhase value) => ApplyActiveNode();
 
     // ── bindable state ───────────────────────────────────────────────────────
 
@@ -113,6 +162,20 @@ public sealed partial class TalkViewModel : ObservableObject
     public ObservableCollection<ChatBubble> Transcript { get; } = new();
     public ObservableCollection<TurnWaterfall> Waterfalls { get; } = new();
     public ObservableCollection<string> EventLog { get; } = new();
+
+    /// <summary>The running pipeline-flow strip shown along the bottom of a live Talk session.</summary>
+    public ObservableCollection<PipelineNode> ProviderNodes { get; } = new();
+
+    // ── aside stats (reference Talk right rail): time-to-first-byte, turns, barge-ins ──
+
+    /// <summary>Time from the user finishing to the first synthesized audio of the latest turn.</summary>
+    [ObservableProperty] private string _ttfbText = "—";
+
+    /// <summary>Completed turns this session.</summary>
+    [ObservableProperty] private int _turnCount;
+
+    /// <summary>Times the user barged in over the agent (interruptions) this session.</summary>
+    [ObservableProperty] private int _bargeInCount;
 
     [ObservableProperty] private AudioEndpoint? _selectedMicrophone;
     [ObservableProperty] private AudioEndpoint? _selectedSpeaker;
@@ -153,11 +216,6 @@ public sealed partial class TalkViewModel : ObservableObject
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private bool _startBlocked;
 
-    /// <summary>Clicking a waterfall stage block deep-links to Metrics (§5 cross-navigation).</summary>
-    public event Action<string>? OpenInMetricsRequested;
-
-    internal void RequestStageInMetrics(string stage) => OpenInMetricsRequested?.Invoke(stage);
-
     /// <summary>Immutable snapshot for the trace control; replaced on each drain that saw VAD windows.</summary>
     [ObservableProperty] private IReadOnlyList<VadSample> _traceSnapshot = [];
 
@@ -192,6 +250,21 @@ public sealed partial class TalkViewModel : ObservableObject
 
         ErrorText = null;
         Phase = TalkPhase.WarmingUp;
+        _sessionStartTick = NowTick();
+
+        // Each session starts clean — the transcript is now the primary Talk surface, so a re-start
+        // must not prepend the previous conversation, and the aside counters must reset to this run.
+        Transcript.Clear();
+        Waterfalls.Clear();
+        EventLog.Clear();
+        _trace.Clear();
+        TraceSnapshot = [];
+        _streamingBot = null;
+        _stages = new Dictionary<string, double>();
+        _turnNumber = 0;
+        TurnCount = 0;
+        BargeInCount = 0;
+        TtfbText = "—";
         try
         {
             // First-run downloads happen HERE, with visible progress — never at app start.
@@ -259,7 +332,13 @@ public sealed partial class TalkViewModel : ObservableObject
         IsBotSpeaking = false;
         Phase = TalkPhase.Idle;
         _streamingBot = null;
+        _sessionStartTick = 0;
     }
+
+    /// <summary>Session-relative mm:ss.fff for a transcript line; "" before a session has started.</summary>
+    private string Stamp(long now) =>
+        _sessionStartTick == 0 ? string.Empty
+            : TimeSpan.FromMilliseconds(Math.Max(0, now - _sessionStartTick)).ToString(@"mm\:ss\.fff");
 
     private async Task WatchSessionAsync(TalkSession session)
     {
@@ -307,7 +386,7 @@ public sealed partial class TalkViewModel : ObservableObject
                     break;
 
                 case TranscriptEvent { IsFinal: true } t:
-                    Transcript.Add(new ChatBubble { IsUser = true, Text = t.Text });
+                    Transcript.Add(new ChatBubble { IsUser = true, Text = t.Text, Time = Stamp(now) });
                     // Entering Thinking restarts the no-speech timeout — STT may have eaten most of the
                     // budget (a big Whisper model on CPU), and the agent's work shouldn't count against it.
                     if (Phase is TalkPhase.Hearing or TalkPhase.Transcribing)
@@ -389,6 +468,7 @@ public sealed partial class TalkViewModel : ObservableObject
                 IsBotSpeaking = false;
                 if (_streamingBot is not null) _streamingBot.IsInterrupted = true;
                 _streamingBot = null;
+                BargeInCount++;
                 Phase = TalkPhase.Listening;
                 break;
         }
@@ -396,13 +476,16 @@ public sealed partial class TalkViewModel : ObservableObject
 
     private ChatBubble NewBotBubble()
     {
-        var bubble = new ChatBubble { IsUser = false };
+        var bubble = new ChatBubble { IsUser = false, Time = Stamp(NowTick()) };
         Transcript.Add(bubble);
         return bubble;
     }
 
     private static readonly string[] StageOrder =
         ["vad_close", "stt_final", "agent_first_token", "tts_first_byte", "audio_out"];
+
+    /// <summary>The measured ms for a stage in the turn under construction, or 0 if not seen yet.</summary>
+    private double Stage(string key) => _stages.TryGetValue(key, out var v) ? v : 0;
 
     private void ApplyStage(StageLatencyEvent stage)
     {
@@ -423,6 +506,11 @@ public sealed partial class TalkViewModel : ObservableObject
             {
                 Waterfalls.Insert(0, new TurnWaterfall(++_turnNumber, segments));
                 while (Waterfalls.Count > 8) Waterfalls.RemoveAt(Waterfalls.Count - 1);
+                TurnCount = _turnNumber;
+                // TTFB (aside): user-perceived time from finishing speaking to first response audio —
+                // the post-utterance stages (transcribe → first token → first synthesized byte).
+                var ttfb = Stage("stt_final") + Stage("agent_first_token") + Stage("tts_first_byte");
+                if (ttfb > 0) TtfbText = $"{ttfb:F0} ms";
             }
             _stages = new Dictionary<string, double>();
         }
