@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Telephony transport — phone calls in and out of a Voxa pipeline (VTL-001).** Two new packages put a
+  real phone call through the standard `VAD → STT → agent → TTS` pipeline **over a WebSocket** — no WebRTC,
+  no SIP, no ICE/TURN:
+  - **`Voxa.Transports.Telephony`** — the shared, vendor-neutral base: a `TelephonyMediaStreamSource` /
+    `TelephonyMediaStreamSink` pair that own the WebSocket read/write loops, the bounded outbound queue with
+    the barge-in **epoch purge** (copied from `WebSocketAudioSink`, incl. the caller-hang-up anti-deadlock),
+    and the **8 kHz ↔ pipeline-rate resample bridge**, delegating the wire format to a tiny
+    `ITelephonyMediaCodec`. Ships an allocation-free **G.711 μ-law (`MuLaw`)** codec. Depends only on Core +
+    `Voxa.Audio.Abstractions` (operates over any `System.Net.WebSockets.WebSocket`).
+  - **`Voxa.Transports.Twilio`** — `MapVoxaTwilioVoice("/twilio")` serves the TwiML webhook and accepts the
+    Twilio Media Streams media WebSocket, composing the call body with the **same**
+    `DefaultVoicePipelineComposer.Compose` as the native `UseDefaults()` route — telephony is purely an edge
+    skin. Hand-rolled JSON (`connected/start/media/dtmf/mark/stop` in; `media/clear/mark` out, base64 μ-law),
+    no Twilio SDK. Includes `X-Twilio-Signature` validation (HMAC-SHA1), **on by default and fail-closed**;
+    knobs under `Voxa:Telephony:Twilio` (`ValidateSignature`, `AuthToken`, `PublicWssBaseUrl`). Barge-in maps
+    an `InterruptionFrame`/`UserStartedSpeakingFrame` to a Twilio `clear` (telephony needs no AEC — the bot
+    audio is never mixed into the inbound track).
+  - **Shared `LinearResampler`** promoted from `Voxa.Studio` into `Voxa.Audio.Abstractions` (namespace
+    `Voxa.Audio`) so the framework transport and Studio share one tested implementation; its tests moved with it.
+  - A runnable **`samples/Voxa.Samples.TwilioServer`** (five-line setup + tunnel/number-config instructions).
+  - Both transports are bundled by the meta-package. **Live-wire caveat:** like the streaming STT vendors, the
+    Twilio wire protocol is **parser/spec-tested only** until validated on a real call (see the package README).
+
 - **Voxa Studio UI overhaul to 1:1 with the reference prototype (VST-005).** A view-layer pass that
   realizes the VST-002 design brief end-to-end:
   - **Rebrand warm → cool.** Studio now wears the cool "Voxa-cyan" Pulse identity by default

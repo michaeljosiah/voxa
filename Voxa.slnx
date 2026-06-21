@@ -9,6 +9,7 @@
   <Folder Name="/samples/">
     <Project Path="samples/Voxa.Samples.AspNetServer/Voxa.Samples.AspNetServer.csproj" />
     <Project Path="samples/Voxa.Samples.MinimalServer/Voxa.Samples.MinimalServer.csproj" />
+    <Project Path="samples/Voxa.Samples.TwilioServer/Voxa.Samples.TwilioServer.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Voxa/Voxa.csproj" />
@@ -45,6 +46,8 @@
     <Project Path="src/Voxa.Speech.Together/Voxa.Speech.Together.csproj" />
     <Project Path="src/Voxa.Speech.WhisperCpp/Voxa.Speech.WhisperCpp.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
+    <Project Path="src/Voxa.Transports.Telephony/Voxa.Transports.Telephony.csproj" />
+    <Project Path="src/Voxa.Transports.Twilio/Voxa.Transports.Twilio.csproj" />
     <Project Path="src/Voxa.Transports.WebSocket/Voxa.Transports.WebSocket.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -82,6 +85,8 @@
     <Project Path="tests/Voxa.Speech.Together.Tests/Voxa.Speech.Together.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
     <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
+    <Project Path="tests/Voxa.Transports.Telephony.Tests/Voxa.Transports.Telephony.Tests.csproj" />
+    <Project Path="tests/Voxa.Transports.Twilio.Tests/Voxa.Transports.Twilio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.WebSocket.Tests/Voxa.Transports.WebSocket.Tests.csproj" />
     <Project Path="tests/Voxa.TurnTaking.Tests/Voxa.TurnTaking.Tests.csproj" />
   </Folder>

@@ -39,6 +39,10 @@
     <ProjectReference Include="..\Voxa.Speech.WhisperCpp\Voxa.Speech.WhisperCpp.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Piper\Voxa.Speech.Piper.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Kokoro\Voxa.Speech.Kokoro.csproj" />
+    <!-- Telephony transport (VTL-001): MapVoxaTwilioVoice + the shared telephony base. Opt-in via the
+         endpoint (not the provider registry), but bundled so a meta-package host can map a phone route. -->
+    <ProjectReference Include="..\Voxa.Transports.Telephony\Voxa.Transports.Telephony.csproj" />
+    <ProjectReference Include="..\Voxa.Transports.Twilio\Voxa.Transports.Twilio.csproj" />
   </ItemGroup>
 
   <!-- OpenAI client for the default chat-agent factory. -->

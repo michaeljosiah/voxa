@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>voxa-twilio-server-9f8e7d6c</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Voxa" />
+    <Using Include="Voxa.AspNetCore" />
+    <Using Include="Voxa.Transports.Twilio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Voxa\Voxa.csproj" />
+  </ItemGroup>
+
+</Project>
