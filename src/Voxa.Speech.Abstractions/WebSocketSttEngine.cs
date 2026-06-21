@@ -16,8 +16,11 @@ public readonly record struct SttFragment(string Text, bool IsSegmentFinal);
 /// <summary>
 /// Base for streaming (WebSocket) <see cref="ISpeechToTextEngine"/> vendors — Deepgram, AssemblyAI, Gladia,
 /// Speechmatics, etc. Owns the <see cref="ClientWebSocket"/> connect / receive loop / binary-audio send /
-/// graceful close; subclasses only describe the vendor: the endpoint, the auth header, how to parse one
-/// server message into <see cref="SttFragment"/>s, and an optional close control frame.
+/// graceful close; subclasses only describe the vendor: the endpoint (sync <see cref="BuildEndpoint"/> or
+/// async <see cref="ResolveEndpointAsync"/>), the auth header (<see cref="ConfigureConnect"/>), an optional
+/// post-connect handshake (<see cref="OnConnectedAsync"/>), how to parse one server message into
+/// <see cref="SttFragment"/>s (<see cref="ParseMessage"/>), and an optional close control frame
+/// (<see cref="BuildCloseMessage"/>).
 ///
 /// <para><b>Turn integration.</b> Streaming vendors emit many "final" segments per utterance, but Voxa fires an
 /// agent turn on every <c>IsFinal:true</c> transcription, so this base does NOT forward segment-finals as Voxa
@@ -32,6 +35,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
     private readonly object _accLock = new();
     private readonly List<string> _finalSegments = new();
     private string _interimTail = string.Empty;
+    private long _audioChunksSent;
     private ClientWebSocket? _ws;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -39,27 +43,42 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
     /// <summary>Optional BCP-47 language tag stamped on emitted results.</summary>
     protected virtual string? Language => null;
 
-    /// <summary>The vendor WebSocket URL (including query parameters: model, encoding, sample rate, …).</summary>
-    protected abstract Uri BuildEndpoint();
+    /// <summary>Count of binary audio chunks sent so far (for vendors whose close frame needs a sequence number).</summary>
+    protected long AudioChunksSent => Interlocked.Read(ref _audioChunksSent);
+
+    /// <summary>The vendor WebSocket URL (model, encoding, sample rate …). Override this for a static endpoint,
+    /// or <see cref="ResolveEndpointAsync"/> when the URL needs an async pre-flight.</summary>
+    protected virtual Uri BuildEndpoint()
+        => throw new NotSupportedException("Override BuildEndpoint() or ResolveEndpointAsync().");
+
+    /// <summary>Resolve the WebSocket endpoint, with an optional async pre-flight (e.g. Gladia's session-init
+    /// POST that returns the socket URL). Default returns <see cref="BuildEndpoint"/>.</summary>
+    protected virtual Task<Uri> ResolveEndpointAsync(CancellationToken ct) => Task.FromResult(BuildEndpoint());
 
     /// <summary>Set request headers (typically the auth header) before the socket connects.</summary>
     protected virtual void ConfigureConnect(ClientWebSocket ws) { }
+
+    /// <summary>Optional post-connect handshake sent before audio flows (e.g. Speechmatics <c>StartRecognition</c>).</summary>
+    protected virtual Task OnConnectedAsync(ClientWebSocket ws, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>Parse one server text message into zero or more fragments. Must be pure (no I/O) and not throw —
     /// a throw is swallowed and the message ignored so a single malformed frame can't kill the receive loop.</summary>
     protected abstract IEnumerable<SttFragment> ParseMessage(string message);
 
-    /// <summary>Optional text control frame to send on graceful stop (e.g. Deepgram <c>{"type":"CloseStream"}</c>).</summary>
-    protected virtual ReadOnlyMemory<byte>? CloseMessage => null;
+    /// <summary>Optional text control frame to send on graceful stop (e.g. Deepgram <c>CloseStream</c>). Built
+    /// per call so vendors can include dynamic data (e.g. Speechmatics <c>EndOfStream</c> with <see cref="AudioChunksSent"/>).</summary>
+    protected virtual ReadOnlyMemory<byte>? BuildCloseMessage() => null;
 
     public async Task StartAsync(CancellationToken ct)
     {
         if (_ws is not null) return; // idempotent
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var endpoint = await ResolveEndpointAsync(ct).ConfigureAwait(false);
         var ws = new ClientWebSocket();
         ConfigureConnect(ws);
-        await ws.ConnectAsync(BuildEndpoint(), ct).ConfigureAwait(false);
+        await ws.ConnectAsync(endpoint, ct).ConfigureAwait(false);
         _ws = ws;
+        await OnConnectedAsync(ws, ct).ConfigureAwait(false);
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
     }
 
@@ -70,6 +89,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         try
         {
             await ws.SendAsync(pcm, WebSocketMessageType.Binary, endOfMessage: true, ct).ConfigureAwait(false);
+            Interlocked.Increment(ref _audioChunksSent);
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
@@ -102,7 +122,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
     public async Task StopAsync()
     {
         var ws = _ws;
-        if (ws is not null && ws.State == WebSocketState.Open && CloseMessage is { } cm)
+        if (ws is not null && ws.State == WebSocketState.Open && BuildCloseMessage() is { } cm)
         {
             try { await ws.SendAsync(cm, WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false); }
             catch { /* best-effort close signal */ }

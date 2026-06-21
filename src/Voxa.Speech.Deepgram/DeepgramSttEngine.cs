@@ -33,7 +33,7 @@ public sealed class DeepgramSttEngine : WebSocketSttEngine
         => ws.Options.SetRequestHeader("Authorization", $"Token {_options.ApiKey}");
 
     // Deepgram flushes and closes cleanly when it receives a CloseStream control message.
-    protected override ReadOnlyMemory<byte>? CloseMessage => CloseStreamFrame;
+    protected override ReadOnlyMemory<byte>? BuildCloseMessage() => CloseStreamFrame;
 
     protected override IEnumerable<SttFragment> ParseMessage(string message) => Parse(message);
 

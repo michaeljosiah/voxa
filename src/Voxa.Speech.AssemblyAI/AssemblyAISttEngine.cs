@@ -24,7 +24,7 @@ public sealed class AssemblyAISttEngine : WebSocketSttEngine
     protected override void ConfigureConnect(ClientWebSocket ws)
         => ws.Options.SetRequestHeader("Authorization", _options.ApiKey);
 
-    protected override ReadOnlyMemory<byte>? CloseMessage => TerminateFrame;
+    protected override ReadOnlyMemory<byte>? BuildCloseMessage() => TerminateFrame;
 
     protected override IEnumerable<SttFragment> ParseMessage(string message) => Parse(message);
 
