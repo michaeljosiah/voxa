@@ -30,6 +30,7 @@ public static class AssemblyAISpeechDescriptors
             ApiKey          = s["ApiKey"] ?? string.Empty,
             InputSampleRate = s.GetValue("InputSampleRate", 16000),
             FormatTurns     = s.GetValue("FormatTurns", true),
+            ApiBaseUrl      = s["ApiBaseUrl"] ?? "wss://streaming.assemblyai.com/v3/ws",
         };
     }
 }

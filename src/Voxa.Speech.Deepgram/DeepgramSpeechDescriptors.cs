@@ -31,6 +31,7 @@ public static class DeepgramSpeechDescriptors
             Model           = s["Model"] ?? "nova-3",
             Language        = s["Language"],
             InputSampleRate = s.GetValue("InputSampleRate", 16000),
+            ApiBaseUrl      = s["ApiBaseUrl"] ?? "wss://api.deepgram.com/v1/listen",
         };
     }
 }

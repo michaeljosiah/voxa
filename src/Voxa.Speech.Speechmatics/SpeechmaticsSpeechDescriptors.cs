@@ -30,6 +30,7 @@ public static class SpeechmaticsSpeechDescriptors
             ApiKey          = s["ApiKey"] ?? string.Empty,
             Language        = s["Language"] ?? "en",
             InputSampleRate = s.GetValue("InputSampleRate", 16000),
+            ApiBaseUrl      = s["ApiBaseUrl"] ?? "wss://eu2.rt.speechmatics.com/v2",
         };
     }
 }

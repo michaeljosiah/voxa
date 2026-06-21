@@ -30,6 +30,7 @@ public static class GladiaSpeechDescriptors
             ApiKey          = s["ApiKey"] ?? string.Empty,
             Language        = s["Language"],
             InputSampleRate = s.GetValue("InputSampleRate", 16000),
+            ApiBaseUrl      = s["ApiBaseUrl"] ?? "https://api.gladia.io",
         };
     }
 }

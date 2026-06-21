@@ -1,40 +1,34 @@
 using System.Net.WebSockets;
 using System.Text;
-using System.Threading.Channels;
 
 namespace Voxa.Speech;
 
 /// <summary>One parsed fragment from a streaming STT vendor's message.</summary>
 /// <param name="Text">The (partial or finalized) transcript text for the current segment.</param>
 /// <param name="IsSegmentFinal">
-/// True when the vendor has locked this segment (it won't change). <see cref="WebSocketSttEngine"/>
-/// accumulates locked segments and emits a single VAD-gated final on <see cref="WebSocketSttEngine.FlushAsync()"/>;
-/// non-final fragments only update the live (<c>IsFinal:false</c>) transcript.
+/// True when the vendor has locked this segment (it won't change). <see cref="WebSocketSttEngine"/> accumulates
+/// locked segments and emits a single VAD-gated final on <see cref="WebSocketSttEngine.FlushAsync()"/>; non-final
+/// fragments only update the live (<c>IsFinal:false</c>) transcript.
 /// </param>
 public readonly record struct SttFragment(string Text, bool IsSegmentFinal);
 
 /// <summary>
 /// Base for streaming (WebSocket) <see cref="ISpeechToTextEngine"/> vendors — Deepgram, AssemblyAI, Gladia,
 /// Speechmatics, etc. Owns the <see cref="ClientWebSocket"/> connect / receive loop / binary-audio send /
-/// graceful close; subclasses only describe the vendor: the endpoint (sync <see cref="BuildEndpoint"/> or
-/// async <see cref="ResolveEndpointAsync"/>), the auth header (<see cref="ConfigureConnect"/>), an optional
-/// post-connect handshake (<see cref="OnConnectedAsync"/>), how to parse one server message into
-/// <see cref="SttFragment"/>s (<see cref="ParseMessage"/>), and an optional close control frame
-/// (<see cref="BuildCloseMessage"/>).
+/// graceful close; subclasses only describe the vendor: the endpoint (sync <see cref="BuildEndpoint"/> or async
+/// <see cref="ResolveEndpointAsync"/>), the auth header (<see cref="ConfigureConnect"/>), an optional post-connect
+/// handshake (<see cref="OnConnectedAsync"/>), how to parse one server message into <see cref="SttFragment"/>s
+/// (<see cref="ParseMessage"/>), and an optional close control frame (<see cref="BuildCloseMessage"/>).
 ///
-/// <para><b>Turn integration.</b> Streaming vendors emit many "final" segments per utterance, but Voxa fires an
-/// agent turn on every <c>IsFinal:true</c> transcription, so this base does NOT forward segment-finals as Voxa
-/// finals. Instead it streams interims (<c>IsFinal:false</c>) for live display, accumulates the locked segments,
-/// and emits ONE accumulated final when <see cref="SpeechToTextProcessor"/> calls <see cref="FlushAsync()"/> at
-/// the VAD/smart-turn speech-end — so a streaming engine drives exactly one turn per utterance, like a batch
-/// engine, but with no post-speech round-trip (the transcript is already computed).</para>
+/// <para><b>Turn integration</b> is delegated to <see cref="StreamingTranscriptAccumulator"/> (shared with the
+/// SDK-backed engines): interims stream for live display, locked segments accumulate, and one VAD-gated final is
+/// emitted per utterance on <see cref="FlushAsync()"/> — so a streaming vendor drives exactly one agent turn per
+/// utterance (like a batch engine) with no post-speech round-trip, and a late provider final from a flushed turn
+/// can't bleed into the next.</para>
 /// </summary>
 public abstract class WebSocketSttEngine : ISpeechToTextEngine
 {
-    private readonly Channel<TranscriptionResult> _transcripts = Channel.CreateUnbounded<TranscriptionResult>();
-    private readonly object _accLock = new();
-    private readonly List<string> _finalSegments = new();
-    private string _interimTail = string.Empty;
+    private readonly StreamingTranscriptAccumulator _acc = new();
     private long _audioChunksSent;
     private ClientWebSocket? _ws;
     private CancellationTokenSource? _cts;
@@ -98,24 +92,12 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         }
     }
 
-    public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct)
-        => _transcripts.Reader.ReadAllAsync(ct);
+    public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct) => _acc.ReadAllAsync(ct);
 
-    /// <summary>
-    /// VAD-gated final: <see cref="SpeechToTextProcessor"/> calls this at <c>UserStoppedSpeakingFrame</c>. Emit
-    /// the accumulated utterance transcript as one <c>IsFinal:true</c> result and reset — one turn per utterance.
-    /// </summary>
+    /// <summary>VAD-gated final: <see cref="SpeechToTextProcessor"/> calls this at <c>UserStoppedSpeakingFrame</c>.</summary>
     public Task FlushAsync()
     {
-        string full;
-        lock (_accLock)
-        {
-            full = BuildRunningText();
-            _finalSegments.Clear();
-            _interimTail = string.Empty;
-        }
-        if (!string.IsNullOrWhiteSpace(full))
-            _transcripts.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, Language));
+        _acc.Flush(Language);
         return Task.CompletedTask;
     }
 
@@ -132,15 +114,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         {
             try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
-        _transcripts.Writer.TryComplete();
-    }
-
-    // caller holds _accLock
-    private string BuildRunningText()
-    {
-        var joined = string.Join(' ', _finalSegments);
-        if (_interimTail.Length == 0) return joined;
-        return joined.Length == 0 ? _interimTail : joined + " " + _interimTail;
+        _acc.Complete();
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -175,28 +149,8 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         try { frags = ParseMessage(json).ToList(); }
         catch { return; } // ignore a malformed frame rather than kill the loop
 
-        if (frags.Count == 0) return;
-
-        string running;
-        lock (_accLock)
-        {
-            foreach (var f in frags)
-            {
-                if (f.IsSegmentFinal)
-                {
-                    if (f.Text.Length > 0) _finalSegments.Add(f.Text);
-                    _interimTail = string.Empty;
-                }
-                else
-                {
-                    _interimTail = f.Text;
-                }
-            }
-            running = BuildRunningText();
-        }
-
-        if (!string.IsNullOrEmpty(running))
-            _transcripts.Writer.TryWrite(new TranscriptionResult(running, IsFinal: false, Language));
+        foreach (var f in frags)
+            _acc.OnFragment(f.Text, f.IsSegmentFinal, Language);
     }
 
     public async ValueTask DisposeAsync()
@@ -208,7 +162,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         }
         _ws?.Dispose();
         _cts?.Dispose();
-        _transcripts.Writer.TryComplete();
+        _acc.Complete();
         GC.SuppressFinalize(this);
     }
 }

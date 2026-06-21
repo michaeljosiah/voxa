@@ -55,4 +55,19 @@ public class StreamingTranscriptAccumulatorTests
         acc.Flush("en");
         Assert.Empty(await Drain(acc));
     }
+
+    [Fact] // Codex P1: a provider's late segment-final (arriving after the VAD flushed the turn) must not bleed forward.
+    public async Task A_late_segment_final_after_flush_does_not_bleed_into_the_next_turn()
+    {
+        var acc = new StreamingTranscriptAccumulator();
+        acc.OnFragment("turn one", isSegmentFinal: true, null);
+        acc.Flush(null);                                       // VAD ends turn A
+        acc.OnFragment("turn one", isSegmentFinal: true, null);// late provider final for A → must be dropped
+        acc.OnFragment("turn two", isSegmentFinal: false, null);// new utterance re-arms accumulation
+        acc.OnFragment("turn two", isSegmentFinal: true, null);
+        acc.Flush(null);                                       // turn B
+
+        var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
+        Assert.Equal(new[] { "turn one", "turn two" }, finals); // not "turn one turn two"
+    }
 }

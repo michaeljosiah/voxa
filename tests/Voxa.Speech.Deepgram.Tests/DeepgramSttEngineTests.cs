@@ -64,6 +64,15 @@ public class DeepgramSttEngineTests
         Assert.Equal("k", o.ApiKey);
         Assert.Equal("nova-3", o.Model);
         Assert.Equal(16000, o.InputSampleRate);
+        Assert.Equal("wss://api.deepgram.com/v1/listen", o.ApiBaseUrl);
+    }
+
+    [Fact] // Codex P2: the documented ApiBaseUrl override must actually be bound (was previously ignored).
+    public void BindOptions_honors_api_base_url_override()
+    {
+        var o = DeepgramSpeechDescriptors.BindOptions(Root(
+            ("Voxa:Deepgram:ApiKey", "k"), ("Voxa:Deepgram:ApiBaseUrl", "wss://proxy.internal/listen")));
+        Assert.Equal("wss://proxy.internal/listen", o.ApiBaseUrl);
     }
 
     [Fact]

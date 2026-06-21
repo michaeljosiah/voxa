@@ -15,6 +15,7 @@ public sealed class StreamingTranscriptAccumulator
     private readonly object _lock = new();
     private readonly List<string> _finalSegments = new();
     private string _interimTail = string.Empty;
+    private bool _awaitingNewUtterance; // after a flush: drop the flushed turn's trailing finals until a new interim
 
     /// <summary>The transcription stream the engine returns from <c>ReadTranscriptsAsync</c>.</summary>
     public IAsyncEnumerable<TranscriptionResult> ReadAllAsync(CancellationToken ct) => _channel.Reader.ReadAllAsync(ct);
@@ -26,6 +27,15 @@ public sealed class StreamingTranscriptAccumulator
         string running;
         lock (_lock)
         {
+            if (_awaitingNewUtterance)
+            {
+                // The VAD ended (flushed) the turn before the provider finalized it; a segment-final arriving now
+                // is the flushed turn's tail — drop it so it can't bleed into the next turn. A non-empty interim
+                // means a genuinely new utterance has begun, which re-arms accumulation.
+                if (isSegmentFinal || text.Length == 0) return;
+                _awaitingNewUtterance = false;
+            }
+
             if (isSegmentFinal)
             {
                 if (text.Length > 0) _finalSegments.Add(text);
@@ -50,6 +60,7 @@ public sealed class StreamingTranscriptAccumulator
             full = BuildRunning();
             _finalSegments.Clear();
             _interimTail = string.Empty;
+            _awaitingNewUtterance = true; // discard the flushed turn's late provider finals (anti-bleed)
         }
         if (!string.IsNullOrWhiteSpace(full))
             _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language));
