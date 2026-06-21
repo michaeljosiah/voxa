@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:services="using:Voxa.Studio.Services"
+             xmlns:conv="using:Voxa.Studio.Views"
+             x:Class="Voxa.Studio.Views.ToastHost"
+             x:DataType="services:ToastService">
+
+  <UserControl.Styles>
+    <!-- slide-in from the right + fade (the reference's vuiToastIn), played once on appear -->
+    <Style Selector="Border.vx-toast">
+      <Style.Animations>
+        <Animation Duration="0:0:0.24" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="TranslateTransform.X" Value="16" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="TranslateTransform.X" Value="0" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="Button.vx-toast-close">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="Foreground" Value="{StaticResource VxMutedBrush}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.vx-toast-close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ItemsControl ItemsSource="{Binding Items}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="18">
+    <ItemsControl.ItemsPanel>
+      <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+    </ItemsControl.ItemsPanel>
+    <ItemsControl.ItemTemplate>
+      <DataTemplate x:DataType="services:ToastItem">
+        <Border Width="320" CornerRadius="10" ClipToBounds="True" Classes="vx-toast"
+                Background="{StaticResource VxPanel2Brush}"
+                BorderBrush="{StaticResource VxLine2Brush}" BorderThickness="1"
+                BoxShadow="0 4 16 0 #73000000">
+          <Border.RenderTransform><TranslateTransform /></Border.RenderTransform>
+          <Grid ColumnDefinitions="3,Auto,*,Auto">
+            <Rectangle Grid.Column="0" Fill="{Binding Tone, Converter={x:Static conv:Converters.ToastAccent}}" />
+            <PathIcon Grid.Column="1" Width="16" Height="16" Margin="13,13,0,0" VerticalAlignment="Top"
+                      Data="{Binding Tone, Converter={x:Static conv:Converters.ToastIcon}}"
+                      Foreground="{Binding Tone, Converter={x:Static conv:Converters.ToastAccent}}" />
+            <StackPanel Grid.Column="2" Margin="11,12" Spacing="2">
+              <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                         Foreground="{StaticResource VxTextBrush}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Message}" FontSize="12" Foreground="{StaticResource VxMutedBrush}"
+                         TextWrapping="Wrap" FontFamily="{Binding Mono, Converter={x:Static conv:Converters.ToastMessageFont}}"
+                         IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+            <Button Grid.Column="3" Classes="vx-toast-close" Click="OnToastClose"
+                    VerticalAlignment="Top" Margin="0,8,8,0" Content="✕" />
+          </Grid>
+        </Border>
+      </DataTemplate>
+    </ItemsControl.ItemTemplate>
+  </ItemsControl>
+</UserControl>

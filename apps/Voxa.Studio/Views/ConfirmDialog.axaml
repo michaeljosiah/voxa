@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Voxa.Studio.Views.ConfirmDialog"
+        Width="460" SizeToContent="Height" CanResize="False"
+        SystemDecorations="None" Background="Transparent" TransparencyLevelHint="Transparent"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+
+  <!-- VST-005 WS6 confirm/danger dialog — mirrors the reference DialogModal (icon · title · body · actions). -->
+  <Border Background="{StaticResource VxPanel2Brush}" BorderBrush="{StaticResource VxLine2Brush}"
+          BorderThickness="1" CornerRadius="20" Margin="12" BoxShadow="0 16 48 0 #8C000000">
+    <StackPanel>
+      <Grid ColumnDefinitions="Auto,*" Margin="22,22,22,16">
+        <Border x:Name="IconWrap" Width="40" Height="40" CornerRadius="10" VerticalAlignment="Top"
+                Background="{StaticResource VxBadSoftBrush}">
+          <PathIcon x:Name="ToneIcon" Width="20" Height="20" Foreground="{StaticResource VxBadBrush}"
+                    Data="M8,2 L16,2 L22,8 L22,16 L16,22 L8,22 L2,16 L2,8 Z M11,7 L13,7 L13,13 L11,13 Z M11,15 L13,15 L13,17 L11,17 Z" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="15,1,0,0" Spacing="7">
+          <TextBlock x:Name="TitleText" FontSize="15.5" FontWeight="SemiBold" LetterSpacing="-0.2"
+                     Foreground="{StaticResource VxTextBrush}" Text="Are you sure?" />
+          <TextBlock x:Name="BodyText" FontSize="13.5" TextWrapping="Wrap"
+                     Foreground="{StaticResource VxText2Brush}" Text="" />
+        </StackPanel>
+      </Grid>
+      <Border Background="{StaticResource VxPanelBrush}" BorderBrush="{StaticResource VxLine1Brush}"
+              BorderThickness="0,1,0,0" Padding="18,14" CornerRadius="0,0,20,20">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="9">
+          <Button Classes="vx-ghost" Content="Cancel" Click="OnCancel" />
+          <Button x:Name="ConfirmButton" Classes="vx-danger" Content="Delete" Click="OnConfirm" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </Border>
+</Window>

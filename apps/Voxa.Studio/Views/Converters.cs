@@ -118,6 +118,31 @@ public static class Converters
             _                      => MatchBrush,
         });
 
+    // ── toasts (VST-005 WS6): tone → accent + icon + message face ──
+
+    public static readonly IValueConverter ToastAccent =
+        new FuncValueConverter<ToastTone, IBrush?>(tone => tone switch
+        {
+            ToastTone.Success => StageOutBrush,
+            ToastTone.Warning => WarnBrush,
+            ToastTone.Danger => DangerBrush,
+            _ => InfoBrush,
+        });
+
+    /// <summary>Tone → a filled even-odd glyph (check / triangle / octagon / info dot).</summary>
+    public static readonly IValueConverter ToastIcon =
+        new FuncValueConverter<ToastTone, Geometry?>(tone => Geometry.Parse(tone switch
+        {
+            ToastTone.Success => "F1 M4,12 L9,17 L20,5 L18,3 L9,13 L6,10 Z",
+            ToastTone.Warning => "F0 M12,3 L22,20 L2,20 Z M11,9 L13,9 L13,14 L11,14 Z M11,16 L13,16 L13,18 L11,18 Z",
+            ToastTone.Danger => "F0 M8,2 L16,2 L22,8 L22,16 L16,22 L8,22 L2,16 L2,8 Z M11,7 L13,7 L13,13 L11,13 Z M11,15 L13,15 L13,17 L11,17 Z",
+            _ => "F0 M12,2 A10,10 0 1 0 12.001,2 Z M11,6 L13,6 L13,8 L11,8 Z M11,10 L13,10 L13,17 L11,17 Z",
+        }));
+
+    public static readonly IValueConverter ToastMessageFont =
+        new FuncValueConverter<bool, FontFamily?>(mono =>
+            Avalonia.Application.Current?.Resources[mono ? "VxMono" : "VxUi"] as FontFamily);
+
     private static readonly IBrush Line2Brush = new SolidColorBrush(Color.Parse("#29A6B2C2")); // line-2
     private static readonly IBrush BadBrush = new SolidColorBrush(Color.Parse("#EF5350"));     // invalid-node ring fallback
 

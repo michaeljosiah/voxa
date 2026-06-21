@@ -31,6 +31,17 @@
     <Style Selector="Button#NavSettings:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
     </Style>
+
+    <!-- replay-launch: muted glyph that warms to the accent on hover -->
+    <Style Selector="Button#ReplaySplash">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button#ReplaySplash:pointerover PathIcon">
+      <Setter Property="Foreground" Value="{StaticResource VxAccentBrush}" />
+    </Style>
+    <Style Selector="Button#ReplaySplash:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
   </Window.Styles>
 
   <Grid ColumnDefinitions="82,*" RowDefinitions="44,*">
@@ -62,11 +73,31 @@
       </Grid>
     </Border>
 
+    <!-- replay-launch button: a hit-testable sibling of the (non-interactive, draggable) titlebar,
+         sitting just left of the native caption buttons. Re-shows the splash for the brand moment. -->
+    <Button Grid.Row="0" Grid.Column="1" x:Name="ReplaySplash" Click="OnReplaySplashClick"
+            HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,146,0"
+            Background="Transparent" BorderThickness="0" Width="30" Height="30" Padding="0"
+            ToolTip.Tip="Replay launch">
+      <PathIcon x:Name="ReplaySplashIcon" Width="15" Height="15" Foreground="{StaticResource VxMutedBrush}"
+                Data="M12,2 L13.4,8.6 L20,10 L13.4,11.4 L12,18 L10.6,11.4 L4,10 L10.6,8.6 Z M18.5,3 L19.1,5.4 L21.5,6 L19.1,6.6 L18.5,9 L17.9,6.6 L15.5,6 L17.9,5.4 Z" />
+    </Button>
+
     <!-- ── nav rail: icon + label, active gets the edge bar ── -->
     <Border Grid.Row="1" Grid.Column="0"
             Background="{StaticResource VxPanelBrush}"
             BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,0,1,0">
       <DockPanel>
+
+      <!-- account chip at the very foot of the rail (the reference's avatar) -->
+      <Border x:Name="NavAvatar" DockPanel.Dock="Bottom" Width="28" Height="28" Margin="0,4,0,12"
+              CornerRadius="14" HorizontalAlignment="Center"
+              Background="{StaticResource VxRaisedBrush}"
+              BorderBrush="{StaticResource VxLine2Brush}" BorderThickness="1">
+        <TextBlock x:Name="NavAvatarText" Text="VX" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontFamily="{StaticResource VxMono}" FontSize="11"
+                   Foreground="{StaticResource VxText2Brush}" />
+      </Border>
 
       <!-- settings gear pinned to the foot of the rail — opens the dialog, not a section -->
       <Button x:Name="NavSettings" DockPanel.Dock="Bottom" Click="OnSettingsClick" Margin="0,0,0,8"
@@ -134,23 +165,51 @@
            Disabled while a session is live (a container rebuild can't run under it, like Config Apply). -->
       <Border Grid.Row="0" Background="{StaticResource VxPanelBrush}"
               BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="0,0,0,1"
-              Padding="20,7" IsEnabled="{Binding !IsLive}">
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <TextBlock Classes="vx-label vx-accent" Text="PIPELINE PROFILE" VerticalAlignment="Center" />
-          <ComboBox MinWidth="200" ItemsSource="{Binding PipelineProfiles}"
+              Padding="20,9" MinHeight="52" IsEnabled="{Binding !IsLive}">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+          <TextBlock Grid.Column="0" Classes="vx-label vx-accent" Text="PIPELINE PROFILE"
+                     VerticalAlignment="Center" Margin="0,0,12,0" />
+          <ComboBox Grid.Column="1" MinWidth="220" VerticalAlignment="Center"
+                    ItemsSource="{Binding PipelineProfiles}"
                     SelectedItem="{Binding SelectedPipelineProfile}"
                     ToolTip.Tip="The active pipeline — switching applies it everywhere (Talk, Playgrounds, …)" />
-          <Button Classes="vx-ghost" Content="Delete" Command="{Binding DeleteProfileCommand}"
-                  ToolTip.Tip="Delete the selected profile"
-                  IsVisible="{Binding HasPipelineProfiles}" />
-          <TextBlock Classes="vx-sub" FontSize="11" VerticalAlignment="Center"
+
+          <!-- the active chain as stage chips (dot + name · chevron); else the build-hint -->
+          <ItemsControl Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center"
+                        ItemsSource="{Binding ActiveChain}" IsVisible="{Binding HasActiveChain}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ShellChainNode">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                  <Border CornerRadius="999" Padding="9,3" Background="{StaticResource VxPanel2Brush}"
+                          BorderBrush="{StaticResource VxLine1Brush}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                      <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                               Fill="{Binding Stage, Converter={x:Static views:Converters.StageBrush}}" />
+                      <TextBlock Text="{Binding Name}" FontFamily="{StaticResource VxMono}" FontSize="10.5"
+                                 Foreground="{StaticResource VxText2Brush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Border>
+                  <Path Data="M0,0 L4,4 L0,8" Stroke="{StaticResource VxMutedBrush}" StrokeThickness="1.3"
+                        Margin="7,0" VerticalAlignment="Center" IsVisible="{Binding ShowSeparator}" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Grid.Column="2" Classes="vx-sub" FontSize="12.5" VerticalAlignment="Center" Margin="14,0,0,0"
                      Foreground="{StaticResource VxMutedBrush}"
                      Text="Build a pipeline in Builder, then “Save as profile” to add one here."
-                     IsVisible="{Binding !HasPipelineProfiles}" />
-        </StackPanel>
+                     IsVisible="{Binding !HasActiveChain}" />
+
+          <Button Grid.Column="3" Classes="vx-ghost" Content="Delete" Click="OnDeleteProfileClick"
+                  VerticalAlignment="Center" ToolTip.Tip="Delete the selected profile"
+                  IsVisible="{Binding HasPipelineProfiles}" />
+        </Grid>
       </Border>
 
-      <!-- content host: code-behind swaps the active view -->
+      <!-- content host: code-behind swaps the active view (+ toast layer, added at the window root) -->
       <Panel Grid.Row="1">
         <views:TalkView x:Name="TalkHost" DataContext="{Binding Talk}" />
         <views:PlaygroundsView x:Name="PlaygroundsHost" DataContext="{Binding Playgrounds}" IsVisible="False" />
@@ -160,8 +219,38 @@
         <views:ModelsView x:Name="ModelsHost" DataContext="{Binding Models}" IsVisible="False" />
         <views:ConfigView x:Name="ConfigHost" DataContext="{Binding Config}" IsVisible="False" />
         <views:DiarizationView x:Name="DiarizationHost" DataContext="{Binding Diarization}" IsVisible="False" />
+
+        <!-- "Surface is busy" — shades a contended view while another holds the device + CPU (VST-005) -->
+        <Border Background="#B8080B10" IsVisible="{Binding IsCurrentSectionBlocked}">
+          <Border Width="420" MaxWidth="420" VerticalAlignment="Center" HorizontalAlignment="Center"
+                  Padding="30,28" CornerRadius="20"
+                  Background="{StaticResource VxPanel2Brush}"
+                  BorderBrush="{StaticResource VxLine2Brush}" BorderThickness="1"
+                  BoxShadow="0 16 48 0 #8C000000">
+            <StackPanel Spacing="0" HorizontalAlignment="Center">
+              <Border Width="46" Height="46" CornerRadius="10" Margin="0,0,0,16"
+                      Background="{StaticResource VxWarnSoftBrush}">
+                <PathIcon Width="22" Height="22" Foreground="{StaticResource VxWarnBrush}"
+                          Data="M12,3 A4,4 0 0 0 8,7 L8,10 L7,10 A1,1 0 0 0 6,11 L6,20 A1,1 0 0 0 7,21 L17,21 A1,1 0 0 0 18,20 L18,11 A1,1 0 0 0 17,10 L16,10 L16,7 A4,4 0 0 0 12,3 Z M10,7 A2,2 0 0 1 14,7 L14,10 L10,10 Z" />
+              </Border>
+              <TextBlock Text="Surface is busy" FontSize="16" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" Foreground="{StaticResource VxTextBrush}" />
+              <TextBlock Text="{Binding BlockedMessage}" TextWrapping="Wrap" TextAlignment="Center"
+                         FontSize="13.5" Margin="0,9,0,0" Foreground="{StaticResource VxText2Brush}" />
+              <StackPanel Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center" Margin="0,20,0,0">
+                <Button Classes="vx-secondary" Content="{Binding GoToOwnerLabel}"
+                        Command="{Binding GoToBusyOwnerCommand}" />
+                <Button Classes="vx-danger" Content="End session" Command="{Binding EndBusyOwnerCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Border>
       </Panel>
     </Grid>
+
+    <!-- toast layer: floats over the whole shell, bottom-right; empty areas pass clicks through -->
+    <views:ToastHost Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Grid.ColumnSpan="2"
+                     DataContext="{Binding Toasts}" />
 
   </Grid>
 </Window>
