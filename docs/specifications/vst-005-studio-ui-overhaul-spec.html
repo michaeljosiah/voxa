@@ -260,6 +260,12 @@ that equals a token, the Avalonia side uses the <b>token</b> (e.g. a 44px titleb
 9". Voxa targets <b>.NET 10</b> — the Avalonia About view must read .NET 10 and the live assembly version, not the
 prototype's placeholder string.</div>
 
+<div class="callout warn"><b>Source caveat — component primitives.</b> The decoded bundle carries the <code>vx-*</code>
+<em>CSS</em> and all 16 view modules, but <b>not</b> the module that defines the React primitives the views call
+(<code>VOXADesignSystem.*</code> — Button, Card, Switch, VoiceOrb, PipelineFlow, …). So §7's component contracts
+(variants, sizes, render details) are <b>reconstructed from the <code>vx-*</code> CSS + the views' call sites</b>, not
+copied from a primitive source — confirm exact prop behavior against the call sites when building each control.</div>
+
 <!-- ============================================================ -->
 <h2 id="s5"><span class="secno">5.</span>Architectural guardrails (do not break)</h2>
 
@@ -286,16 +292,35 @@ members the new layouts bind to (and those stay Avalonia-free).</p></div>
 <h2 id="s6"><span class="secno">6.</span>WS1 — Design tokens &amp; themes</h2>
 
 <div class="ws-head">
-  <span><b>Files</b> Theme/Studio.axaml · Theme/StudioThemes.cs</span>
+  <span><b>Files</b> App.axaml (token brushes) · Theme/Studio.axaml · Theme/StudioThemes.cs · ThemeManager</span>
   <span><b>Risk</b> <span class="sev-med">Medium</span> (foundation)</span>
   <span><b>Mode</b> dark-only · 3 accents</span>
   <span><b>Rule</b> every value is a token</span>
 </div>
 
-<p>Mirror the prototype's token system as Avalonia resources (a <code>ResourceDictionary</code> of
-<code>Color</code>/<code>SolidColorBrush</code>/<code>double</code>/<code>Thickness</code>/<code>FontFamily</code>).
-The current <code>Theme/Studio.axaml</code> + <code>StudioThemes.cs</code> are the home; this aligns their names and
-values to the brief exactly.</p>
+<p><b>A token layer already exists</b> — VST-005 re-tones it, it does not build it from scratch.
+<a href="apps/Voxa.Studio/App.axaml">App.axaml</a> defines the full <code>Vx*</code> token set as
+<code>Color</code> + <code>{token}Brush</code> resources (<code>VxBg</code>, <code>VxPanel</code>, <code>VxAccent</code>,
+<code>VxHalo</code>, the <code>VxStageVad/Stt/Agent/Tts/Out</code> palette, <code>VxGood/Warn/Bad</code>, <code>VxUi</code> =
+Inter, <code>VxMono</code> = Cascadia); <a href="apps/Voxa.Studio/Theme/StudioThemes.cs">StudioThemes.cs</a> +
+<code>ThemeManager.Apply</code> already switch themes at runtime by mutating those shared brush instances (every view binds
+the same brush via <code>StaticResource</code>, so a mutation repaints live). <b>The five stage colors already equal the
+prototype values</b> (<code>#76849B / #4FC3F7 / #CE93D8 / #FFB74D / #66BB6A</code>) and are correctly never themed — keep
+them. So WS1 is three concrete changes against that existing layer (below), not a green-field token system. Keep the
+<code>Vx*</code> resource keys (no app-wide rename); the §6 tables give the canonical hex each key must hold. Mapping:
+<code>ink-950→VxBg</code>, <code>ink-900→VxPanel</code>, <code>ink-850→VxPanel2</code>, <code>pulse-400→VxAccent</code>,
+<code>pulse-300→VxAccent2</code>, <code>pulse-500→VxAccentPressed</code>, <code>halo-400→VxHalo</code>,
+<code>stage-*→VxStage*</code>.</p>
+
+<div class="callout danger"><b>Headline change — rebrand warm → cool.</b> Today's Studio ships the <b>warm "Claude-coral"</b>
+palette as its base/default (<code>VxBg #1C1C19</code>, <code>VxAccent #C96442</code>, warm inks/text; the default theme
+is <b>Warm</b>). The prototype — the 1:1 target — is the <b>cool "Voxa-cyan" Pulse</b> brand (<code>ink-950 #0B0F14</code>,
+<code>pulse-400 #4FC3F7</code>). VST-005's single most visible change is making the <b>cool/cyan</b> palette the base and
+default. The values below are the prototype's; the existing "Cool" theme already carries most of them, so this is largely
+"promote Cool to the base, re-tone Warm/Slate to accent-only variants of it." Concretely: replace
+<a href="apps/Voxa.Studio/App.axaml">App.axaml</a>'s warm base palette with the cool/Ink values, change
+<code>StudioPreferences.ThemeId</code>'s default from <code>"warm"</code> to <code>"cool"</code>, and flip
+<code>StudioThemes.ById</code>'s fallback from Warm to Cool.</div>
 
 <h3>Color tokens (exact)</h3>
 <table>
@@ -342,9 +367,14 @@ values to the brief exactly.</p>
   <tr><td><b>warm</b></td><td><span class="swatch" style="background:#E27A4E"></span><code>#E27A4E</code> (200 #F6CBB0 → 600 #9E4A29)</td><td>Terracotta accent</td></tr>
   <tr><td><b>slate</b></td><td><span class="swatch" style="background:#8AA2CE"></span><code>#8AA2CE</code> (200 #CBD7EC → 600 #54698F)</td><td>Cool periwinkle</td></tr>
 </table>
-<p>Only the <code>pulse-*</code> ramp + the cyan glows re-tint. Ink, text, lines, and the five stage colors are identical
-in every theme. Persist the choice in <code>StudioPreferences</code> (the prototype uses <code>localStorage
-'voxa.theme'</code>; the app uses its existing preferences store) and apply at boot.</p>
+<p><b>Behavior change.</b> Today the three themes (<b>Warm</b> default / Cool / Slate) each re-tint the <em>whole</em>
+chrome — ink scale, text, and hairlines all shift per theme (<code>StudioThemes.cs</code>). The prototype narrows this:
+only the <code>pulse-*</code> ramp + the cyan glows re-tint; ink, text, lines, and the five stage colors are identical in
+every theme, and <b>Cool</b> is the default. VST-005 adopts the prototype's model — promote the cool base to all themes
+and reduce Warm/Slate to accent-only variants (warm accent <code>#E27A4E</code>, slate <code>#8AA2CE</code>; the current
+warm coral <code>#C96442</code> is retired with the rebrand). Persist the choice in
+<a href="apps/Voxa.Studio/Services/StudioPreferences.cs">StudioPreferences</a> (the prototype uses <code>localStorage
+'voxa.theme'</code>) and apply at boot via the existing <code>ThemeManager</code>.</p>
 
 <div class="callout"><b>Implementation note.</b> Express the accent ramp as a small swappable
 <code>ResourceDictionary</code> (one per theme) merged over the base token dictionary, so a theme switch is a single
@@ -402,7 +432,7 @@ colors match the rest of the app.</p>
 
 <h3>Titlebar (44px)</h3>
 <p>Custom chrome (Avalonia <code>ExtendClientAreaToDecorationsHint</code>): the mark (18px) + wordmark
-"<b>VOXA</b> STUDIO" (Inter 700, tracking 0.28em, "STUDIO" in text-3) on the left; on the right a live status pill
+"<b>VOXA</b> STUDIO" (Inter 700, tracking 0.28em — the titlebar uses 0.28em, not the 0.42em wordmark token; "STUDIO" in text-3) on the left; on the right a live status pill
 (mono clock, only while a session runs), a "replay launch" sparkles button, a hairline divider, then minimize / maximize
 / close window controls (close hovers <code>danger</code>). Drag-move on the bar.</p>
 
@@ -419,6 +449,11 @@ colors match the rest of the app.</p>
   <tr><td>7</td><td>config</td><td>Config</td><td>settings-2</td></tr>
   <tr><td>8</td><td>diarization</td><td>Diarization</td><td>scan-line</td></tr>
 </table>
+<div class="callout warn"><b>Reordering needed.</b> The current rail renders <b>Diarization before Config</b>
+(<a href="apps/Voxa.Studio/Views/MainWindow.axaml">MainWindow.axaml</a>; section indices Config=6 / Diarization=7 in
+<code>MainWindow.axaml.cs</code>). The order above (config=7, diarization=8) matches the prototype — reorder the rail and
+keep the <code>SelectedSection</code> index mapping consistent.</div>
+
 <p>Active item: surface-2 bg, line-1 border, pulse-400 icon + label, and a 2px pulse accent bar inset on the left edge.
 At the foot: a settings gear (opens the Settings dialog) and a circular user-initials avatar. (Appearance setting "Nav
 labels" can hide the text under the icons.)</p>
@@ -434,10 +469,13 @@ align it to the exact layout + chips.</p>
 slot for that view's controls. Padding <code>12px 20px</code>, bottom hairline, panel bg.</p>
 
 <h3>BlockedOverlay (contended surfaces)</h3>
-<p>A live Talk session holds the audio device + CPU. While it runs, switching to <b>Builder</b> or <b>Metrics</b> shows a
-centered "Surface is busy" card (warn lock icon, copy explaining one pipeline at a time, "Go to Talk" + "End session"
-buttons) over a blurred view. The contended set is <code>{ talk, builder, metrics }</code>; Talk is the owner. This maps
-to the existing live-session state on the Talk view model.</p>
+<p><b>Net-new</b> (today the shell only disables the profile bar via <code>IsEnabled="{Binding !IsLive}"</code> and lets
+the user freely switch surfaces while live — there is no overlay). A live Talk session holds the audio device + CPU; while
+it runs, switching to <b>Builder</b> or <b>Metrics</b> shows a centered <code>min(420px)</code> "Surface is busy" card
+(warn lock icon; copy: "A <b>Talk</b> session is holding the audio device and CPU. One real pipeline runs at a time, so
+live surfaces block each other."; "Go to Talk" + a danger "End session" button) over a blurred view. The contended set is
+<code>{ talk, builder, metrics }</code> with Talk the owner. Confirm the Talk view model exposes the live-ownership state
+the overlay binds to, or add a presentation-only member for it.</p>
 
 <!-- ============================================================ -->
 <h2 id="s9"><span class="secno">9.</span>WS4 — The views, 1:1</h2>
@@ -503,7 +541,7 @@ pulse underline). A card of rows: stage dot + model name/provider + type chip + 
 <h3>9.9 Config <span class="badge p2">P2</span></h3>
 <p>Two columns. <em>Left</em> composer card: five rows, each a stage-dot label + <code>Select</code> (Speech to text /
 Text to speech / Voice activity / Agent / Latency profile), then a smart-turn checkbox card, a validity pill ("Valid — a
-server boots with this block" / "Incomplete…"), and Apply / Open-in-Builder. <em>Right</em>: a live
+server boots with this block" / "Incomplete…"), and Apply / Open-in-Builder. <em>Right</em>: a <b>460-wide</b> live
 <code>appsettings.json</code> pane (mono, ink-950) with Copy / Save-to-file. Export never carries secrets.
 <a href="apps/Voxa.Studio/Views/ConfigView.axaml">ConfigView.axaml</a>.</p>
 
@@ -515,7 +553,7 @@ segmentation-only, per-speaker labelling deferred.
 <a href="apps/Voxa.Studio/Views/DiarizationView.axaml">DiarizationView.axaml</a>.</p>
 
 <h3>9.11 Settings dialog <span class="badge p2">P2</span></h3>
-<p>760×560 modal, left nav (Providers / Appearance / About). <b>Providers:</b> a DPAPI reassurance banner + a list of
+<p>Modal <code>min(760, 100vw-48) × min(560, 100vh-64)</code>, left nav <b>184</b> wide (Providers / Appearance / About). <b>Providers:</b> a DPAPI reassurance banner + a list of
 providers (cloud = expandable with credential fields + Save-encrypted/Clear; local = on-device, no fields), each with a
 status badge (off / active / needs key) and an activation switch. <b>Appearance:</b> the three-theme picker (swatch +
 label + hint + check), plus toggles for idle animations / nav labels / replay-splash. <b>About:</b> mark + "VOXA STUDIO"
