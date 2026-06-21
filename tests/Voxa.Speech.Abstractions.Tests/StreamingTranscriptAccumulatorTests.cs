@@ -87,6 +87,22 @@ public class StreamingTranscriptAccumulatorTests
         Assert.Equal(new[] { "turn one", "turn two" }, finals); // A's tail never reaches B
     }
 
+    [Fact] // Codex P2 (round 4): a user-start reset keeps a quick follow-up final that lands inside the window.
+    public async Task OnUtteranceStart_keeps_a_quick_followup_final_within_the_window()
+    {
+        long t = 1000;
+        var acc = new StreamingTranscriptAccumulator(() => t, lateFinalWindowMs: 500);
+        acc.OnFragment("first", isSegmentFinal: true, null);
+        acc.Flush(null);                                    // turn A at t=1000 (window armed)
+        t = 1100;                                           // still inside the window
+        acc.OnUtteranceStart();                             // user starts speaking again → reset
+        acc.OnFragment("yes", isSegmentFinal: true, null);  // quick final-only "yes" — kept because the window was reset
+        acc.Flush(null);
+
+        var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
+        Assert.Equal(new[] { "first", "yes" }, finals);
+    }
+
     [Fact] // Codex P1 (round 2): a final-only provider (no interims) must not lose every utterance after the first.
     public async Task A_final_only_provider_recovers_after_the_late_final_window()
     {

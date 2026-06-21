@@ -31,6 +31,14 @@ public interface ISpeechToTextEngine : IAsyncDisposable
     Task FlushAsync() => Task.CompletedTask;
 
     /// <summary>
+    /// New-utterance signal: <see cref="SpeechToTextProcessor"/> calls this on a
+    /// <see cref="Voxa.Frames.UserStartedSpeakingFrame"/>. Streaming engines use it to reset their late-final
+    /// anti-bleed window so the new utterance's first final is kept even if it arrives within the window of the
+    /// previous flush (e.g. a quick "yes"). Default: no-op (batch engines don't need it).
+    /// </summary>
+    Task OnUserStartedSpeakingAsync() => Task.CompletedTask;
+
+    /// <summary>
     /// True only if this engine implements eager/speculative STT (VRT-002 WS1) — i.e. it overrides
     /// <see cref="FlushAsync(long)"/> to peek-transcribe (stamp the id, do NOT clear the buffer) and
     /// <see cref="DiscardBufferedAudioAsync"/> to drop a promoted buffer. <see cref="SpeechToTextProcessor"/>

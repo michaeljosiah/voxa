@@ -83,6 +83,12 @@ public sealed class AwsSttEngine : ISpeechToTextEngine
         return Task.CompletedTask;
     }
 
+    public Task OnUserStartedSpeakingAsync()
+    {
+        _acc.OnUtteranceStart();
+        return Task.CompletedTask;
+    }
+
     public async Task StopAsync()
     {
         _audioQueue.Writer.TryComplete(); // ends the publisher → AWS closes the stream
@@ -91,6 +97,7 @@ public sealed class AwsSttEngine : ISpeechToTextEngine
             try { await _processing.ConfigureAwait(false); } catch { /* shutdown */ }
         }
         _cts?.Cancel();
+        _acc.Flush(_options.Language); // drain a buffered last utterance before completing
         _acc.Complete();
     }
 

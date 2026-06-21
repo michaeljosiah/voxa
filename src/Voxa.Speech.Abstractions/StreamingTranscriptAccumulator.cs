@@ -82,7 +82,17 @@ public sealed class StreamingTranscriptAccumulator
             _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language));
     }
 
-    /// <summary>Complete the transcription stream (call on stop/dispose).</summary>
+    /// <summary>
+    /// Reset the anti-bleed window because a new utterance has begun (driven by <c>UserStartedSpeakingFrame</c>).
+    /// The previous flush's late finals have stopped arriving by now, so the new utterance's finals — even a quick
+    /// one that lands inside the time window — are kept rather than dropped.
+    /// </summary>
+    public void OnUtteranceStart()
+    {
+        lock (_lock) _flushed = false;
+    }
+
+    /// <summary>Complete the transcription stream (call on stop/dispose). Flush any buffered text first.</summary>
     public void Complete() => _channel.Writer.TryComplete();
 
     private string BuildRunning()

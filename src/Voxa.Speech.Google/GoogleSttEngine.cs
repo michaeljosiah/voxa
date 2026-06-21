@@ -78,6 +78,12 @@ public sealed class GoogleSttEngine : ISpeechToTextEngine
         return Task.CompletedTask;
     }
 
+    public Task OnUserStartedSpeakingAsync()
+    {
+        _acc.OnUtteranceStart();
+        return Task.CompletedTask;
+    }
+
     public async Task StopAsync()
     {
         var stream = _stream;
@@ -90,6 +96,7 @@ public sealed class GoogleSttEngine : ISpeechToTextEngine
         {
             try { await _readLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
+        _acc.Flush(_options.Language); // drain a buffered last utterance before completing
         _acc.Complete();
     }
 

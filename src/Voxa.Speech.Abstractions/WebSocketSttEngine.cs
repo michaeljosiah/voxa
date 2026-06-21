@@ -101,6 +101,13 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         return Task.CompletedTask;
     }
 
+    /// <summary>New utterance: reset the accumulator's anti-bleed window so a quick new final isn't dropped.</summary>
+    public Task OnUserStartedSpeakingAsync()
+    {
+        _acc.OnUtteranceStart();
+        return Task.CompletedTask;
+    }
+
     public async Task StopAsync()
     {
         var ws = _ws;
@@ -114,6 +121,7 @@ public abstract class WebSocketSttEngine : ISpeechToTextEngine
         {
             try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
+        _acc.Flush(Language); // drain a buffered last utterance (e.g. disconnect with no UserStoppedSpeaking) before completing
         _acc.Complete();
     }
 
