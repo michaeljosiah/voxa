@@ -9,11 +9,12 @@ namespace Voxa.Speech;
 /// one accumulated <c>IsFinal:true</c> result at the VAD/smart-turn speech-end — so a streaming vendor drives
 /// exactly one agent turn per utterance.
 ///
-/// <para><b>Anti-bleed.</b> When the VAD flushes a turn before the provider has delivered its final, that final
-/// arrives just afterwards. Such a late final is dropped (it's the flushed turn's tail, already emitted) so it
-/// can't merge into the next turn — but only within a short window after the flush: a non-empty interim, or any
-/// final after the window, marks a genuinely new utterance and re-arms accumulation. The window keeps the drop
-/// from starving a <em>final-only</em> provider (one that never emits interims) of its later utterances.</para>
+/// <para><b>Anti-bleed.</b> When the VAD flushes a turn before the provider has finalized it, the provider keeps
+/// emitting that utterance's tail (interims and/or finals) just afterwards. A segment-final arriving within a
+/// short window after the flush is therefore dropped as the flushed turn's tail (it was already emitted), so it
+/// can't merge into the next turn. The gate is purely time-based: interims are always applied for display but
+/// never re-open the window, and a final after the window is kept (so a <em>final-only</em> provider — one that
+/// never emits interims — isn't starved of its later utterances).</para>
 /// </summary>
 public sealed class StreamingTranscriptAccumulator
 {
@@ -23,7 +24,7 @@ public sealed class StreamingTranscriptAccumulator
     private readonly Func<long> _nowMs;
     private readonly long _lateFinalWindowMs;
     private string _interimTail = string.Empty;
-    private bool _awaitingNewUtterance; // after a flush: drop the flushed turn's trailing finals until re-armed
+    private bool _flushed;
     private long _flushedAtMs;
 
     /// <param name="clock">Monotonic millisecond clock; defaults to <see cref="Environment.TickCount64"/> (injectable for tests).</param>
@@ -44,21 +45,11 @@ public sealed class StreamingTranscriptAccumulator
         string running;
         lock (_lock)
         {
-            if (_awaitingNewUtterance)
-            {
-                if (isSegmentFinal)
-                {
-                    // Late final within the window = the just-flushed turn's tail → drop (anti-bleed). After the
-                    // window it's a new utterance from a final-only provider → accept and re-arm.
-                    if (_nowMs() - _flushedAtMs < _lateFinalWindowMs) return;
-                    _awaitingNewUtterance = false;
-                }
-                else
-                {
-                    if (text.Length == 0) return;   // empty interim can't start a new utterance
-                    _awaitingNewUtterance = false;  // a real interim marks the new utterance
-                }
-            }
+            // Drop a segment-final that lands within the late-final window after a flush — it's the just-flushed
+            // turn's tail. Interims never re-open this window, so a late interim followed by a late final can't
+            // sneak the previous turn into the next one.
+            if (isSegmentFinal && _flushed && _nowMs() - _flushedAtMs < _lateFinalWindowMs)
+                return;
 
             if (isSegmentFinal)
             {
@@ -84,7 +75,7 @@ public sealed class StreamingTranscriptAccumulator
             full = BuildRunning();
             _finalSegments.Clear();
             _interimTail = string.Empty;
-            _awaitingNewUtterance = true; // discard the flushed turn's late provider finals (anti-bleed)
+            _flushed = true;            // arm the anti-bleed window
             _flushedAtMs = _nowMs();
         }
         if (!string.IsNullOrWhiteSpace(full))

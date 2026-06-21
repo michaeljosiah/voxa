@@ -71,6 +71,22 @@ public class StreamingTranscriptAccumulatorTests
         Assert.Equal(new[] { "turn one", "turn two" }, finals); // not "turn one turn two"
     }
 
+    [Fact] // Codex P1 (round 3): a late interim for the flushed turn must not re-open the window for its late final.
+    public async Task A_late_interim_then_late_final_after_flush_does_not_bleed()
+    {
+        var acc = new StreamingTranscriptAccumulator(); // immediate calls → all within the default window
+        acc.OnFragment("turn one", isSegmentFinal: true, null);
+        acc.Flush(null);                                          // turn A
+        acc.OnFragment("turn one tail", isSegmentFinal: false, null); // late interim for A
+        acc.OnFragment("turn one tail", isSegmentFinal: true, null);  // late final for A — must still be dropped
+        acc.OnFragment("turn two", isSegmentFinal: false, null);
+        acc.OnFragment("turn two", isSegmentFinal: true, null);
+        acc.Flush(null);                                          // turn B
+
+        var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
+        Assert.Equal(new[] { "turn one", "turn two" }, finals); // A's tail never reaches B
+    }
+
     [Fact] // Codex P1 (round 2): a final-only provider (no interims) must not lose every utterance after the first.
     public async Task A_final_only_provider_recovers_after_the_late_final_window()
     {
