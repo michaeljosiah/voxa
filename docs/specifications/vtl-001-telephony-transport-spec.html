@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VTL-001 — Telephony Transport (Twilio Media Streams over the WebSocket seam)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VTL-001 — Telephony Transport (Twilio Media Streams over the WebSocket seam)</h1>
+  <div class="sub">A first-class <b>telephony transport</b> — phone calls in and out of a Voxa pipeline — built
+    <em>on the transport seam Voxa already has</em>. Twilio (and later Azure ACS) stream call audio over a
+    <b>WebSocket</b>, not WebRTC, so this is a new <code>PipelineSource</code>/<code>PipelineSink</code> pair speaking the
+    vendor's JSON-envelope-over-WS framing plus a μ-law codec and a sample-rate bridge at the edge — the VAD → STT →
+    agent → TTS chain is untouched, and there is <b>no</b> WebRTC stack, no ICE, no TURN.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VTL-001 v1.0</div>
+    <div><b>Date</b> 2026-06-21</div>
+    <div><b>Status</b> Draft — for review (spec only; no code in this item)</div>
+    <div><b>Target framework</b> .NET 10 (<code>net10.0</code>)</div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> Reopens "Not planned → Telephony (Twilio, SIP)" (ROADMAP.md)</div>
+    <div><b>Depends on</b> <code>DefaultVoicePipelineComposer</code> (transport-agnostic <code>Compose</code>); the <code>PipelineSource</code>/<code>PipelineSink</code> seam</div>
+    <div><b>Supersedes decision</b> "WebSocket is enough; WebRTC/telephony deferred" — telephony delivered here <em>without</em> WebRTC</div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — where telephony plugs into the seam</a></li>
+    <li><a href="#s5">WS1 — the shared telephony media-stream base</a></li>
+    <li><a href="#s6">WS2 — the Twilio Media Streams codec + TwiML endpoint</a></li>
+    <li><a href="#s7">WS3 — μ-law (G.711) &amp; the sample-rate bridge</a></li>
+    <li><a href="#s8">WS4 — lifecycle &amp; barge-in mapping</a></li>
+    <li><a href="#s9">WS5 — Azure ACS codec (second vendor; design)</a></li>
+    <li><a href="#s10">Configuration reference</a></li>
+    <li><a href="#s11">Plan of action — phases &amp; dependencies</a></li>
+    <li><a href="#s12">Progress checklist</a></li>
+    <li><a href="#s13">Verification protocol</a></li>
+    <li><a href="#s14">Risk register</a></li>
+    <li><a href="#s15">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VTL-001 add, in one sentence?</b>
+    <p>It lets a real phone call drive a Voxa voice agent: a caller dials a number, Twilio bridges the call audio to your
+    server over a WebSocket, and Voxa runs its normal <code>VAD → STT → agent → TTS</code> pipeline on it — speaking back
+    down the same call — with barge-in.</p>
+  </div>
+  <div class="qa">
+    <b>Isn't telephony a WebRTC thing? Didn't we decide not to do WebRTC?</b>
+    <p>That's the key insight that makes this cheap. <b>Twilio Media Streams (and Azure ACS) deliver phone audio over a
+    plain WebSocket</b> — Twilio owns the WebRTC/SIP/PSTN side and hands you JSON messages whose payload is base64-encoded
+    μ-law audio. So telephony needs <em>no</em> WebRTC stack in .NET (no SIPSorcery, no ICE, no DTLS-SRTP, no TURN
+    server). It reuses the exact transport mechanism Voxa already uses for its native client: an ASP.NET WebSocket upgrade
+    feeding a <code>PipelineSource</code>, and a <code>PipelineSink</code> writing back.</p>
+  </div>
+  <div class="qa">
+    <b>So what is actually new, if the transport mechanism already exists?</b>
+    <p>Three small things, all at the <em>edge</em> of the pipeline: (1) a new source/sink that speak Twilio's
+    <em>JSON-envelope</em> framing instead of Voxa's native <em>binary-PCM</em> framing; (2) a <b>μ-law (G.711)</b>
+    encode/decode — a 256-entry lookup table both ways; (3) a <b>sample-rate bridge</b> between the telephone's 8&nbsp;kHz
+    and whatever rate the composed pipeline announces (e.g. 16&nbsp;kHz for Whisper). The whole STT/agent/TTS chain in the
+    middle is byte-for-byte the same as today.</p>
+  </div>
+  <div class="qa">
+    <b>Why is this the right first transport to add (vs. browser WebRTC)?</b>
+    <p>Because phone agents are the highest-value, lowest-cost target: it's the canonical production use case for voice
+    AI, it closes the "no telephony" gap the Pipecat comparison flagged as the single biggest functional gap, and it
+    rides the seam we already have for a few days of work — versus multi-week, infra-heavy native WebRTC. Browser WebRTC
+    stays deferred and, when needed, is best delivered by integrating a media server (LiveKit/Daily) rather than
+    implementing the stack — a separate decision.</p>
+  </div>
+  <div class="qa">
+    <b>Does this change anything for today's (native-client / Studio) users?</b>
+    <p>No. It's an additive new package (<code>Voxa.Transports.Telephony</code> + <code>Voxa.Transports.Twilio</code>) and
+    a new endpoint (<code>MapVoxaTwilioVoice</code>). The native WebSocket transport, Studio's in-process transport, the
+    composer, and every processor are untouched. If you never reference the telephony package, nothing about your build
+    changes.</p>
+  </div>
+  <div class="qa">
+    <b>What ships in VTL-001, and what is deferred?</b>
+    <p><b>This item is a spec only</b> — no code lands with it. The spec defines: the shared telephony media-stream base,
+    the Twilio codec + TwiML endpoint as the first vendor, the μ-law + resample edge, and the lifecycle/barge-in mapping.
+    <b>Deferred to follow-up items:</b> Azure ACS as the second vendor (designed in §9), DTMF-as-frames, outbound/dial-out
+    calls, and any SIP-direct path. Implementation is phased (§11) so Twilio ships first behind this spec.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>Voxa's pipeline is <code>PipelineSource → FrameProcessor… → PipelineSink</code>, and the entire VAD/STT/agent/TTS
+chain is composed <b>transport-agnostically</b> by <code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code>,
+which returns a <code>ComposedVoice(Parts, InputSampleRate, OutputSampleRate)</code>. The native client transport
+(<code>Voxa.Transports.WebSocket</code>) is just two leaf processors — <code>WebSocketAudioSource : PipelineSource</code>
+and <code>WebSocketAudioSink : PipelineSink</code> — carrying raw PCM as binary WebSocket frames plus a typed JSON
+sidechannel. <b>Telephony is the same shape with a different edge codec.</b></p>
+
+<p>Twilio Media Streams connects a phone call to a <code>wss://</code> endpoint (declared via TwiML
+<code>&lt;Connect&gt;&lt;Stream&gt;</code>) and exchanges <b>JSON text messages</b>: inbound
+<code>connected</code>/<code>start</code>/<code>media</code>/<code>dtmf</code>/<code>stop</code>, outbound
+<code>media</code>/<code>mark</code>/<code>clear</code>. The audio is <b>base64-encoded μ-law (G.711 PCMU), 8&nbsp;kHz,
+mono</b>, in 20&nbsp;ms chunks. Three additive workstreams plus a second-vendor design:</p>
+
+<ul>
+  <li><b>WS1 — the shared base <span class="badge additive">additive</span>.</b> A
+    <code>TelephonyMediaStreamSource : PipelineSource</code> / <code>TelephonyMediaStreamSink : PipelineSink</code> pair in
+    a new <code>Voxa.Transports.Telephony</code> package that own the WebSocket read/write loops, the bounded outbound
+    queue with the same interruption-epoch purge as <code>WebSocketAudioSink</code>, and the sample-rate bridge — and
+    delegate the wire format to a small <b>codec seam</b>. This mirrors the proven
+    <code>WebSocketSttEngine</code> "shared base + thin vendor codecs" pattern from the STT work.</li>
+  <li><b>WS2 — the Twilio codec + endpoint <span class="badge p1">P1</span>.</b> A
+    <code>TwilioMediaStreamCodec</code> implementing the seam (parse <code>media</code>→PCM, serialize PCM→<code>media</code>,
+    <code>clear</code> on barge-in, capture <code>streamSid</code>) and a <code>MapVoxaTwilioVoice("/twilio")</code>
+    endpoint that returns TwiML on the webhook GET/POST and accepts the media WebSocket, composing the pipeline body via
+    the <em>same</em> <code>DefaultVoicePipelineComposer</code> as <code>UseDefaults()</code>.</li>
+  <li><b>WS3 — μ-law + sample-rate bridge <span class="badge p1">P1</span>.</b> A branchless G.711 PCMU
+    encode/decode (256-entry tables) and reuse of the existing, already-tested <code>LinearResampler</code> (promoted from
+    Studio into a shared package) to bridge 8&nbsp;kHz wire ↔ the pipeline's announced rate. When STT announces
+    8&nbsp;kHz (a cloud "telephony" model), the resample is a no-op.</li>
+  <li><b>WS4 — lifecycle &amp; barge-in mapping <span class="badge p1">P1</span>.</b> Map Twilio
+    <code>start</code>/<code>stop</code> to <code>StartFrame</code>/<code>EndFrame</code>, <code>InterruptionFrame</code> to
+    a Twilio <code>clear</code>, and (optionally) <code>mark</code> for playout completion. Telephony has <b>no acoustic
+    echo loop</b> (the caller hears the bot through the phone; Twilio never feeds bot audio back on the inbound track), so
+    barge-in here needs <em>no</em> AEC — strictly simpler than open-speaker barge-in.</li>
+  <li><b>WS5 — Azure ACS (design, deferred).</b> Same base, a <code>AcsMediaStreamCodec</code> that is even simpler
+    (ACS streams 16-bit PCM at 16&nbsp;kHz — no μ-law, no resample) and fits Voxa's existing Azure lean. Specced in §9;
+    implemented as a follow-up item.</li>
+</ul>
+
+<div class="callout good"><b>Net effect.</b> A phone call drives the existing pipeline by adding one package and one
+endpoint. No WebRTC, no new infrastructure for the deployer beyond a Twilio number + webhook URL. The middle of the
+pipeline — every processor, the composer, the diagnostics — is unchanged and untested-against because it never sees the
+transport.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Accept an inbound Twilio phone call and run the standard composed pipeline on it, speaking back down the call with
+    barge-in — keyless-of-WebRTC, over the WebSocket seam Voxa already has.</li>
+  <li>Define a <b>shared telephony media-stream base</b> (source/sink + codec seam) so a second vendor (ACS) is a thin
+    codec, not a second transport — mirroring <code>WebSocketSttEngine</code>.</li>
+  <li>Reuse <code>DefaultVoicePipelineComposer.Compose(IServiceProvider)</code> verbatim: the telephony endpoint composes
+    the identical <code>VAD → STT → … → TTS</code> body that <code>UseDefaults()</code> does. Telephony is purely an edge
+    skin.</li>
+  <li>Ship a correct, allocation-disciplined <b>μ-law codec</b> and reuse the existing tested <b>resampler</b> to bridge
+    8&nbsp;kHz ↔ the announced pipeline rate.</li>
+  <li>Map call lifecycle and barge-in to Voxa frames faithfully: <code>start/stop</code> ↔
+    <code>StartFrame/EndFrame</code>, <code>InterruptionFrame</code> → Twilio <code>clear</code>, epoch-purge stale bot
+    audio exactly as the native sink already does.</li>
+  <li>Honour every cross-cutting invariant: forward <code>StartFrame</code>/<code>EndFrame</code>; bounded
+    <code>DropOldest</code> on the inbound audio path and bounded <code>Wait</code> on the outbound control path; the
+    config-capture rule; <code>Voxa.Core</code> stays zero-dependency; one logical change per PR with a CHANGELOG entry;
+    this spec lands before any code.</li>
+</ul>
+
+<h3>Non-goals (this spec / first item)</h3>
+<ul>
+  <li><b>WebRTC of any kind.</b> No native WebRTC (SIPSorcery), no browser P2P, no media-server integration
+    (LiveKit/Daily). Those are separate, later decisions; telephony here is deliberately WebSocket-only because the
+    vendors deliver it that way.</li>
+  <li><b>Outbound / dial-out calls and call control.</b> VTL-001 handles an <em>inbound</em> media stream. Originating
+    calls, transfers, conferencing, and recording are Twilio REST/TwiML concerns outside the media path — deferred.</li>
+  <li><b>DTMF-as-frames.</b> The codec will parse the Twilio <code>dtmf</code> event, but mapping keypad digits to a
+    first-class frame (there is no <code>DtmfFrame</code> today) is a follow-up; for now it is logged/ignored behind a
+    seam hook.</li>
+  <li><b>A direct SIP path.</b> Bridging SIP without a provider (e.g. via SIPSorcery) is explicitly out — it reintroduces
+    exactly the stack telephony-over-provider lets us avoid.</li>
+  <li><b>A Studio surface.</b> Studio hosts the in-process mic/speaker transport; it is not a softphone. No telephony UI.</li>
+  <li><b>Shipping ACS.</b> ACS is designed (§9) but implemented as its own follow-up item.</li>
+</ul>
+
+<h3>Budgets</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Pipeline-body identity</td><td>The composed <code>VAD → STT → … → TTS</code> body is produced by the <b>same</b> <code>Compose(IServiceProvider)</code> call as the native route — <b>byte-identical processor list</b> for a given config. Telephony adds only edge source/sink.</td></tr>
+  <tr><td>Default-build weight</td><td><b>0</b> change for hosts that don't reference the telephony package. <code>Voxa.Transports.Telephony</code> depends only on Core (frames/processors) + <code>Microsoft.AspNetCore</code> abstractions it needs for the endpoint — no Azure, ONNX, native, or WebRTC dependency. <code>Voxa.Transports.Twilio</code> adds no third-party SDK (the wire is hand-rolled JSON, same as <code>WireProtocol</code>).</td></tr>
+  <tr><td>Per-frame allocations (hot path)</td><td>μ-law decode/encode use shared 256-entry tables; the 8&nbsp;kHz↔rate resample reuses the existing <code>LinearResampler</code>. One exact-size PCM buffer per inbound 20&nbsp;ms chunk becomes the <code>AudioRawFrame</code> payload (matching the native source's "must not come from a pool" rule); outbound base64 is encoded into pooled scratch.</td></tr>
+  <tr><td>Latency added by the edge</td><td>μ-law table lookup + linear resample on a 160-byte chunk is sub-millisecond and off the model critical path; the budget is "negligible vs. STT/LLM/TTS." No jitter buffer is added (the pipeline's bounded channels + VAD already absorb timing).</td></tr>
+  <tr><td>Test lane</td><td>Codec parse/serialize, μ-law round-trip, resample round-trip, and lifecycle/epoch mapping are <b>offline unit tests</b> with a fake WebSocket — no Twilio account, no network. (Live-wire validation is a manual lane, §13 caveat.)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — where telephony plugs into the seam</h2>
+
+<p>The native HTTP host builds a connection like this (<code>MapVoxaVoiceExtensions.HandleContextAsync</code>): accept
+the WebSocket, build <code>WebSocketAudioSource</code> → the composed <code>Parts</code> → <code>WebSocketAudioSink</code>,
+run the <code>PipelineRunner</code>, and inject a <code>SessionInfoFrame</code> announcing the rates. Telephony is the
+<em>same five steps</em> with a telephony source/sink and a TwiML pre-step:</p>
+
+<pre><code> PSTN ──▶ <span class="cm">Twilio</span> ──(wss: JSON + base64 μ-law 8 kHz)──▶ <span class="cm">[ Twilio media WebSocket ]</span>
+                                                          │
+   ┌──────────────────────────────────────────────────────┘
+   ▼
+ <span class="cm">TelephonyMediaStreamSource</span>  ── decode μ-law → resample 8k→Nk → AudioRawFrame ──▶ ┐
+   (PipelineSource)                                                                 │
+                                                                                    ▼
+        <span class="cm">VAD ──▶ STT ──▶ filter ──▶ agent ──▶ aggregator ──▶ TTS</span>   <span class="cm">(unchanged composed body)</span>
+                                                                                    │
+ <span class="cm">TelephonyMediaStreamSink</span>  ◀── encode μ-law ◀── resample Nk→8k ◀── AudioRawFrame ◀┘
+   (PipelineSink) ── JSON media/clear/mark ──▶ Twilio ──▶ PSTN</code></pre>
+
+<p>The middle is produced by the same composer. The only seam-level decisions are: how the source turns inbound bytes
+into <code>AudioRawFrame</code>s, and how the sink turns outbound <code>AudioRawFrame</code>s back into Twilio messages —
+which is exactly what a <b>codec</b> abstracts.</p>
+
+<h3>File-change table</h3>
+<table>
+  <tr><th>File / project</th><th>Change</th></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Telephony/ITelephonyMediaCodec.cs</span> <i>(new)</i></td><td>WS1 — the codec seam: parse one inbound message → frames; serialize an outbound <code>AudioRawFrame</code> → wire bytes; build <code>clear</code>/<code>mark</code>; surface the resolved input/output media format.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Telephony/TelephonyMediaStreamSource.cs</span> <i>(new)</i></td><td>WS1 — <code>PipelineSource</code>: WebSocket read loop, hand each text message to the codec, decode+resample audio to <code>AudioRawFrame</code>, ingest control frames. Models <code>WebSocketAudioSource</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Telephony/TelephonyMediaStreamSink.cs</span> <i>(new)</i></td><td>WS1 — <code>PipelineSink</code>: bounded outbound queue + interruption-epoch purge (copied discipline from <code>WebSocketAudioSink</code>), resample+encode bot audio via the codec, emit <code>clear</code> on barge-in, complete on <code>EndFrame</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Telephony/MuLaw.cs</span> <i>(new)</i></td><td>WS3 — G.711 PCMU encode/decode via static 256-entry tables. Pure, allocation-free, unit-tested round-trip.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Audio.Abstractions/LinearResampler.cs</span> <i>(promote)</i></td><td>WS3 — promote the existing, tested <code>apps/Voxa.Studio/Audio/LinearResampler.cs</code> into a shared package so the framework transport (and Studio) share one implementation. Move its tests with it. <i>(Alternative: a private copy in the telephony package; promotion preferred to avoid divergence.)</i></td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Twilio/TwilioMediaStreamCodec.cs</span> <i>(new)</i></td><td>WS2 — implements <code>ITelephonyMediaCodec</code> for Twilio: parse <code>connected/start/media/dtmf/stop</code>, serialize outbound <code>media</code>, build <code>clear</code>/<code>mark</code>, hold <code>streamSid</code>. Hand-rolled <code>System.Text.Json</code>, no SDK.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.Transports.Twilio/MapVoxaTwilioVoice.cs</span> <i>(new)</i></td><td>WS2 — endpoint: webhook returns TwiML <code>&lt;Connect&gt;&lt;Stream url="wss://…"/&gt;</code>; the wss route accepts the media WebSocket and runs source→composed parts→sink via <code>PipelineRunner</code>. Mirrors <code>MapVoxaVoiceExtensions</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">src/Voxa.AspNetCore/DefaultVoicePipelineComposer.cs</span></td><td><b>Reference only / no change.</b> <code>Compose(IServiceProvider)</code> already returns a transport-agnostic <code>ComposedVoice</code>; the telephony endpoint calls it exactly like <code>VoxaVoiceRoute.UseDefaults()</code>.</td></tr>
+  <tr><td><span class="filelabel" style="margin:0">Voxa.slnx · src/Voxa/Voxa.csproj · src/Voxa/VoxaDefaults.cs</span></td><td>WS2 — add the two projects + their test projects to the solution; the meta-package references them; no auto-registration needed (the endpoint is opt-in via <code>MapVoxaTwilioVoice</code>, not the provider registry).</td></tr>
+</table>
+
+<div class="callout"><b>Invariant.</b> Inbound, the source emits <code>AudioRawFrame(Pcm, SampleRate, Channels)</code> at the
+pipeline's announced input rate (after resample); outbound, the sink consumes <code>AudioRawFrame</code> at the announced
+output rate and resamples down to 8&nbsp;kHz before μ-law encoding. The source/sink forward
+<code>StartFrame</code>/<code>EndFrame</code> and every non-audio frame exactly as the native pair does — or the sink
+never completes and the runner hangs (the same deadlock <code>WebSocketAudioSink</code> guards against on client
+disconnect).</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the shared telephony media-stream base</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Transports.Telephony <i>(new)</i></span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (WS lifecycle/threading)</span>
+  <span><b>Network</b> inbound WebSocket only</span>
+  <span><b>Surface</b> additive (new source/sink + codec seam)</span>
+</div>
+
+<p>The base owns everything that is vendor-independent: the server WebSocket receive/send loops, the bounded outbound
+queue with the barge-in epoch purge, the resample bridge, and the frame mapping. The vendor supplies only the wire
+format through a tiny codec — exactly how <code>WebSocketSttEngine</code> owns the ClientWebSocket and delegates
+<code>ParseMessage</code>/<code>BuildCloseMessage</code> to each STT vendor.</p>
+
+<span class="filelabel">src/Voxa.Transports.Telephony/ITelephonyMediaCodec.cs (new — sketch)</span>
+<pre><code>namespace Voxa.Transports.Telephony;
+
+<span class="cm">/// &lt;summary&gt;</span>
+<span class="cm">/// Per-vendor wire codec for a telephony media stream (Twilio Media Streams, Azure ACS, …). The shared</span>
+<span class="cm">/// source/sink own the WebSocket, the outbound queue + barge-in purge, and the sample-rate bridge; the</span>
+<span class="cm">/// codec owns ONLY the JSON/base64 framing and the vendor's negotiated media format.</span>
+<span class="cm">/// &lt;/summary&gt;</span>
+public interface ITelephonyMediaCodec
+{
+    <span class="cm">/// &lt;summary&gt;The wire media format (e.g. μ-law 8 kHz mono for Twilio, PCM16 16 kHz for ACS). The base</span>
+    <span class="cm">/// uses Rate to size the 8k↔pipeline resample and Encoding to pick μ-law vs. raw PCM.&lt;/summary&gt;</span>
+    TelephonyMediaFormat WireFormat { get; }
+
+    <span class="cm">/// &lt;summary&gt;Parse one inbound text message into zero or more transport events: decoded near-end audio</span>
+    <span class="cm">/// (still at wire rate/encoding — the base resamples), start/stop lifecycle, dtmf, or "ignore".</span>
+    <span class="cm">/// Returns the raw wire audio bytes; the base does μ-law decode + resample so every codec stays trivial.&lt;/summary&gt;</span>
+    TelephonyInbound Parse(ReadOnlySpan&lt;byte&gt; utf8Message);
+
+    <span class="cm">/// &lt;summary&gt;Serialize one chunk of outbound audio (already wire-rate, wire-encoding) into a vendor</span>
+    <span class="cm">/// "media" message addressed to the active stream.&lt;/summary&gt;</span>
+    byte[] BuildMedia(ReadOnlyMemory&lt;byte&gt; wireAudio);
+
+    <span class="cm">/// &lt;summary&gt;The vendor's "flush my buffered playout now" message (Twilio: clear). Sent on barge-in so</span>
+    <span class="cm">/// the caller stops hearing now-stale bot audio almost immediately. Null ⇒ vendor has no flush.&lt;/summary&gt;</span>
+    byte[]? BuildClear();
+
+    <span class="cm">/// &lt;summary&gt;Optional playout marker (Twilio: mark) to detect when the caller has heard a chunk. Null ⇒ unsupported.&lt;/summary&gt;</span>
+    byte[]? BuildMark(string name);
+}</code></pre>
+
+<p>The base source's read loop is the native source's loop with the codec spliced in. Note the inbound media on
+telephony arrives as <b>text</b> JSON (not binary), so unlike <code>WebSocketAudioSource</code> the audio path goes
+through <code>Parse</code> too:</p>
+
+<span class="filelabel">src/Voxa.Transports.Telephony/TelephonyMediaStreamSource.cs (new — sketch, read loop core)</span>
+<pre><code>var inbound = _codec.Parse(message.Span);
+switch (inbound.Kind)
+{
+    case TelephonyInboundKind.Audio:
+        <span class="cm">// wire (μ-law 8k) → PCM16 8k → PCM16 Nk (announced input rate). One exact-size array → frame payload.</span>
+        var pcm8  = _muLaw.Decode(inbound.WireAudio.Span);              <span class="cm">// μ-law → PCM16 @ 8 kHz</span>
+        var pcmIn = _bridge.ToPipeline(pcm8);                           <span class="cm">// 8 kHz → InputSampleRate (no-op if equal)</span>
+        await IngestAsync(new AudioRawFrame(pcmIn, _inputRate, 1), ct).ConfigureAwait(false);
+        break;
+    case TelephonyInboundKind.Start:
+        <span class="cm">// streamSid captured inside the codec; optionally announce a SessionInfoFrame here.</span>
+        break;
+    case TelephonyInboundKind.Stop:
+        await IngestAsync(new EndFrame(), ct).ConfigureAwait(false);
+        return;
+    case TelephonyInboundKind.Dtmf:   <span class="cm">// VTL-001: logged behind a hook; DtmfFrame is a follow-up.</span>
+    case TelephonyInboundKind.Ignore:
+        break;
+}</code></pre>
+
+<div class="callout"><b>Why a base, not just a Twilio source.</b> The user explicitly favours a shared base, and it is the
+right factoring regardless of how many vendors ship: the WebSocket lifecycle, the bounded outbound queue, the barge-in
+epoch purge, the resample bridge, and the <code>EndFrame</code>/runner-completion discipline are <em>identical</em> for
+Twilio and ACS — only the JSON shapes and the wire media format differ. Putting them in the base means the ACS codec
+(§9) is ~60 lines, exactly as <code>AssemblyAISttEngine</code> is a thin subclass of <code>WebSocketSttEngine</code>.</div>
+
+<div class="callout warn"><b>Threading &amp; backpressure, copied from the native sink.</b> The outbound queue is a
+<code>BoundedChannel</code> (<code>Wait</code> for control, the audio purged by epoch on <code>InterruptionFrame</code>),
+a single writer task drains it to the socket, and <code>EndFrame</code> completes the channel unconditionally so a caller
+hang-up (socket already closed) can't deadlock the data loop — the exact failure <code>WebSocketAudioSink</code>
+documents and guards. The base reuses that proven shape verbatim rather than re-deriving it.</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the Twilio Media Streams codec + TwiML endpoint</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Transports.Twilio <i>(new)</i></span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (live wire protocol)</span>
+  <span><b>SDK</b> none — hand-rolled JSON</span>
+  <span><b>Wire</b> μ-law 8 kHz mono, base64</span>
+</div>
+
+<h3>The Twilio Media Streams protocol (inbound, JSON text)</h3>
+<table>
+  <tr><th>event</th><th>Shape (abridged)</th><th>Maps to</th></tr>
+  <tr><td><code>connected</code></td><td><code>{"event":"connected","protocol":"Call","version":"1.0.0"}</code></td><td>ignore (handshake)</td></tr>
+  <tr><td><code>start</code></td><td><code>{"event":"start","start":{"streamSid":"MZ…","callSid":"CA…","mediaFormat":{"encoding":"audio/x-mulaw","sampleRate":8000,"channels":1},"customParameters":{…}},"streamSid":"MZ…"}</code></td><td>capture <code>streamSid</code>; <code>customParameters</code> → hello-metadata; optional <code>SessionInfoFrame</code></td></tr>
+  <tr><td><code>media</code></td><td><code>{"event":"media","media":{"track":"inbound","chunk":"1","timestamp":"5","payload":"&lt;base64 μ-law&gt;"},"streamSid":"MZ…"}</code></td><td><code>AudioRawFrame</code> (after base64→μ-law→PCM→resample)</td></tr>
+  <tr><td><code>dtmf</code></td><td><code>{"event":"dtmf","dtmf":{"digit":"1"},"streamSid":"MZ…"}</code></td><td>logged behind a hook (DtmfFrame deferred)</td></tr>
+  <tr><td><code>mark</code></td><td><code>{"event":"mark","mark":{"name":"…"},"streamSid":"MZ…"}</code></td><td>playout reached our mark — optional barge-in/playout signal</td></tr>
+  <tr><td><code>stop</code></td><td><code>{"event":"stop","stop":{"callSid":"CA…"},"streamSid":"MZ…"}</code></td><td><code>EndFrame</code></td></tr>
+</table>
+
+<h3>Outbound (server → Twilio, JSON text)</h3>
+<pre><code><span class="cm">// bot audio (must be base64 μ-law 8 kHz mono):</span>
+{"event":"media","streamSid":"MZ…","media":{"payload":"&lt;base64 μ-law&gt;"}}
+<span class="cm">// barge-in — flush everything Twilio has buffered for playout:</span>
+{"event":"clear","streamSid":"MZ…"}
+<span class="cm">// optional playout marker (Twilio echoes it back as an inbound mark when reached):</span>
+{"event":"mark","streamSid":"MZ…","mark":{"name":"utt-7-end"}}</code></pre>
+
+<span class="filelabel">src/Voxa.Transports.Twilio/TwilioMediaStreamCodec.cs (new — sketch)</span>
+<pre><code>public sealed class TwilioMediaStreamCodec : ITelephonyMediaCodec
+{
+    private string? _streamSid;
+    public TelephonyMediaFormat WireFormat =&gt; TelephonyMediaFormat.MuLaw8k;   <span class="cm">// μ-law, 8000, mono</span>
+
+    public TelephonyInbound Parse(ReadOnlySpan&lt;byte&gt; utf8)
+    {
+        <span class="cm">// Utf8JsonReader, no intermediate string — same approach as WireProtocol.TryParseClientMessage.</span>
+        <span class="cm">// "media" → base64-decode media.payload into wire μ-law bytes; "start" → capture streamSid; etc.</span>
+    }
+
+    public byte[] BuildMedia(ReadOnlyMemory&lt;byte&gt; wireMuLaw)            <span class="cm">// {"event":"media","streamSid":…,"media":{"payload":base64}}</span>
+        =&gt; TwilioJson.Media(_streamSid!, wireMuLaw);
+    public byte[]? BuildClear() =&gt; TwilioJson.Clear(_streamSid!);       <span class="cm">// {"event":"clear","streamSid":…}</span>
+    public byte[]? BuildMark(string name) =&gt; TwilioJson.Mark(_streamSid!, name);
+}</code></pre>
+
+<h3>The endpoint &amp; TwiML</h3>
+<p>Twilio first hits your <em>webhook</em> (a normal HTTP request configured on the phone number) and expects TwiML in
+response; the TwiML's <code>&lt;Stream url&gt;</code> tells Twilio which <code>wss://</code> to open for the media. The
+endpoint therefore has two faces on one helper:</p>
+
+<span class="filelabel">src/Voxa.Transports.Twilio/MapVoxaTwilioVoice.cs (new — sketch)</span>
+<pre><code><span class="cm">// 1) Webhook: return TwiML pointing Twilio at the media wss route.</span>
+endpoints.MapPost(pattern, ctx =&gt;
+{
+    var wss = $"wss://{ctx.Request.Host}{pattern}/media";
+    ctx.Response.ContentType = "text/xml";
+    return ctx.Response.WriteAsync(
+        $"&lt;Response&gt;&lt;Connect&gt;&lt;Stream url=\"{wss}\"/&gt;&lt;/Connect&gt;&lt;/Response&gt;");
+});
+
+<span class="cm">// 2) Media stream: accept the WebSocket, compose the SAME pipeline body as UseDefaults(), run it.</span>
+endpoints.MapGet($"{pattern}/media", async ctx =&gt;
+{
+    if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
+    using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
+
+    var composed = ctx.RequestServices.GetRequiredService&lt;DefaultVoicePipelineComposer&gt;().Compose(ctx);
+    var codec  = new TwilioMediaStreamCodec();
+    var source = new TelephonyMediaStreamSource(socket, codec, composed.InputSampleRate);
+    var sink   = new TelephonyMediaStreamSink(socket, codec, composed.OutputSampleRate);
+
+    var b = Pipeline.Build().Source(source);
+    foreach (var f in composed.Parts) b.Then(f(ctx.RequestServices));
+    var pipeline = b.Sink(sink);
+
+    await using var runner = new PipelineRunner(pipeline, ctx.RequestAborted);
+    await runner.StartAsync(ct: ctx.RequestAborted);
+    await runner.WaitAsync().WaitAsync(ctx.RequestAborted);
+});</code></pre>
+
+<div class="callout"><b>Same composer, same body.</b> The media route resolves <code>DefaultVoicePipelineComposer</code> and
+calls <code>Compose(ctx)</code> — the identical call <code>VoxaVoiceRoute.UseDefaults()</code> makes. The processor list
+is whatever the host configured (STT/TTS/VAD/profile); telephony does not fork it. The only telephony-specific objects
+are the source, the sink, and the codec.</div>
+
+<div class="callout warn"><b>Security note.</b> The webhook should validate Twilio's <code>X-Twilio-Signature</code> (HMAC
+over the request URL + params with your auth token) before returning TwiML, and the media route should be reachable only
+over TLS (<code>wss</code>). VTL-001 provides a hook for signature validation; enabling it is a host concern documented
+in the README. Without it, anyone who learns the URL can open a media stream.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — μ-law (G.711) &amp; the sample-rate bridge</h2>
+
+<div class="ws-head">
+  <span><b>Codec</b> G.711 PCMU (μ-law)</span>
+  <span><b>Tables</b> 256-entry, static</span>
+  <span><b>Resampler</b> existing LinearResampler (promoted)</span>
+  <span><b>No-op case</b> announced rate == 8 kHz</span>
+</div>
+
+<p>μ-law is a fixed, standardized companding of 14-bit PCM into 8 bits. Decode is a direct 256-entry table
+(<code>byte → short</code>); encode is the standard segment/quantize algorithm, precomputable into a table keyed on the
+top bits of the sample. Both are pure and allocation-free; the round-trip is lossy only to μ-law's quantization (exactly
+what the PSTN already imposes), so a decode→encode round-trip of μ-law-origin audio is a faithful identity for test
+purposes within one quantization step.</p>
+
+<span class="filelabel">src/Voxa.Transports.Telephony/MuLaw.cs (new — sketch)</span>
+<pre><code>public static class MuLaw
+{
+    private static readonly short[] DecodeTable = BuildDecodeTable();   <span class="cm">// 256 → PCM16</span>
+
+    public static void Decode(ReadOnlySpan&lt;byte&gt; muLaw, Span&lt;short&gt; pcm)
+    {
+        for (int i = 0; i &lt; muLaw.Length; i++) pcm[i] = DecodeTable[muLaw[i]];
+    }
+
+    public static byte EncodeSample(short pcm) { <span class="cm">/* standard G.711 segment + quantize */</span> }
+}</code></pre>
+
+<p><b>The bridge.</b> Telephony is 8&nbsp;kHz; the composed pipeline announces whatever STT/TTS resolve to
+(<code>ComposedVoice.InputSampleRate</code> / <code>OutputSampleRate</code>). The source resamples 8&nbsp;kHz →
+<code>InputSampleRate</code>; the sink resamples <code>OutputSampleRate</code> → 8&nbsp;kHz. Voxa already has a tested
+linear resampler — <code>apps/Voxa.Studio/Audio/LinearResampler.cs</code> with <code>LinearResamplerTests</code> — used
+to reconcile WASAPI mix formats. VTL-001 <b>promotes</b> it into a shared package (e.g. <code>Voxa.Audio.Abstractions</code>,
+which already hosts audio-edge types) so the framework transport and Studio share one tested implementation rather than
+duplicating it.</p>
+
+<table>
+  <tr><th>STT model</th><th>Announced input rate</th><th>Inbound bridge</th></tr>
+  <tr><td>WhisperCpp / most local + cloud models</td><td>16 kHz</td><td>resample 8 k → 16 k (band-limited; no new information, but matches the model's expected rate)</td></tr>
+  <tr><td>A cloud "telephony" model (e.g. Google <code>telephony</code>, Deepgram on 8 k)</td><td>8 kHz</td><td><b>no-op</b> — run the pipeline natively at 8 k, best fidelity + least work</td></tr>
+</table>
+
+<div class="callout good"><b>Linear is enough here.</b> The PSTN is band-limited to ~3.4&nbsp;kHz, so 8&nbsp;kHz already
+captures the signal; upsampling to 16&nbsp;kHz for an STT model is about matching the model's expected input, not
+recovering detail. A linear resampler is adequate and cheap; a higher-order (sinc) resampler is an optional later
+refinement and explicitly out of scope (§15).</div>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>WS4 — lifecycle &amp; barge-in mapping</h2>
+
+<div class="ws-head">
+  <span><b>start/stop</b> → StartFrame/EndFrame</span>
+  <span><b>InterruptionFrame</b> → Twilio clear</span>
+  <span><b>Echo</b> none (separate tracks)</span>
+  <span><b>Epoch purge</b> reused from native sink</span>
+</div>
+
+<h3>Lifecycle</h3>
+<ul>
+  <li><b>WebSocket open + <code>connected</code>:</b> the <code>PipelineRunner</code> injects the <code>StartFrame</code>
+    that fans out each processor's drain loop (same as the native route). <code>connected</code> itself is a handshake —
+    ignored by the codec.</li>
+  <li><b><code>start</code>:</b> capture <code>streamSid</code> (needed to address every outbound message) and the
+    <code>customParameters</code> (Twilio's mechanism to pass call metadata via <code>&lt;Parameter&gt;</code> in TwiML —
+    the natural analog of Voxa's <em>hello envelope</em>). Optionally emit a <code>SessionInfoFrame</code>.</li>
+  <li><b><code>stop</code> / socket close / caller hang-up:</b> ingest <code>EndFrame</code>; the sink completes its
+    outbound channel unconditionally (the native sink's anti-deadlock rule) and the runner drains to completion.</li>
+</ul>
+
+<h3>Barge-in — simpler on the phone than on a speaker</h3>
+<p>The output side already exists: Voxa fires an <code>InterruptionFrame</code> (or a <code>UserStartedSpeakingFrame</code>)
+on barge-in, and the native sink bumps an epoch and drops queued bot audio so the bot stops almost immediately. The
+telephony sink does the <em>same</em> epoch purge and additionally emits a Twilio <b><code>clear</code></b> so Twilio
+flushes whatever it has already buffered for playout toward the caller. That is the whole barge-in story for telephony:</p>
+
+<pre><code>InterruptionFrame ─▶ <span class="cm">Interlocked.Increment(epoch)</span>  <span class="cm">// stale bot audio in the queue is dropped by the writer</span>
+                  └▶ send <span class="cm">{"event":"clear","streamSid":…}</span>  <span class="cm">// Twilio drops what it already buffered</span></code></pre>
+
+<div class="callout good"><b>No AEC needed on a phone call.</b> Open-speaker barge-in is hard because the mic hears the
+bot through the room — which is why VRT-003 built the <code>IEchoCanceller</code> seam and why Voxa is half-duplex on
+speakers. <b>Telephony has no such loop:</b> Twilio sends you only the <em>inbound</em> (caller) track and never mixes
+the bot's outbound audio back into it, so the STT never hears the bot. Barge-in is therefore just VAD on a clean caller
+track + <code>clear</code> — no echo canceller, no half-duplex gate. Telephony is the <em>easier</em> full-duplex
+environment, not the harder one.</div>
+
+<div class="callout"><b>Mark-based playout (optional refinement).</b> Sending a Twilio <code>mark</code> after each
+utterance's audio and watching for the echoed inbound <code>mark</code> tells you when the caller has actually <em>heard</em>
+a chunk (vs. when you sent it). That sharpens "bot finished speaking" timing and barge-in accounting. VTL-001 wires the
+<code>BuildMark</code> hook but treats consuming marks as optional polish, not required for a working call.</div>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>WS5 — Azure ACS codec (second vendor; design)</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> Voxa.Transports.Acs <i>(follow-up item)</i></span>
+  <span><b>Wire</b> PCM16 16 kHz (no μ-law)</span>
+  <span><b>Resample</b> none (rate already matches)</span>
+  <span><b>Fit</b> Voxa's existing Azure lean</span>
+</div>
+
+<p>Azure Communication Services Call Automation streams call audio over a WebSocket too, but as <b>base64 PCM16 at
+16&nbsp;kHz mono</b> wrapped in ACS's own JSON envelopes (<code>AudioData</code> in / <code>StopAudio</code> for barge-in
+out). That makes the ACS codec <em>strictly simpler</em> than Twilio's: no μ-law table, and if STT announces 16&nbsp;kHz
+the resample bridge is a no-op. It also fits Voxa's stated Azure orientation (Speech / OpenAI / ACS already named in the
+design materials).</p>
+
+<p>On the shared base, ACS is a thin codec — the same way <code>AssemblyAISttEngine</code> is a thin
+<code>WebSocketSttEngine</code> subclass:</p>
+<ul>
+  <li><code>WireFormat =&gt; Pcm16_16k</code> (the base then skips μ-law decode/encode and, for a 16&nbsp;kHz pipeline,
+    skips resampling).</li>
+  <li><code>Parse</code> handles ACS's <code>AudioData</code> / metadata / stop envelopes.</li>
+  <li><code>BuildMedia</code> emits ACS outbound audio; <code>BuildClear</code> maps to ACS's stop-audio (barge-in).</li>
+  <li>The endpoint integrates with ACS Call Automation's media-streaming start instead of TwiML, but the WebSocket media
+    loop is the base's.</li>
+</ul>
+
+<p>ACS is designed here for completeness and to validate the base's vendor-neutrality, but it ships as its own follow-up
+item (its own PR, CHANGELOG entry, and live-validation caveat). VTL-001's deliverable scope is Twilio.</p>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Configuration reference</h2>
+
+<p>Telephony is an opt-in <em>endpoint</em>, not a provider in the <code>Voxa:Stt</code>/<code>Voxa:Tts</code> sense — you
+add it by mapping a route, like the native <code>MapVoxaVoice</code>. The pipeline body still comes from the standard
+<code>Voxa</code> config section (STT/TTS/VAD/profile), unchanged.</p>
+
+<span class="filelabel">Program.cs — mapping a Twilio voice endpoint</span>
+<pre><code>builder.Services.AddVoxa(builder.Configuration);   <span class="cm">// same providers/profile as any Voxa host</span>
+<span class="cm">// …</span>
+app.UseWebSockets();
+app.MapVoxaTwilioVoice("/twilio");                 <span class="cm">// webhook (TwiML) + /twilio/media (WebSocket)</span></code></pre>
+
+<span class="filelabel">appsettings.json — optional telephony knobs (under Voxa:Telephony)</span>
+<pre><code>{
+  "Voxa": {
+    "Stt": "WhisperCpp",         <span class="cm">// the pipeline body is composed exactly as usual…</span>
+    "Tts": "Kokoro",
+    "Telephony": {
+      "Twilio": {
+        "ValidateSignature": true,        <span class="cm">// verify X-Twilio-Signature on the webhook (recommended)</span>
+        "AuthToken": "",                  <span class="cm">// for signature validation (or via env / secrets)</span>
+        "PublicWssBaseUrl": ""            <span class="cm">// override the wss host in TwiML when behind a proxy/tunnel</span>
+      }
+    }
+  }
+}</code></pre>
+
+<table>
+  <tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+  <tr><td><code>Voxa:Telephony:Twilio:ValidateSignature</code></td><td><code>true</code></td><td>Verify Twilio's request signature on the webhook before returning TwiML. Disable only for local tunnels where the signature URL won't match.</td></tr>
+  <tr><td><code>Voxa:Telephony:Twilio:AuthToken</code></td><td>—</td><td>Twilio auth token used for signature validation. Honour the config-capture rule; read from the captured <code>IConfiguration</code> / environment, never <code>GetRequiredService&lt;IConfiguration&gt;()</code>.</td></tr>
+  <tr><td><code>Voxa:Telephony:Twilio:PublicWssBaseUrl</code></td><td>request host</td><td>Override the <code>wss://</code> host embedded in TwiML when the public URL differs from <code>Request.Host</code> (reverse proxy, ngrok).</td></tr>
+</table>
+
+<div class="callout"><b>Config-capture rule.</b> Any telephony option binding follows the same discipline as the composer,
+validator, and <code>DefaultAgentFactory</code>: capture the <code>IConfiguration</code> passed to <code>AddVoxa</code>;
+never service-locate <code>IConfiguration</code> (which breaks plain-<code>ServiceCollection</code> hosts — Studio,
+tests, CLI).</div>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Plan of action — phases &amp; dependencies</h2>
+<ol>
+  <li><b>Phase A — the shared base + μ-law + resampler (ships alone).</b> New <code>Voxa.Transports.Telephony</code>
+    package: <code>ITelephonyMediaCodec</code>, <code>TelephonyMediaStreamSource/Sink</code>, <code>MuLaw</code>, and the
+    promotion of <code>LinearResampler</code> into a shared package (moving its tests). A <code>FakeMediaCodec</code> in
+    tests proves the base end-to-end without any vendor. Pure additive; nothing references it yet.</li>
+  <li><b>Phase B — the Twilio codec + endpoint <span class="badge p1">P1</span>.</b> New
+    <code>Voxa.Transports.Twilio</code> package: <code>TwilioMediaStreamCodec</code> (parser + serializer, unit-tested
+    against captured sample envelopes), <code>MapVoxaTwilioVoice</code> (TwiML webhook + media route), signature-validation
+    hook. Add both projects + tests to <code>Voxa.slnx</code>; the meta-package references them. CHANGELOG entry.</li>
+  <li><b>Phase C — a runnable sample <span class="badge p2">P2</span>.</b> A
+    <code>samples/Voxa.Samples.TwilioServer</code> (or a documented snippet) showing the five-line setup + ngrok/tunnel
+    instructions, so the live path is reproducible.</li>
+  <li><b>Follow-up item (NOT this spec) — Azure ACS.</b> <code>Voxa.Transports.Acs</code> as a second codec on the same
+    base (§9): its own PR, CHANGELOG, and live-validation caveat.</li>
+  <li><b>Follow-up items — DTMF-as-frames, outbound/dial-out, mark-driven playout analytics.</b> Each small, each its own
+    change once the base is proven.</li>
+</ol>
+<p>One logical change per PR (CONTRIBUTING): Phase A, Phase B, and the sample are separate PRs; ACS and the follow-ups
+are their own items. Each PR adds an <code>[Unreleased]</code> CHANGELOG entry; this spec lands <b>before</b> any code.
+ROADMAP's "Not planned → Telephony (Twilio, SIP)" line is updated to point at this spec.</p>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">T1.1</span> New <code>Voxa.Transports.Telephony</code> project (Core + ASP.NET abstractions only; no Azure/ONNX/native/WebRTC dep); add to <code>Voxa.slnx</code>.
+    <span class="ac">AC: builds warnings-as-errors clean; references only what the endpoint needs.</span></li>
+  <li><span class="tid">T1.2</span> <code>ITelephonyMediaCodec</code> + <code>TelephonyMediaFormat</code> + <code>TelephonyInbound</code> seam types, with thread-safety/ownership doc-comments.
+    <span class="ac">AC: base owns WS/queue/resample; codec owns only framing + wire format.</span></li>
+  <li><span class="tid">T1.3</span> <code>TelephonyMediaStreamSource</code>: read loop → codec.Parse → μ-law decode → resample → <code>AudioRawFrame</code>; <code>stop</code>→<code>EndFrame</code>; forward control frames.
+    <span class="ac">AC: inbound audio array is exact-size (not pooled — it becomes the frame payload); <code>StartFrame</code>/<code>EndFrame</code> path intact.</span></li>
+  <li><span class="tid">T1.4</span> <code>TelephonyMediaStreamSink</code>: bounded outbound queue + single writer + interruption-epoch purge; resample+encode bot audio; <code>clear</code> on barge-in; complete channel unconditionally on <code>EndFrame</code>.
+    <span class="ac">AC: caller hang-up (socket closed) does not deadlock the data loop (the native-sink failure mode is regression-tested).</span></li>
+  <li><span class="tid">T1.5</span> <code>MuLaw</code> encode/decode (256-entry tables), allocation-free span APIs.
+    <span class="ac">AC: decode∘encode round-trip of μ-law-origin bytes is identity within one quantization step; fuzz over all 256 codes.</span></li>
+  <li><span class="tid">T1.6</span> Promote <code>LinearResampler</code> (+ tests) into a shared package; Studio references the shared copy.
+    <span class="ac">AC: Studio still green; no duplicate resampler; 8 k→16 k→8 k round-trip bounded-error test.</span></li>
+  <li><span class="tid">T1.7</span> <code>FakeMediaCodec</code> + base end-to-end test: synthetic inbound media → <code>AudioRawFrame</code>s; outbound <code>AudioRawFrame</code>s → media; <code>InterruptionFrame</code> → epoch bump + clear; <code>stop</code> → <code>EndFrame</code> → runner completes.</li>
+  <li><span class="tid">T2.1</span> <code>TwilioMediaStreamCodec.Parse</code> over <code>Utf8JsonReader</code> (no intermediate string): <code>connected/start/media/dtmf/mark/stop</code>; capture <code>streamSid</code>; base64-decode <code>media.payload</code>.</li>
+  <li><span class="tid">T2.2</span> <code>TwilioMediaStreamCodec.BuildMedia/BuildClear/BuildMark</code> (source-generated JSON, like <code>WireProtocol</code>).</li>
+  <li><span class="tid">T2.3</span> <code>MapVoxaTwilioVoice</code>: TwiML webhook (POST) + media route (GET/WS) composing via <code>DefaultVoicePipelineComposer.Compose(ctx)</code>; honours <code>PublicWssBaseUrl</code>.</li>
+  <li><span class="tid">T2.4</span> <code>X-Twilio-Signature</code> validation hook (HMAC over URL + params); on by default, fail-closed with an actionable message; disablable for tunnels.</li>
+  <li><span class="tid">T2.5</span> Codec unit tests against captured sample envelopes (a small fixture of real-shaped Twilio JSON); <code>customParameters</code> → hello-metadata.</li>
+  <li><span class="tid">T2.6</span> <code>Voxa.slnx</code> + meta-package references + CHANGELOG <code>[Unreleased]</code> entry + a <code>Voxa.Transports.Twilio/README.md</code>.</li>
+  <li><span class="tid">T3.1</span> Sample (<code>samples/Voxa.Samples.TwilioServer</code>) or documented snippet with tunnel + number-config instructions.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s13"><span class="secno">13.</span>Verification protocol</h2>
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>Default (offline) — codec</b></td><td>Parse a fixture of real-shaped Twilio envelopes (<code>connected/start/media/dtmf/mark/stop</code>); assert each maps to the right <code>TelephonyInbound</code>; assert <code>BuildMedia/Clear/Mark</code> emit the documented JSON addressed to the captured <code>streamSid</code>. No account, no network.</td></tr>
+  <tr><td><b>Default (offline) — μ-law &amp; resample</b></td><td>μ-law decode/encode round-trip over all 256 codes (identity within one quantization step); <code>LinearResampler</code> 8 k↔16 k round-trip within a bounded error; no-op when rates are equal.</td></tr>
+  <tr><td><b>Default (offline) — base lifecycle &amp; barge-in</b></td><td>With a <code>FakeMediaCodec</code> over a fake/in-memory WebSocket: synthetic <code>media</code> in produces <code>AudioRawFrame</code>s at the announced input rate; bot <code>AudioRawFrame</code>s out produce <code>media</code> messages; an <code>InterruptionFrame</code> bumps the epoch (stale queued audio dropped) <em>and</em> emits a <code>clear</code>; <code>stop</code>/socket-close yields <code>EndFrame</code> and the runner completes without deadlock.</td></tr>
+  <tr><td><b>Default (offline) — composition parity</b></td><td>Assert the telephony media route composes its processor body via the same <code>DefaultVoicePipelineComposer.Compose</code> result as the native route for a given config (the middle of the pipeline is identical; only source/sink differ).</td></tr>
+  <tr><td><b>Manual / live (caveat lane)</b></td><td>A real Twilio number → webhook (via a public URL / tunnel) → a real call: confirm two-way audio, barge-in (talking over the bot triggers <code>clear</code> and the bot stops), and clean hang-up. <b>Not in CI</b> (needs a Twilio account + PSTN). This is the load-bearing real-world check — see the caveat below.</td></tr>
+</table>
+
+<div class="callout warn"><b>Live-wire caveat (same discipline as the STT providers).</b> Like the streaming STT vendors
+added on <code>feat/stt-vendor-coverage</code>, the Twilio (and ACS) wire protocol here is <b>parser/spec-tested only</b>
+until run against the real service. The envelope shapes are from Twilio's public Media Streams docs and are stable, but
+exact field presence, base64 framing, chunk cadence, and <code>clear</code>/<code>mark</code> timing must be validated on
+a real call before this is relied on in production. The manual lane above is mandatory before declaring Twilio
+"verified," and the README must carry the caveat.</div>
+
+<!-- ============================================================ -->
+<h2 id="s14"><span class="secno">14.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td>Live wire protocol differs from the documented shapes (field names, chunk cadence, <code>clear</code> semantics), so offline-green code fails on a real call.</td><td class="sev-high">High</td><td>Mandatory manual live lane (§13) before "verified"; README caveat; codec parser is defensive (unknown events → ignore, like <code>WireProtocol</code> drops unknowns). Capture real sample envelopes into the test fixture once a call is made.</td></tr>
+  <tr><td>R2</td><td>WebSocket lifecycle/threading bug deadlocks the runner on hang-up (the exact failure <code>WebSocketAudioSink</code> documents).</td><td class="sev-med">Med</td><td>Copy the native sink's proven discipline verbatim: single writer task, <code>EndFrame</code> completes the channel unconditionally, best-effort drain. Regression test the socket-already-closed path.</td></tr>
+  <tr><td>R3</td><td>Sample-rate mismatch: the source emits audio at a rate the VAD/STT don't expect (the composer's per-frame rate check fails fast).</td><td class="sev-med">Med</td><td>The source resamples to <code>ComposedVoice.InputSampleRate</code> exactly; the sink resamples from <code>OutputSampleRate</code>. Round-trip test; no-op assertion when announced rate is 8 k.</td></tr>
+  <tr><td>R4</td><td>Barge-in feels laggy: epoch purge drops our queued audio but Twilio keeps playing its buffer.</td><td class="sev-med">Med</td><td>Always send <code>clear</code> alongside the epoch bump so Twilio flushes its playout buffer too; this is the documented Twilio barge-in mechanism. Mark-based timing (optional) sharpens it further.</td></tr>
+  <tr><td>R5</td><td>Unauthenticated media endpoint: anyone with the URL opens a stream / runs up cost.</td><td class="sev-med">Med</td><td><code>X-Twilio-Signature</code> validation on by default; <code>wss</code>-only; README documents locking the route down. Fail-closed if validation is enabled but the token is missing.</td></tr>
+  <tr><td>R6</td><td>μ-law / endianness / signedness bug produces garbled audio that's hard to spot in unit tests.</td><td class="sev-low">Low</td><td>Exhaustive 256-code round-trip test + a golden decode of a known μ-law vector; the live lane is the human ear check.</td></tr>
+  <tr><td>R7</td><td>Resampler duplication drifts (Studio's copy vs a telephony copy diverge).</td><td class="sev-low">Low</td><td>Promote one shared <code>LinearResampler</code> (T1.6) rather than copying; Studio references it. Single source of truth + one test suite.</td></tr>
+  <tr><td>R8</td><td>Scope creep into WebRTC/SIP because "telephony."</td><td class="sev-low">Low</td><td>Non-goals (§3) are explicit: provider-bridged WebSocket only; no SIP-direct, no WebRTC, no dial-out in VTL-001.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s15"><span class="secno">15.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>WebRTC of any kind</b> — native (SIPSorcery), browser P2P, or media-server integration (LiveKit/Daily). Telephony
+    here is deliberately WebSocket-only because the providers deliver it that way. Browser WebRTC is a separate, later
+    decision (and, when taken, likely a media-server integration rather than a .NET stack).</li>
+  <li><b>Azure ACS implementation</b> — designed in §9, shipped as its own follow-up item on the same base.</li>
+  <li><b>Outbound / dial-out calls, transfer, conferencing, recording</b> — Twilio REST/TwiML concerns outside the media
+    path.</li>
+  <li><b>DTMF-as-frames</b> — parsed-and-logged now; a first-class <code>DtmfFrame</code> (and IVR-style routing) is a
+    follow-up.</li>
+  <li><b>Direct SIP</b> — bridging SIP without a provider reintroduces the WebRTC/RTP/ICE stack telephony-over-provider
+    exists to avoid.</li>
+  <li><b>Higher-order (sinc) resampling</b> — linear is adequate for band-limited 8 kHz telephony; a better resampler is
+    an optional refinement, not part of VTL-001.</li>
+  <li><b>A Studio telephony surface</b> — Studio is not a softphone (per its spec's non-goals); no telephony UI.</li>
+  <li><b>Codec negotiation beyond μ-law/PCM16</b> — Opus or other Twilio/ACS formats are not handled; μ-law 8 k (Twilio)
+    and PCM16 16 k (ACS) cover the providers' defaults.</li>
+</ul>
+
+</div>
+</body>
+</html>
