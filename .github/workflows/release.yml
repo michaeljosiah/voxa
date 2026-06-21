@@ -16,6 +16,7 @@ jobs:
   publish:
     name: Pack & publish to NuGet
     runs-on: ubuntu-latest
+    timeout-minutes: 30   # fail fast if a step hangs instead of burning the runner for hours
     environment: dev
     permissions:
       contents: write
@@ -44,7 +45,11 @@ jobs:
         run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        run: dotnet test Voxa.slnx --configuration Release --no-build
+        # Exclude the LocalModels lane: those tests download real speech models (hundreds of MB) and
+        # have their own model-cached CI lane (ci.yml). Running them here with no cache hangs the release
+        # until timeout — v0.6.0-alpha's first attempt ran ~51 min before cancellation. This matches the
+        # ci.yml main lane and the documented inner-loop command.
+        run: dotnet test Voxa.slnx --configuration Release --no-build --filter "Category!=LocalModels"
 
       - name: Pack
         # Pack EVERY packable project under src/ (auto-discovered) rather than a hand-maintained list —
