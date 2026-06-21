@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Voxa.Processors;
 using Voxa.Services.MicrosoftAgents;
 using Voxa.Speech;
 
@@ -122,15 +123,21 @@ public class ComposerAgentConfiguratorTests
     }
 
     [Fact]
-    public void No_Configurator_Builds_The_Agent_Stage_With_BuiltIn_Memory()
+    public void Registering_A_Configurator_Does_Not_Change_The_Pipeline_Shape()
     {
-        var sp = SessionServices(configurator: null);
+        // The seam is options-only: a configurator mutates the agent's MicrosoftAgentVoiceOptions, it never
+        // adds or removes a stage. (Equivalence of the no-configurator *options* is guaranteed by the
+        // unchanged built-in wiring and exercised by the end-to-end route tests; here we pin the structure.)
+        var withoutSp = SessionServices(configurator: null);
+        var withSp = SessionServices(new CapturingConfigurator());
 
-        var composed = Composer(OptionsWith(conversationMemory: true)).Compose(sp);
+        var without = Composer(OptionsWith()).Compose(withoutSp);
+        var with = Composer(OptionsWith()).Compose(withSp);
 
-        // Part count unchanged (byte-identity guard) and the built-in path constructs without a configurator.
-        Assert.Equal(5, composed.Parts.Count);
-        Assert.NotNull(composed.Parts[AgentIndex](sp));
+        Assert.Equal(5, without.Parts.Count);
+        Assert.Equal(without.Parts.Count, with.Parts.Count);
+        Assert.IsType<AgentLoopProcessor>(without.Parts[AgentIndex](withoutSp));
+        Assert.IsType<AgentLoopProcessor>(with.Parts[AgentIndex](withSp));
     }
 
     [Fact]
