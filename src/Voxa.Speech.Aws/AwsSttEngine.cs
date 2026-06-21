@@ -47,7 +47,10 @@ public sealed class AwsSttEngine : ISpeechToTextEngine
         var response = await _client.StartStreamTranscriptionAsync(request, _cts.Token).ConfigureAwait(false);
         var stream = response.TranscriptResultStream;
         stream.TranscriptEventReceived += OnTranscript;
-        stream.ExceptionReceived += (_, _) => _acc.Complete();
+        // Do NOT complete the accumulator on a stream error — a transient blip would permanently deafen the
+        // session for the rest of its life. Let StopAsync own completion (same ownership as the WebSocket and
+        // Google read loops); the faulted processing task is awaited and swallowed there.
+        stream.ExceptionReceived += (_, _) => { };
         _processing = stream.StartProcessingAsync();
     }
 

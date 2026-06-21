@@ -33,6 +33,7 @@ builder.Services.AddVoxa(builder.Configuration, voxa =>
 |-----|---------|-------|
 | `Voxa:Speechmatics:ApiKey` | — | Required. Sent as `Authorization: Bearer`. |
 | `Voxa:Speechmatics:Language` | `en` | Transcription language. |
+| `Voxa:Speechmatics:InputSampleRate` | `16000` | PCM rate (`pcm_s16le`, mono). |
 | `Voxa:Speechmatics:ApiBaseUrl` | `wss://eu2.rt.speechmatics.com/v2` | Region / on-prem override. |
 
 Partials drive the live transcript; one final per utterance is emitted at the VAD / smart-turn

@@ -42,7 +42,6 @@ public sealed class StreamingTranscriptAccumulator
     /// Emits the running text as an interim for display (never a Voxa final — that comes from <see cref="Flush"/>).</summary>
     public void OnFragment(string text, bool isSegmentFinal, string? language)
     {
-        string running;
         lock (_lock)
         {
             // Drop a segment-final that lands within the late-final window after a flush — it's the just-flushed
@@ -60,29 +59,33 @@ public sealed class StreamingTranscriptAccumulator
             {
                 _interimTail = text;
             }
-            running = BuildRunning();
+
+            // Write under the lock (the channel is unbounded, so TryWrite never blocks) so a concurrent Flush's
+            // final on the data-loop thread can't be reordered ahead of this interim from the receive-loop thread.
+            var running = BuildRunning();
+            if (!string.IsNullOrEmpty(running))
+                _channel.Writer.TryWrite(new TranscriptionResult(running, IsFinal: false, language));
         }
-        if (!string.IsNullOrEmpty(running))
-            _channel.Writer.TryWrite(new TranscriptionResult(running, IsFinal: false, language));
     }
 
     /// <summary>Emit the accumulated utterance transcript as one final and reset (call at speech-end).</summary>
     public void Flush(string? language)
     {
-        string full;
         lock (_lock)
         {
-            full = BuildRunning();
+            var full = BuildRunning();
             _finalSegments.Clear();
             _interimTail = string.Empty;
             // Only arm the anti-bleed window when this flush actually emitted a final. An empty flush — the VAD
             // ended a turn before the provider produced any text — has nothing to bleed from, so the turn's real
             // (if late) final must be kept rather than dropped as a tail.
             _flushed = !string.IsNullOrWhiteSpace(full);
-            if (_flushed) _flushedAtMs = _nowMs();
+            if (_flushed)
+            {
+                _flushedAtMs = _nowMs();
+                _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language)); // under lock: ordering
+            }
         }
-        if (!string.IsNullOrWhiteSpace(full))
-            _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language));
     }
 
     /// <summary>

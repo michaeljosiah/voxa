@@ -33,6 +33,7 @@ builder.Services.AddVoxa(builder.Configuration, voxa =>
 | `Voxa:AssemblyAI:ApiKey` | — | Required. Sent in the `Authorization` header. |
 | `Voxa:AssemblyAI:FormatTurns` | `true` | Punctuated/cased turn transcripts. |
 | `Voxa:AssemblyAI:InputSampleRate` | `16000` | PCM rate (`pcm_s16le`, mono). |
+| `Voxa:AssemblyAI:ApiBaseUrl` | `wss://streaming.assemblyai.com/v3/ws` | Override for a proxy/region. |
 
 Like every Voxa streaming STT, interims drive the live transcript and a single final is emitted per
 utterance at the VAD / smart-turn boundary — see `WebSocketSttEngine`. MIT licensed.
