@@ -75,8 +75,11 @@ public sealed class StreamingTranscriptAccumulator
             full = BuildRunning();
             _finalSegments.Clear();
             _interimTail = string.Empty;
-            _flushed = true;            // arm the anti-bleed window
-            _flushedAtMs = _nowMs();
+            // Only arm the anti-bleed window when this flush actually emitted a final. An empty flush — the VAD
+            // ended a turn before the provider produced any text — has nothing to bleed from, so the turn's real
+            // (if late) final must be kept rather than dropped as a tail.
+            _flushed = !string.IsNullOrWhiteSpace(full);
+            if (_flushed) _flushedAtMs = _nowMs();
         }
         if (!string.IsNullOrWhiteSpace(full))
             _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language));

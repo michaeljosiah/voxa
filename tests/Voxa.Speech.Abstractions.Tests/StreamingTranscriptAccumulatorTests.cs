@@ -87,6 +87,20 @@ public class StreamingTranscriptAccumulatorTests
         Assert.Equal(new[] { "turn one", "turn two" }, finals); // A's tail never reaches B
     }
 
+    [Fact] // Codex P1 (round 5): a real final after an EMPTY VAD flush must be kept (empty flush must not arm the window).
+    public async Task A_real_final_after_an_empty_flush_is_kept()
+    {
+        long t = 1000;
+        var acc = new StreamingTranscriptAccumulator(() => t, lateFinalWindowMs: 500);
+        acc.Flush(null);                                    // empty flush (provider produced nothing yet) → window NOT armed
+        t = 1100;                                           // inside what would have been the window
+        acc.OnFragment("late hello", isSegmentFinal: true, null); // the turn's real, late final — must be kept
+        acc.Flush(null);
+
+        var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
+        Assert.Equal(new[] { "late hello" }, finals);
+    }
+
     [Fact] // Codex P2 (round 4): a user-start reset keeps a quick follow-up final that lands inside the window.
     public async Task OnUtteranceStart_keeps_a_quick_followup_final_within_the_window()
     {
