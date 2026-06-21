@@ -126,11 +126,48 @@ Estimated effort: ~2 weeks (server adapter ~1w + mobile client ~1w).
 
 The biggest adoption lever. Target: a working voice endpoint in ~5 lines plus one config block, with no knowledge of frames required.
 
-- **`AddVoxa()` + config-bound providers** — `services.AddVoxa(builder.Configuration)` reads a `"Voxa"` config section (`"Stt": "OpenAI"`, `"Tts": "ElevenLabs"`, `"Profile": "LowLatency"`) and registers engines/options in DI, so `app.MapVoxaVoice("/voice").UseDefaults()` composes the whole chained pipeline. Named **profiles** ("LowLatency" / "Quality" / "Cheap") bundle the tuning knobs from `docs/performance-tuning.md` (VAD hangover, eager first chunk, channel capacities) so users never have to learn them individually. `IHttpClientFactory` integration feeds/replaces `VoxaHttp.Shared` for hosts that need custom handlers or proxies.
+- ✅ **`AddVoxa()` + config-bound providers (shipped)** — `services.AddVoxa(builder.Configuration)` reads a `"Voxa"` config section (`"Stt": "OpenAI"`, `"Tts": "ElevenLabs"`, `"Profile": "LowLatency"`) and registers engines/options in DI, so `app.MapVoxaVoice("/voice").UseDefaults()` composes the whole chained pipeline. Named **profiles** ("LowLatency" / "Quality" / "Cheap") bundle the tuning knobs from `docs/performance-tuning.md` (VAD hangover, eager first chunk, channel capacities) so users never have to learn them individually. `IHttpClientFactory` integration feeds/replaces `VoxaHttp.Shared` for hosts that need custom handlers or proxies.
 - **`Voxa` meta-package + `dotnet new voxa-server` template** — one NuGet package pulling Core + Transports.WebSocket + AspNetCore with sensible defaults, and a project template that scaffolds the sample-server shape (voice endpoint, JS client page, appsettings placeholders).
-- **Official JS client — `@voxa/client` on npm** — typed wire protocol generated from the `WireMessages` DTOs (so client and server can't drift), mic capture via AudioWorklet, streaming PCM playback, and playback-buffer **flush on the `interruption` envelope** — the missing client half of barge-in (P2); today every consumer reimplements this by hand.
+- **Official JS client — `@voxa/client` on npm** — speced as **VDX-005** ([spec](docs/specifications/vdx-005-js-client-spec.html)); scoped breakdown below. **Do this first** of the remaining P5 items.
 
-Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS client ~4d).
+### `@voxa/client` (npm) — the official browser/JS client *(start here — [VDX-005 spec](docs/specifications/vdx-005-js-client-spec.html))*
+
+> **Why first.** The server is already a 5-line library call (`samples/Voxa.Samples.MinimalServer/Program.cs`); the *client* is the part every consumer re-hand-rolls — AudioWorklet mic capture, gap-free PCM playback, and the barge-in flush. It is also the missing half of true barge-in (P2): `WebSocketAudioSink` already purges queued bot audio on interruption (epoch bump), but only the client can stop audio it has already handed to the Web Audio graph. And it is *upstream* of the `dotnet new voxa-server` template and any future `voxa-server` tool — both produce an endpoint that needs a real client, not the throwaway test page. A complete reference implementation already exists end-to-end in `samples/Voxa.Samples.MinimalServer/wwwroot/{index.html,recorder-worklet.js}`; this item productizes it and closes the two gaps that page leaves open (tool-call round-trip, protocol-version checking).
+
+**Surface area (v0.1).** One `VoxaClient` over the *existing* wire protocol — the happy path needs no protocol changes:
+
+```ts
+const client = new VoxaClient("wss://host/voice", { hello?: {...} });
+await client.connect();                 // resolves on the `session` envelope
+client.onTranscription(t => …)          // { text, isFinal, language?, speakerId? }
+client.onText(chunk => …)               // streamed assistant text ({type:"text"})
+client.onSpeaking(s => …)               // { who:"bot"|"user", started }
+client.onToolCall(async c => {          // { callId, name, argumentsJson }
+  client.sendToolResult(c.callId, resultJson, isError?);
+});
+client.onStatus / onError / onEnd
+client.sendText("…"); client.end(); client.disconnect();
+```
+
+It owns: mic `getUserMedia` (echoCancellation/noiseSuppression/AGC on), an `AudioContext` at the server-announced `inputSampleRate`, the recorder worklet (20 ms Int16 frames), gap-free scheduled playback at `outputSampleRate`, and **`flushPlayback()` on both `interruption` *and* `speaking{who:"user",started:true}`** (stop scheduled source nodes, reset the play cursor) — the existing page already proves this is the correct trigger pair.
+
+**Wire protocol = a versioned contract, generated so it can't drift.** The downstream side is *already* versioned: `SessionInfoFrame(… ProtocolVersion = 1)` emits `{"type":"session","v":1,…}`. Formalize it:
+1. **Make inbound envelopes real DTOs.** Outbound envelopes are clean records in `src/Voxa.Transports.WebSocket/Protocol/WireMessages.cs`, but the inbound side (`end`/`text`/`toolResult`) is hand-parsed in `WireProtocol.TryParseClientMessage`. Add inbound record structs so *both* directions share one source of truth.
+2. **Generate TS from the DTOs.** A small generator (reflect over the `[JsonSerializable]` envelope records) emits a single `voxa-wire.schema.json`; `json-schema-to-typescript` produces `protocol.ts`. A CI **golden check** (same instinct as the existing byte-identical wire tests) fails if the committed TS is stale — client and server cannot drift.
+3. **Client honors `session.v`.** Expose it and warn (or refuse — configurable) on an unsupported major. Defer *hello-side* negotiation to the P7 "`v` in the hello envelope" item; note `hello` is **optional** today (default `UseDefaults()` never reads one via `UseWebSocketHello<T>`), so the client sends it only when configured.
+
+**Milestones.**
+- **M1** — typed protocol: inbound DTOs + codegen + golden check.
+- **M2** — `VoxaClient` happy path: connect → session → mic → transcription/text/speaking → playback (port `recorder-worklet.js`).
+- **M3** — barge-in: `flushPlayback` on interruption / user-speaking (closes the P2 client half).
+- **M4** — frontend tools: `onToolCall` / `sendToolResult` round-trip (absent from the test page today).
+- **M5** — packaging: ESM + types, framework-agnostic core, an optional thin `useVoxa` React hook, and an `examples/` vanilla page that replaces the inline test HTML.
+
+**Effort:** ~4–5 days (codegen + inbound DTOs ~1.5d, client core ~2d, tools + packaging ~1.5d).
+
+**Open questions.** (a) codegen mechanism — reflection-based emitter vs hand-authored TS guarded by a golden diff; (b) ship `@voxa/react` now or just document the hook; (c) fold a typed `hello` (agentId / future resume token) into v0.1 or wait for P7 + the session-resilience item under P6.
+
+Estimated effort (remaining P5): `@voxa/client` ~4–5d (**first**), then `Voxa` meta-package + `dotnet new voxa-server` template ~2d. `AddVoxa` shipped.
 
 ## P6 — Capability
 
@@ -146,7 +183,7 @@ Estimated effort: ~1.5 weeks (AddVoxa ~3d, meta-package + template ~2d, JS clien
 - ✅ **Per-stage latency waterfall** — shipped by VST-001 WS0: the per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → audio out) is derived inside `VoxaDiagnosticsHub` (a `StageLatencyTracker` over the hub's anchor events) and recorded as `voxa.stage.latency` histograms (tag `stage`), making `voxa.turn.ttfb` *diagnosable*. Enable with `Voxa:Diagnostics:Enabled`. Voxa Studio's Talk view renders it live; a `/voxa/debug` browser page over the same hub remains open for a follow-up.
 - **Runtime control envelope** — client-sent `{"type":"configure", ...}` to adjust VAD thresholds / voice / language mid-session (mobile acoustic environments vary wildly), guarded by a host-side allowlist.
 - **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load).
-- **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking.
+- **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking. *(The `session` envelope already carries `v` via `SessionInfoFrame.ProtocolVersion`; the DTO→TS generator and the inbound-envelope DTOs land with `@voxa/client` in P5 — this item adds the prose doc and **hello-side** negotiation on top.)*
 
 ## P8 — Voxa Studio (developer desktop app)
 

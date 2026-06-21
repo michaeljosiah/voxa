@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VDX-005 — @voxa/client: the official browser/JS client + versioned wire protocol</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .badge.spike { background: #3a2414; color: #ffb74d; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl input[type=checkbox] { margin-right: 10px; transform: scale(1.15); accent-color: var(--accent); }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-005 — <code>@voxa/client</code>: the official browser/JS client + versioned wire protocol</h1>
+  <div class="sub">An official, typed JavaScript/TypeScript client for the Voxa WebSocket voice endpoint — mic capture,
+    gap-free playback, and the <b>barge-in flush</b> every consumer reimplements by hand — plus the codegen that turns the
+    existing wire envelopes into a <b>versioned contract that client and server cannot drift apart on</b>. This is the
+    first of the remaining P5 developer-experience items, and it is <em>upstream</em> of the
+    <code>dotnet new voxa-server</code> template and any future <code>voxa-server</code> tool: both produce an endpoint
+    that needs a real client, not the throwaway test page.</div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-005 v1.0</div>
+    <div><b>Date</b> 2026-06-21</div>
+    <div><b>Status</b> Draft — ready to implement (M1 is pure-.NET)</div>
+    <div><b>Target</b> npm package (TypeScript / ESM) + <code>Voxa.Transports.WebSocket</code></div>
+    <div><b>Repository</b> Voxa (branch from <code>main</code>)</div>
+    <div><b>Roadmap item</b> P5 — Developer experience (do first)</div>
+    <div><b>Depends on</b> nothing — the server protocol already ships; <code>session.v</code> exists</div>
+    <div><b>Reference impl</b> <code>samples/Voxa.Samples.MinimalServer/wwwroot/{index.html,recorder-worklet.js}</code></div>
+    <div><b>Audience</b> Implementing engineer / agent</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#s1">What is this? — a plain-English explainer</a></li>
+    <li><a href="#s2">Executive summary</a></li>
+    <li><a href="#s3">Goals, non-goals &amp; budgets</a></li>
+    <li><a href="#s4">Architecture context — the wire protocol today</a></li>
+    <li><a href="#s5">WS1 — the versioned protocol contract (DTOs + codegen)</a></li>
+    <li><a href="#s6">WS2 — the <code>VoxaClient</code> runtime</a></li>
+    <li><a href="#s7">WS3 — packaging &amp; framework adapters</a></li>
+    <li><a href="#s8">Plan of action — phases</a></li>
+    <li><a href="#s9">Progress checklist</a></li>
+    <li><a href="#s10">Verification protocol</a></li>
+    <li><a href="#s11">Risk register</a></li>
+    <li><a href="#s12">Out of scope / deferred</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="secno">1.</span>What is this? — a plain-English explainer</h2>
+
+<div class="explain">
+  <div class="qa">
+    <b>What does VDX-005 add, in one sentence?</b>
+    <p>An npm package, <code>@voxa/client</code>, that a web app imports to talk to a Voxa voice endpoint — it captures the
+    microphone, streams it to the server, plays the bot's audio back gap-free, surfaces transcripts and tool calls as typed
+    events, and — critically — <em>stops the bot's audio the instant the user barges in</em>.</p>
+  </div>
+  <div class="qa">
+    <b>Why is this the highest-leverage P5 item?</b>
+    <p>Three reasons. <b>(1) It's the piece everyone rebuilds.</b> The server is already a five-line library call
+    (<code>MapVoxaVoice("/voice").UseDefaults()</code>); the <em>client</em> — AudioWorklet mic capture, PCM playback, the
+    wire envelopes — gets hand-written by every consumer. <b>(2) It's the missing half of barge-in.</b> The server already
+    purges queued bot audio on interruption (<code>WebSocketAudioSink</code>'s epoch purge), but only the browser can stop
+    audio it has <em>already handed to the Web Audio graph</em>. Without the client half, the bot keeps talking for ~a
+    sentence after you cut in. <b>(3) It's upstream of the other P5 items.</b> The <code>dotnet new voxa-server</code>
+    template and any <code>voxa-server</code> CLI both produce an endpoint that needs a real client to be usable.</p>
+  </div>
+  <div class="qa">
+    <b>Does the wire protocol have to change?</b>
+    <p>No — the happy path runs over the protocol exactly as it ships today. What this item <em>adds</em> is discipline:
+    the downstream side is already versioned (the <code>session</code> envelope carries <code>"v":1</code>), so the client
+    simply <em>honors</em> that version, and we generate the TypeScript types from the C# envelope records so the two ends
+    cannot silently drift. The only server-side code change is internal: express the three inbound envelopes as records
+    too, so both directions share one source of truth — wire-format unchanged, guarded by the existing byte-identical
+    golden tests.</p>
+  </div>
+  <div class="callout good"><b>A complete reference implementation already exists.</b> The local-voice test page —
+  <code>samples/Voxa.Samples.MinimalServer/wwwroot/index.html</code> plus <code>recorder-worklet.js</code> — already does
+  the mic capture, the gap-free playback, and the barge-in flush correctly. VDX-005 is mostly <em>productizing that page
+  into a typed, tested, published package</em>, and closing the two gaps it leaves open: it never round-trips tool calls,
+  and it ignores the protocol version.</div>
+  <div class="qa">
+    <b>What does it explicitly not change?</b>
+    <p><code>Voxa.Core</code> stays zero-dependency. The outbound wire bytes are untouched. The <code>AddVoxa</code> /
+    composer layer, the CLI, and the MCP server are all untouched. Native mobile clients (Flutter, Swift, Kotlin) are
+    <em>separate</em> consumers and out of scope here, exactly as VDX-004 keeps mobile bindings in sibling repos.</p>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="secno">2.</span>Executive summary</h2>
+
+<p>VDX-005 ships the client half of the Voxa voice loop as an official, framework-agnostic npm package, and formalizes the
+wire protocol into a generated, versioned contract along the way. It is three workstreams, sequenced so the first is pure
+.NET and testable in the existing suite before a line of TypeScript is written:</p>
+
+<ul>
+  <li><b>WS1 — the versioned protocol contract <span class="badge additive">pure .NET first</span>.</b> Express the inbound
+    (client&nbsp;&rarr;&nbsp;server) envelopes as records alongside the outbound ones in
+    <code>WireMessages.cs</code>, then generate a single <code>voxa-wire.schema.json</code> from the
+    <code>[JsonSerializable]</code> envelope types and a <code>protocol.ts</code> from that schema, each guarded by a CI
+    golden check. The client honors the <code>session.v</code> the server already emits.</li>
+  <li><b>WS2 — the <code>VoxaClient</code> runtime <span class="badge p2">the package</span>.</b> One class over the wire
+    protocol: connect &rarr; await <code>session</code> &rarr; mic capture at the announced input rate &rarr; typed events
+    (transcription, text, speaking, toolCall, status, error, end) &rarr; gap-free playback at the announced output rate
+    &rarr; <b>flush on interruption / user-speaking</b>. Audio is behind a backend seam so the core is unit-testable
+    headless, matching how Voxa fakes engines/transports in its own tests.</li>
+  <li><b>WS3 — packaging &amp; adapters <span class="badge p2">distribution</span>.</b> ESM + type declarations on npm,
+    a framework-agnostic core, and one thin optional React hook (<code>useVoxa</code>). The inline test HTML is replaced
+    by an <code>examples/</code> page that consumes the package.</li>
+</ul>
+
+<div class="callout"><b>Net position.</b> After VDX-005, a web developer adds voice with <code>npm i @voxa/client</code> and
+~10 lines — no hand-rolled AudioWorklet, no PCM scheduling, and barge-in that actually works. The server and client can no
+longer drift, because both ends are generated from one set of records and the version is checked at runtime. And the
+remaining P5 items (template, <code>voxa-server</code>) inherit a real client instead of a toy page.</div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="secno">3.</span>Goals, non-goals &amp; budgets</h2>
+
+<h3>Goals</h3>
+<ul>
+  <li>Publish <code>@voxa/client</code> — a typed, framework-agnostic browser client that captures mic audio, plays bot
+    audio gap-free, and surfaces the full envelope set as typed events.</li>
+  <li>Implement the <em>client half of barge-in</em>: flush local playback on the <code>interruption</code> envelope
+    <em>and</em> on <code>speaking{who:"user",started:true}</code> — the trigger pair the reference page already proves
+    correct.</li>
+  <li>Round-trip frontend tools: deliver <code>toolCall</code> to the host and send <code>toolResult</code> back — the one
+    protocol feature the reference page omits.</li>
+  <li>Make the wire protocol a <b>generated, versioned contract</b>: TypeScript types emitted from the C# envelope
+    records, a runtime <code>session.v</code> check, and CI golden checks that fail on drift.</li>
+  <li>Keep the client core unit-testable with no browser — audio and transport behind seams, driven by a mock WebSocket.</li>
+</ul>
+
+<h3>Non-goals (this spec)</h3>
+<ul>
+  <li><b>Any wire-format change.</b> Outbound bytes stay byte-identical; inbound parsing accepts exactly the same JSON. The
+    only change is internal representation (records) to enable codegen.</li>
+  <li><b>Native / mobile clients.</b> Flutter (AONIK P3), Swift, Kotlin are separate consumers in their own
+    repos — the VDX-004 stance on bindings applies here too.</li>
+  <li><b>A UI component library.</b> The package ships logic, not chat bubbles. One thin React hook is the ceiling; no
+    design-system components.</li>
+  <li><b>Reconnect / resume.</b> The session-resilience resume token is a P6 item; the client leaves a seam but does not
+    implement it.</li>
+  <li><b>The runtime <code>configure</code> control envelope and C#-delegate tool schema generation</b> (both P6/P7) — the
+    client only round-trips the existing <code>callId</code> / <code>argumentsJson</code> strings.</li>
+</ul>
+
+<h3>Budgets &amp; invariants</h3>
+<table>
+  <tr><th>Concern</th><th>Budget / target</th></tr>
+  <tr><td>Outbound wire bytes</td><td><b>Byte-identical.</b> The existing <code>WireProtocolTests</code> / <code>WireProtocolCompatibilityTests</code> golden assertions must stay green unchanged.</td></tr>
+  <tr><td>Inbound parsing behaviour</td><td><b>Unchanged.</b> <code>WireProtocol.TryParseClientMessage</code> must still yield the same <code>Frame</code>s for the same JSON (incl. dropping <code>hello</code> / unknowns to <code>null</code>).</td></tr>
+  <tr><td><code>Voxa.Core</code> dependencies</td><td>Unchanged (NUlid only). Inbound DTOs live in <code>Voxa.Transports.WebSocket.Protocol</code>, never in Core.</td></tr>
+  <tr><td>.NET default / <code>LocalModels</code> CI lanes</td><td>Unaffected. The schema-golden test is an added <code>Voxa.Transports.WebSocket.Tests</code> case; the JS package builds in a new Node lane.</td></tr>
+  <tr><td>Package weight</td><td>Zero runtime npm dependencies in the core (WebSocket + Web Audio are platform APIs). <code>json-schema-to-typescript</code> is a dev dependency only.</td></tr>
+  <tr><td>Protocol version</td><td><code>VOXA_WIRE_VERSION = 1</code> on the client matches <code>SessionInfoFrame.ProtocolVersion = 1</code>. Bumped only on a breaking envelope change.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="secno">4.</span>Architecture context — the wire protocol today</h2>
+
+<p>The transport already exists and is stable: <code>WebSocketAudioSource</code> / <code>WebSocketAudioSink</code> in
+<code>Voxa.Transports.WebSocket</code>, with the JSON codec in <code>WireProtocol</code> and the outbound envelope records
+in <code>WireMessages.cs</code>. <b>Binary</b> WebSocket frames carry raw 16-bit PCM; <b>text</b> frames carry typed JSON
+envelopes. The client is a faithful peer to this contract — nothing below is invented for VDX-005, it is the surface as it
+ships.</p>
+
+<table>
+  <tr><th>Direction</th><th>Channel</th><th>Messages</th></tr>
+  <tr><td><b>Server &rarr; Client</b></td><td>Binary</td><td>Output PCM (16-bit, mono, at <code>session.outputSampleRate</code>) — the bot's voice.</td></tr>
+  <tr><td><b>Server &rarr; Client</b></td><td>Text JSON</td><td><code>session{v,inputSampleRate,outputSampleRate}</code>, <code>transcription{text,isFinal,language?,speakerId?}</code>, <code>text{text}</code>, <code>toolCall{callId,name,argumentsJson}</code>, <code>speaking{who:"bot"|"user",started}</code>, <code>interruption</code>, <code>status{message}</code>, <code>error{message}</code>, <code>end</code>.</td></tr>
+  <tr><td><b>Client &rarr; Server</b></td><td>Binary</td><td>Mic PCM (16-bit, mono, at <code>session.inputSampleRate</code>).</td></tr>
+  <tr><td><b>Client &rarr; Server</b></td><td>Text JSON</td><td><code>hello{…}</code> (optional, out-of-band — see below), <code>end</code>, <code>text{text}</code>, <code>toolResult{callId,resultJson,isError?}</code>.</td></tr>
+</table>
+
+<h3>Three facts that shape the client</h3>
+<ul>
+  <li><b>The session is already versioned.</b> <code>SessionInfoFrame(int InputSampleRate, int OutputSampleRate, int
+    ProtocolVersion = 1)</code> serializes to <code>{"type":"session","v":1,"inputSampleRate":…,"outputSampleRate":…}</code>.
+    The client's <em>first</em> job after connect is to read this envelope: it learns both sample rates (hardcoding none —
+    the reference page makes a point of this) and checks <code>v</code>.</li>
+  <li><b><code>hello</code> is optional and out-of-band.</b> A host opts in via
+    <code>VoicePipelineBuilder.UseWebSocketHello&lt;T&gt;</code>; the default <code>UseDefaults()</code> pipeline never
+    reads one, and <code>WireProtocol.TryParseClientMessage</code> returns <code>null</code> for a <code>hello</code> seen
+    in the frame stream. So the client must send <code>hello</code> <em>only when configured to</em>, and send it as the
+    first message before any audio.</li>
+  <li><b>Barge-in is half-built server-side.</b> On an <code>InterruptionFrame</code> (or a <code>UserStartedSpeaking</code>
+    arriving as a data frame), <code>WebSocketAudioSink</code> bumps an epoch, drops queued bot audio from the previous
+    epoch, and lets the <code>interruption</code> envelope jump ahead. That stops audio still sitting in the <em>server's</em>
+    send queue — it cannot touch audio already delivered to the browser's <code>AudioContext</code>. Closing that is WS2.</li>
+</ul>
+
+<pre><code><span class="cm">  Browser (this package)                        Voxa server (already ships)</span>
+  getUserMedia + AudioWorklet  --binary PCM-->  WebSocketAudioSource --> VAD/STT/agent/TTS
+  AudioContext playback        &lt;--binary PCM--  WebSocketAudioSink   &lt;-- output audio
+  typed events / tools         &lt;--text JSON-->  WireProtocol (session/transcription/text/toolCall/speaking/…)
+  flushPlayback()              &lt;--interruption-- epoch purge (server) + interruption envelope</code></pre>
+
+<div class="callout"><b>Invariant.</b> The client is a peer of the <em>existing</em> protocol. It adds no envelope types
+and requires no server behaviour change for the happy path. The only server-side edit in this spec (WS1) is to represent
+the inbound envelopes as records so codegen has one source — verified wire-identical by the golden tests.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="secno">5.</span>WS1 — the versioned protocol contract (DTOs + codegen)</h2>
+
+<div class="ws-head">
+  <span><b>Where</b> <code>Voxa.Transports.WebSocket.Protocol</code> + a new <code>clients/voxa-client</code> dir</span>
+  <span><b>Risk</b> <span class="sev-low">Low</span> (internal refactor + tooling)</span>
+  <span><b>Wire change</b> none (byte-identical)</span>
+  <span><b>Order</b> first — pure .NET, testable now</span>
+</div>
+
+<p>Today the outbound envelopes are clean records, but the inbound side (<code>end</code> / <code>text</code> /
+<code>toolResult</code>) is hand-parsed field-by-field in <code>TryParseClientMessage</code>. For a contract that "can't
+drift," <em>both</em> directions must derive from one source. Step one is to give the inbound envelopes records too.</p>
+
+<span class="filelabel">src/Voxa.Transports.WebSocket/Protocol/WireMessages.cs (added — inbound envelopes as records)</span>
+<pre><code><span class="cm">// Inbound (client -&gt; server). Mirrors the existing outbound records so a single</span>
+<span class="cm">// [JsonSerializable] set covers BOTH directions for schema generation. Field order</span>
+<span class="cm">// and camelCase are chosen to match what TryParseClientMessage already accepts.</span>
+internal readonly record struct EndClientEnvelope(string Type);                                  <span class="cm">// {"type":"end"}</span>
+internal readonly record struct TextClientEnvelope(string Type, string Text);                    <span class="cm">// {"type":"text","text":…}</span>
+internal readonly record struct ToolResultClientEnvelope(string Type, string CallId, string ResultJson, bool IsError);
+
+<span class="cm">// hello stays host-defined (VoiceHello / UseWebSocketHello&lt;T&gt;) — documented as an</span>
+<span class="cm">// extension point, NOT folded into the generated core protocol (see §12).</span></code></pre>
+
+<p><code>TryParseClientMessage</code> is then a thin switch that deserializes the matching record (via the existing
+source-generated <code>WireJsonContext</code>, now also in deserialize mode) and maps it to the same <code>Frame</code> it
+returns today — <code>EndFrame</code>, <code>TextFrame</code>, <code>ToolCallResultFrame</code>. Same inputs, same frames,
+same dropped-unknown behaviour; the change is representational. The existing
+<code>WireProtocolCompatibilityTests</code> are the proof.</p>
+
+<h3>Schema &amp; TypeScript generation</h3>
+<p>.NET 9+ ships <code>System.Text.Json.Schema.JsonSchemaExporter</code>. A tiny generator (a console target under
+<code>tools/</code>, or — preferred, since it needs no new project — a <code>[Fact]</code> in
+<code>Voxa.Transports.WebSocket.Tests</code> that writes the file) walks every envelope type registered in
+<code>WireJsonContext</code> and emits one <code>voxa-wire.schema.json</code>. The TypeScript is generated <em>from that
+schema</em> by <code>json-schema-to-typescript</code> in the JS package's build.</p>
+
+<pre><code><span class="cm">  C# envelope records  (WireMessages.cs, the single source of truth)</span>
+        | JsonSchemaExporter over WireJsonContext's types
+        v
+  voxa-wire.schema.json  ......  committed; CI golden-checks it is up to date
+        | json-schema-to-typescript  (dev dependency, JS package build)
+        v
+  clients/voxa-client/src/protocol.ts  ....  committed; CI golden-checks it is up to date
+        |
+        v
+  VoxaClient (WS2) consumes the generated types — cannot drift from the server</code></pre>
+
+<span class="filelabel">clients/voxa-client/src/protocol.ts (generated — shape)</span>
+<pre><code><span class="cm">// AUTO-GENERATED from voxa-wire.schema.json. Do not edit by hand.</span>
+export const VOXA_WIRE_VERSION = 1;
+
+export type ServerMessage =
+  | { type: "session";       v: number; inputSampleRate: number; outputSampleRate: number }
+  | { type: "transcription"; text: string; isFinal: boolean; language?: string; speakerId?: string }
+  | { type: "text";          text: string }
+  | { type: "toolCall";      callId: string; name: string; argumentsJson: string }
+  | { type: "speaking";      who: "bot" | "user"; started: boolean }
+  | { type: "interruption" }
+  | { type: "status";        message: string }
+  | { type: "error";         message: string }
+  | { type: "end" };
+
+export type ClientMessage =
+  | { type: "end" }
+  | { type: "text";       text: string }
+  | { type: "toolResult"; callId: string; resultJson: string; isError?: boolean };</code></pre>
+
+<div class="callout good"><b>Why golden-check both artifacts.</b> The repo already lives by byte-identical wire golden
+tests. Extending that instinct to the schema and the <code>.ts</code> means a server-side envelope change that isn't
+reflected in the committed TypeScript <em>fails CI</em> — the drift is caught mechanically, not in code review or, worse,
+at a customer's runtime.</div>
+
+<h3>Runtime version handling</h3>
+<p>The client compares <code>session.v</code> against <code>VOXA_WIRE_VERSION</code>. Policy is configurable
+(<code>onVersionMismatch: "warn" | "throw" | "ignore"</code>, default <code>"warn"</code>): a newer server major means the
+client may not understand some envelopes; it warns and proceeds on unknown-but-non-breaking, or throws if the host opts
+into strictness. Hello-<em>side</em> negotiation (a <code>v</code> in the outbound hello) is deferred to the P7 wire-protocol
+item; this spec only consumes the version the server already advertises.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="secno">6.</span>WS2 — the <code>VoxaClient</code> runtime</h2>
+
+<div class="ws-head">
+  <span><b>Where</b> <code>clients/voxa-client/src</code></span>
+  <span><b>Risk</b> <span class="sev-med">Medium</span> (audio + barge-in correctness)</span>
+  <span><b>Browser APIs</b> WebSocket, getUserMedia, AudioWorklet, AudioContext</span>
+  <span><b>Testability</b> audio + transport behind seams</span>
+</div>
+
+<p>One class drives the whole loop. The public surface is small and typed against the generated protocol; the audio engine
+is behind a backend interface so the state machine can be unit-tested with no browser.</p>
+
+<span class="filelabel">clients/voxa-client/src/index.ts (public API — shape)</span>
+<pre><code>export interface VoxaClientOptions {
+  url: string;                          <span class="cm">// ws(s)://host/voice</span>
+  hello?: Record&lt;string, unknown&gt;;       <span class="cm">// sent FIRST, only if provided (host opted into UseWebSocketHello)</span>
+  onVersionMismatch?: "warn" | "throw" | "ignore";   <span class="cm">// default "warn"</span>
+  audio?: AudioBackend;                 <span class="cm">// defaults to WebAudioBackend; injectable for tests</span>
+  micConstraints?: MediaTrackConstraints; <span class="cm">// defaults: EC + NS + AGC on, mono</span>
+}
+
+export type VoxaEvents = {
+  session:       (s: { v: number; inputSampleRate: number; outputSampleRate: number }) =&gt; void;
+  transcription: (t: { text: string; isFinal: boolean; language?: string; speakerId?: string }) =&gt; void;
+  text:          (t: { text: string }) =&gt; void;          <span class="cm">// streamed assistant tokens</span>
+  speaking:      (s: { who: "bot" | "user"; started: boolean }) =&gt; void;
+  toolCall:      (c: { callId: string; name: string; argumentsJson: string }) =&gt; void;
+  status:        (m: { message: string }) =&gt; void;
+  error:         (e: { message: string }) =&gt; void;
+  micLevel:      (rms: number) =&gt; void;                   <span class="cm">// 0..1, convenience for meters</span>
+  end:           () =&gt; void;
+};
+
+export class VoxaClient {
+  constructor(opts: VoxaClientOptions);
+  on&lt;K extends keyof VoxaEvents&gt;(event: K, handler: VoxaEvents[K]): () =&gt; void;  <span class="cm">// returns an unsubscribe</span>
+  connect(): Promise&lt;void&gt;;              <span class="cm">// opens WS, resolves once `session` arrives + mic is live</span>
+  sendText(text: string): void;         <span class="cm">// optional text-only turn (no mic)</span>
+  sendToolResult(callId: string, resultJson: string, isError?: boolean): void;
+  end(): void;                          <span class="cm">// sends {type:"end"}</span>
+  disconnect(): Promise&lt;void&gt;;           <span class="cm">// close WS + tear down audio</span>
+}</code></pre>
+
+<h3>The audio backend seam</h3>
+<p>All Web Audio lives behind one interface. The default <code>WebAudioBackend</code> is the productized reference page
+logic; tests inject a fake that records calls. This mirrors Voxa's own rule that every engine/transport is testable behind
+an interface.</p>
+
+<span class="filelabel">clients/voxa-client/src/audio.ts (the seam)</span>
+<pre><code>export interface AudioBackend {
+  <span class="cm">// start mic at the announced input rate; deliver 20 ms Int16 frames to onFrame.</span>
+  startCapture(inputRate: number, onFrame: (pcm: Int16Array) =&gt; void): Promise&lt;void&gt;;
+  <span class="cm">// schedule PCM gap-free at the announced output rate.</span>
+  play(pcm: Int16Array, outputRate: number): void;
+  <span class="cm">// barge-in: stop everything already scheduled and reset the play cursor.</span>
+  flush(): void;
+  stop(): Promise&lt;void&gt;;
+}</code></pre>
+
+<h3>Barge-in — the load-bearing behaviour</h3>
+<p>The reference page already establishes the correct trigger pair and the correct mechanism; the package adopts both
+verbatim. Playback schedules each chunk against a running <code>nextPlayTime</code> cursor and tracks live source nodes in
+a set; <code>flush()</code> stops every node in the set and snaps the cursor back to <code>currentTime</code>.</p>
+
+<span class="filelabel">clients/voxa-client/src/web-audio-backend.ts (ported from recorder-worklet.js + index.html)</span>
+<pre><code><span class="cm">// playback cursor + live nodes (from the reference page, typed)</span>
+play(pcm: Int16Array, outputRate: number) {
+  const f32 = new Float32Array(pcm.length);
+  for (let i = 0; i &lt; pcm.length; i++) f32[i] = pcm[i] / 32768;
+  const buf = this.ctx.createBuffer(1, f32.length, outputRate);  <span class="cm">// ctx resamples to its own rate</span>
+  buf.copyToChannel(f32, 0);
+  const src = this.ctx.createBufferSource(); src.buffer = buf; src.connect(this.ctx.destination);
+  const startAt = Math.max(this.ctx.currentTime, this.nextPlayTime);
+  src.start(startAt); this.nextPlayTime = startAt + buf.duration;
+  this.scheduled.add(src); src.onended = () =&gt; this.scheduled.delete(src);
+}
+flush() {                              <span class="cm">// barge-in: kill scheduled audio immediately</span>
+  for (const s of this.scheduled) { try { s.stop(); } catch {} }
+  this.scheduled.clear(); this.nextPlayTime = this.ctx.currentTime;
+}</code></pre>
+
+<p>In <code>VoxaClient</code>, <code>flush()</code> is wired to <em>both</em> triggers — exactly the reference page's two
+call sites:</p>
+<pre><code>case "interruption": this.audio.flush(); this.emit("…"); break;
+case "speaking":
+  if (msg.who === "user" &amp;&amp; msg.started) this.audio.flush();   <span class="cm">// barge-in before the interruption envelope even arrives</span>
+  this.emit("speaking", msg); break;</code></pre>
+
+<h3>Frontend tools — the gap the reference page leaves</h3>
+<p>The test page never handles <code>toolCall</code>. The package delivers it as a typed event and exposes
+<code>sendToolResult(callId, resultJson, isError?)</code>, which serializes the <code>toolResult</code> envelope the server
+already parses (round-tripping through the agent loop's TCS correlation). This is what makes <code>@voxa/client</code> a
+superset of the reference page, not just a repackaging.</p>
+
+<div class="callout warn"><b>Hello ordering.</b> When <code>hello</code> is provided, the client sends it as the very first
+text frame on open, before starting capture — a host that configured <code>UseWebSocketHello&lt;T&gt;</code> reads exactly
+one message out-of-band before the pipeline runs. When <code>hello</code> is omitted (the default-server case), the client
+sends nothing until it has the <code>session</code> envelope. The client never requires a server to read a hello.</div>
+
+<!-- ============================================================ -->
+<h2 id="s7"><span class="secno">7.</span>WS3 — packaging &amp; framework adapters</h2>
+
+<div class="ws-head">
+  <span><b>Package</b> <code>@voxa/client</code> (scoped, MIT)</span>
+  <span><b>Format</b> ESM + <code>.d.ts</code></span>
+  <span><b>Deps</b> zero runtime</span>
+  <span><b>Adapter</b> one optional React hook</span>
+</div>
+
+<ul>
+  <li><b>Core package</b> — framework-agnostic, ESM, with generated type declarations. No runtime dependencies; WebSocket
+    and Web Audio are platform APIs. <code>json-schema-to-typescript</code> is a dev dependency used only at build.</li>
+  <li><b>React hook</b> — a single thin <code>useVoxa(options)</code> that wraps the lifecycle in
+    <code>useEffect</code>/<code>useState</code> and returns the typed event values + actions. Shipped either as a
+    subpath export (<code>@voxa/client/react</code>) or documented as a copy-paste snippet — decided in WS3 (Open
+    Question b). No other framework adapters; no UI components.</li>
+  <li><b>Examples</b> — an <code>examples/vanilla</code> page that reproduces the current local-voice test UI using the
+    package, and replaces the inline script in <code>samples/Voxa.Samples.MinimalServer/wwwroot/index.html</code> with a
+    package-consuming version (so the sample and the package can't diverge).</li>
+  <li><b>Versioning</b> — package SemVer is independent of the wire version; <code>VOXA_WIRE_VERSION</code> is exported so
+    consumers can assert against a server. A wire-breaking change bumps both.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s8"><span class="secno">8.</span>Plan of action — phases</h2>
+<ol>
+  <li><b>Phase 1 — Protocol contract (WS1), pure .NET.</b> Add the inbound envelope records; refactor
+    <code>TryParseClientMessage</code> to deserialize-and-map; add the <code>voxa-wire.schema.json</code> emitter + golden
+    test. No JS yet. Fully landed and verified in the existing suite. <b>Ships independently and is valuable on its own.</b></li>
+  <li><b>Phase 2 — <code>VoxaClient</code> happy path (WS2).</b> New <code>clients/voxa-client</code> package; generate
+    <code>protocol.ts</code>; implement connect &rarr; session &rarr; mic &rarr; events &rarr; playback over the audio
+    backend seam; port <code>recorder-worklet.js</code>. Headless unit tests with a mock WebSocket + fake audio backend.</li>
+  <li><b>Phase 3 — Barge-in + tools (WS2).</b> Wire <code>flush()</code> to the interruption / user-speaking pair; add
+    <code>onToolCall</code> / <code>sendToolResult</code>. Tests assert flush clears scheduled audio on both triggers and
+    the tool round-trip emits the correct envelope.</li>
+  <li><b>Phase 4 — Packaging &amp; examples (WS3).</b> ESM build, types, the React hook, the examples page, and the
+    swap of the MinimalServer test page to consume the package. npm publish under <code>@voxa</code>.</li>
+</ol>
+
+<div class="callout warn"><b>Per-PR discipline.</b> Each phase is one logical change, branches from <code>main</code>,
+carries an <code>[Unreleased]</code> CHANGELOG entry, and is warnings-as-errors clean on the .NET side. Phase 1 in
+particular must land green against the existing wire golden tests before any TypeScript exists.</div>
+
+<!-- ============================================================ -->
+<h2 id="s9"><span class="secno">9.</span>Progress checklist</h2>
+<ul class="cl">
+  <li><span class="tid">W1.1</span> Add inbound envelope records (<code>EndClientEnvelope</code>, <code>TextClientEnvelope</code>, <code>ToolResultClientEnvelope</code>) to <code>WireMessages.cs</code>; register in <code>WireJsonContext</code>.
+    <span class="ac">AC: records compile; no Core dependency added.</span></li>
+  <li><span class="tid">W1.2</span> Refactor <code>TryParseClientMessage</code> to deserialize the records and map to <code>Frame</code>s.
+    <span class="ac">AC: <code>WireProtocolTests</code> + <code>WireProtocolCompatibilityTests</code> pass unchanged; unknown/<code>hello</code> still &rarr; null.</span></li>
+  <li><span class="tid">W1.3</span> Schema emitter (<code>JsonSchemaExporter</code> over <code>WireJsonContext</code>) writes <code>voxa-wire.schema.json</code>; commit it; add a golden test that regen matches.
+    <span class="ac">AC: editing an envelope without regenerating fails the test.</span></li>
+  <li><span class="tid">W2.1</span> Scaffold <code>clients/voxa-client</code> (TS, ESM, zero runtime deps); generate <code>protocol.ts</code> from the schema; commit + golden-check it in the Node lane.
+    <span class="ac">AC: <code>npm run build</code> + typecheck green; stale <code>protocol.ts</code> fails CI.</span></li>
+  <li><span class="tid">W2.2</span> <code>AudioBackend</code> seam + <code>WebAudioBackend</code> (port <code>recorder-worklet.js</code> + the playback scheduler).
+    <span class="ac">AC: 20 ms Int16 capture frames; gap-free scheduling at the announced output rate.</span></li>
+  <li><span class="tid">W2.3</span> <code>VoxaClient</code> happy path: connect, await <code>session</code>, honor <code>session.v</code>, mic, typed events, playback.
+    <span class="ac">AC: mock-WS unit test drives the full envelope set; rates taken from <code>session</code>, nothing hardcoded.</span></li>
+  <li><span class="tid">W2.4</span> Barge-in: <code>flush()</code> on <code>interruption</code> <em>and</em> <code>speaking{user,started}</code>.
+    <span class="ac">AC: test asserts the scheduled set is emptied and the cursor reset on both triggers.</span></li>
+  <li><span class="tid">W2.5</span> Frontend tools: <code>onToolCall</code> event + <code>sendToolResult</code>.
+    <span class="ac">AC: test asserts a <code>{type:"toolResult",callId,resultJson,isError}</code> frame is sent.</span></li>
+  <li><span class="tid">W2.6</span> Version policy: <code>onVersionMismatch</code> warn/throw/ignore against <code>VOXA_WIRE_VERSION</code>.
+    <span class="ac">AC: test for each policy on a simulated <code>session.v</code> bump.</span></li>
+  <li><span class="tid">W3.1</span> Build/pack: ESM + <code>.d.ts</code>; optional <code>useVoxa</code> React hook.
+    <span class="ac">AC: a React example mounts/unmounts cleanly (no leaked AudioContext / socket).</span></li>
+  <li><span class="tid">W3.2</span> Examples page + swap MinimalServer's inline test page to consume the package.
+    <span class="ac">AC: the local-voice page works through <code>@voxa/client</code>; barge-in still cuts the bot off.</span></li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s10"><span class="secno">10.</span>Verification protocol</h2>
+
+<table>
+  <tr><th>Lane</th><th>What runs</th></tr>
+  <tr><td><b>.NET wire golden (existing)</b></td><td><code>WireProtocolTests</code> / <code>WireProtocolCompatibilityTests</code> — must stay green <em>unchanged</em>, proving the inbound-DTO refactor is wire- and behaviour-identical.</td></tr>
+  <tr><td><b>Schema golden (added .NET)</b></td><td>Regenerate <code>voxa-wire.schema.json</code> and assert it equals the committed file. Fails on an un-regenerated envelope change.</td></tr>
+  <tr><td><b>TS codegen golden (Node)</b></td><td>Regenerate <code>protocol.ts</code> from the schema and diff against the committed file — the client cannot drift from the server.</td></tr>
+  <tr><td><b>Client unit (Node, headless)</b></td><td>A mock <code>WebSocket</code> + fake <code>AudioBackend</code> drive the full envelope set: session-rate plumbing, streamed text, transcription, speaking, tool round-trip, version policy, and the two barge-in triggers. No browser, no network.</td></tr>
+  <tr><td><b>Browser smoke (manual / optional)</b></td><td>The examples page against a running MinimalServer: speak, get a transcript + bot voice, barge in mid-sentence and confirm the bot stops immediately. Documented; not a blocking CI gate (real mic/Web Audio aren't headless-CI-friendly).</td></tr>
+  <tr><td><b>.NET default / LocalModels</b></td><td><b>Unchanged.</b> VDX-005 adds an inbound-DTO refactor + one test on the .NET side and an entirely separate Node package; neither alters existing lanes.</td></tr>
+</table>
+
+<div class="callout"><b>The barge-in assertion is the one that matters.</b> The single behaviour most worth a deterministic
+test is that <code>flush()</code> empties the scheduled-audio set and resets the play cursor on <em>both</em> the
+<code>interruption</code> envelope and <code>speaking{user,started}</code> — because that is the user-visible defect (the
+bot talking over you) the whole client half of barge-in exists to fix.</div>
+
+<!-- ============================================================ -->
+<h2 id="s11"><span class="secno">11.</span>Risk register</h2>
+<table>
+  <tr><th>ID</th><th>Risk</th><th>Sev</th><th>Mitigation</th></tr>
+  <tr><td>R1</td><td><b>Client/server protocol drift</b> — the TS types fall behind a server envelope change and consumers break at runtime.</td><td class="sev-med">Med</td><td>One source of truth (the C# records) &rarr; schema &rarr; TS, with golden checks on <em>both</em> artifacts in CI. A change that isn't regenerated fails the build, not the customer.</td></tr>
+  <tr><td>R2</td><td>The inbound-DTO refactor accidentally changes inbound parsing (a field name, a default, dropped-unknown behaviour).</td><td class="sev-med">Med</td><td>Outbound is untouched; inbound is covered by the existing compatibility golden tests, which must pass unchanged (W1.2). Records are chosen to match the JSON those tests already assert.</td></tr>
+  <tr><td>R3</td><td>Web Audio / AudioWorklet can't run in headless CI, so the client is hard to test.</td><td class="sev-med">Med</td><td><code>AudioBackend</code> seam: the state machine is unit-tested with a fake backend + mock WebSocket; only the thin <code>WebAudioBackend</code> needs a browser, exercised by the manual smoke. Mirrors Voxa's fake-engine testing discipline.</td></tr>
+  <tr><td>R4</td><td><b>Barge-in regression</b> — flush misses already-scheduled nodes and the bot talks over the user (the exact defect this fixes).</td><td class="sev-high">High</td><td>Port the proven reference implementation verbatim; a deterministic test asserts the scheduled set empties + cursor resets on both triggers (W2.4, §10).</td></tr>
+  <tr><td>R5</td><td>Hello coupling — the client sends a hello a default server doesn't read, or omits one a configured server expects.</td><td class="sev-low">Low</td><td>Hello is opt-in and sent first only when provided; default servers drop unknown text frames to null. Ordering (hello before audio) is enforced by sending it synchronously on open.</td></tr>
+  <tr><td>R6</td><td>Scope creep into a UI framework / component library.</td><td class="sev-low">Low</td><td>Hard non-goal (§3): logic only, one thin React hook ceiling, no components.</td></tr>
+  <tr><td>R7</td><td>Adding a JS toolchain/CI lane to a .NET repo raises maintenance surface.</td><td class="sev-low">Low</td><td>Zero runtime deps; a single Node lane (build + typecheck + two golden checks). The package is isolated under <code>clients/</code> and not part of <code>Voxa.slnx</code>.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s12"><span class="secno">12.</span>Out of scope / deferred</h2>
+<ul>
+  <li><b>Native / mobile clients</b> (Flutter, Swift, Kotlin). Separate consumers in their own repos — the AONIK Flutter
+    client is P3; the VDX-004 "bindings are siblings" stance applies.</li>
+  <li><b>Reconnect / resume.</b> The session-resilience resume token (P6) is left as a seam — the client surfaces
+    disconnect but does not replay state.</li>
+  <li><b>The runtime <code>configure</code> control envelope</b> (P7) — mid-session VAD/voice/language changes. The client
+    will gain a <code>sendConfigure</code> when the server supports it; not now.</li>
+  <li><b>Hello-side version negotiation.</b> Adding <code>v</code> to the outbound hello belongs to P7's wire-protocol
+    item; VDX-005 only consumes the <code>session.v</code> the server already emits.</li>
+  <li><b>C#-delegate tool schema generation</b> (typed frontend tools, P6) — server-side. The client round-trips the
+    existing <code>callId</code> / <code>argumentsJson</code> strings as-is.</li>
+  <li><b>A UI component library.</b> Out of scope by design; the package is the transport + audio + protocol logic, not
+    chat widgets.</li>
+</ul>
+
+</div>
+</body>
+</html>
