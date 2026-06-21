@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using NAudio.Wave;
+using Voxa.Audio;   // shared LinearResampler (promoted from Studio in VTL-001)
 
 namespace Voxa.Studio.Audio;
 

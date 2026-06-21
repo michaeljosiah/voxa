@@ -1,11 +1,18 @@
-namespace Voxa.Studio.Audio;
+namespace Voxa.Audio;
 
 /// <summary>
-/// Streaming linear-interpolation resampler for PCM16 mono. Voice-bandwidth quality is ample
-/// here: the capture path feeds a 16 kHz STT model (hardware is typically 44.1/48 k, so this is
-/// a downsample) and the render path upsamples synthesized speech to the device rate. Stateful —
-/// keeps the last input sample so chunk boundaries don't click. Not thread-safe; use one
-/// instance per direction.
+/// Streaming linear-interpolation resampler for PCM16 mono. Voice-bandwidth quality is ample on
+/// the paths it serves: Studio's capture/render device bridge (hardware 44.1/48 kHz ↔ pipeline
+/// 16 kHz) and the telephony edge (8 kHz wire ↔ the pipeline's announced rate, VTL-001). Stateful —
+/// keeps the last input sample so chunk boundaries don't click. Not thread-safe; use one instance
+/// per direction.
+///
+/// <para>
+/// Promoted from Voxa.Studio into this shared package (VTL-001) so the framework telephony transport
+/// and Studio share one tested implementation rather than duplicating it. The PSTN is band-limited
+/// to ~3.4 kHz, so linear interpolation is adequate for 8 kHz telephony; a higher-order (sinc)
+/// resampler is an optional later refinement.
+/// </para>
 /// </summary>
 public sealed class LinearResampler
 {

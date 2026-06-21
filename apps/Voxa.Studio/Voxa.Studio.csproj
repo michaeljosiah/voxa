@@ -71,6 +71,10 @@
          Kokoro GPU compatibility indicator. Available transitively, but referenced directly so the
          ViewModel's device types are unambiguously compile-visible. -->
     <ProjectReference Include="..\..\src\Voxa.Audio.Onnx\Voxa.Audio.Onnx.csproj" />
+    <!-- The shared LinearResampler (VTL-001) used by the device bridge (CaptureFormatConverter) and
+         WavIo. Available transitively via the meta-package, but referenced directly since Studio uses
+         the type directly (same convention as the ONNX device seam above). -->
+    <ProjectReference Include="..\..\src\Voxa.Audio.Abstractions\Voxa.Audio.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

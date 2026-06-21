@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Transports.Twilio</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Twilio Media Streams transport for the Voxa pipeline (VTL-001). MapVoxaTwilioVoice("/twilio") serves the TwiML webhook and accepts the media WebSocket, running a phone call through the SAME composed VAD→STT→agent→TTS pipeline as the native route — with barge-in. The wire is hand-rolled JSON over the shared Voxa.Transports.Telephony base (μ-law 8 kHz); no Twilio SDK, no WebRTC. Includes X-Twilio-Signature validation.</Description>
+    <PackageTags>voxa;voice;ai;telephony;twilio;media-streams;websocket;mulaw</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The shared telephony base (source/sink + codec seam + μ-law) and the ASP.NET composer/endpoint
+         infrastructure (DefaultVoicePipelineComposer). No Twilio SDK — the wire is hand-rolled JSON. -->
+    <ProjectReference Include="..\Voxa.Transports.Telephony\Voxa.Transports.Telephony.csproj" />
+    <ProjectReference Include="..\Voxa.AspNetCore\Voxa.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The endpoint maps routes and reads HttpContext; the composer is resolved from request services. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Transports.Twilio.Tests" />
+  </ItemGroup>
+
+</Project>

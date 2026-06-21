@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Transports.Telephony</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Shared telephony media-stream transport for the Voxa pipeline (VTL-001). A vendor-neutral PipelineSource/PipelineSink pair that runs a phone call over a WebSocket — owning the read/write loops, the barge-in epoch purge, and the 8 kHz↔pipeline resample bridge — and delegates the JSON/base64 wire framing to a small ITelephonyMediaCodec. Includes a G.711 (μ-law) codec. No WebRTC. The Twilio codec lives in Voxa.Transports.Twilio.</Description>
+    <PackageTags>voxa;voice;ai;telephony;websocket;twilio;g711;mulaw;transport</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Core frames/processors + the shared LinearResampler (Voxa.Audio.Abstractions). No ASP.NET,
+         Azure, ONNX, native, or WebRTC dependency — the base operates over any System.Net.WebSockets.WebSocket. -->
+    <ProjectReference Include="..\Voxa.Core\Voxa.Core.csproj" />
+    <ProjectReference Include="..\Voxa.Audio.Abstractions\Voxa.Audio.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Transports.Telephony.Tests" />
+  </ItemGroup>
+
+</Project>

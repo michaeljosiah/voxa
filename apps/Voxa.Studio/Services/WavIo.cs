@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Voxa.Audio;   // shared LinearResampler (promoted from Studio in VTL-001)
 using Voxa.Speech;
 using Voxa.Studio.Audio;
 

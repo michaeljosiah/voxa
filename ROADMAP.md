@@ -203,8 +203,12 @@ Estimated effort: ~2.5 weeks (WS0 diagnostics ~4d, shell + audio ~4d, Talk ~3d, 
 
 ## Not planned (deferred from original Pipecat scope)
 
-- WebRTC transports (Daily, LiveKit) — WebSocket is enough for mobile-first
-- Telephony (Twilio, SIP)
+- WebRTC transports (Daily, LiveKit) — WebSocket is enough for mobile-first; if taken, a media-server
+  integration rather than a .NET WebRTC stack
+- ~~Telephony (Twilio, SIP)~~ — **Twilio shipped** via [VTL-001](docs/specifications/vtl-001-telephony-transport-spec.html)
+  (`Voxa.Transports.Telephony` + `Voxa.Transports.Twilio`, `MapVoxaTwilioVoice`), over the existing
+  WebSocket seam — no WebRTC. Azure ACS is a designed follow-up (§9); direct SIP stays out (it reintroduces
+  the RTP/ICE stack telephony-over-provider exists to avoid)
 - Vision / image / avatar processors
 - Whisker / Tail debugging tools
 - mem0, Sentry observers — use OpenTelemetry instead

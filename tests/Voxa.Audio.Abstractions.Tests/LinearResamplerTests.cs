@@ -1,10 +1,11 @@
-using Voxa.Studio.Audio;
+using Voxa.Audio;
 
-namespace Voxa.Studio.Tests;
+namespace Voxa.Audio.Abstractions.Tests;
 
 /// <summary>
-/// VST-001 WS1-A4: the device layer's resampler — hardware 48 kHz ↔ pipeline 16 kHz — preserves
-/// signal energy within tolerance and is continuous across chunk boundaries (no clicks).
+/// The shared linear resampler (promoted from Studio in VTL-001) preserves signal energy within
+/// tolerance and is continuous across chunk boundaries (no clicks) — for both the device bridge
+/// (48 kHz ↔ 16 kHz) and the telephony edge (8 kHz ↔ 16 kHz).
 /// </summary>
 public class LinearResamplerTests
 {
@@ -50,6 +51,24 @@ public class LinearResamplerTests
     }
 
     [Fact]
+    public void Telephony_8k_To_16k_RoundTrip_Bounded_Error()
+    {
+        // VTL-001 inbound (8 k → 16 k) then outbound (16 k → 8 k): a 300 Hz tone (in the PSTN band)
+        // survives the round trip with bounded energy loss — the resample bridge is faithful.
+        var up = new LinearResampler(8000, 16000);
+        var down = new LinearResampler(16000, 8000);
+        var input = Sine(8000, 300, seconds: 0.5);
+
+        var upBuf = new short[up.MaxOutputSamples(input.Length)];
+        int upN = up.Process(input, upBuf);
+        var downBuf = new short[down.MaxOutputSamples(upN)];
+        int downN = down.Process(upBuf.AsSpan(0, upN), downBuf);
+
+        Assert.InRange(downN, input.Length - 2, input.Length + 2);
+        Assert.InRange(Rms(downBuf.AsSpan(0, downN)), Rms(input) * 0.9, Rms(input) * 1.1);
+    }
+
+    [Fact]
     public void Chunked_Processing_Equals_Whole_Buffer_Processing()
     {
         // WASAPI delivers ~20 ms chunks; the stateful resampler must produce the same stream as
@@ -81,6 +100,7 @@ public class LinearResamplerTests
     public void Passthrough_Copies_Verbatim()
     {
         var resampler = new LinearResampler(16000, 16000);
+        Assert.True(resampler.IsPassthrough);
         var input = Sine(16000, 200, 0.1);
         var output = new short[input.Length];
         Assert.Equal(input.Length, resampler.Process(input, output));
