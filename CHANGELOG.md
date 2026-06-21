@@ -491,6 +491,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Smart-turn / cloning-TTS sidecars no longer flash a console window on Windows, and smart-turn
+  failures are now visible.** The Python sidecar launchers (`ProcessSmartTurnSidecar` in
+  `Voxa.Audio.SmartTurn`, `ProcessSidecarChannel` in `Voxa.Speech.Sidecar`) started `python.exe` with
+  `UseShellExecute=false` but without `CreateNoWindow=true`, so a console window popped every time the
+  sidecar (re)launched — on every Talk/Builder run, and on *every turn* if the sidecar was failing and
+  relaunching. Both now set `CreateNoWindow=true` (matching `PiperProcessHost`/`EspeakPhonemizer`).
+  Observability: both `ISmartTurnClassifier` implementations now log their fail-safe fallback at
+  **Warning** (was Debug, below Studio's Information floor — i.e. invisible); the composer wraps the
+  classifier so each turn-end decision is logged with latency (a "held open" verdict at Information is the
+  positive "smart turn is working" signal); and Studio gains a **file log sink**
+  (`%LOCALAPPDATA%\Voxa\Studio\studio.log`) since a GUI app's `AddDebug()` only reaches a debugger — so a
+  sidecar that can't start (missing Python deps, etc.) is now recorded somewhere a user can read.
 - **Shared PCM16 WAV helper ends the copy-pasted RIFF code in the writers (CQ-009, #53).** A new `Pcm16Wav` in `Voxa.Speech.Abstractions` provides the canonical 44-byte header writer (`Wrap`/`WriteHeader`) and a robust chunk-walking reader (`FindData` — skips unknown chunks, honors word alignment, reads bit depth past a fmt extension, clamps an over-declared final chunk). The five sites that hand-rolled the WAV header — `OpenAIWhisperEngine`, `MistralSpeechToTextEngine`, `HttpSmartTurnClassifier`, the CLI, and Studio — now call it, so a header/format fix lands in one place. The bespoke readers (Piper's zero-copy parse, the CLI/Studio/MCP readers, each with their own copy/mix/resample) can adopt `FindData` as a follow-up.
 - **`Frame` no longer allocates a ULID string per frame (CQ-004, #48).** Every `Frame` eagerly ran `Ulid.NewUlid().ToString()` in its initializer — a 26-char heap allocation on every audio/token/transcription frame, even though the only production reader of `Frame.Id` is the optional tracing processor. The id is now stored as the `Ulid` **struct** (no heap allocation) and the string is materialized only on read, keeping the data loop allocation-free. Semantics are unchanged: ids stay unique per frame, `with` preserves the id, and an explicitly-set id round-trips (it must be a valid ULID).
 - **Provider descriptors share one HTTP-client resolver instead of copy-pasting it (CQ-013, #57).** The `(sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve()` expression was duplicated across seven descriptor sites (OpenAI, Mistral, ElevenLabs, Kokoro, Piper, WhisperCpp, SmartTurn). Centralized into a single `IServiceProvider.ResolveHttpClient()` extension in `Voxa.Speech.Abstractions`, so HTTP-client resolution policy lives in one place. Behaviour is unchanged. (The separate duplicated-options-default cleanup — bind into a fresh instance — remains a follow-up.)
