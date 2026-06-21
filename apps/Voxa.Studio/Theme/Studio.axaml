@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Voxa.Studio.Controls">
 
   <!-- ════════ VOXA Studio stylesheet (VST-002; VST-005 rebrand warm→cool) ════════
        Dark, calm, one accent: cool blue-grey surfaces, cool hairlines, a single Pulse
@@ -18,10 +19,18 @@
 
   <!-- ── typography ─────────────────────────────────────────────────────── -->
 
-  <!-- View title (the ViewBar pattern): 18 bold, tight tracking. -->
+  <!-- Card / section heading: 16 semibold, tight tracking. -->
   <Style Selector="TextBlock.vx-h1">
     <Setter Property="FontSize" Value="16" />
     <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.2" />
+    <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
+  </Style>
+
+  <!-- The ViewBar title (every view's header): 18 bold, tight tracking — the brief's view-title size. -->
+  <Style Selector="TextBlock.vx-viewtitle">
+    <Setter Property="FontSize" Value="18" />
+    <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="LetterSpacing" Value="-0.2" />
     <Setter Property="Foreground" Value="{StaticResource VxTextBrush}" />
   </Style>
@@ -437,6 +446,87 @@
     <Setter Property="Background" Value="{StaticResource VxBadSoftBrush}" />
     <Setter Property="BorderBrush" Value="#4DEF5350" />
     <Setter Property="TextElement.Foreground" Value="{StaticResource VxBadBrush}" />
+  </Style>
+
+  <!-- ── voice orb: layered cyan radial sphere + glow; rings ripple outward when live (Talk). ── -->
+  <Style Selector="controls|VoiceOrb">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <!-- ripple rings: hidden until live, then scale + fade outward (staggered).
+               Each owns a ScaleTransform so the keyframes animate ScaleTransform.ScaleX/Y. -->
+          <Ellipse Name="ripple1" Stroke="#594FC3F7" StrokeThickness="1" Fill="Transparent"
+                   Opacity="0" RenderTransformOrigin="50%,50%">
+            <Ellipse.RenderTransform><ScaleTransform ScaleX="0.9" ScaleY="0.9" /></Ellipse.RenderTransform>
+          </Ellipse>
+          <Ellipse Name="ripple2" Stroke="#594FC3F7" StrokeThickness="1" Fill="Transparent"
+                   Opacity="0" RenderTransformOrigin="50%,50%">
+            <Ellipse.RenderTransform><ScaleTransform ScaleX="0.9" ScaleY="0.9" /></Ellipse.RenderTransform>
+          </Ellipse>
+          <!-- body: outer glow + inner darkening, three stacked radial gradients (highlight on top) -->
+          <Border CornerRadius="1000" BoxShadow="0 0 40 0 #594FC3F7, inset 0 0 24 0 #660B0F14">
+            <Panel>
+              <Ellipse>
+                <Ellipse.Fill>
+                  <RadialGradientBrush Center="40%,55%" GradientOrigin="40%,55%" RadiusX="0.7" RadiusY="0.7">
+                    <GradientStop Offset="0" Color="#EB4FC3F7" />
+                    <GradientStop Offset="1" Color="#B8155F82" />
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Ellipse>
+                <Ellipse.Fill>
+                  <RadialGradientBrush Center="64%,70%" GradientOrigin="64%,70%" RadiusX="0.6" RadiusY="0.6">
+                    <GradientStop Offset="0" Color="#8C29A8E0" />
+                    <GradientStop Offset="1" Color="#0029A8E0" />
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Ellipse>
+                <Ellipse.Fill>
+                  <RadialGradientBrush Center="32%,28%" GradientOrigin="32%,28%" RadiusX="0.45" RadiusY="0.45">
+                    <GradientStop Offset="0" Color="#38EAF1F8" />
+                    <GradientStop Offset="1" Color="#00EAF1F8" />
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+            </Panel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="controls|VoiceOrb[IsLive=True] /template/ Ellipse#ripple1">
+    <Style.Animations>
+      <Animation Duration="0:0:2.4" IterationCount="INFINITE" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0.8" />
+          <Setter Property="ScaleTransform.ScaleX" Value="0.9" />
+          <Setter Property="ScaleTransform.ScaleY" Value="0.9" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="ScaleTransform.ScaleX" Value="1.45" />
+          <Setter Property="ScaleTransform.ScaleY" Value="1.45" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+  <Style Selector="controls|VoiceOrb[IsLive=True] /template/ Ellipse#ripple2">
+    <Style.Animations>
+      <Animation Duration="0:0:2.4" Delay="0:0:1.2" IterationCount="INFINITE" Easing="CubicEaseOut">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="0.8" />
+          <Setter Property="ScaleTransform.ScaleX" Value="0.9" />
+          <Setter Property="ScaleTransform.ScaleY" Value="0.9" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0" />
+          <Setter Property="ScaleTransform.ScaleX" Value="1.45" />
+          <Setter Property="ScaleTransform.ScaleY" Value="1.45" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
   </Style>
 
   <!-- ── status pill: mono caps label + 7px dot; live dot pulses cyan (uses the vx-dot rule). ── -->
