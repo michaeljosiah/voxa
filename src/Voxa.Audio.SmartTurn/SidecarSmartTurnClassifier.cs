@@ -89,9 +89,14 @@ public sealed class SidecarSmartTurnClassifier : ISmartTurnClassifier, IDisposab
         {
             // A crashed / erroring / timed-out sidecar must never hold the turn open — fail to "complete"
             // and let the next turn relaunch it (the process was reset above / StartAsync relaunches it).
-            // Warn (not Debug): a silent drop to classic silence detection is a degraded state worth seeing.
+            // A timeout is a "slow this turn / slow first-run load" event → Information; a real failure
+            // (e.g. Python/deps missing, model load error, process exit) → Warning. No longer Debug, which
+            // is below the typical Information floor (so it was invisible).
             _started = false;
-            _logger.LogWarning(ex, "Smart-turn sidecar failed or timed out; falling back to classic silence detection (turn-complete).");
+            if (ex is OperationCanceledException)
+                _logger.LogInformation("Smart-turn sidecar timed out; classic silence detection this turn.");
+            else
+                _logger.LogWarning(ex, "Smart-turn sidecar failed; falling back to classic silence detection (turn-complete).");
             return true;
         }
         finally
