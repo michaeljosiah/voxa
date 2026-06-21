@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- NU1901: low-severity advisory on a transitive AWSSDK.Core (no fixed version yet); the AWS SDK is the
+         only way to reach Transcribe streaming. Revisit when AWS ships a patched Core. -->
+    <NoWarn>$(NoWarn);CS1591;NU1901</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Speech.Aws</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>AWS Transcribe streaming speech-to-text for the Voxa pipeline. Implements ISpeechToTextEngine over the official AWSSDK.TranscribeStreaming client — pair with the generic SpeechToTextProcessor from Voxa.Speech.Abstractions.</Description>
+    <PackageTags>voxa;voice;ai;aws;transcribe;stt;streaming</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Voxa.Speech.Aws.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.TranscribeStreaming" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

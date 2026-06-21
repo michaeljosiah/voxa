@@ -9,10 +9,12 @@ using OpenAI;
 using Voxa.AspNetCore;
 using Voxa.Audio.SileroVad;
 using Voxa.Speech.AssemblyAI;
+using Voxa.Speech.Aws;
 using Voxa.Speech.Azure;
 using Voxa.Speech.Deepgram;
 using Voxa.Speech.ElevenLabs;
 using Voxa.Speech.Gladia;
+using Voxa.Speech.Google;
 using Voxa.Speech.Groq;
 using Voxa.Speech.Kokoro;
 using Voxa.Speech.Mistral;
@@ -53,6 +55,8 @@ public static class VoxaDefaultsExtensions
             voxa.AddProvider(AssemblyAISpeechDescriptors.Stt);    // AssemblyAI (streaming WebSocket)
             voxa.AddProvider(GladiaSpeechDescriptors.Stt);        // Gladia (streaming WebSocket + HTTP session-init)
             voxa.AddProvider(SpeechmaticsSpeechDescriptors.Stt);  // Speechmatics (streaming WebSocket)
+            voxa.AddProvider(GoogleSpeechDescriptors.Stt);        // Google Cloud Speech v2 (gRPC streaming)
+            voxa.AddProvider(AwsSpeechDescriptors.Stt);           // AWS Transcribe (streaming)
             voxa.AddProvider(AzureSpeechDescriptors.Stt);
             voxa.AddProvider(AzureSpeechDescriptors.Tts);
             voxa.AddProvider(ElevenLabsDescriptors.Tts);
