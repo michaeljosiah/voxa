@@ -216,11 +216,6 @@ public sealed partial class TalkViewModel : ObservableObject
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private bool _startBlocked;
 
-    /// <summary>Clicking a waterfall stage block deep-links to Metrics (§5 cross-navigation).</summary>
-    public event Action<string>? OpenInMetricsRequested;
-
-    internal void RequestStageInMetrics(string stage) => OpenInMetricsRequested?.Invoke(stage);
-
     /// <summary>Immutable snapshot for the trace control; replaced on each drain that saw VAD windows.</summary>
     [ObservableProperty] private IReadOnlyList<VadSample> _traceSnapshot = [];
 
@@ -256,6 +251,17 @@ public sealed partial class TalkViewModel : ObservableObject
         ErrorText = null;
         Phase = TalkPhase.WarmingUp;
         _sessionStartTick = NowTick();
+
+        // Each session starts clean — the transcript is now the primary Talk surface, so a re-start
+        // must not prepend the previous conversation, and the aside counters must reset to this run.
+        Transcript.Clear();
+        Waterfalls.Clear();
+        EventLog.Clear();
+        _trace.Clear();
+        TraceSnapshot = [];
+        _streamingBot = null;
+        _stages = new Dictionary<string, double>();
+        _turnNumber = 0;
         TurnCount = 0;
         BargeInCount = 0;
         TtfbText = "—";

@@ -55,13 +55,6 @@ public sealed partial class MainWindowViewModel : ObservableObject
             SelectedSection = 3;
         };
 
-        // Talk's waterfall deep-link: land on that stage's series in the workbench (§5).
-        Talk.OpenInMetricsRequested += stage =>
-        {
-            Metrics.FocusStage(stage);
-            SelectedSection = 4;
-        };
-
         // Voices' audition: open the TTS lab and preselect the voice (its tested synth + playback).
         // A local catalog voice (Piper/Kokoro) is selected for real; a cloud/cloned voice the lab
         // can't synthesize just opens the lab (TrySelectVoice returns false, selection untouched).
