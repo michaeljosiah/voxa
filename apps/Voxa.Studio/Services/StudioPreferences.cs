@@ -15,7 +15,7 @@ public sealed class StudioPreferences
         _path = path ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "voxa-studio-prefs.json");
 
-    public string ThemeId { get; set; } = "warm";
+    public string ThemeId { get; set; } = "cool";
 
     public static StudioPreferences Load(string? path = null)
     {

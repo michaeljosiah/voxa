@@ -1,12 +1,12 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-  <!-- ════════ VOXA Studio stylesheet (VST-002, re-toned VST-003) ════════
-       Dark, calm, one accent: warm-neutral surfaces, warm hairlines, a single coral
-       doing the talking (Claude-like). Compact controls — radii: 7 controls · 10 cards
+  <!-- ════════ VOXA Studio stylesheet (VST-002; VST-005 rebrand warm→cool) ════════
+       Dark, calm, one accent: cool blue-grey surfaces, cool hairlines, a single Pulse
+       cyan doing the talking (Voxa). Compact controls — radii: 7 controls · 10 cards
        · 12 modals. Motion tokens (Theme/Motion.cs): fast 120 · standard 240 · draw 1100
-       · pulse 2600; XAML transitions hardcode the same values. Text on coral is warm
-       white. If a screen looks exciting while idle, it's wrong. -->
+       · pulse 2600; XAML transitions hardcode the same values. Text on cyan is page ink.
+       If a screen looks exciting while idle, it's wrong. -->
 
   <Style Selector="Window">
     <Setter Property="Background" Value="{StaticResource VxBgBrush}" />
