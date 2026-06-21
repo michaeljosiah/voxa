@@ -35,6 +35,9 @@ public sealed class GladiaSttEngine : WebSocketSttEngine
             bit_depth = 16,
             channels = 1,
             language_config = string.IsNullOrEmpty(_options.Language) ? null : new { languages = new[] { _options.Language } },
+            // Stream partial (interim) transcripts, not just finals — gives a live transcript and lets the
+            // shared accumulator re-arm on a new utterance's first interim instead of relying on the timeout.
+            messages_config = new { receive_partial_transcripts = true },
         });
 
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);

@@ -70,4 +70,21 @@ public class StreamingTranscriptAccumulatorTests
         var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
         Assert.Equal(new[] { "turn one", "turn two" }, finals); // not "turn one turn two"
     }
+
+    [Fact] // Codex P1 (round 2): a final-only provider (no interims) must not lose every utterance after the first.
+    public async Task A_final_only_provider_recovers_after_the_late_final_window()
+    {
+        long t = 1000;
+        var acc = new StreamingTranscriptAccumulator(() => t, lateFinalWindowMs: 500);
+        acc.OnFragment("hi", isSegmentFinal: true, null);     // utterance A (final-only)
+        acc.Flush(null);                                      // VAD ends A → emits "hi"; window armed at t=1000
+        t = 1100;
+        acc.OnFragment("hi", isSegmentFinal: true, null);     // A's late tail, within window → dropped
+        t = 3000;
+        acc.OnFragment("bye", isSegmentFinal: true, null);    // utterance B, after window → accepted (re-armed)
+        acc.Flush(null);                                      // emits "bye"
+
+        var finals = (await Drain(acc)).Where(r => r.IsFinal).Select(r => r.Text).ToList();
+        Assert.Equal(new[] { "hi", "bye" }, finals); // B not dropped, A's tail not bled
+    }
 }

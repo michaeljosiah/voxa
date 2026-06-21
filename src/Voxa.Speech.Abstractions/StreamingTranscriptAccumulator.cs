@@ -3,19 +3,36 @@ using System.Threading.Channels;
 namespace Voxa.Speech;
 
 /// <summary>
-/// Shared interim-display + VAD-gated-final accumulation for streaming STT engines that are NOT on the
-/// <see cref="WebSocketSttEngine"/> base (SDK-backed vendors: Google, AWS). Mirrors that base's turn integration
-/// exactly: <see cref="OnFragment"/> streams interims (<c>IsFinal:false</c>) for live display and accumulates the
-/// vendor's locked segments; <see cref="Flush"/> emits one accumulated <c>IsFinal:true</c> result at the
-/// VAD/smart-turn speech-end — so a streaming SDK vendor drives exactly one agent turn per utterance.
+/// Shared interim-display + VAD-gated-final accumulation for streaming STT engines (the WebSocket base and the
+/// SDK-backed Google/AWS engines). Mirrors the turn integration once: <see cref="OnFragment"/> streams interims
+/// (<c>IsFinal:false</c>) for live display and accumulates the vendor's locked segments; <see cref="Flush"/> emits
+/// one accumulated <c>IsFinal:true</c> result at the VAD/smart-turn speech-end — so a streaming vendor drives
+/// exactly one agent turn per utterance.
+///
+/// <para><b>Anti-bleed.</b> When the VAD flushes a turn before the provider has delivered its final, that final
+/// arrives just afterwards. Such a late final is dropped (it's the flushed turn's tail, already emitted) so it
+/// can't merge into the next turn — but only within a short window after the flush: a non-empty interim, or any
+/// final after the window, marks a genuinely new utterance and re-arms accumulation. The window keeps the drop
+/// from starving a <em>final-only</em> provider (one that never emits interims) of its later utterances.</para>
 /// </summary>
 public sealed class StreamingTranscriptAccumulator
 {
     private readonly Channel<TranscriptionResult> _channel = Channel.CreateUnbounded<TranscriptionResult>();
     private readonly object _lock = new();
     private readonly List<string> _finalSegments = new();
+    private readonly Func<long> _nowMs;
+    private readonly long _lateFinalWindowMs;
     private string _interimTail = string.Empty;
-    private bool _awaitingNewUtterance; // after a flush: drop the flushed turn's trailing finals until a new interim
+    private bool _awaitingNewUtterance; // after a flush: drop the flushed turn's trailing finals until re-armed
+    private long _flushedAtMs;
+
+    /// <param name="clock">Monotonic millisecond clock; defaults to <see cref="Environment.TickCount64"/> (injectable for tests).</param>
+    /// <param name="lateFinalWindowMs">How long after a flush a segment-final is treated as the flushed turn's late tail (dropped).</param>
+    public StreamingTranscriptAccumulator(Func<long>? clock = null, int lateFinalWindowMs = 600)
+    {
+        _nowMs = clock ?? (static () => Environment.TickCount64);
+        _lateFinalWindowMs = lateFinalWindowMs;
+    }
 
     /// <summary>The transcription stream the engine returns from <c>ReadTranscriptsAsync</c>.</summary>
     public IAsyncEnumerable<TranscriptionResult> ReadAllAsync(CancellationToken ct) => _channel.Reader.ReadAllAsync(ct);
@@ -29,11 +46,18 @@ public sealed class StreamingTranscriptAccumulator
         {
             if (_awaitingNewUtterance)
             {
-                // The VAD ended (flushed) the turn before the provider finalized it; a segment-final arriving now
-                // is the flushed turn's tail — drop it so it can't bleed into the next turn. A non-empty interim
-                // means a genuinely new utterance has begun, which re-arms accumulation.
-                if (isSegmentFinal || text.Length == 0) return;
-                _awaitingNewUtterance = false;
+                if (isSegmentFinal)
+                {
+                    // Late final within the window = the just-flushed turn's tail → drop (anti-bleed). After the
+                    // window it's a new utterance from a final-only provider → accept and re-arm.
+                    if (_nowMs() - _flushedAtMs < _lateFinalWindowMs) return;
+                    _awaitingNewUtterance = false;
+                }
+                else
+                {
+                    if (text.Length == 0) return;   // empty interim can't start a new utterance
+                    _awaitingNewUtterance = false;  // a real interim marks the new utterance
+                }
             }
 
             if (isSegmentFinal)
@@ -61,6 +85,7 @@ public sealed class StreamingTranscriptAccumulator
             _finalSegments.Clear();
             _interimTail = string.Empty;
             _awaitingNewUtterance = true; // discard the flushed turn's late provider finals (anti-bleed)
+            _flushedAtMs = _nowMs();
         }
         if (!string.IsNullOrWhiteSpace(full))
             _channel.Writer.TryWrite(new TranscriptionResult(full, IsFinal: true, language));
