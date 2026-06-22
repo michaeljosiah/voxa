@@ -524,6 +524,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Voxa Studio's headless test host no longer hangs `dotnet test` at exit.** `Voxa.Studio.Tests` ran its
+  Avalonia-headless app with real Skia rendering (`UseHeadlessDrawing = false`), which starts a continuous
+  render loop that kept the Avalonia dispatcher busy after the tests finished — so the per-assembly
+  `HeadlessUnitTestSession` never went idle, the test host never exited, and `dotnet test` blocked forever
+  (confirmed from a hang dump: the xUnit runner parked in `RunTestsInAssembly`, the session dispatcher still
+  live). All 255 tests *passed* in ~3 s first, which is why it surfaced only as a hang — and it burned
+  multiple ~6h CI runs and three v0.6.0-alpha release attempts. The test app (`TestAppBuilder`) now defaults
+  to **headless drawing** (no render loop → the host exits cleanly the instant tests finish) and enables
+  real Skia only for the opt-in brand capture/export utilities (`VOXA_STUDIO_CAPTURE` / `VOXA_BRAND_EXPORT`).
+  With the root cause fixed, the CI/release test gate is simplified back to a plain per-project exit-code
+  check (the temporary trx-counters/`--blame-hang-timeout` workaround is removed; per-project stays because
+  the whole-solution `dotnet test Voxa.slnx` has a separate vstest orchestration hang, tracked for later).
+  Test/CI-only — no runtime behavior change.
 - **Smart-turn / cloning-TTS sidecars no longer flash a console window on Windows, and smart-turn
   failures are now visible.** The Python sidecar launchers (`ProcessSmartTurnSidecar` in
   `Voxa.Audio.SmartTurn`, `ProcessSidecarChannel` in `Voxa.Speech.Sidecar`) started `python.exe` with
