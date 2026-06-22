@@ -31,35 +31,38 @@ jobs:
       # LocalModels tests run in their own cached, network-blocked lane below — the everyday
       # inner loop stays fast and download-free.
       #
-      # Run each project in its own `dotnet test` invocation (a whole-solution run can't isolate the
-      # problem below), and GATE ON THE TEST RESULT, not the host's process exit. Voxa.Studio.Tests'
-      # 255 tests pass in ~3s, then its Avalonia-headless test host fails to EXIT (a live teardown
-      # thread) — `dotnet test` never returns, so a whole-solution run burned ~6h CI runs. Use vstest's
-      # OWN `--blame-hang-timeout` to bound it (NOT an external `timeout`: SIGTERM kills dotnet before it
-      # flushes its summary AND its trx, so both are lost — that's why the stdout/trx gate misfired).
-      # blame-hang completes the run, flushes "Passed!", then aborts the stuck host with a non-zero exit;
-      # we accept that IFF the run reported all-passed. A genuine failure / no-results crash still fails.
-      # NB: GitHub runs this under `bash -e`, so capture with `out=$(...) || rc=$?` (a bare failure aborts
-      # the step). Root-cause teardown fix is tracked; the windows lane's hang dump pinpoints the thread.
+      # Run each project in its own `dotnet test`, and GATE ON THE TRX <Counters>, not the process exit
+      # or stdout. Voxa.Studio.Tests' tests pass in ~3s, then its Avalonia-headless test host fails to
+      # EXIT (a live teardown thread): `dotnet test` never returns (a whole-solution run burned ~6h CI
+      # runs), and on Linux vstest aborts the stuck host WITHOUT printing the "Passed!" summary — only
+      # `--blame-hang-timeout` reliably writes the trx first. So bound each run with --blame-hang-timeout
+      # and read the trx: pass iff failed=0 AND error=0 AND aborted=0 (the host-abort sets outcome="Failed"
+      # and a non-zero exit even when every test passed; the counters are the truth). A genuine failure
+      # has failed>0; a no-results crash has no trx → both fail. Missing counters fail-closed (default 1).
+      # Root-cause teardown fix is tracked separately (the windows lane writes a hang dump naming it).
       - name: Test
         run: |
           shopt -s nullglob
           failed=""
           for proj in tests/*/*.csproj; do
             name="$(basename "$proj" .csproj)"
+            trx="$(dirname "$proj")/TestResults/${name}.trx"
+            rm -f "$trx"
             echo "::group::test ${name}"
-            rc=0
-            out="$(dotnet test "$proj" --configuration Release --no-build --verbosity normal \
-              --filter "Category!=LocalModels" --blame-hang-timeout 90s --logger "trx;LogFileName=${name}.trx" 2>&1)" || rc=$?
-            printf '%s\n' "$out"
+            dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+              --filter "Category!=LocalModels" --blame-hang-timeout 90s --logger "trx;LogFileName=${name}.trx" 2>&1 || true
             echo "::endgroup::"
-            [ "${rc}" -eq 0 ] && continue
-            if printf '%s' "$out" | grep -qE "Passed!.*Failed:[[:space:]]+0,"; then
-              echo "::warning::${name}: tests passed but the test host did not exit (rc=${rc}); accepting"
-              continue
+            if [ ! -f "$trx" ]; then echo "::error::${name}: no trx (run did not complete)"; failed="${failed} ${name}"; continue; fi
+            c="$(grep -oE '<Counters [^>]*/>' "$trx" | head -1 || true)"
+            f="$(printf '%s' "$c" | grep -oE 'failed="[0-9]+"' | grep -oE '[0-9]+' || true)";  f="${f:-1}"
+            e="$(printf '%s' "$c" | grep -oE ' error="[0-9]+"' | grep -oE '[0-9]+' || true)";  e="${e:-1}"
+            a="$(printf '%s' "$c" | grep -oE ' aborted="[0-9]+"' | grep -oE '[0-9]+' || true)"; a="${a:-1}"
+            if [ "$f" -eq 0 ] && [ "$e" -eq 0 ] && [ "$a" -eq 0 ]; then
+              echo "${name}: ok ($(printf '%s' "$c" | grep -oE 'passed="[0-9]+"' | grep -oE '[0-9]+') passed)"
+            else
+              echo "::error::${name}: failed=${f} error=${e} aborted=${a}"
+              failed="${failed} ${name}"
             fi
-            echo "::error::${name} failed (rc=${rc})"
-            failed="${failed} ${name}"
           done
           [ -z "${failed}" ] || { echo "::error::Tests failed:${failed}"; exit 1; }
 
@@ -85,22 +88,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Voxa.Studio.Tests' 255 tests pass in ~3s, then the Avalonia-headless test host fails to EXIT
-      # (a live teardown thread) — it cancelled this lane at 6h once. --blame-hang-timeout makes vstest
-      # kill the stuck host (and write a dump naming the lingering thread for the root-cause fix). Gate
-      # on the RESULT, not the exit code: accept a host-hang-after-all-passed; a real failure still fails.
+      # Voxa.Studio.Tests' tests pass in ~3s, then the Avalonia-headless test host fails to EXIT (a live
+      # teardown thread) — it cancelled this lane at 6h once. --blame-hang-timeout kills the stuck host
+      # (writing a dump naming the lingering thread for the root-cause fix) AND writes the trx first. Gate
+      # on the trx <Counters>, not the exit code: the host-abort sets a non-zero exit + outcome="Failed"
+      # even when every test passed, so accept iff failed=0 AND error=0 AND aborted=0; a real failure fails.
       - name: Build & test Studio
         shell: pwsh
         run: |
           dotnet build tests/Voxa.Studio.Tests --configuration Release
-          $out = dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 90s --logger "trx;LogFileName=studio-results.trx" 2>&1 | Out-String
-          Write-Host $out
-          if ($LASTEXITCODE -eq 0) { exit 0 }
-          if ($out -match 'Passed!.*Failed:\s+0,') {
-            Write-Host "::warning::Studio tests passed but the test host did not exit (exit $LASTEXITCODE); accepting"
-            exit 0
-          }
-          Write-Host "::error::Studio tests failed (exit $LASTEXITCODE)"
+          $trx = "tests/Voxa.Studio.Tests/TestResults/studio-results.trx"
+          Remove-Item $trx -ErrorAction SilentlyContinue
+          dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 90s --logger "trx;LogFileName=studio-results.trx" 2>&1 | Write-Host
+          if (-not (Test-Path $trx)) { Write-Host "::error::Studio: no trx (run did not complete)"; exit 1 }
+          $c = ([xml](Get-Content $trx)).TestRun.ResultSummary.Counters
+          Write-Host "Studio counters: passed=$($c.passed) failed=$($c.failed) error=$($c.error) aborted=$($c.aborted)"
+          if ([int]$c.failed -eq 0 -and [int]$c.error -eq 0 -and [int]$c.aborted -eq 0) { exit 0 }
+          Write-Host "::error::Studio tests failed (failed=$($c.failed) error=$($c.error) aborted=$($c.aborted))"
           exit 1
 
       - name: Upload Studio test results
