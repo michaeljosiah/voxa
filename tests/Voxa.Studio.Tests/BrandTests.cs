@@ -45,16 +45,18 @@ public class BrandTests
         MotionSettings.SetOverride(true);
         try
         {
-            var window = new Window
-            {
-                Width = 100, Height = 100,
-                Content = new VoxaMarkControl { Width = 88, Height = 88, Animated = true, Glow = true },
-            };
-            window.Show();
+            var mark = new VoxaMarkControl { Width = 88, Height = 88, Animated = true, Glow = true };
+            var window = new Window { Width = 100, Height = 100, Content = mark };
+            window.Show(); // resolves the mark's resources/brushes; throws if the render path is broken
 
-            // Reduced motion = finished mark immediately, no ticker — a frame must render.
-            var frame = window.CaptureRenderedFrame();
-            Assert.NotNull(frame);
+            // Reduced motion = the finished mark immediately, with no animation ticker left running.
+            Assert.False(mark.IsTickerRunning);
+
+            // A real captured frame only exists on the Skia backend (the capture/export lanes); the
+            // default headless-drawing backend has no surface to read back. See TestAppBuilder.
+            if (TestAppBuilder.RealPixels)
+                Assert.NotNull(window.CaptureRenderedFrame());
+
             window.Close();
         }
         finally

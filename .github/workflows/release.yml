@@ -45,37 +45,23 @@ jobs:
         run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        # Run each test project in its own `dotnet test`, and GATE ON THE TRX <Counters>, not the process
-        # exit or stdout. Voxa.Studio.Tests' tests pass in ~3s, then its Avalonia-headless test host fails
-        # to EXIT (a live teardown thread) so `dotnet test` never returns — in a whole-solution run that
-        # burned the first two v0.6.0-alpha release attempts. `--blame-hang-timeout` bounds the hang and
-        # (unlike an external `timeout`'s SIGTERM) writes the trx first; on Linux it aborts the host with a
-        # non-zero exit + outcome="Failed" WITHOUT printing the "Passed!" summary, so the trx counters are
-        # the only reliable signal: pass iff failed=0 AND error=0 AND aborted=0. A real failure has
-        # failed>0; a no-results crash has no trx → both fail (missing counters fail-closed). LocalModels
-        # stays excluded (its own model-cached lane in ci.yml; empty-filter trx is total=0/failed=0 = pass).
+        # Run each test project in its own `dotnet test` and gate on its exit code. The whole-solution
+        # `dotnet test Voxa.slnx` still hangs after all tests pass (a vstest multi-assembly orchestration
+        # issue, even sequentially) though every project exits cleanly alone — so per-project stays. The
+        # trx-counters/blame-hang gate this replaced was only needed because Voxa.Studio.Tests' headless
+        # host didn't exit; that's fixed (no Skia render loop — see TestAppBuilder), so an exit-code check
+        # suffices. A per-project `timeout` fails fast on any future host-exit regression; `|| rc=$?` keeps
+        # it errexit-safe under `bash -e`. LocalModels stays excluded (its own model-cached lane in ci.yml).
         run: |
           shopt -s nullglob
           failed=""
           for proj in tests/*/*.csproj; do
             name="$(basename "$proj" .csproj)"
-            trx="$(dirname "$proj")/TestResults/${name}.trx"
-            rm -f "$trx"
             echo "::group::test ${name}"
-            dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" \
-              --blame-hang-timeout 90s --logger "trx;LogFileName=${name}.trx" 2>&1 || true
+            rc=0
+            timeout 180 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" || rc=$?
             echo "::endgroup::"
-            if [ ! -f "$trx" ]; then echo "::error::${name}: no trx (run did not complete)"; failed="${failed} ${name}"; continue; fi
-            c="$(grep -oE '<Counters [^>]*/>' "$trx" | head -1 || true)"
-            f="$(printf '%s' "$c" | grep -oE 'failed="[0-9]+"' | grep -oE '[0-9]+' || true)";  f="${f:-1}"
-            e="$(printf '%s' "$c" | grep -oE ' error="[0-9]+"' | grep -oE '[0-9]+' || true)";  e="${e:-1}"
-            a="$(printf '%s' "$c" | grep -oE ' aborted="[0-9]+"' | grep -oE '[0-9]+' || true)"; a="${a:-1}"
-            if [ "$f" -eq 0 ] && [ "$e" -eq 0 ] && [ "$a" -eq 0 ]; then
-              echo "${name}: ok"
-            else
-              echo "::error::${name}: failed=${f} error=${e} aborted=${a}"
-              failed="${failed} ${name}"
-            fi
+            if [ "${rc}" -ne 0 ]; then echo "::error::${name} failed (rc=${rc})"; failed="${failed} ${name}"; fi
           done
           [ -z "${failed}" ] || { echo "::error::Tests failed:${failed}"; exit 1; }
 
