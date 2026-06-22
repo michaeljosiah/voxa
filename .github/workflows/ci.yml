@@ -31,33 +31,35 @@ jobs:
       # LocalModels tests run in their own cached, network-blocked lane below — the everyday
       # inner loop stays fast and download-free.
       #
-      # Run each project in its own `dotnet test` invocation, not one whole-solution run: the
-      # solution-wide `dotnet test Voxa.slnx` HANGS after every test passes when a test host fails
-      # to exit (Voxa.Studio.Tests' Avalonia-headless teardown intermittently leaves a live thread).
-      # In one run that poisons the whole solution (the ~6h "Build & test" burns); per-project it
-      # only stalls that one project. So: `timeout` each project, and RETRY once on a non-zero exit —
-      # the hang is intermittent, so the retry passes. A genuine test failure fails both attempts and
-      # is reported. NB: GitHub runs this with `bash -e`, so capture exit codes with `|| rc=$?`
-      # (a bare command's failure would abort the whole step before the loop can record it).
+      # Run each project in its own `dotnet test` invocation (a whole-solution run can't isolate the
+      # problem below), and GATE ON THE TEST RESULT, not the host's process exit. Voxa.Studio.Tests'
+      # 255 tests pass in ~3s, then its Avalonia-headless test host fails to EXIT (a live teardown
+      # thread) — `dotnet test` never returns, so a whole-solution run burned ~6h CI runs. Here we
+      # `timeout` each project and, on a non-zero exit, accept it IFF the run reported all-passed
+      # (host hung after success); a genuine failure or a no-results crash still fails. NB: GitHub
+      # runs this under `bash -e`, so capture with `out=$(...) || rc=$?` (a bare failure would abort
+      # the whole step). Root-cause teardown fix is tracked; the blame dumps (windows lane) pinpoint it.
       - name: Test
         run: |
           shopt -s nullglob
           failed=""
           for proj in tests/*/*.csproj; do
             name="$(basename "$proj" .csproj)"
-            ok=0
-            for attempt in 1 2; do
-              echo "::group::test ${name} (attempt ${attempt})"
-              rc=0
-              timeout 120 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
-                --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.${attempt}.trx" || rc=$?
-              echo "::endgroup::"
-              if [ "${rc}" -eq 0 ]; then ok=1; break; fi
-              echo "::warning::test ${name} attempt ${attempt} exited ${rc}$([ "${rc}" -eq 124 ] && echo ' (timeout/hang)')"
-            done
-            [ "${ok}" -eq 1 ] || failed="${failed} ${name}"
+            echo "::group::test ${name}"
+            rc=0
+            out="$(timeout 90 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+              --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.trx" 2>&1)" || rc=$?
+            printf '%s\n' "$out"
+            echo "::endgroup::"
+            [ "${rc}" -eq 0 ] && continue
+            if printf '%s' "$out" | grep -qE "Passed!.*Failed:[[:space:]]+0,"; then
+              echo "::warning::${name}: tests passed but the test host did not exit (rc=${rc}); accepting"
+              continue
+            fi
+            echo "::error::${name} failed (rc=${rc})"
+            failed="${failed} ${name}"
           done
-          [ -z "${failed}" ] || { echo "::error::Tests failed/hung after retry:${failed}"; exit 1; }
+          [ -z "${failed}" ] || { echo "::error::Tests failed:${failed}"; exit 1; }
 
       - name: Upload test results
         if: always()
@@ -81,20 +83,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Voxa.Studio.Tests' Avalonia-headless test host intermittently hangs at EXIT after all tests
-      # pass (it cancelled this lane at 6h once). --blame-hang-timeout makes vstest kill a stuck host
-      # (writing a dump naming the culprit) instead of stalling; retry once since the hang is intermittent.
+      # Voxa.Studio.Tests' 255 tests pass in ~3s, then the Avalonia-headless test host fails to EXIT
+      # (a live teardown thread) — it cancelled this lane at 6h once. --blame-hang-timeout makes vstest
+      # kill the stuck host (and write a dump naming the lingering thread for the root-cause fix). Gate
+      # on the RESULT, not the exit code: accept a host-hang-after-all-passed; a real failure still fails.
       - name: Build & test Studio
         shell: pwsh
         run: |
           dotnet build tests/Voxa.Studio.Tests --configuration Release
-          $ok = $false
-          foreach ($attempt in 1..2) {
-            dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 150s --logger "trx;LogFileName=studio-results.$attempt.trx"
-            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
-            Write-Host "::warning::Studio test attempt $attempt exited $LASTEXITCODE"
+          $out = dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 90s --logger "trx;LogFileName=studio-results.trx" 2>&1 | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -eq 0) { exit 0 }
+          if ($out -match 'Passed!.*Failed:\s+0,') {
+            Write-Host "::warning::Studio tests passed but the test host did not exit (exit $LASTEXITCODE); accepting"
+            exit 0
           }
-          if (-not $ok) { exit 1 }
+          Write-Host "::error::Studio tests failed (exit $LASTEXITCODE)"
+          exit 1
 
       - name: Upload Studio test results
         if: always()

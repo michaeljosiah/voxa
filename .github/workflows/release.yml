@@ -45,31 +45,33 @@ jobs:
         run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        # Run each test project in its own `dotnet test` invocation instead of one whole-solution run.
-        # `dotnet test Voxa.slnx` HANGS after every test passes when a test host fails to exit
-        # (Voxa.Studio.Tests' Avalonia-headless teardown intermittently leaves a live thread) — it
-        # poisons the whole-solution run and burned the first two v0.6.0-alpha release attempts.
-        # Per-project + `timeout` isolates it; RETRY once on a non-zero exit since the hang is
-        # intermittent (a genuine failure fails both attempts and is reported). NB: GitHub uses
-        # `bash -e`, so capture exit codes with `|| rc=$?` or a bare failure aborts the whole step.
+        # Run each test project in its own `dotnet test`, and GATE ON THE TEST RESULT, not the host's
+        # process exit. Voxa.Studio.Tests' tests pass in ~3s, then its Avalonia-headless test host
+        # fails to EXIT (a live teardown thread) so `dotnet test` never returns — in a whole-solution
+        # run that poisoned everything and burned the first two v0.6.0-alpha release attempts. Here we
+        # `timeout` each project and, on a non-zero exit, accept it IFF the run reported all-passed
+        # (host hung after success); a genuine failure or no-results crash still fails. NB: GitHub uses
+        # `bash -e`, so capture with `out=$(...) || rc=$?` or a bare failure aborts the whole step.
         # LocalModels stays excluded: it has its own model-cached lane in ci.yml.
         run: |
           shopt -s nullglob
           failed=""
           for proj in tests/*/*.csproj; do
             name="$(basename "$proj" .csproj)"
-            ok=0
-            for attempt in 1 2; do
-              echo "::group::test ${name} (attempt ${attempt})"
-              rc=0
-              timeout 120 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" || rc=$?
-              echo "::endgroup::"
-              if [ "${rc}" -eq 0 ]; then ok=1; break; fi
-              echo "::warning::test ${name} attempt ${attempt} exited ${rc}$([ "${rc}" -eq 124 ] && echo ' (timeout/hang)')"
-            done
-            [ "${ok}" -eq 1 ] || failed="${failed} ${name}"
+            echo "::group::test ${name}"
+            rc=0
+            out="$(timeout 90 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" 2>&1)" || rc=$?
+            printf '%s\n' "$out"
+            echo "::endgroup::"
+            [ "${rc}" -eq 0 ] && continue
+            if printf '%s' "$out" | grep -qE "Passed!.*Failed:[[:space:]]+0,"; then
+              echo "::warning::${name}: tests passed but the test host did not exit (rc=${rc}); accepting"
+              continue
+            fi
+            echo "::error::${name} failed (rc=${rc})"
+            failed="${failed} ${name}"
           done
-          [ -z "${failed}" ] || { echo "::error::Tests failed/hung after retry:${failed}"; exit 1; }
+          [ -z "${failed}" ] || { echo "::error::Tests failed:${failed}"; exit 1; }
 
       - name: Pack
         # Pack EVERY packable project under src/ (auto-discovered) rather than a hand-maintained list —
