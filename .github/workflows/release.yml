@@ -45,11 +45,30 @@ jobs:
         run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        # Exclude the LocalModels lane: those tests download real speech models (hundreds of MB) and
-        # have their own model-cached CI lane (ci.yml). Running them here with no cache hangs the release
-        # until timeout — v0.6.0-alpha's first attempt ran ~51 min before cancellation. This matches the
-        # ci.yml main lane and the documented inner-loop command.
-        run: dotnet test Voxa.slnx --configuration Release --no-build --filter "Category!=LocalModels"
+        # Run each test project in its own `dotnet test` invocation instead of one whole-solution run.
+        # `dotnet test Voxa.slnx` intermittently HANGS after every test passes — vstest's parallel
+        # multi-assembly run leaves orphan test-host processes at teardown, so the command never exits
+        # (it burned several 6h CI runs and the first two v0.6.0-alpha release attempts). Every project
+        # exits cleanly on its own (verified across all 38), so a per-project loop is reliable. A
+        # per-project `timeout` makes any future single-project hang fail fast rather than stall.
+        # LocalModels stays excluded: it has its own model-cached lane in ci.yml.
+        run: |
+          shopt -s nullglob
+          failed=""
+          for proj in tests/*/*.csproj; do
+            echo "::group::test ${proj}"
+            timeout 180 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels"
+            code=$?
+            echo "::endgroup::"
+            if [ "${code}" -ne 0 ]; then
+              echo "::error::tests failed or timed out (exit ${code}): ${proj}"
+              failed="${failed} ${proj}"
+            fi
+          done
+          if [ -n "${failed}" ]; then
+            echo "Failed/hung projects:${failed}"
+            exit 1
+          fi
 
       - name: Pack
         # Pack EVERY packable project under src/ (auto-discovered) rather than a hand-maintained list —
