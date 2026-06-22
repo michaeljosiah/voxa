@@ -13,6 +13,7 @@ jobs:
   build:
     name: Build & test
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # backstop: no run should ever burn the 6h default on a hang
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +30,26 @@ jobs:
 
       # LocalModels tests run in their own cached, network-blocked lane below — the everyday
       # inner loop stays fast and download-free.
+      #
+      # Run each project in its own `dotnet test` invocation, not one whole-solution run: the
+      # solution-wide `dotnet test Voxa.slnx` intermittently HANGS after every test passes (vstest
+      # leaves orphan test-host processes from its parallel multi-assembly teardown) — that's what
+      # burned the ~6h "Build & test" runs on recent merges. Every project exits cleanly on its own;
+      # a per-project `timeout` makes any future single-project hang fail fast instead of stalling.
       - name: Test
-        run: dotnet test Voxa.slnx --configuration Release --no-build --verbosity normal --filter "Category!=LocalModels" --logger "trx;LogFileName=test-results.trx"
+        run: |
+          shopt -s nullglob
+          failed=""
+          for proj in tests/*/*.csproj; do
+            name="$(basename "$proj" .csproj)"
+            echo "::group::test ${name}"
+            timeout 180 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+              --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.trx"
+            code=$?
+            echo "::endgroup::"
+            if [ "${code}" -ne 0 ]; then echo "::error::tests failed/timed out (exit ${code}): ${name}"; failed="${failed} ${name}"; fi
+          done
+          [ -z "${failed}" ] || { echo "Failed/hung projects:${failed}"; exit 1; }
 
       - name: Upload test results
         if: always()
@@ -45,6 +64,7 @@ jobs:
     # job (the view models are Avalonia-free; Avalonia.Headless needs no display server) — this
     # lane proves the Windows leg: WASAPI-referencing build, Windows font/resource resolution.
     runs-on: windows-latest
+    timeout-minutes: 15   # this single-project lane hung ~6h once; bound it hard
     steps:
       - uses: actions/checkout@v4
 
@@ -53,10 +73,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # --blame-hang-timeout: if a Studio test hangs (this lane was cancelled at 6h once on
+      # windows-latest), vstest kills it and writes a hang dump naming the culprit — actionable
+      # data + fast failure instead of an opaque multi-hour stall.
       - name: Build & test Studio
         run: |
           dotnet build tests/Voxa.Studio.Tests --configuration Release
-          dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --logger "trx;LogFileName=studio-results.trx"
+          dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 180s --logger "trx;LogFileName=studio-results.trx"
 
       - name: Upload Studio test results
         if: always()
@@ -68,6 +91,7 @@ jobs:
   local-speech:
     name: Local speech (zero network)
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # generous: a cache miss downloads hundreds of MB of models
     env:
       # Models cache inside the workspace so actions/cache can persist it. The integration tests
       # resolve their cache root via VoxaModelCacheOptions.ResolveCacheRoot(), which honours this
