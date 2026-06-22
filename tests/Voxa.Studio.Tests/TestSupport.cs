@@ -23,17 +23,18 @@ namespace Voxa.Studio.Tests;
 /// </para>
 /// <para>
 /// So default to <b>headless drawing</b> (no render loop → the host exits cleanly the instant tests
-/// finish). Real Skia pixels are only needed by the opt-in brand capture/export utilities
-/// (<c>VOXA_STUDIO_CAPTURE</c> / <c>VOXA_BRAND_EXPORT</c>), which enable Skia on demand and accept the
-/// render-loop cost for a manual run.
+/// finish). Real Skia pixels are only needed by the opt-in screenshot utility (<c>VOXA_STUDIO_CAPTURE=1</c>,
+/// which reads back rendered Avalonia windows via <c>CaptureRenderedFrame</c>); it enables Skia on demand
+/// and accepts that the render loop then keeps the host alive until the (manual) run is killed.
+/// (<c>VOXA_BRAND_EXPORT</c> draws the NuGet icon with raw SkiaSharp, not Avalonia rendering, so it does
+/// NOT need this and stays on the fast, clean-exit path.)
 /// </para>
 /// </summary>
 public static class TestAppBuilder
 {
-    /// <summary>True when a capture/export run asked for real Skia pixels (and the render loop).</summary>
+    /// <summary>True when the screenshot utility asked for real Skia pixels (and the render loop).</summary>
     public static bool RealPixels { get; } =
-        Environment.GetEnvironmentVariable("VOXA_STUDIO_CAPTURE") == "1" ||
-        Environment.GetEnvironmentVariable("VOXA_BRAND_EXPORT") == "1";
+        Environment.GetEnvironmentVariable("VOXA_STUDIO_CAPTURE") == "1";
 
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()

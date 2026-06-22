@@ -31,14 +31,14 @@ jobs:
       # LocalModels tests run in their own cached, network-blocked lane below — the everyday
       # inner loop stays fast and download-free.
       #
-      # Run each project in its own `dotnet test` and gate on its exit code. The whole-solution
-      # `dotnet test Voxa.slnx` still hangs after all tests pass (a vstest multi-assembly orchestration
-      # issue that persists even sequentially) even though every project exits cleanly in isolation — so
-      # per-project stays. The previous trx-counters/blame-hang gate was only needed because
-      # Voxa.Studio.Tests' headless test host itself didn't exit; that root cause is fixed (the test app
-      # no longer starts the Skia render loop — see TestAppBuilder), so a plain exit-code check is enough.
-      # A per-project `timeout` makes any future host-exit regression fail fast (and name the project)
-      # instead of stalling; `|| rc=$?` keeps it errexit-safe under GitHub's `bash -e`.
+      # Run each project in its own `dotnet test` and gate on its exit code. The previous
+      # trx-counters/blame-hang gate was only needed because Voxa.Studio.Tests' headless test host itself
+      # didn't exit; that root cause is fixed (the test app no longer starts the Skia render loop — see
+      # TestAppBuilder), so a plain exit-code check is enough. Per-project stays because the whole-solution
+      # `dotnet test Voxa.slnx` still APPEARS to hang after all tests pass — a separate, untriaged vstest
+      # multi-assembly issue (it reproduced even with `-- RunConfiguration.MaxCpuCount=1`) while every
+      # project exits cleanly in isolation; tracked for later. A per-project `timeout` makes any future
+      # host-exit regression fail fast (and name the project); `|| rc=$?` keeps it errexit-safe under `bash -e`.
       - name: Test
         run: |
           shopt -s nullglob
@@ -47,7 +47,7 @@ jobs:
             name="$(basename "$proj" .csproj)"
             echo "::group::test ${name}"
             rc=0
-            timeout 180 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+            timeout -k 30 180 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
               --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.trx" || rc=$?
             echo "::endgroup::"
             if [ "${rc}" -ne 0 ]; then echo "::error::${name} failed (rc=${rc})"; failed="${failed} ${name}"; fi

@@ -47,7 +47,8 @@ public class BrandTests
         {
             var mark = new VoxaMarkControl { Width = 88, Height = 88, Animated = true, Glow = true };
             var window = new Window { Width = 100, Height = 100, Content = mark };
-            window.Show(); // resolves the mark's resources/brushes; throws if the render path is broken
+            window.Show(); // resolves the mark's resources/brushes + runs layout (the paint itself is
+                           // only exercised on the Skia capture lane, where the frame is also asserted)
 
             // Reduced motion = the finished mark immediately, with no animation ticker left running.
             Assert.False(mark.IsTickerRunning);

@@ -45,13 +45,14 @@ jobs:
         run: dotnet build Voxa.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        # Run each test project in its own `dotnet test` and gate on its exit code. The whole-solution
-        # `dotnet test Voxa.slnx` still hangs after all tests pass (a vstest multi-assembly orchestration
-        # issue, even sequentially) though every project exits cleanly alone — so per-project stays. The
+        # Run each test project in its own `dotnet test` and gate on its exit code. The
         # trx-counters/blame-hang gate this replaced was only needed because Voxa.Studio.Tests' headless
         # host didn't exit; that's fixed (no Skia render loop — see TestAppBuilder), so an exit-code check
-        # suffices. A per-project `timeout` fails fast on any future host-exit regression; `|| rc=$?` keeps
-        # it errexit-safe under `bash -e`. LocalModels stays excluded (its own model-cached lane in ci.yml).
+        # suffices. Per-project stays because the whole-solution `dotnet test Voxa.slnx` still APPEARS to
+        # hang after all tests pass — a separate, untriaged vstest multi-assembly issue (reproduced even
+        # with MaxCpuCount=1) while every project exits cleanly alone; tracked for later. A per-project
+        # `timeout` fails fast on any future host-exit regression; `|| rc=$?` keeps it errexit-safe under
+        # `bash -e`. LocalModels stays excluded (its own model-cached lane in ci.yml).
         run: |
           shopt -s nullglob
           failed=""
@@ -59,7 +60,7 @@ jobs:
             name="$(basename "$proj" .csproj)"
             echo "::group::test ${name}"
             rc=0
-            timeout 180 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" || rc=$?
+            timeout -k 30 180 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" || rc=$?
             echo "::endgroup::"
             if [ "${rc}" -ne 0 ]; then echo "::error::${name} failed (rc=${rc})"; failed="${failed} ${name}"; fi
           done
