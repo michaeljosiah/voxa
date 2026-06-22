@@ -34,11 +34,13 @@ jobs:
       # Run each project in its own `dotnet test` invocation (a whole-solution run can't isolate the
       # problem below), and GATE ON THE TEST RESULT, not the host's process exit. Voxa.Studio.Tests'
       # 255 tests pass in ~3s, then its Avalonia-headless test host fails to EXIT (a live teardown
-      # thread) — `dotnet test` never returns, so a whole-solution run burned ~6h CI runs. Here we
-      # `timeout` each project and, on a non-zero exit, accept it IFF the run reported all-passed
-      # (host hung after success); a genuine failure or a no-results crash still fails. NB: GitHub
-      # runs this under `bash -e`, so capture with `out=$(...) || rc=$?` (a bare failure would abort
-      # the whole step). Root-cause teardown fix is tracked; the blame dumps (windows lane) pinpoint it.
+      # thread) — `dotnet test` never returns, so a whole-solution run burned ~6h CI runs. Use vstest's
+      # OWN `--blame-hang-timeout` to bound it (NOT an external `timeout`: SIGTERM kills dotnet before it
+      # flushes its summary AND its trx, so both are lost — that's why the stdout/trx gate misfired).
+      # blame-hang completes the run, flushes "Passed!", then aborts the stuck host with a non-zero exit;
+      # we accept that IFF the run reported all-passed. A genuine failure / no-results crash still fails.
+      # NB: GitHub runs this under `bash -e`, so capture with `out=$(...) || rc=$?` (a bare failure aborts
+      # the step). Root-cause teardown fix is tracked; the windows lane's hang dump pinpoints the thread.
       - name: Test
         run: |
           shopt -s nullglob
@@ -47,8 +49,8 @@ jobs:
             name="$(basename "$proj" .csproj)"
             echo "::group::test ${name}"
             rc=0
-            out="$(timeout 90 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
-              --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.trx" 2>&1)" || rc=$?
+            out="$(dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+              --filter "Category!=LocalModels" --blame-hang-timeout 90s --logger "trx;LogFileName=${name}.trx" 2>&1)" || rc=$?
             printf '%s\n' "$out"
             echo "::endgroup::"
             [ "${rc}" -eq 0 ] && continue

@@ -48,10 +48,11 @@ jobs:
         # Run each test project in its own `dotnet test`, and GATE ON THE TEST RESULT, not the host's
         # process exit. Voxa.Studio.Tests' tests pass in ~3s, then its Avalonia-headless test host
         # fails to EXIT (a live teardown thread) so `dotnet test` never returns — in a whole-solution
-        # run that poisoned everything and burned the first two v0.6.0-alpha release attempts. Here we
-        # `timeout` each project and, on a non-zero exit, accept it IFF the run reported all-passed
-        # (host hung after success); a genuine failure or no-results crash still fails. NB: GitHub uses
-        # `bash -e`, so capture with `out=$(...) || rc=$?` or a bare failure aborts the whole step.
+        # run that poisoned everything and burned the first two v0.6.0-alpha release attempts. Use
+        # vstest's OWN `--blame-hang-timeout` (NOT an external `timeout`: SIGTERM kills dotnet before it
+        # flushes its summary, so the gate can't see the pass). blame-hang flushes "Passed!" then aborts
+        # the stuck host non-zero; accept that IFF the run reported all-passed (a genuine failure /
+        # no-results crash still fails). NB: GitHub uses `bash -e`, so capture with `out=$(...) || rc=$?`.
         # LocalModels stays excluded: it has its own model-cached lane in ci.yml.
         run: |
           shopt -s nullglob
@@ -60,7 +61,7 @@ jobs:
             name="$(basename "$proj" .csproj)"
             echo "::group::test ${name}"
             rc=0
-            out="$(timeout 90 dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" 2>&1)" || rc=$?
+            out="$(dotnet test "$proj" --configuration Release --no-build --filter "Category!=LocalModels" --blame-hang-timeout 90s 2>&1)" || rc=$?
             printf '%s\n' "$out"
             echo "::endgroup::"
             [ "${rc}" -eq 0 ] && continue
