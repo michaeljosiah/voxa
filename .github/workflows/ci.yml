@@ -32,24 +32,32 @@ jobs:
       # inner loop stays fast and download-free.
       #
       # Run each project in its own `dotnet test` invocation, not one whole-solution run: the
-      # solution-wide `dotnet test Voxa.slnx` intermittently HANGS after every test passes (vstest
-      # leaves orphan test-host processes from its parallel multi-assembly teardown) — that's what
-      # burned the ~6h "Build & test" runs on recent merges. Every project exits cleanly on its own;
-      # a per-project `timeout` makes any future single-project hang fail fast instead of stalling.
+      # solution-wide `dotnet test Voxa.slnx` HANGS after every test passes when a test host fails
+      # to exit (Voxa.Studio.Tests' Avalonia-headless teardown intermittently leaves a live thread).
+      # In one run that poisons the whole solution (the ~6h "Build & test" burns); per-project it
+      # only stalls that one project. So: `timeout` each project, and RETRY once on a non-zero exit —
+      # the hang is intermittent, so the retry passes. A genuine test failure fails both attempts and
+      # is reported. NB: GitHub runs this with `bash -e`, so capture exit codes with `|| rc=$?`
+      # (a bare command's failure would abort the whole step before the loop can record it).
       - name: Test
         run: |
           shopt -s nullglob
           failed=""
           for proj in tests/*/*.csproj; do
             name="$(basename "$proj" .csproj)"
-            echo "::group::test ${name}"
-            timeout 180 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
-              --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.trx"
-            code=$?
-            echo "::endgroup::"
-            if [ "${code}" -ne 0 ]; then echo "::error::tests failed/timed out (exit ${code}): ${name}"; failed="${failed} ${name}"; fi
+            ok=0
+            for attempt in 1 2; do
+              echo "::group::test ${name} (attempt ${attempt})"
+              rc=0
+              timeout 120 dotnet test "$proj" --configuration Release --no-build --verbosity normal \
+                --filter "Category!=LocalModels" --logger "trx;LogFileName=${name}.${attempt}.trx" || rc=$?
+              echo "::endgroup::"
+              if [ "${rc}" -eq 0 ]; then ok=1; break; fi
+              echo "::warning::test ${name} attempt ${attempt} exited ${rc}$([ "${rc}" -eq 124 ] && echo ' (timeout/hang)')"
+            done
+            [ "${ok}" -eq 1 ] || failed="${failed} ${name}"
           done
-          [ -z "${failed}" ] || { echo "Failed/hung projects:${failed}"; exit 1; }
+          [ -z "${failed}" ] || { echo "::error::Tests failed/hung after retry:${failed}"; exit 1; }
 
       - name: Upload test results
         if: always()
@@ -73,13 +81,20 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # --blame-hang-timeout: if a Studio test hangs (this lane was cancelled at 6h once on
-      # windows-latest), vstest kills it and writes a hang dump naming the culprit — actionable
-      # data + fast failure instead of an opaque multi-hour stall.
+      # Voxa.Studio.Tests' Avalonia-headless test host intermittently hangs at EXIT after all tests
+      # pass (it cancelled this lane at 6h once). --blame-hang-timeout makes vstest kill a stuck host
+      # (writing a dump naming the culprit) instead of stalling; retry once since the hang is intermittent.
       - name: Build & test Studio
+        shell: pwsh
         run: |
           dotnet build tests/Voxa.Studio.Tests --configuration Release
-          dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 180s --logger "trx;LogFileName=studio-results.trx"
+          $ok = $false
+          foreach ($attempt in 1..2) {
+            dotnet test tests/Voxa.Studio.Tests --configuration Release --no-build --blame-hang-timeout 150s --logger "trx;LogFileName=studio-results.$attempt.trx"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Host "::warning::Studio test attempt $attempt exited $LASTEXITCODE"
+          }
+          if (-not $ok) { exit 1 }
 
       - name: Upload Studio test results
         if: always()
