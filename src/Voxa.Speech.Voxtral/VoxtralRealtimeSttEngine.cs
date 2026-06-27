@@ -40,12 +40,12 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     // Stop-drain bookkeeping. _pendingAudio: audio appended since the last commit (uncommitted tail — set on the
-    // data loop, cleared on the system loop). _awaitingDone: a commit was sent for buffered audio and its
-    // transcription.done hasn't arrived yet. StopAsync waits for either before closing so the last utterance —
-    // whether already committed (a clean stop right after flush) or only buffered (an abrupt disconnect) — still
-    // reaches downstream. The receive loop completes _drainSignal when the done arrives.
+    // data loop, cleared inside the send lock). _pendingDones: how many committed utterances are still awaiting
+    // their transcription.done (a COUNT, not a flag — back-to-back utterances can have several commits in flight
+    // before the server finalizes any). StopAsync waits until the count reaches zero before closing, so no
+    // committed utterance is dropped. The receive loop decrements on each done and completes _drainSignal at zero.
     private volatile bool _pendingAudio;
-    private volatile bool _awaitingDone;
+    private int _pendingDones;
     private volatile TaskCompletionSource? _drainSignal;
 
     private ClientWebSocket? _ws;
@@ -145,25 +145,29 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
-            await _sendLock.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                // Snapshot INSIDE the lock: every append serialized before this commit has run (and set
-                // _pendingAudio), and any later append is ordered after it on the wire — so _pendingAudio here is
-                // exactly the audio this commit finalizes. Snapshotting before the lock could miss a racing append.
-                var hadAudio = _pendingAudio;
-                await ws.SendAsync(VoxtralWire.Commit(final: false), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None)
-                    .ConfigureAwait(false);
-                _pendingAudio = false;                 // this utterance has been committed for finalization
-                if (hadAudio) _awaitingDone = true;    // the server now owes us its transcription.done
-            }
-            finally { _sendLock.Release(); }
+            await SendCommitAsync(ws, final: false, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
         {
             // Socket gone — nothing left to commit.
         }
+    }
+
+    // Send a commit and, under the same lock that serializes appends, account for the done it will produce.
+    // Reading _pendingAudio INSIDE the lock means every append ordered before this commit has set it (and any
+    // later append is ordered after it on the wire), so we count exactly one expected done per committed utterance.
+    private async Task SendCommitAsync(ClientWebSocket ws, bool final, CancellationToken ct)
+    {
+        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var hadAudio = _pendingAudio;
+            await ws.SendAsync(VoxtralWire.Commit(final), WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
+            _pendingAudio = false;
+            if (hadAudio) Interlocked.Increment(ref _pendingDones); // the server now owes us a transcription.done
+        }
+        finally { _sendLock.Release(); }
     }
 
     public async Task StopAsync()
@@ -175,22 +179,19 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
             {
                 using var close = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-                // Arm a drain signal so we can wait for an outstanding transcription.done before closing — either a
-                // committed utterance hasn't finalized yet (_awaitingDone, e.g. a stop right after a normal flush
-                // whose done is still in flight) or there's uncommitted tail audio the final commit below will
-                // finalize (_pendingAudio, e.g. an abrupt disconnect mid-utterance). The receive loop completes it.
+                // Arm a drain signal, THEN send the end-of-all-audio commit (which finalizes any uncommitted tail
+                // and bumps _pendingDones for it). The receive loop completes the signal once _pendingDones hits
+                // zero — i.e. every committed utterance, including back-to-back ones still in flight, has finalized.
                 var drain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _drainSignal = drain;
-                if (!_awaitingDone && !_pendingAudio) drain.TrySetResult(); // nothing outstanding — don't block
+                await SendCommitAsync(ws, final: true, close.Token).ConfigureAwait(false);
+                if (Volatile.Read(ref _pendingDones) <= 0) drain.TrySetResult(); // nothing outstanding — don't block
 
-                // Signal end-of-all-audio so the server flushes any tail and tears down cleanly.
-                await SendSerializedAsync(ws, VoxtralWire.Commit(final: true), close.Token).ConfigureAwait(false);
-
-                // Drain the final transcript before closing, so the last utterance still reaches downstream
+                // Drain the final transcript(s) before closing, so the last utterance still reaches downstream
                 // (mirrors the other engines' stop-drain). Bounded by the close budget; the receive loop is still
-                // running here (we cancel it only after), so the done is read and queued before we complete below.
+                // running here (we cancel it only after), so the dones are read and queued before we complete below.
                 try { await drain.Task.WaitAsync(close.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) { /* no tail arrived within the budget */ }
+                catch (OperationCanceledException) { /* not all finalized within the budget */ }
 
                 await _sendLock.WaitAsync(close.Token).ConfigureAwait(false);
                 try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", close.Token).ConfigureAwait(false); }
@@ -266,8 +267,10 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 _running.Clear();
                 if (!string.IsNullOrWhiteSpace(text))
                     _transcripts.Writer.TryWrite(new TranscriptionResult(text, IsFinal: true, _options.Language));
-                _awaitingDone = false;
-                _drainSignal?.TrySetResult(); // let a stop-drain proceed now the tail final has been queued
+                // One committed utterance finalized; only release a stop-drain once ALL of them have (count → 0),
+                // so back-to-back utterances still in flight aren't dropped by an early-closing socket.
+                if (Interlocked.Decrement(ref _pendingDones) <= 0)
+                    _drainSignal?.TrySetResult();
                 break;
 
             case VoxtralServerEvent.Error:
@@ -276,7 +279,6 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 // ErrorFrame, and release any stop-drain. Further frames are ignored (the channel is completed).
                 var error = m.Text.Length > 0 ? m.Text : "unspecified error";
                 _logger.LogError("Voxtral server reported an error: {Error}", error);
-                _awaitingDone = false;
                 _drainSignal?.TrySetResult();
                 _transcripts.Writer.TryComplete(new VoxaModelUnavailableException($"Voxtral server error: {error}"));
                 break;

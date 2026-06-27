@@ -131,6 +131,29 @@ public class VoxtralRealtimeSttEngineTests
         Assert.Contains(finals, r => r.Text == "committed");
     }
 
+    [Fact] // codex P2: several commits can be in flight at stop — every pending done must drain, not just the first
+    public async Task StopAsync_Drains_All_Pending_Finals_For_Back_To_Back_Utterances()
+    {
+        // Delayed dones keep both commits in flight when StopAsync runs; a single-bool drain would release after
+        // the first done and drop the second utterance's final.
+        await using var server = new MiniRealtimeServer(deltas: ["u"], doneText: "utterance", doneDelayMs: 150);
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+        await engine.FlushAsync();   // utterance 1 committed; done delayed/in flight
+        await engine.WriteAudioAsync(new byte[] { 3, 4 }, CancellationToken.None);
+        await engine.FlushAsync();   // utterance 2 committed; both dones now outstanding
+        await engine.StopAsync();    // must drain BOTH dones before closing
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var finals = 0;
+        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
+            if (r.IsFinal && r.Text == "utterance") finals++;
+        Assert.Equal(2, finals);
+    }
+
     [Fact] // codex P2: a stop with un-flushed audio (abrupt disconnect mid-utterance) still drains the tail transcript
     public async Task StopAsync_Drains_The_Tail_Transcript_When_Audio_Was_Not_Flushed()
     {
