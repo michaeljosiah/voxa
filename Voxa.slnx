@@ -44,6 +44,7 @@
     <Project Path="src/Voxa.Speech.Sidecar/Voxa.Speech.Sidecar.csproj" />
     <Project Path="src/Voxa.Speech.Speechmatics/Voxa.Speech.Speechmatics.csproj" />
     <Project Path="src/Voxa.Speech.Together/Voxa.Speech.Together.csproj" />
+    <Project Path="src/Voxa.Speech.Voxtral/Voxa.Speech.Voxtral.csproj" />
     <Project Path="src/Voxa.Speech.WhisperCpp/Voxa.Speech.WhisperCpp.csproj" />
     <Project Path="src/Voxa.Testing/Voxa.Testing.csproj" />
     <Project Path="src/Voxa.Transports.Telephony/Voxa.Transports.Telephony.csproj" />
@@ -83,6 +84,7 @@
     <Project Path="tests/Voxa.Speech.Sidecar.Tests/Voxa.Speech.Sidecar.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Speechmatics.Tests/Voxa.Speech.Speechmatics.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.Together.Tests/Voxa.Speech.Together.Tests.csproj" />
+    <Project Path="tests/Voxa.Speech.Voxtral.Tests/Voxa.Speech.Voxtral.Tests.csproj" />
     <Project Path="tests/Voxa.Speech.WhisperCpp.Tests/Voxa.Speech.WhisperCpp.Tests.csproj" />
     <Project Path="tests/Voxa.Studio.Tests/Voxa.Studio.Tests.csproj" />
     <Project Path="tests/Voxa.Transports.Telephony.Tests/Voxa.Transports.Telephony.Tests.csproj" />

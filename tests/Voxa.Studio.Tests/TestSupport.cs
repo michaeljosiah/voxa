@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
 using Microsoft.Extensions.Configuration;
+using Voxa.Speech.Voxtral;
 using Voxa.Studio;
 using Voxa.Studio.Audio;
 using Voxa.Studio.Services;
@@ -97,11 +98,19 @@ public static class TestSupport
                 new NullAudioDevice(),
                 secrets ?? new MemorySecretsStore(),
                 activations ?? new ProviderActivationStore(TempActivationsPath()),
-                profiles ?? new PipelineProfileStore(TempProfilesPath()));
+                profiles ?? new PipelineProfileStore(TempProfilesPath()),
+                new NoGpu());   // tests never shell out to nvidia-smi — keep the default-STT gate deterministic
         }
         finally
         {
             Environment.SetEnvironmentVariable("VOXA_MODEL_CACHE", prior);
         }
+    }
+
+    /// <summary>A GPU probe reporting no device, so the VLS-009 default-STT gate stays on whisper.cpp in tests
+    /// (the selector's own tests inject a capable probe explicitly).</summary>
+    private sealed class NoGpu : IGpuInfoProbe
+    {
+        public int LargestGpuMemoryGb() => 0;
     }
 }

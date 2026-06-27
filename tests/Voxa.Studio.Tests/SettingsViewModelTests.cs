@@ -16,7 +16,7 @@ public class SettingsViewModelTests
         var vm = new ProvidersViewModel(Service());
 
         var localNames = vm.Rows.Where(r => r.IsLocal).Select(r => r.Manifest.Name).OrderBy(n => n);
-        Assert.Equal(["Echo", "Kokoro", "Piper", "WhisperCpp"], localNames);
+        Assert.Equal(["Echo", "Kokoro", "Piper", "Voxtral", "WhisperCpp"], localNames);
 
         var available = vm.Available.Select(m => m.Name).OrderBy(n => n);
         Assert.Equal(

@@ -56,6 +56,7 @@ public static class MistralDescriptors
             SttModel         = s["SttModel"] ?? "voxtral-mini-latest",
             InputSampleRate  = s.GetValue("InputSampleRate", 16000),
             SttLanguage      = s["SttLanguage"],
+            SttStreaming     = s.GetValue("SttStreaming", true),
             SttBufferSeconds = s.GetValue("SttBufferSeconds", 30.0),
         };
     }

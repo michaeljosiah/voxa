@@ -37,6 +37,8 @@
     <ProjectReference Include="..\Voxa.Audio.SileroVad\Voxa.Audio.SileroVad.csproj" />
     <!-- Local/offline speech tier (VLS-001): no API keys, no network after first-run download. -->
     <ProjectReference Include="..\Voxa.Speech.WhisperCpp\Voxa.Speech.WhisperCpp.csproj" />
+    <!-- Heavy local STT (VLS-009): Voxtral-Mini-4B-Realtime via a local vLLM server; GPU-gated default in Studio. -->
+    <ProjectReference Include="..\Voxa.Speech.Voxtral\Voxa.Speech.Voxtral.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Piper\Voxa.Speech.Piper.csproj" />
     <ProjectReference Include="..\Voxa.Speech.Kokoro\Voxa.Speech.Kokoro.csproj" />
     <!-- Telephony transport (VTL-001): MapVoxaTwilioVoice + the shared telephony base. Opt-in via the

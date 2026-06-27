@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Quality &amp; Design Audit — whole solution</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin: 24px 0 8px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-critical { color: var(--bad); font-weight: 700; }
+  .sev-major { color: var(--warn); font-weight: 700; }
+  .sev-minor { color: var(--accent); font-weight: 600; }
+  .sev-note { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.critical { background: #4a1416; color: #ff8a80; }
+  .badge.major { background: #4a3214; color: #ffcc80; }
+  .badge.minor { background: #143a4a; color: #81d4fa; }
+  .badge.note { background: #232a35; color: #b6c2d2; }
+  .badge.conf { background: #143a20; color: #a5d6a7; }
+  .badge.likely { background: #3a3214; color: #ffe082; }
+  .badge.spec { background: #3a1c1c; color: #ef9a9a; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .finding { background: linear-gradient(180deg, rgba(22,27,34,0.78) 0%, rgba(28,35,48,0.35) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin: 22px 0; }
+  .finding h3 { margin-top: 0; }
+  .finding .loc { display: block; margin: 8px 0 12px; color: var(--muted); }
+  .small { color: var(--muted); font-size: 0.82rem; }
+  .nowrap { white-space: nowrap; }
+  ul.flat { padding-left: 20px; }
+  ul.flat li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>Code Quality &amp; Design Audit — whole solution</h1>
+  <div class="sub">Evidence-based audit of design, maintainability, async/resource safety, DRY, and hot-path performance across Voxa.</div>
+  <div class="meta-grid">
+    <div><b>Scope</b> whole solution (<code>src/</code>, <code>apps/</code>, tests skimmed; <code>samples/</code>/<code>bench/</code> not judged)</div>
+    <div><b>Branch/commit</b> <code>main</code> @ <code>ac9e486a5e093874080e42b36ca4ae79c9b4b131</code></div>
+    <div><b>Build</b> Pass: <code>dotnet build Voxa.slnx --configuration Release</code> (0 warnings, 0 errors)</div>
+    <div><b>Tests</b> Partial pass: <code>Category!=LocalModels</code>; 26 projects green, Studio.Tests timed out locally</div>
+    <div><b>Date</b> 2026-06-20</div>
+    <div><b>Files reviewed</b> 770 <code>.cs</code> files inventoried; 81,183 LOC excluding <code>bin/</code>/<code>obj/</code></div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#scorecard">Dimension scorecard</a></li>
+    <li><a href="#index">Findings index</a></li>
+    <li><a href="#details">Detailed findings</a></li>
+    <li><a href="#intentional">Confirmed-intentional</a></li>
+    <li><a href="#quick-wins">Quick wins</a></li>
+    <li><a href="#appendix">Appendix</a></li>
+  </ol>
+</nav>
+
+<h2 id="summary"><span class="secno">1.</span>Executive summary</h2>
+<div class="callout">
+  <p><b>Overall health:</b> Voxa's core architecture is sound and well-documented: frame processors are isolated, vendor seams are intentionally testable, <code>Voxa.Core</code> stays dependency-clean, and the Release build is warning-free. Nothing in this audit blocks shipping by itself.</p>
+  <p>The meaningful issues cluster into three themes. First, processor teardown is too dependent on <code>EndFrame</code>, so normal request-abort disposal skips several derived/resource cleanup paths. Second, a few hot paths still allocate or copy on every frame despite the repo's explicit real-time allocation goals. Third, several provider packages have high-risk copy-paste twins, especially the OpenAI Realtime and Azure Voice Live protocol stacks.</p>
+  <p>The highest-value fixes are small: make <code>FrameProcessor.DisposeAsync</code> safely extensible, move <code>OnEndAsync</code>-only resource release into real disposal, remove the eager per-frame <code>Frame.Id</code> allocation, and extract the duplicated realtime wire protocol.</p>
+</div>
+
+<h2 id="scorecard"><span class="secno">2.</span>Dimension scorecard</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Findings (C/Maj/Min)</th><th>One-line verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Business-logic placement &amp; layering</td><td>0 / 1 / 0</td><td>Layering is mostly clean; Studio's builder compiler mirrors production composition logic by hand and can drift.</td></tr>
+    <tr><td>Bad C# practices</td><td>0 / 4 / 2</td><td>No sync-over-async hot-path issues found; resource disposal and cancellation propagation have real gaps.</td></tr>
+    <tr><td>DRY violations</td><td>0 / 2 / 2</td><td>Most duplication is provider boilerplate, but realtime protocol and WAV/STT code are duplicated enough to create drift risk.</td></tr>
+    <tr><td>Performance / hot-path issues</td><td>0 / 2 / 1</td><td>Core frame allocation and VAD buffer handling are the only clear hot-path costs worth prioritizing from static review.</td></tr>
+    <tr><td>Simplification / optimization</td><td>0 / 0 / 2</td><td>Small safe simplifications exist; no broad simplification rewrite is warranted.</td></tr>
+    <tr><td>Over-engineering / YAGNI</td><td>0 / 0 / 0</td><td>Clean after applying the repo's testability/extensibility rules; apparent one-impl seams are load-bearing or documented.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="index"><span class="secno">3.</span>Findings index</h2>
+<table>
+  <thead><tr><th>ID</th><th>Dimension</th><th>Severity</th><th>Confidence</th><th>Location</th><th>One-line problem</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#cq-001">CQ-001</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Core/Processors/AgentLoopProcessor.cs:336</code></td><td>Shadowed <code>DisposeAsync</code> is skipped when processors are disposed through <code>FrameProcessor</code>.</td></tr>
+    <tr><td><a href="#cq-002">CQ-002</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Services.OpenAIRealtime/OpenAIRealtimeProcessor.cs:67</code></td><td>Realtime transports are disposed only from <code>OnEndAsync</code>, not abrupt request-abort disposal.</td></tr>
+    <tr><td><a href="#cq-003">CQ-003</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Speech.Abstractions/SpeechToTextProcessor.cs:60</code></td><td>Granular speech processors release engines/sessions only on <code>EndFrame</code>.</td></tr>
+    <tr><td><a href="#cq-004">CQ-004</a></td><td>Performance</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Core/Frames/Frame.cs:22</code></td><td>Every frame eagerly allocates a ULID string used only by tracing.</td></tr>
+    <tr><td><a href="#cq-005">CQ-005</a></td><td>Performance</td><td class="sev-major">Major</td><td>Likely</td><td><code>src/Voxa.Audio.SileroVad/SileroVadProcessor.cs:117</code></td><td>VAD uses <code>List&lt;float&gt;</code> append + front <code>RemoveRange</code> on the audio-frame path.</td></tr>
+    <tr><td><a href="#cq-006">CQ-006</a></td><td>DRY</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:19</code></td><td>OpenAI Realtime and Azure Voice Live duplicate the same wire protocol and transport stack.</td></tr>
+    <tr><td><a href="#cq-007">CQ-007</a></td><td>Layering</td><td class="sev-major">Major</td><td>Certain</td><td><code>apps/Voxa.Studio/Services/BuilderChainCompiler.cs:31</code></td><td>Studio mirrors production pipeline composition instead of consuming a shared composition service.</td></tr>
+    <tr><td><a href="#cq-008">CQ-008</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:158</code></td><td>REST STT HTTP calls drop pipeline cancellation and can hang until <code>HttpClient.Timeout</code>.</td></tr>
+    <tr><td><a href="#cq-009">CQ-009</a></td><td>DRY</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Cli/WavIO.cs:62</code></td><td>Minimal WAV PCM16 read/write code is reimplemented across six production areas.</td></tr>
+    <tr><td><a href="#cq-010">CQ-010</a></td><td>Bad C# practices</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Core/Processors/FrameProcessor.cs:84</code></td><td>A linked CTS created in <code>Start</code> is never disposed.</td></tr>
+    <tr><td><a href="#cq-011">CQ-011</a></td><td>Performance</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Observability/TracingProcessor.cs:38</code></td><td>Tracing builds the activity name string before checking whether tracing is observed.</td></tr>
+    <tr><td><a href="#cq-012">CQ-012</a></td><td>Simplification</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Speech.Abstractions/TranscriptionFilter.cs:84</code></td><td><code>ToLowerInvariant()</code> is redundant before an ordinal-ignore-case substring check.</td></tr>
+    <tr><td><a href="#cq-013">CQ-013</a></td><td>DRY / Simplification</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Speech.OpenAI/OpenAISpeechDescriptors.cs:46</code></td><td>Provider defaults and shared HTTP-client resolution are repeated across descriptors.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="details"><span class="secno">4.</span>Detailed findings</h2>
+
+<section class="finding" id="cq-001">
+  <h3>[MAJOR] AgentLoopProcessor cleanup is hidden behind a shadowed DisposeAsync <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Core/Processors/AgentLoopProcessor.cs:336</code>
+  <p><b>Dimension:</b> Bad C# practices: lifetime/resource bugs.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>public new async ValueTask DisposeAsync()
+{
+    _processorCts.Cancel();
+    _processorCts.Dispose();
+    await base.DisposeAsync().ConfigureAwait(false);
+}</code></pre>
+  <pre><code>public async ValueTask DisposeAsync()
+{
+    _processorCts.Cancel();
+    ...
+}</code></pre>
+  <p>The base method above is <code>src/Voxa.Core/Processors/FrameProcessor.cs:214</code>; it is not virtual. The production disposer iterates <code>IReadOnlyList&lt;FrameProcessor&gt;</code> and calls the base-typed method:</p>
+  <pre><code>foreach (var p in _pipeline.Processors)
+{
+    await p.DisposeAsync().ConfigureAwait(false);
+}</code></pre>
+  <p><b>Why it matters:</b> <code>AgentLoopProcessor</code>'s private CTS at <code>AgentLoopProcessor.cs:46</code> is not cancelled/disposed when the pipeline runner disposes the chain. On normal request-abort teardown, the turn worker may remain governed by a CTS the runner never cancels, and every agent session leaks that CTS registration/object until finalization or process exit.</p>
+  <p><b>Recommendation:</b> Make the base disposal path extensible and require derived cleanup to override it. The smallest safe change is to make <code>FrameProcessor.DisposeAsync</code> <code>virtual</code> and change this method to <code>override</code>; alternatively add a protected virtual <code>DisposeCoreAsync</code> called from the base method and move derived cleanup there.</p>
+  <p><b>Effort:</b> trivial.</p>
+</section>
+
+<section class="finding" id="cq-002">
+  <h3>[MAJOR] Realtime transports leak on request-abort disposal <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Services.OpenAIRealtime/OpenAIRealtimeProcessor.cs:67</code>
+  <p><b>Dimension:</b> Bad C# practices: lifetime/resource bugs.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+{
+    if (_transport is not null)
+    {
+        await _transport.DisposeAsync().ConfigureAwait(false);
+        _transport = null;
+    }
+}</code></pre>
+  <p>The same pattern exists in <code>src/Voxa.Services.AzureVoiceLive/AzureVoiceLiveProcessor.cs:62-68</code>. The transport holds disposable resources:</p>
+  <pre><code>private readonly ClientWebSocket _ws = new();
+private readonly SemaphoreSlim _sendLock = new(1, 1);</code></pre>
+  <p>The request path shows abrupt disconnects do not call <code>StopAsync</code> or inject <code>EndFrame</code> before disposal:</p>
+  <pre><code>await using var runner = new PipelineRunner(pipeline, ct);
+await runner.StartAsync(ct: ct).ConfigureAwait(false);
+...
+await runner.WaitAsync().WaitAsync(ct).ConfigureAwait(false);</code></pre>
+  <p><b>Why it matters:</b> A browser tab closing or request abort cancels <code>MapVoxaVoice</code> and then disposes the runner. Because <code>OnEndAsync</code> is data-loop lifecycle, it is not guaranteed to run during that disposal path. The underlying <code>ClientWebSocket</code> and <code>SemaphoreSlim</code> can remain undisposed for each aborted realtime session.</p>
+  <p><b>Recommendation:</b> Move transport release into the actual disposal path as well as <code>OnEndAsync</code>. After fixing <a href="#cq-001">CQ-001</a>, override the disposal hook and call a shared <code>DisposeTransportAsync</code> helper from both <code>OnEndAsync</code> and disposal.</p>
+  <p><b>Effort:</b> moderate, because both realtime packages need the same change and tests should cover abrupt disposal without <code>EndFrame</code>.</p>
+</section>
+
+<section class="finding" id="cq-003">
+  <h3>[MAJOR] Granular speech engines and sessions are released only on EndFrame <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.Abstractions/SpeechToTextProcessor.cs:60</code>
+  <p><b>Dimension:</b> Bad C# practices: lifetime/resource bugs.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>protected override async ValueTask OnEndAsync(EndFrame frame, CancellationToken ct)
+{
+    if (_engine is not null)
+    {
+        try { await _engine.StopAsync().ConfigureAwait(false); } catch { /* best-effort */ }
+        await _engine.DisposeAsync().ConfigureAwait(false);
+        _engine = null;
+    }
+}</code></pre>
+  <p>The same <code>OnEndAsync</code>-only resource release exists at <code>src/Voxa.Speech.Abstractions/TextToSpeechProcessor.cs:43-49</code> and <code>src/Voxa.Services.SpeechToSpeech/SpeechToSpeechProcessor.cs:153-159</code>.</p>
+  <p><b>Why it matters:</b> Engines wrap non-trivial resources: whisper.cpp processors, sidecar processes, audio sessions, HTTP streams, model sessions, and background read loops. The server endpoint treats client disconnect as normal cancellation and lets <code>await using var runner</code> dispose the pipeline. Without an <code>EndFrame</code>, these engines/sessions are not deterministically stopped/disposed.</p>
+  <p><b>Recommendation:</b> Centralize each processor's cleanup in an idempotent private method and call it from both <code>OnEndAsync</code> and the real disposal path. Test with a started pipeline disposed under cancellation without first sending <code>EndFrame</code>.</p>
+  <p><b>Effort:</b> moderate.</p>
+</section>
+
+<section class="finding" id="cq-004">
+  <h3>[MAJOR] Every Frame eagerly allocates a ULID string even though only tracing reads it <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Core/Frames/Frame.cs:22</code>
+  <p><b>Dimension:</b> Performance / hot-path issues.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>public abstract record Frame
+{
+    public string Id { get; init; } = Ulid.NewUlid().ToString();
+}</code></pre>
+  <p>A source search found the only production read of frame ids here:</p>
+  <pre><code>activity.SetTag("voxa.frame.id", frame.Id);</code></pre>
+  <p><b>Why it matters:</b> Voxa's hot path constructs <code>AudioRawFrame</code>, VAD frames, transcription frames, LLM token frames, TTS audio frames, and system/control frames continuously. This initializer executes for every <code>new</code> frame, allocating a 26-character string and computing a ULID before anyone knows whether tracing is enabled. The performance spec calls out real-time audio allocation pressure as directly harmful; this is now one of the few remaining pervasive allocations.</p>
+  <p><b>Recommendation:</b> Make the id lazy or opt-in. Minimal option: back <code>Id</code> with a nullable field and generate it only on first read. If record equality semantics must not include a mutable lazy field, consider moving trace ids into tracing metadata instead of the base frame record.</p>
+  <p><b>Effort:</b> moderate, because record equality/serialization expectations should be checked before changing the base record.</p>
+</section>
+
+<section class="finding" id="cq-005">
+  <h3>[MAJOR] Silero VAD shifts a List from the front on the per-audio-frame path <span class="badge major">Major</span><span class="badge likely">Likely</span></h3>
+  <code class="loc">src/Voxa.Audio.SileroVad/SileroVadProcessor.cs:117</code>
+  <p><b>Dimension:</b> Performance / hot-path issues.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>for (int i = 0; i &lt; sampleCount; i++)
+{
+    short s = BinaryPrimitives.ReadInt16LittleEndian(pcm.Slice(i * 2, 2));
+    _samples.Add(s / 32768f);
+}
+...
+_samples.CopyTo(0, window, 0, _windowSize);
+_samples.RemoveRange(0, _windowSize);</code></pre>
+  <p><b>Why it matters:</b> <code>ProcessFrameAsync</code> runs for every inbound audio frame; the VAD window loop runs repeatedly during live audio. <code>List&lt;float&gt;.Add</code> per sample is tolerable in isolation, but <code>RemoveRange(0, _windowSize)</code> memmoves the remaining tail every VAD window. The repo's performance spec and <code>CLAUDE.md</code> both treat real-time audio as a hot path where steady-state allocations and avoidable copies matter.</p>
+  <p><b>Recommendation:</b> Replace the front-removing list with a small ring buffer or read-index accumulator. Keep the reused <code>_window</code> scratch array; only change how pending samples are retained between windows.</p>
+  <p><b>Effort:</b> moderate.</p>
+</section>
+
+<section class="finding" id="cq-006">
+  <h3>[MAJOR] OpenAI Realtime and Azure Voice Live duplicate the same protocol stack <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:19</code>
+  <p><b>Dimension:</b> DRY violations.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>// OpenAI package
+public static IEnumerable&lt;Frame&gt; Decode(JsonElement evt, bool botSpeaking, int outputSampleRate)
+
+// Azure Voice Live package
+public static IEnumerable&lt;Frame&gt; Decode(JsonElement evt, bool botSpeaking, int outputSampleRate)</code></pre>
+  <p>The matching websocket transport receive loop is duplicated too:</p>
+  <pre><code>sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+if (result.EndOfMessage)
+{
+    var msg = sb.ToString();
+    sb.Clear();
+    yield return msg;
+}</code></pre>
+  <p>The Azure transport's own doc comment says it is suitable for Azure Voice Live, Azure OpenAI Realtime, and OpenAI Realtime endpoints; only URL and auth header differ (<code>src/Voxa.Services.AzureVoiceLive/Transport/WebSocketRealtimeApiTransport.cs:7-10</code>).</p>
+  <p><b>Why it matters:</b> Static diff showed the codec files differ by only 11 lines, while the transports have already drifted by 35 lines. Event parsing, interruption semantics, base64 handling, UTF-8 message reassembly, and error handling must be fixed in two packages by hand. The duplicated receive loop also decodes each websocket fragment separately, which can split a multi-byte UTF-8 sequence across receives before appending to the <code>StringBuilder</code>.</p>
+  <p><b>Recommendation:</b> Extract a shared internal realtime protocol/transport helper package or shared source item parameterized by endpoint/auth/session options. Fix the receive path once by accumulating bytes through <code>EndOfMessage</code> and parsing UTF-8 bytes directly where practical.</p>
+  <p><b>Effort:</b> involved.</p>
+</section>
+
+<section class="finding" id="cq-007">
+  <h3>[MAJOR] Studio mirrors production pipeline composition logic by hand <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">apps/Voxa.Studio/Services/BuilderChainCompiler.cs:31</code>
+  <p><b>Dimension:</b> Business-logic placement &amp; layering.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>/// the live registry's descriptors, and (c) export artifacts. Mirrors
+/// &lt;see cref="DefaultVoicePipelineComposer"/&gt; block-for-block so "run from canvas" is the same
+/// pipeline a server would boot</code></pre>
+  <p>The production composer owns effective rates and stage order:</p>
+  <pre><code>var inputSampleRate  = stt.GetEffectiveInputSampleRate(root);
+var outputSampleRate = tts.GetEffectiveOutputSampleRate(root);
+...
+parts.Add(sp =&gt; stt.CreateProcessor(sp, root));
+...
+parts.Add(sp =&gt; CreateAgentProcessor(sp, o.Agent, history, tuning.MaxResponseDuration));</code></pre>
+  <p><b>Why it matters:</b> The application service that owns default composition is <code>DefaultVoicePipelineComposer</code>. Studio's compiler duplicates that logic, plus code generation, inside the desktop app. Any new stage, rate invariant, diagnostics tap placement, agent memory change, AEC/enhance behavior, or smart-turn wrapping must be updated in multiple places or Studio's "run from canvas" and exported code will diverge from server behavior.</p>
+  <p><b>Recommendation:</b> Extract a shared composition plan model from <code>Voxa.AspNetCore</code> that both the default composer and Studio compiler consume. Studio can still add canvas-specific graph validation/export, but stage ordering/rate/tap rules should come from one service.</p>
+  <p><b>Effort:</b> involved.</p>
+</section>
+
+<section class="finding" id="cq-008">
+  <h3>[MAJOR] REST STT HTTP calls ignore pipeline cancellation <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:158</code>
+  <p><b>Dimension:</b> Bad C# practices: cancellation propagation.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>using var resp = await _http.SendAsync(req).ConfigureAwait(false);
+resp.EnsureSuccessStatusCode();
+
+var json = await resp.Content.ReadFromJsonAsync&lt;JsonElement&gt;().ConfigureAwait(false);</code></pre>
+  <p>The same pattern appears in <code>src/Voxa.Speech.Mistral/MistralSpeechToTextEngine.cs:132-135</code>.</p>
+  <p><b>Why it matters:</b> These calls run when buffered utterance audio is flushed for transcription. If the user disconnects or an interruption cancels the pipeline, the request is not cancelled; it can wait until the shared <code>HttpClient</code>'s 100-second timeout (<code>src/Voxa.Speech.Abstractions/VoxaHttp.cs:24</code>). That delays cleanup and can hold buffered audio and multipart content much longer than the session lifetime.</p>
+  <p><b>Recommendation:</b> Thread the engine/session cancellation token into <code>TranscribeAsync</code>, <code>SendAsync</code>, and <code>ReadFromJsonAsync</code>. A minimal signature change is <code>TranscribeAsync(byte[] wav, CancellationToken ct)</code> called from the flush path using the engine CTS token.</p>
+  <p><b>Effort:</b> moderate.</p>
+</section>
+
+<section class="finding" id="cq-009">
+  <h3>[MAJOR] WAV PCM16 reader/writer logic is copied across production packages <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Cli/WavIO.cs:62</code>
+  <p><b>Dimension:</b> DRY violations.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>public static async Task WritePcm16Async(string path, byte[] pcm, int sampleRate, CancellationToken ct)
+{
+    await using var fs = File.Create(path);
+    Span&lt;byte&gt; header = stackalloc byte[44];
+    ...
+}</code></pre>
+  <p>Equivalent writer/reader code exists at <code>src/Voxa.Mcp/VoiceToolCore.cs:123-187</code>, <code>src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:165-187</code>, <code>src/Voxa.Speech.Mistral/MistralSpeechToTextEngine.cs:139-161</code>, <code>apps/Voxa.Studio/Services/WavIo.cs:16-92</code>, <code>src/Voxa.Audio.SmartTurn/HttpSmartTurnClassifier.cs:97-116</code>, and <code>src/Voxa.Speech.Piper/WavAudio.cs:10-36</code>.</p>
+  <p><b>Why it matters:</b> The copies already differ in robustness: some readers handle chunk skipping and format-extensible cases better than others, while several writers hard-code mono/16-bit assumptions. Any fix for odd RIFF chunk padding, extensible WAV formats, or header validation must be hand-applied across CLI, MCP, Studio, local TTS, smart-turn, and REST STT.</p>
+  <p><b>Recommendation:</b> Move a minimal PCM16 WAV utility into a shared production package that these projects can reference. Do not reuse <code>Voxa.Testing</code> directly from production; copy/extract the proven logic into an appropriate shipped abstraction if dependencies allow.</p>
+  <p><b>Effort:</b> involved, mainly due to package dependency direction.</p>
+</section>
+
+<section class="finding" id="cq-010">
+  <h3>[MINOR] FrameProcessor.Start creates a linked CTS that is never disposed <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Core/Processors/FrameProcessor.cs:84</code>
+  <p><b>Dimension:</b> Bad C# practices: lifetime/resource bugs.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>var linked = CancellationTokenSource.CreateLinkedTokenSource(_processorCts.Token, externalCt);
+var token = linked.Token;
+_systemTask = Task.Run(() =&gt; RunSystemLoopAsync(token), token);
+_dataTask = Task.Run(() =&gt; RunDataLoopAsync(token), token);</code></pre>
+  <p><b>Why it matters:</b> The linked CTS registers with <code>externalCt</code> and lives for the processor lifetime. Because it is local-only, disposal never unregisters it. This is one object/registration per processor per session; small individually, but avoidable in a pipeline framework.</p>
+  <p><b>Recommendation:</b> Store the linked CTS in a field and dispose it in <code>FrameProcessor.DisposeAsync</code> after the loops have stopped.</p>
+  <p><b>Effort:</b> trivial.</p>
+</section>
+
+<section class="finding" id="cq-011">
+  <h3>[MINOR] TracingProcessor builds per-frame activity names before checking whether tracing is observed <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Observability/TracingProcessor.cs:38</code>
+  <p><b>Dimension:</b> Performance / hot-path issues.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>using var activity = VoxaActivities.Source.StartActivity($"voxa.{_scope}.{frame.GetType().Name}");
+if (activity is not null)
+{
+    activity.SetTag("voxa.scope", _scope);</code></pre>
+  <p><b>Why it matters:</b> This processor is explicitly pass-through for every frame. The interpolated activity name and <code>frame.GetType().Name</code> are evaluated before <code>StartActivity</code> can return <code>null</code> for an unobserved source. If users leave the processor in a hot pipeline without an active listener, every audio/token frame still pays the name construction cost.</p>
+  <p><b>Recommendation:</b> Check <code>VoxaActivities.Source.HasListeners()</code> before building the name, or use a constant activity name and set type/scope only when an activity exists.</p>
+  <p><b>Effort:</b> trivial.</p>
+</section>
+
+<section class="finding" id="cq-012">
+  <h3>[MINOR] TranscriptionFilter lowercases before a case-insensitive Contains <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.Abstractions/TranscriptionFilter.cs:84</code>
+  <p><b>Dimension:</b> Simplification / optimization.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>var lower = trimmed.ToLowerInvariant();
+for (int i = 0; i &lt; SubstringBlocklist.Count; i++)
+{
+    if (lower.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
+}</code></pre>
+  <p><b>Why it matters:</b> <code>StringComparison.OrdinalIgnoreCase</code> already ignores case, so the lowercased copy is dead work and allocates on every final transcript that reaches substring filtering.</p>
+  <p><b>Recommendation:</b></p>
+  <pre><code>for (int i = 0; i &lt; SubstringBlocklist.Count; i++)
+{
+    if (trimmed.Contains(SubstringBlocklist[i], StringComparison.OrdinalIgnoreCase)) return true;
+}</code></pre>
+  <p><b>Effort:</b> trivial.</p>
+</section>
+
+<section class="finding" id="cq-013">
+  <h3>[MINOR] Descriptor defaults and shared HTTP-client resolution are repeated across providers <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.OpenAI/OpenAISpeechDescriptors.cs:46</code>
+  <p><b>Dimension:</b> DRY violations / simplification.</p>
+  <p><b>Evidence:</b></p>
+  <pre><code>// Options record
+public string ApiBaseUrl { get; init; } = "https://api.openai.com/v1";
+public string TtsModel { get; init; } = "tts-1";
+
+// Descriptor binder
+ApiBaseUrl = s["ApiBaseUrl"] ?? "https://api.openai.com/v1",
+TtsModel   = s["TtsModel"] ?? "tts-1",</code></pre>
+  <p>The same descriptor pattern repeats in Azure, ElevenLabs, and Mistral descriptors. The shared HTTP-client resolver expression appears in seven sites, including:</p>
+  <pre><code>private static HttpClient? ResolveHttpClient(IServiceProvider sp)
+    =&gt; (sp.GetService(typeof(IVoxaHttpClientProvider)) as IVoxaHttpClientProvider)?.Resolve();</code></pre>
+  <p><b>Why it matters:</b> Changing a default in an options record does not change config-driven descriptor binding unless the duplicate literal is updated. Similarly, changing HTTP client resolution policy requires edits across seven provider files.</p>
+  <p><b>Recommendation:</b> Bind into a new options instance first and override only provided values, or centralize provider descriptor binding helpers in <code>Voxa.Speech.Abstractions</code>. Add a tiny helper for <code>IVoxaHttpClientProvider</code> resolution.</p>
+  <p><b>Effort:</b> moderate.</p>
+</section>
+
+<h2 id="intentional"><span class="secno">5.</span>Confirmed-intentional</h2>
+<table>
+  <thead><tr><th>Checked smell</th><th>Verdict with citation</th></tr></thead>
+  <tbody>
+    <tr><td>Anemic frames/options and transaction-script processors</td><td>Intentional. The repo says processors consume/emit typed frames (<code>CLAUDE.md:7-9</code>), records are the convention (<code>CLAUDE.md:142</code>), and granular chains compose STT, agent, aggregator, and TTS as services (<code>CLAUDE.md:90-94</code>).</td></tr>
+    <tr><td>Interfaces with one obvious production implementation</td><td>Generally intentional. The contributing guide requires external-service processors to be testable through fake engines/transports (<code>CONTRIBUTING.md:36-38</code>, <code>CONTRIBUTING.md:52-55</code>), and <code>CLAUDE.md:140-141</code> explicitly cites <code>ISpeechToTextEngine</code> and <code>IRealtimeApiTransport</code>. Tests contain fakes for the important seams, so they were not treated as YAGNI.</td></tr>
+    <tr><td>FrameProcessor dual loops and special interruption cancellation rules</td><td>Intentional and load-bearing. <code>CLAUDE.md:58-70</code> documents the system/data task split, interruption cancellation, uninterruptible frames, and forwarding requirement.</td></tr>
+    <tr><td>Bounded drop-oldest audio/data channels</td><td>Intentional. The backpressure convention is documented at <code>CLAUDE.md:72-76</code> and <code>CONTRIBUTING.md:38-40</code>; channel findings were checked against that rule.</td></tr>
+    <tr><td>Diagnostics hub guarded by listener checks</td><td>Intentional. <code>CLAUDE.md:113-120</code> says diagnostics publishing is zero-cost when unobserved; the finding on <code>TracingProcessor</code> is separate because it is an observability processor outside that hub and builds an activity name eagerly.</td></tr>
+    <tr><td>Studio using plain <code>ServiceCollection</code> rather than Generic Host</td><td>Intentional. <code>CLAUDE.md:122-134</code> documents Studio's service-collection hosting and headless-testable view-model pattern; no finding recommends moving Studio to Generic Host.</td></tr>
+    <tr><td>LocalModels tests excluded from the audit run</td><td>Intentional. <code>CLAUDE.md:46-52</code> says <code>Category=LocalModels</code> downloads large real models and should be excluded from the inner loop unless speech engines/model cache were touched.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="quick-wins"><span class="secno">6.</span>Quick wins</h2>
+<ol>
+  <li>Fix <a href="#cq-001">CQ-001</a> and <a href="#cq-010">CQ-010</a> together: make base disposal extensible and dispose the linked CTS. This unlocks safe fixes for the other lifetime issues.</li>
+  <li>Add idempotent real-disposal cleanup to realtime and granular speech processors (<a href="#cq-002">CQ-002</a>, <a href="#cq-003">CQ-003</a>), with one abrupt-disconnect test.</li>
+  <li>Remove eager frame id allocation (<a href="#cq-004">CQ-004</a>) or gate it behind tracing.</li>
+  <li>Thread cancellation through OpenAI/Mistral REST STT calls (<a href="#cq-008">CQ-008</a>).</li>
+  <li>Apply trivial hot-path cleanups: <code>TracingProcessor.HasListeners</code> gate and <code>TranscriptionFilter</code> lowercase removal (<a href="#cq-011">CQ-011</a>, <a href="#cq-012">CQ-012</a>).</li>
+  <li>Schedule a focused refactor for duplicated realtime protocol code (<a href="#cq-006">CQ-006</a>) before adding another realtime event type.</li>
+</ol>
+
+<h2 id="appendix"><span class="secno">7.</span>Appendix</h2>
+<h3>Commands and results</h3>
+<pre><code>dotnet build Voxa.slnx --configuration Release
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+Time Elapsed 00:00:15.53</code></pre>
+<pre><code>dotnet test Voxa.slnx --configuration Release --filter "Category!=LocalModels" --no-build
+Observed before timeout: 26 test projects reported Passed, 0 failures.
+The full command exceeded the 900s local timeout before final aggregate output.
+
+dotnet test tests/Voxa.Studio.Tests --configuration Release --filter "Category!=LocalModels" --no-build
+Exceeded the 300s local timeout without output.</code></pre>
+<h3>Assumptions and scope notes</h3>
+<ul class="flat">
+  <li>Production-code findings were limited to <code>src/</code> and <code>apps/</code>. Tests were skimmed to verify seams and avoid false over-engineering findings.</li>
+  <li><code>publish/</code> existed as an untracked directory before the report was written and was not reviewed.</li>
+  <li>No <code>.editorconfig</code> file was present at <code>C:\Users\mjosi\source\repos\Voxa\.editorconfig</code> during the audit; conventions were taken from <code>CLAUDE.md</code>, <code>CONTRIBUTING.md</code>, <code>README.md</code>, and <code>docs/specifications/*.html</code>.</li>
+  <li>No benchmark numbers were invented. Performance findings are static hot-path findings tied to documented audio/frame paths.</li>
+</ul>
+
+</div>
+</body>
+</html>

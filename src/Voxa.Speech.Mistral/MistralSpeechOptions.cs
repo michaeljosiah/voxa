@@ -31,6 +31,14 @@ public sealed record MistralSpeechOptions
     public string? SttLanguage { get; init; }
 
     /// <summary>
+    /// Stream the transcription response (<c>stream=true</c>): the per-utterance POST returns an SSE stream of
+    /// <c>transcription.text.delta</c> partials (surfaced as interims) followed by a <c>transcription.done</c>
+    /// final — lower perceived latency than waiting for the whole batch. The audio is still sent once at
+    /// speech-end (the API takes a complete clip, not incremental audio). Set false for a single batched final.
+    /// </summary>
+    public bool SttStreaming { get; init; } = true;
+
+    /// <summary>
     /// Safety-backstop flush interval (seconds) for the buffered transcription path: if VAD never
     /// fires <c>UserStoppedSpeaking</c> (runaway monologue / VAD-less pipeline) the buffer is posted
     /// once it exceeds this span. The primary flush is <c>FlushAsync</c> at speech-end. 0 disables it.

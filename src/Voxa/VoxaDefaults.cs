@@ -22,6 +22,7 @@ using Voxa.Speech.OpenAI;
 using Voxa.Speech.Piper;
 using Voxa.Speech.Speechmatics;
 using Voxa.Speech.Together;
+using Voxa.Speech.Voxtral;
 using Voxa.Speech.WhisperCpp;
 
 namespace Voxa;
@@ -65,6 +66,7 @@ public static class VoxaDefaultsExtensions
             voxa.AddProvider(SileroVadDescriptors.Vad);
             // The local/offline tier (VLS-001): no API keys, no network after first-run download.
             voxa.AddProvider(WhisperCppDescriptors.Stt);
+            voxa.AddProvider(VoxtralDescriptors.Stt);   // Voxtral-Mini-4B-Realtime via local vLLM (VLS-009); Studio GPU-gates it as default
             voxa.AddProvider(PiperDescriptors.Tts);
             voxa.AddProvider(KokoroDescriptors.Tts);
         });

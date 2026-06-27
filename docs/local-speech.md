@@ -52,6 +52,30 @@ barge-in. First run downloads the models, so give it a moment before the first r
   same rate as the cloud TTS default, so swapping ElevenLabs→Kokoro doesn't change the wire
   session at all). Use `"Precision": "int8"` (~92 MB) on weak machines.
 
+## Voxtral — cloud-grade STT, fully offline (VLS-009)
+
+whisper.cpp is keyless and runs anywhere, but it has no interims and its accurate models are slow on CPU
+(see latency below). If you have a **GPU (≥ 16 GB)**, `Voxa.Speech.Voxtral` runs Mistral's open-weights
+**Voxtral-Mini-4B-Realtime** (Apache-2.0) entirely on your machine via a local **vLLM** server — streaming,
+cloud-grade transcription with live interims, no API key, no audio leaving the box.
+
+```jsonc
+"Voxa": {
+  "Stt": "Voxtral",
+  // connect to a vLLM server you run …
+  "Voxtral": { "ServerUrl": "ws://127.0.0.1:8000" }
+  // … or have Voxa launch & own it:
+  // "Voxtral": { "LaunchCommand": "vllm",
+  //   "LaunchArgs": ["serve", "mistralai/Voxtral-Mini-4B-Realtime-2602", "--tokenizer-mode", "mistral"] }
+}
+```
+
+Run the server once on a GPU box: `vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 --tokenizer-mode mistral`.
+No GPU handy? `sidecar/voxtral_realtime_mock.py` replays a canned transcript over the same wire so you can
+smoke-test the pipeline offline. In **Voxa Studio**, Voxtral becomes the default STT automatically on a capable
+GPU once a server is configured — otherwise whisper.cpp. vLLM is the only supported runtime today (no ONNX/CPU
+path yet); see the [package README](../src/Voxa.Speech.Voxtral/README.md) for all the knobs.
+
 ## Latency expectations — read this before filing a bug
 
 Cloud streaming STT shows interim transcripts while the user talks. **WhisperCpp does not**: it

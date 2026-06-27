@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparison Analysis — Voxa vs Pipecat</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --voxa: #4fc3f7; --pipecat: #b388ff;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin: 24px 0 8px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 4px; vertical-align: middle; }
+  .badge.voxa { background: #123040; color: #7fd6ff; }
+  .badge.pipecat { background: #2a2342; color: #c9aaff; }
+  .badge.tie { background: #232a35; color: #b6c2d2; }
+  .badge.good { background: #143a20; color: #a5d6a7; }
+  .badge.warn { background: #3a3214; color: #ffe082; }
+  .edge-voxa { color: var(--voxa); font-weight: 700; }
+  .edge-pipecat { color: var(--pipecat); font-weight: 700; }
+  .edge-tie { color: var(--muted); font-weight: 600; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout.pipecat { border-left-color: var(--pipecat); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .small { color: var(--muted); font-size: 0.82rem; }
+  .nowrap { white-space: nowrap; }
+  ul.flat { padding-left: 20px; }
+  ul.flat li { margin: 6px 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+  .card h4 { margin-top: 0; }
+  .card.voxa { border-top: 3px solid var(--voxa); }
+  .card.pipecat { border-top: 3px solid var(--pipecat); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>Comparison Analysis — <span class="edge-voxa">Voxa</span> vs <span class="edge-pipecat">Pipecat</span></h1>
+  <div class="sub">An evidence-based comparison of Voxa (the .NET framework in this repo) against <code>pipecat-ai/pipecat</code>, the Python framework it is explicitly inspired by. Architecture, integration breadth, transports, ecosystem, maturity — and an honest "which should you use".</div>
+  <div class="meta-grid">
+    <div><b>Subject A — Voxa</b> <code>main</code> @ <code>945c795</code> · .NET 10 · MIT · pre-alpha (NuGet <code>*-alpha</code>)</div>
+    <div><b>Subject B — Pipecat</b> <code>pipecat-ai/pipecat</code> · Python 3.11+ · BSD-2 · v0.0.77, ~12k★ (per public data, mid-2026)</div>
+    <div><b>Lineage</b> Voxa is a clean-room .NET reimagining of Pipecat's frame/processor model; it even runs Pipecat's <code>smart-turn-v3</code> turn model</div>
+    <div><b>Date</b> 2026-06-20</div>
+    <div><b>Method</b> Voxa from the repo (README, package inventory, code); Pipecat from its public README + web sources, fetched 2026-06-20 (see Appendix)</div>
+    <div><b>One-line verdict</b> Different ecosystems, very different maturity: <span class="edge-pipecat">Pipecat</span> for breadth/WebRTC/telephony/cloud today; <span class="edge-voxa">Voxa</span> for a typed, local-first, Studio-driven .NET stack</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#lineage">Shared lineage (read this first)</a></li>
+    <li><a href="#scorecard">At-a-glance scorecard</a></li>
+    <li><a href="#architecture">Architecture comparison</a></li>
+    <li><a href="#breadth">Integration breadth (STT / TTS / LLM / S2S)</a></li>
+    <li><a href="#transports">Transports &amp; client SDKs</a></li>
+    <li><a href="#ecosystem">Ecosystem, deployment &amp; maturity</a></li>
+    <li><a href="#verdict">Where each leads · parity · lags</a></li>
+    <li><a href="#choose">When to choose which</a></li>
+    <li><a href="#appendix">Appendix — sources &amp; method</a></li>
+  </ol>
+</nav>
+
+<h2 id="summary"><span class="secno">1.</span>Executive summary</h2>
+<div class="callout">
+  <p><b>The short version:</b> Voxa and Pipecat share a mental model — typed <em>frames</em> flowing through composable <em>frame processors</em> in a <em>pipeline</em>, with VAD, interruption/barge-in, and pluggable STT/LLM/TTS. They differ on three axes that decide everything else: <b>language</b> (Voxa = .NET/C#, Pipecat = Python), <b>maturity</b> (Voxa is a pre-alpha, effectively single-maintainer project; Pipecat is a Daily-backed framework with ~12k stars, 131 contributors, a managed cloud, and 1,000+ teams in production), and <b>breadth</b> (Pipecat integrates ~21 STT / 29 TTS / 22 LLM vendors and ~8 transports incl. WebRTC + telephony; Voxa integrates a focused handful and a single WebSocket transport).</p>
+  <p><b>Pipecat's decisive advantages today</b> are transport coverage (WebRTC via Daily/LiveKit/SmallWebRTC/Vonage, telephony via Twilio/Plivo, WhatsApp), a full client-SDK suite (JS/React/React Native/Swift/Kotlin/C++/ESP32 + the RTVI standard), a managed deployment story (Pipecat Cloud), a conversation-flow layer (Pipecat Flows), multimodal (voice+vision), and sheer integration count. For a team shipping browser- or phone-based voice agents this quarter, these are close to table stakes and Pipecat has them.</p>
+  <p><b>Voxa's genuine, non-boosterish strengths</b> are: it is the only credible <b>.NET-native</b> answer in this space, with a strongly-typed API and an allocation-disciplined real-time hot path (≈25 B/frame; the wire protocol is source-generated; the Silero VAD path is ≈272 B/inference); it leans on the <b>Microsoft Agent Framework</b> so LLM breadth comes "for free" from <code>Microsoft.Extensions.AI</code> rather than 22 hand-maintained adapters; it ships <b>Voxa Studio</b>, a first-party desktop app to build, run, measure, and inspect pipelines live (Pipecat has web components + a debugger, but no integrated desktop builder/measurement workbench); and it has a disciplined <b>local-first / air-gapped</b> tier (SHA-256-pinned model catalogs, offline mode, GPU opt-in) plus niceties like an MCP server and an Azure-first realtime composite.</p>
+  <p><b>Bottom line:</b> this is not "competitor vs competitor" so much as "the mature Python original vs a young, opinionated .NET reimagining." If you can use Python, Pipecat is the safer, broader, more production-ready choice right now. If you are committed to .NET — or you prize strong typing, GC-conscious latency, an integrated tuning UI, and local-first deployment — Voxa is a coherent and in places more polished bet, with the clear caveat that it is pre-alpha and its transport/client/cloud story is far thinner.</p>
+</div>
+
+<h2 id="lineage"><span class="secno">2.</span>Shared lineage (read this first)</h2>
+<p>Voxa's own README states it is "Inspired by Pipecat," and the architectures confirm it: both center on <code>Frame</code> → <code>FrameProcessor</code> → <code>Pipeline</code>, both gate turns with Silero VAD, both stream LLM tokens into sentence-sized TTS chunks, and both treat interruption/barge-in as a first-class control signal. The relationship is concrete, not just spiritual — Voxa's opt-in smart-turn package downloads and runs <em>Pipecat's own</em> <code>pipecat-ai/smart-turn-v3</code> model.</p>
+<div class="callout pipecat">
+  <p><b>Why this framing matters:</b> a fair comparison should credit Voxa for porting a proven design into a different ecosystem rather than penalise it for similarity, and should credit Pipecat for being the upstream that defined the pattern and carries the community, breadth, and tooling that come with years of adoption. Differences below are read in that light — "where the .NET reimagining has diverged or not yet caught up," not "who copied whom."</p>
+</div>
+
+<h2 id="scorecard"><span class="secno">3.</span>At-a-glance scorecard</h2>
+<p>"Edge" is a pragmatic call for the <em>typical</em> team today, not an absolute. <span class="edge-voxa">V</span> = advantage Voxa, <span class="edge-pipecat">P</span> = advantage Pipecat, <span class="edge-tie">≈</span> = rough parity.</p>
+<table>
+  <thead><tr><th>Dimension</th><th>Voxa</th><th>Pipecat</th><th>Edge</th></tr></thead>
+  <tbody>
+    <tr><td>Language / runtime</td><td>.NET 10, C#, <code>async</code>/Channels</td><td>Python 3.11+, asyncio</td><td class="edge-tie">≈ (pick your stack)</td></tr>
+    <tr><td>Core architecture</td><td>Frames + dual-loop FrameProcessor + Pipeline + Runner</td><td>Frames + FrameProcessor + Pipeline + PipelineTask</td><td class="edge-tie">≈</td></tr>
+    <tr><td>Real-time perf / typing</td><td>Strong types; allocation-gated hot path (≈25 B/frame); source-gen wire</td><td>Dynamic; asyncio; perf depends on Python/GIL</td><td class="edge-voxa">V</td></tr>
+    <tr><td>STT vendors</td><td>3 granular (Azure, OpenAI/Whisper, WhisperCpp) + composites</td><td>~21 (Deepgram, AssemblyAI, Gladia, Speechmatics, …)</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>TTS vendors</td><td>6 + a local sidecar (Azure, OpenAI, ElevenLabs, Mistral, Piper, Kokoro, Sidecar)</td><td>~29 (Cartesia, Rime, LMNT, Hume, Fish, …)</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>LLM coverage</td><td>1 integration surface (Microsoft Agent Framework / <code>IChatClient</code>) → the .NET agent ecosystem</td><td>~22 first-party adapters (Anthropic, Gemini, Groq, Bedrock, …)</td><td class="edge-pipecat">P (breadth) · <span class="edge-voxa">V</span> (leverage)</td></tr>
+    <tr><td>Speech-to-speech / realtime</td><td>OpenAI Realtime + Azure Voice Live (+ Azure OpenAI) on one processor; generic S2S seam (no model yet)</td><td>5 (OpenAI Realtime, Gemini Live, AWS Nova Sonic, Grok, Ultravox)</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Transports</td><td>1 — host-agnostic WebSocket</td><td>~8 incl. WebRTC (Daily/LiveKit/SmallWebRTC/Vonage), telephony (Twilio/Plivo), WhatsApp, local</td><td class="edge-pipecat">P (large)</td></tr>
+    <tr><td>Client SDKs</td><td>None shipped (a <code>@voxa/client</code> JS pkg is on the roadmap); you implement the documented WS protocol</td><td>JS, React, React Native, Swift, Kotlin, C++, ESP32 + RTVI standard</td><td class="edge-pipecat">P (large)</td></tr>
+    <tr><td>Turn-taking / VAD</td><td>Silero + energy gate; opt-in smart-turn (runs Pipecat's model)</td><td>Silero; smart-turn model; barge-in</td><td class="edge-tie">≈</td></tr>
+    <tr><td>Noise suppression / AEC</td><td>Seams only (<code>IEchoCanceller</code>/<code>IAudioEnhancer</code>) — no shipping engine</td><td>Krisp VIVA, Koala, ai-coustics, RNNoise integrations</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Local / on-device</td><td>Deep: whisper.cpp, Piper, Kokoro, Silero, ONNX host, SHA-pinned offline catalogs, GPU opt-in</td><td>Yes: Whisper, Moonshine, Kokoro, Piper, Silero</td><td class="edge-voxa">V (discipline) · <span class="edge-tie">≈</span> (coverage)</td></tr>
+    <tr><td>Diarization</td><td>Ships <code>Voxa.Audio.Diarization</code> (pyannote ONNX + clustering, offline)</td><td>Not a core README feature (realtime-focused)</td><td class="edge-voxa">V</td></tr>
+    <tr><td>Multimodal (vision)</td><td>Voice only</td><td>Voice + vision + text</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Multi-agent composition</td><td>Single pipeline + agent loop (no built-in handoff/fan-out)</td><td>Handoff, parallel fan-out, sidecar, distributed</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Conversation flows</td><td>Agent loop + MAF; no flow/state-machine layer</td><td>Pipecat Flows (state machine)</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Observability</td><td>OpenTelemetry traces + metrics; in-process typed diagnostics hub + per-turn latency waterfall</td><td>OpenTelemetry + Sentry; Whisker debugger; Tail dashboard</td><td class="edge-tie">≈</td></tr>
+    <tr><td>First-party dev tooling</td><td>Voxa Studio desktop app (7 views: Talk, Playgrounds, Voices, Builder, Metrics, Models, Config); CLI; MCP server</td><td>Voice UI Kit (web), Pipecat CLI (scaffold/deploy), Whisker/Tail</td><td class="edge-voxa">V (integrated workbench)</td></tr>
+    <tr><td>Deployment / cloud</td><td>Self-host (ASP.NET Core); desktop; no managed offering</td><td>Self-host + Pipecat Cloud (managed, GA Jan 2026)</td><td class="edge-pipecat">P</td></tr>
+    <tr><td>Testing story</td><td>xUnit per package; fakes for every engine/transport; allocation-gated tests; zero-network local lane</td><td>Test utilities + examples; large example corpus</td><td class="edge-tie">≈</td></tr>
+    <tr><td>Maturity / community</td><td>Pre-alpha; ~1 maintainer; 2026; NuGet prerelease</td><td>~12k★, 131 contributors, since 2024, commercial backing</td><td class="edge-pipecat">P (large)</td></tr>
+    <tr><td>License</td><td>MIT</td><td>BSD-2-Clause</td><td class="edge-tie">≈ (both permissive)</td></tr>
+  </tbody>
+</table>
+<p class="small">Both projects are pre-1.0 (Voxa "pre-alpha"; Pipecat 0.0.x) and explicitly warn of breaking changes — API churn is a shared, not differentiating, risk.</p>
+
+<h2 id="architecture"><span class="secno">4.</span>Architecture comparison</h2>
+<p>The mental models line up almost one-to-one, which is the point — Voxa set out to bring this model to .NET. Where they diverge is in emphasis and a few design choices Voxa makes more explicit.</p>
+<div class="cols">
+  <div class="card voxa">
+    <h4 class="edge-voxa">Voxa</h4>
+    <ul class="flat">
+      <li><b>Dual-loop FrameProcessor.</b> Every processor runs two tasks: a <em>system</em> loop draining priority frames (interruption, errors, speaking edges) and a <em>data</em> loop draining ordered frames. An interruption cancels the in-flight data frame's token; <code>IUninterruptible</code> frames (tool calls, <code>EndFrame</code>) are guaranteed to complete. This is a notably explicit articulation of preemption.</li>
+      <li><b>Backpressure convention.</b> Audio/data on bounded <code>DropOldest</code> channels; control/system on unbounded <code>Wait</code>. Documented and enforced.</li>
+      <li><b>Allocation discipline.</b> Steady-state data loop is allocation-free (per-frame CTS reused); regression-gated by tests. A deliberate answer to "GC pauses are the worst failure mode for voice."</li>
+      <li><b>Two pipeline shapes.</b> Composite (one processor wraps STT+LLM+TTS+VAD — realtime APIs) and granular (mix any STT × any LLM × any TTS).</li>
+      <li><b>Agent loop.</b> <code>AgentLoopProcessor</code> is framework-agnostic; the data loop never blocks on agent/tool calls (a separate turn worker runs the turn). Hosts plug a runtime in via <code>IAgentTurnDriver</code>; MAF is wired for you.</li>
+    </ul>
+  </div>
+  <div class="card pipecat">
+    <h4 class="edge-pipecat">Pipecat</h4>
+    <ul class="flat">
+      <li><b>Frames + FrameProcessors + Pipeline.</b> Same primitives; the canonical implementation of the pattern. Async/event-driven (asyncio).</li>
+      <li><b>Multi-agent composition.</b> "Each pipeline is an agent" — compose with handoff, parallel fan-out, sidecar workers, and distributed deployment. Voxa has no equivalent built-in.</li>
+      <li><b>Transports as a first-class layer.</b> The pipeline's I/O ends are pluggable transports (WebRTC, WebSocket, telephony, local), which is what unlocks browser/phone deployment out of the box.</li>
+      <li><b>Mature interruption/turn handling.</b> Barge-in, VAD, and smart-turn are battle-tested across a large production user base.</li>
+      <li><b>Breadth of processors.</b> Audio filters (Krisp/Koala/RNNoise), vision, and dozens of service processors ship in-tree.</li>
+    </ul>
+  </div>
+</div>
+<p><b>Net read:</b> at the core-abstraction level this is a <span class="edge-tie">tie</span> — Voxa's dual-loop + <code>IUninterruptible</code> + documented backpressure is arguably a cleaner written contract, and its allocation discipline is a real, .NET-specific advantage; Pipecat's architecture is the proven one and goes further into multi-agent and transport-as-a-layer territory that Voxa hasn't built.</p>
+
+<h2 id="breadth"><span class="secno">5.</span>Integration breadth (STT / TTS / LLM / S2S)</h2>
+<p>This is the starkest gap and the easiest to over- or under-state, so here are the actual lists.</p>
+
+<h3>Speech-to-Text</h3>
+<table>
+  <thead><tr><th></th><th class="edge-voxa">Voxa (3 granular + composites)</th><th class="edge-pipecat">Pipecat (~21)</th></tr></thead>
+  <tbody>
+    <tr><td>Vendors</td>
+      <td>Azure, OpenAI (Whisper REST), WhisperCpp (local); realtime composites add built-in STT (OpenAI Realtime, Azure Voice Live).</td>
+      <td>AssemblyAI, AWS, Azure, Cartesia, Deepgram, ElevenLabs, Fal Wizper, Gladia, Google, Gradium, Groq, Mistral, Moonshine, NVIDIA, OpenAI, Sarvam, Soniox, Speechmatics, Together, Whisper, xAI.</td></tr>
+  </tbody>
+</table>
+
+<h3>Text-to-Speech</h3>
+<table>
+  <thead><tr><th></th><th class="edge-voxa">Voxa (6 + sidecar)</th><th class="edge-pipecat">Pipecat (~29)</th></tr></thead>
+  <tbody>
+    <tr><td>Vendors</td>
+      <td>Azure, OpenAI, ElevenLabs, Mistral (Voxtral), Piper (local), Kokoro (local); plus <code>Voxa.Speech.Sidecar</code> for local expressive/cloning TTS.</td>
+      <td>Async, AWS, Azure, Camb AI, Cartesia, Deepgram, ElevenLabs, Fish, Google, Gradium, Groq, Hume, Inworld, Kokoro, LMNT, MiniMax, Mistral, Neuphonic, NVIDIA, OpenAI, Piper, Resemble, Rime, Sarvam, Smallest, Soniox, Speechmatics, Together, xAI, XTTS.</td></tr>
+  </tbody>
+</table>
+
+<h3>LLM</h3>
+<p>Different philosophies. Pipecat ships ~22 first-party LLM adapters. Voxa ships <em>one</em> integration surface — the <b>Microsoft Agent Framework</b> / <code>Microsoft.Extensions.AI</code> <code>IChatClient</code> — and delegates vendor coverage to that ecosystem (OpenAI, Azure OpenAI, Ollama, and any other <code>IChatClient</code> provider), plus a built-in OpenAI factory and a keyless Echo agent.</p>
+<table>
+  <thead><tr><th></th><th class="edge-voxa">Voxa</th><th class="edge-pipecat">Pipecat (~22)</th></tr></thead>
+  <tbody>
+    <tr><td>Approach</td>
+      <td>Bring any MAF <code>AIAgent</code> / <code>IChatClient</code>; the agent loop handles turns, frontend-tool round-trips, token aggregation. Breadth = whatever .NET's agent layer supports.</td>
+      <td>Anthropic, AWS, Azure, Cerebras, DeepSeek, Fireworks, Gemini, Grok, Groq, Inception, Mistral, Nebius, Novita, NVIDIA NIM, Ollama, OpenAI (+Responses), OpenRouter, Perplexity, Qwen, SambaNova, Sarvam, Together.</td></tr>
+  </tbody>
+</table>
+<p class="small">Trade-off: Pipecat gives you tuned, ready-made adapters for each vendor (including provider-specific features); Voxa gives you one well-integrated agent abstraction and inherits new providers as <code>Microsoft.Extensions.AI</code> grows — less to maintain, but you depend on that layer's coverage and quality for any given vendor.</p>
+
+<h3>Speech-to-speech / realtime multimodal</h3>
+<table>
+  <thead><tr><th></th><th class="edge-voxa">Voxa</th><th class="edge-pipecat">Pipecat (5)</th></tr></thead>
+  <tbody>
+    <tr><td>Services</td>
+      <td>OpenAI Realtime, Azure Voice Live, Azure OpenAI Realtime — one composite processor, three endpoints (shared wire protocol). A generic <code>ISpeechToSpeechSession</code> seam exists for local/other S2S models (no model shipped yet).</td>
+      <td>AWS Nova Sonic, Gemini Multimodal Live, Grok Voice Agent, OpenAI Realtime, Ultravox.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="transports"><span class="secno">6.</span>Transports &amp; client SDKs</h2>
+<p>If integration breadth is the widest gap, this is the most <em>consequential</em> one for shipping real products.</p>
+<table>
+  <thead><tr><th></th><th class="edge-voxa">Voxa</th><th class="edge-pipecat">Pipecat</th></tr></thead>
+  <tbody>
+    <tr><td>Transports</td>
+      <td><b>WebSocket only</b> (<code>Voxa.Transports.WebSocket</code>, host-agnostic source/sink; raw 16-bit PCM binary + typed JSON envelopes). No WebRTC, no telephony.</td>
+      <td>Daily (WebRTC), LiveKit (WebRTC), SmallWebRTCTransport (P2P), Vonage (WebRTC), FastAPI WebSocket, WebSocket Server, WhatsApp, Local; telephony via Twilio / Plivo (Twilio Media Streams).</td></tr>
+    <tr><td>Browser voice</td>
+      <td>Possible over WebSocket, but you own jitter buffering, echo cancellation (only a seam ships), and reconnection; no WebRTC means no built-in NAT traversal / adaptive bitrate.</td>
+      <td>First-class via WebRTC; Daily/LiveKit handle NAT, jitter, packet loss, and AEC for you.</td></tr>
+    <tr><td>Telephony</td>
+      <td>None built in (bring your own bridge to the WebSocket).</td>
+      <td>Twilio / Plivo / SIP via Daily &amp; LiveKit; documented patterns.</td></tr>
+    <tr><td>Client SDKs</td>
+      <td>None shipped. A <code>@voxa/client</code> JS package is on the roadmap; today you implement the documented WebSocket wire protocol (<code>hello/end/text/toolResult</code> ↔ <code>session/transcription/text/toolCall/speaking/interruption/status/error/end</code>).</td>
+      <td>Official SDKs for JavaScript, React, React Native, Swift (iOS), Kotlin (Android), C++, and ESP32 (embedded), plus the RTVI client/server standard.</td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+  <p><b>This is the gap to weigh most heavily.</b> For a browser or phone voice agent, WebRTC and a client SDK are close to mandatory, and Pipecat delivers both out of the box (with AEC/noise suppression bundled). Voxa's WebSocket-only, bring-your-own-client posture suits server-to-server, embedded hosts, or apps that already own their audio transport (its origin story is an ASP.NET host streaming PCM) — but it pushes real work onto the integrator for a typical consumer voice app.</p>
+</div>
+
+<h2 id="ecosystem"><span class="secno">7.</span>Ecosystem, deployment &amp; maturity</h2>
+<div class="cols">
+  <div class="card pipecat">
+    <h4 class="edge-pipecat">Pipecat — broad &amp; backed</h4>
+    <ul class="flat">
+      <li><b>Pipecat Cloud</b> — managed deployment (GA Jan 2026), Daily global infra, multi-region, Krisp VIVA bundled, 1,000+ teams.</li>
+      <li><b>Pipecat Flows</b> — conversation state machine for complex flows.</li>
+      <li><b>Voice UI Kit</b> — React/React Native component library.</li>
+      <li><b>Pipecat CLI</b> — scaffolding (<code>pipecat create/init</code>), monitoring, deploy.</li>
+      <li><b>Debug tooling</b> — Whisker (real-time debugger), Tail (terminal dashboard).</li>
+      <li><b>Community</b> — ~12k★, 131 contributors, examples galore, Claude Code skills, Pipecat TV. Commercial steward (Daily).</li>
+    </ul>
+  </div>
+  <div class="card voxa">
+    <h4 class="edge-voxa">Voxa — integrated &amp; .NET-native</h4>
+    <ul class="flat">
+      <li><b>Voxa Studio</b> — a desktop app (Windows) with 7 views: Talk (live VAD trace + per-turn latency waterfall), STT/TTS Playgrounds (WER harness, A/B/X, batch bench), Voices (library + cloning), Builder (node canvas → runs the real chain), Metrics (run compare), Models (cache manager), Config. No Pipecat equivalent as an integrated workbench.</li>
+      <li><b>ASP.NET Core integration</b> — <code>AddVoxa()</code> + <code>MapVoxaVoice().UseDefaults()</code>, fail-fast config validation, named latency profiles.</li>
+      <li><b>Local-first discipline</b> — SHA-256-pinned catalogs, offline mode, GPU opt-in, license matrix, zero-network CI lane.</li>
+      <li><b>MCP server</b> (<code>Voxa.Mcp</code>) and a headless <b>CLI</b>.</li>
+      <li><b>Diagnostics hub</b> — typed per-session event stream + stage-latency waterfall, zero-cost when unobserved.</li>
+      <li><b>Community</b> — pre-alpha, ~1 maintainer, NuGet prerelease; no managed cloud, no client SDKs yet.</li>
+    </ul>
+  </div>
+</div>
+<p><b>Net read:</b> Pipecat wins ecosystem and deployment decisively on breadth and a managed cloud. Voxa counters with a single, unusually polished <em>integrated</em> developer experience (Studio) that Pipecat doesn't match in one place — but that's one app versus an entire ecosystem and a production cloud.</p>
+
+<h2 id="verdict"><span class="secno">8.</span>Where each leads · parity · lags</h2>
+
+<h4 class="edge-voxa">Where Voxa genuinely leads (for its target user)</h4>
+<ul class="flat">
+  <li><b>.NET-native + strong typing + GC-conscious latency.</b> The only serious option of its kind for C#/.NET teams; the allocation-gated hot path is a real, measurable, language-specific advantage.</li>
+  <li><b>Integrated desktop workbench (Studio).</b> Build-run-measure-inspect in one app, including a WER/TTFB/RTF lab and a run-compare metrics view. Pipecat's equivalents are separate web/CLI/debug tools.</li>
+  <li><b>MAF-leveraged agent layer.</b> One well-integrated agent abstraction (frontend-tool round-trips, token aggregation, per-turn isolation) instead of N adapters to maintain.</li>
+  <li><b>Local/offline discipline &amp; diarization.</b> Air-gapped provisioning, hash-pinned models, and an offline diarization package are first-class.</li>
+  <li><b>Azure-first realtime + MCP.</b> One processor across Azure Voice Live / Azure OpenAI / OpenAI Realtime; an MCP server is a novel niche.</li>
+</ul>
+
+<h4 class="edge-tie">Rough parity</h4>
+<ul class="flat">
+  <li>Core frame/processor/pipeline abstraction and interruption model (Voxa's is a cleaner written contract; Pipecat's is more proven).</li>
+  <li>VAD (both Silero) and smart-turn (Voxa runs Pipecat's model).</li>
+  <li>OpenTelemetry observability.</li>
+  <li>Local model coverage (both offer Whisper/Kokoro/Piper/Silero-class local engines).</li>
+  <li>Permissive licensing (MIT vs BSD-2) and pre-1.0 API churn.</li>
+</ul>
+
+<h4 class="edge-pipecat">Where Voxa lags (honestly)</h4>
+<ul class="flat">
+  <li><b>Transports.</b> WebSocket-only vs WebRTC + telephony + WhatsApp. The single biggest functional gap for consumer voice.</li>
+  <li><b>Client SDKs.</b> None vs a 7-platform suite + RTVI. You build the client yourself.</li>
+  <li><b>Integration breadth.</b> A focused handful vs ~21 STT / ~29 TTS / ~22 LLM / 5 S2S.</li>
+  <li><b>Managed deployment.</b> No Pipecat-Cloud equivalent.</li>
+  <li><b>Noise suppression / AEC.</b> Seams only vs shipping Krisp/Koala/RNNoise integrations.</li>
+  <li><b>Multimodal &amp; multi-agent.</b> Voice-only and single-pipeline vs voice+vision and handoff/fan-out/distributed.</li>
+  <li><b>Conversation flows.</b> No Flows-style state machine.</li>
+  <li><b>Maturity &amp; community.</b> Pre-alpha, ~1 maintainer vs ~12k★, 131 contributors, commercial backing, production track record.</li>
+</ul>
+
+<h2 id="choose"><span class="secno">9.</span>When to choose which</h2>
+<div class="cols">
+  <div class="card voxa">
+    <h4 class="edge-voxa">Choose Voxa if…</h4>
+    <ul class="flat">
+      <li>You are a <b>.NET / C# shop</b> and want to stay in-stack (and use MAF / <code>Microsoft.Extensions.AI</code>).</li>
+      <li>You need <b>strong typing</b> and <b>GC-conscious real-time latency</b> guarantees.</li>
+      <li>Your transport is <b>server-to-server, embedded, or already-owned</b> (you have a WebSocket/PCM path), not browser-WebRTC-from-day-one.</li>
+      <li>You value an <b>integrated desktop tuning/measurement UX</b> (Studio) and <b>local-first / air-gapped</b> deployment.</li>
+      <li>You are <b>Azure-centric</b> or want an MCP voice surface.</li>
+      <li>You can accept <b>pre-alpha</b> risk and a thin client/transport story (or will contribute it).</li>
+    </ul>
+  </div>
+  <div class="card pipecat">
+    <h4 class="edge-pipecat">Choose Pipecat if…</h4>
+    <ul class="flat">
+      <li>You work in <b>Python</b> (or are language-agnostic).</li>
+      <li>You need <b>WebRTC and/or telephony</b> and <b>client SDKs</b> for web/mobile/embedded now.</li>
+      <li>You want the <b>widest vendor choice</b> (STT/TTS/LLM/S2S) and ready-made, tuned adapters.</li>
+      <li>You want a <b>managed cloud</b> (Pipecat Cloud) and/or bundled <b>noise suppression</b>.</li>
+      <li>You need <b>multimodal (vision)</b>, <b>multi-agent</b>, or <b>conversation flows</b>.</li>
+      <li>You value a <b>large community</b>, examples, and a production track record.</li>
+    </ul>
+  </div>
+</div>
+<div class="callout good">
+  <p><b>A note for the Voxa maintainer (this repo):</b> the comparison points to a clear, high-leverage roadmap if broader adoption is a goal — in rough priority: (1) a <b>WebRTC transport</b> (even wrapping LiveKit/SmallWebRTC-style P2P) to clear the biggest functional gap; (2) the <b>roadmapped <code>@voxa/client</code> JS SDK</b> (ideally RTVI-compatible so Pipecat's client ecosystem can be reused); (3) a shipping <b>AEC/denoise engine</b> behind the existing seams; (4) <b>telephony</b> guidance/bridge. Voxa's typed core, Studio, and local-first discipline are differentiators worth leaning into rather than trying to out-breadth Pipecat vendor-for-vendor.</p>
+</div>
+
+<h2 id="appendix"><span class="secno">10.</span>Appendix — sources &amp; method</h2>
+
+<h4>Method</h4>
+<ul class="flat">
+  <li><b>Voxa</b> was assessed from this repository at <code>main</code> @ <code>945c795</code>: the root <code>README.md</code>, the package/project inventory (<code>src/Voxa.*</code>, <code>apps/Voxa.Studio</code>), the <code>ROADMAP.md</code> references, and direct code reading accumulated during prior audits of this codebase.</li>
+  <li><b>Pipecat</b> was assessed from its public <code>README.md</code> (fetched 2026-06-20) for the architecture and the STT/TTS/LLM/S2S/transport lists, supplemented by web search for community/maturity figures, Pipecat Cloud GA, client SDKs, and telephony/transport coverage. Figures are quoted as found and dated; treat counts and star/contributor numbers as "approximately, mid-2026."</li>
+  <li><b>"Edge" calls</b> are pragmatic judgements for a typical team at the time of writing, not absolute rankings; the underlying facts are in the tables so you can re-weight them for your context.</li>
+</ul>
+
+<h4>Sources</h4>
+<ul class="flat">
+  <li>Pipecat repository &amp; README — <a href="https://github.com/pipecat-ai/pipecat">github.com/pipecat-ai/pipecat</a> (integration lists, transports, ecosystem; fetched 2026-06-20).</li>
+  <li>Pipecat community/maturity figures (~12k★, 131 contributors, v0.0.77, BSD-2, created by Daily 2024) — public summaries incl. <a href="https://aiwiki.ai/wiki/pipecat">aiwiki.ai/wiki/pipecat</a> and the repo's <a href="https://github.com/pipecat-ai/pipecat/releases">releases</a> / <a href="https://github.com/pipecat-ai/pipecat/graphs/contributors">contributors</a> pages.</li>
+  <li>Pipecat Cloud GA &amp; transports — <a href="https://www.daily.co/blog/pipecat-cloud-is-now-generally-available/">daily.co blog</a>, <a href="https://docs.pipecat.ai/deployment/pipecat-cloud/guides/daily-webrtc">docs.pipecat.ai</a>.</li>
+  <li>Pipecat client SDKs / RTVI — <a href="https://github.com/pipecat-ai/pipecat-client-web">pipecat-client-web</a>, <a href="https://github.com/pipecat-ai/pipecat-client-web-transports">pipecat-client-web-transports</a>.</li>
+  <li>Voxa — this repository's <code>README.md</code>, <code>ROADMAP.md</code>, and <code>src/</code>/<code>apps/</code> package tree at <code>945c795</code>.</li>
+</ul>
+
+<h4>What is approximate / unverified</h4>
+<ul class="flat">
+  <li>Pipecat's exact vendor counts shift release-to-release; the lists are from the README on the fetch date and may have grown.</li>
+  <li>Star/contributor/forks counts are point-in-time public figures, rounded.</li>
+  <li>Latency/allocation numbers for Voxa are the repo's own published figures (<code>bench/</code>, README), not independently re-measured here; no head-to-head latency benchmark between the two frameworks was run.</li>
+  <li>This is a capability/ecosystem comparison, not a code audit of Pipecat (only Voxa's source was read directly).</li>
+</ul>
+
+<p class="small">End of comparison. The deliverable is this file; the tables above carry the evidence so conclusions can be re-weighted for a specific use case.</p>
+
+</div>
+</body>
+</html>

@@ -24,7 +24,7 @@ public class SettingsIntegrationTests
         Assert.DoesNotContain("Azure", config.TtsProviders);
         Assert.DoesNotContain("Mistral", config.TtsProviders);
 
-        Assert.Equal(["WhisperCpp"], config.SttProviders);    // only the local STT
+        Assert.Equal(["Voxtral", "WhisperCpp"], config.SttProviders); // the local STT tier (Voxtral is GPU-gated at runtime)
     }
 
     [Fact] // WS6-A2 — activating OpenAI in Settings lights up all three Config dropdowns, no restart

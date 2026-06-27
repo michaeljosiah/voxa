@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Remote Voxtral STT now streams (Mistral API).** `MistralSpeechToTextEngine` gained a streaming path:
+  with `Voxa:Mistral:SttStreaming` (default **true**) the per-utterance POST to `/v1/audio/transcriptions`
+  sends `stream=true` and parses the `text/event-stream` response — `transcription.text.delta` events surface
+  as interim `TranscriptionResult`s and the terminal `transcription.done` as the final, for lower perceived
+  latency than waiting for the whole batch. The audio is still sent once at speech-end (the API takes a complete
+  clip, not incremental audio). Set `SttStreaming:false` for the previous single batched final. The SSE parser
+  (`MistralSttStream`) is tolerant and total: the delta text is read from `delta` *or* `text`, and any unknown or
+  malformed event is ignored rather than throwing. This pairs the **local** privacy tier (`Voxa.Speech.Voxtral`,
+  VLS-009) with an **offload-to-API** remote tier behind the same `Voxa:Stt` switch (`"Voxtral"` vs `"Mistral"`).
+- **Local Voxtral realtime STT — open-weights, fully-offline, cloud-grade (VLS-009).** A new
+  **`Voxa.Speech.Voxtral`** package adds Mistral's **Voxtral-Mini-4B-Realtime** (Apache-2.0) as a first-class,
+  on-device STT provider — `"Voxa:Stt": "Voxtral"`. It implements the streaming `ISpeechToTextEngine` directly
+  (a plain `Channel<TranscriptionResult>`, not the `WebSocketSttEngine` base) because vLLM's realtime API carries
+  audio as base64-in-JSON (`input_audio_buffer.append`) and finalizes via a `commit`→`done` round-trip — deltas
+  stream as interims, `done` is the one VAD-gated final per utterance. Two honest hosting modes like the VVL-002
+  sidecar: **connect-only** (`Voxa:Voxtral:ServerUrl` → a vLLM server you run) and **managed** (`LaunchCommand`/
+  `ExecutablePath` → Voxa launches, readiness-polls `/health`, and kills the process tree on dispose). Registered
+  in the meta-package so the string resolves everywhere. **Heavy tier:** needs a GPU (≥ 16 GB) and vLLM — no ONNX
+  export, no CPU path yet (a lighter GGUF tier is deferred until the architecture lands upstream in llama.cpp).
+  Ships a dev **mock realtime server** (`sidecar/voxtral_realtime_mock.py`) so the wire protocol is exercisable
+  with no GPU or model. In **Voxa Studio**, a GPU-gated `DefaultSttSelector` auto-promotes Voxtral to the default
+  STT only when the machine can run it (`nvidia-smi` VRAM probe behind a seam) and a server is configured —
+  otherwise whisper.cpp, so a fresh GPU-less install is unchanged. Full unit coverage against an in-process fake
+  `/v1/realtime` server, a fake GPU probe, and the descriptor/selector — no real model, GPU, or network.
 - **Telephony transport — phone calls in and out of a Voxa pipeline (VTL-001).** Two new packages put a
   real phone call through the standard `VAD → STT → agent → TTS` pipeline **over a WebSocket** — no WebRTC,
   no SIP, no ICE/TURN:

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voxa — Architecture</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 140px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 48px 0 26px; margin-bottom: 24px; }
+  header.doc .eyebrow { color: var(--accent); font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.18em; text-transform: uppercase; }
+  header.doc h1 { font-size: 2.1rem; margin: 8px 0 8px; color: #fff; letter-spacing: -0.01em; }
+  header.doc .sub { color: var(--muted); font-size: 1rem; max-width: 820px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 22px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  h2 { font-size: 1.5rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 9px; margin-top: 64px; scroll-margin-top: 20px; }
+  h2 .secno { color: var(--accent); margin-right: 12px; font-family: var(--mono); font-size: 1.1rem; }
+  h3 { font-size: 1.18rem; color: var(--accent2); margin-top: 38px; }
+  h4 { font-size: 1.02rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.85em; background: var(--panel2); padding: 1.5px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  pre .kw { color: #4fc3f7; }
+  pre .str { color: #a5d6a7; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.875rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  td code { font-size: 0.82em; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; column-count: 2; column-gap: 40px; }
+  nav.toc b { color: var(--accent2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  nav.toc ol { margin: 8px 0 0; padding-left: 22px; }
+  nav.toc li { margin: 4px 0; font-size: 0.9rem; break-inside: avoid; }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; background: #143a4a; color: #81d4fa; border: 1px solid #1f4d61; }
+  figure { margin: 22px 0; }
+  figure svg { width: 100%; height: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; }
+  figcaption { color: var(--muted); font-size: 0.82rem; margin-top: 8px; text-align: center; }
+  .lead { font-size: 1.02rem; color: #c3ccd8; }
+  .diag-label { font-family: var(--mono); font-size: 12px; fill: var(--text); }
+  .diag-sub { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+  .diag-accent { fill: var(--accent); }
+  hr.soft { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">Voxa · Architecture</div>
+  <h1>How Voxa is built</h1>
+  <div class="sub">Voxa is a frame-based, real-time voice-AI pipeline framework for .NET 10 (inspired by Pipecat).
+    You compose voice agents from small, independently-testable processors that consume and emit typed
+    <code>Frame</code>s — audio, transcripts, tool calls, control signals. This document is the map: the core
+    runtime, the provider system, the local-model tier, and the Voxa Studio desktop app.</div>
+  <div class="meta-grid">
+    <div><b>Runtime</b> .NET 10</div>
+    <div><b>Solution</b> Voxa.slnx (XML format)</div>
+    <div><b>Core deps</b> NUlid only</div>
+    <div><b>Shape</b> Frames → Processors</div>
+    <div><b>Status</b> Pre-alpha (API moves)</div>
+    <div><b>Desktop</b> Voxa Studio (Avalonia)</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#overview">Overview &amp; solution layout</a></li>
+    <li><a href="#frames">Frames &amp; processors</a></li>
+    <li><a href="#dualtask">The dual-task processor model</a></li>
+    <li><a href="#backpressure">Backpressure</a></li>
+    <li><a href="#agentloop">The agent loop</a></li>
+    <li><a href="#shapes">Two pipeline shapes</a></li>
+    <li><a href="#seams">The seam ecosystem</a></li>
+    <li><a href="#providers">AddVoxa, registry &amp; composer</a></li>
+    <li><a href="#diagnostics">The diagnostics hub</a></li>
+    <li><a href="#localmodels">Local-model infrastructure</a></li>
+    <li><a href="#catalog">Provider catalog</a></li>
+    <li><a href="#studio">Voxa Studio</a></li>
+    <li><a href="#packages">Package map</a></li>
+    <li><a href="#testing">Testing &amp; CI</a></li>
+  </ol>
+</nav>
+
+<h2 id="overview"><span class="secno">1</span>Overview &amp; solution layout</h2>
+<p class="lead">Voxa turns a stream of microphone audio into a spoken agent reply, in real time, with barge-in.
+  The whole framework is one idea applied consistently: <b>everything that flows through the pipeline is a typed
+  <code>Frame</code>, and every stage is a <code>FrameProcessor</code> that consumes some frames, emits others, and
+  forwards the rest.</b></p>
+<p>Because the contract between stages is just frames, stages compose freely and each is testable in isolation
+  behind an interface (fake the engine, never burn cloud quota in a unit test). A voice bot is a chain:</p>
+<pre><code>PipelineSource → FrameProcessor… → PipelineSink</code></pre>
+
+<p>The repository is a single solution, <code>Voxa.slnx</code> (the new XML solution format — there is no
+  <code>.sln</code>), organised as:</p>
+<table>
+  <tr><th>Folder</th><th>What lives there</th></tr>
+  <tr><td><code>src/</code></td><td>One <code>csproj</code> per NuGet package. <code>Voxa.Core</code> (zero-dependency runtime), the provider packages (<code>Voxa.Speech.*</code>, <code>Voxa.Audio.*</code>, <code>Voxa.Services.*</code>, <code>Voxa.Transports.*</code>), the ASP.NET integration, and the <code>Voxa</code> meta-package.</td></tr>
+  <tr><td><code>tests/</code></td><td>One xUnit project per library. Warnings are errors here, as in <code>src/</code>.</td></tr>
+  <tr><td><code>apps/</code></td><td><code>Voxa.Studio</code> — the Avalonia developer desktop app.</td></tr>
+  <tr><td><code>samples/</code></td><td>Runnable servers (minimal, ASP.NET, Twilio).</td></tr>
+  <tr><td><code>bench/</code></td><td>BenchmarkDotNet micro-benchmarks and the turn-taking corpus runner.</td></tr>
+  <tr><td><code>docs/</code></td><td>Guides (<code>*.md</code>) and design specs (<code>specifications/*.html</code>).</td></tr>
+</table>
+<div class="callout"><b>The cardinal rule.</b> <code>Voxa.Core</code> has <b>zero external dependencies</b> beyond
+  NUlid. No ASP.NET, no Azure, no OpenTelemetry ever leak into it. Everything vendor- or host-specific lives in a
+  satellite package behind an interface.</div>
+
+<h2 id="frames"><span class="secno">2</span>Frames &amp; processors</h2>
+<p>A <code>Frame</code> is an immutable record. Frames fall into families:</p>
+<table>
+  <tr><th>Family</th><th>Examples</th><th>Role</th></tr>
+  <tr><td>Audio / data</td><td><code>AudioRawFrame</code>, <code>TranscriptionFrame</code>, <code>TextFrame</code>, <code>LlmTextChunkFrame</code></td><td>The ordered payload of a turn — the stuff being transformed.</td></tr>
+  <tr><td>Speaking events</td><td><code>UserStartedSpeakingFrame</code>/<code>…Stopped…</code>, <code>BotStartedSpeakingFrame</code>/<code>…Stopped…</code></td><td>VAD &amp; turn edges that drive the conversation state machine.</td></tr>
+  <tr><td>Control / system</td><td><code>StartFrame</code>, <code>EndFrame</code>, <code>InterruptionFrame</code>, <code>ErrorFrame</code></td><td>Lifecycle &amp; priority signals — they jump the queue.</td></tr>
+  <tr><td>Tool calls</td><td><code>ToolCallRequestFrame</code>, <code>ToolCallResultFrame</code></td><td>Frontend tools round-trip <em>through</em> the pipeline so any stage can serve them.</td></tr>
+</table>
+<p>A <code>FrameProcessor</code> overrides one method to handle the frames it cares about and forwards the rest
+  downstream. <b>Forwarding is not optional</b>: a processor that swallows <code>StartFrame</code>/<code>EndFrame</code>
+  strands the sink (it never completes). Any long-running work accepts the per-frame
+  <code>CancellationToken</code> so an interruption can abort it mid-flight.</p>
+
+<h2 id="dualtask"><span class="secno">3</span>The dual-task processor model</h2>
+<p>The non-obvious heart of Voxa is that <b>every <code>FrameProcessor</code> drains two queues concurrently</b>:</p>
+<ul>
+  <li>A <b>system task</b> drains priority frames — <code>InterruptionFrame</code>, speaking events, <code>ErrorFrame</code> — on an unbounded, never-dropped channel.</li>
+  <li>A <b>data task</b> drains ordered frames — audio, transcripts, text — on a bounded channel.</li>
+</ul>
+<p>This split is what makes barge-in correct. When the user starts speaking mid-reply, an
+  <code>InterruptionFrame</code> arrives on the <em>system</em> task and cancels the in-flight data frame's
+  <code>CancellationToken</code> — so a streaming LLM or a long TTS synthesis aborts cleanly <em>while</em> ordered
+  frames keep flowing. The exception is frames marked <code>IUninterruptible</code> (tool calls,
+  <code>EndFrame</code>): those are guaranteed to complete.</p>
+<div class="callout"><b>Allocation-free at steady state.</b> The per-frame cancellation source is reused; it is
+  replaced only after an actual interruption. So the hot path of a running conversation does not churn the GC.</div>
+
+<figure>
+<svg viewBox="0 0 900 230" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Dual-task processor model">
+  <rect x="20" y="20" width="860" height="190" rx="10" fill="none" stroke="#2d3748"/>
+  <text x="40" y="46" class="diag-label" fill="#fff">FrameProcessor</text>
+  <!-- system task -->
+  <rect x="50" y="62" width="360" height="56" rx="8" fill="#1c2330" stroke="#1f4d61"/>
+  <text x="68" y="86" class="diag-label diag-accent">system task</text>
+  <text x="68" y="104" class="diag-sub">InterruptionFrame · speaking events · ErrorFrame  (unbounded, Wait)</text>
+  <!-- data task -->
+  <rect x="50" y="132" width="360" height="56" rx="8" fill="#1c2330" stroke="#2d3748"/>
+  <text x="68" y="156" class="diag-label">data task</text>
+  <text x="68" y="174" class="diag-sub">audio · transcript · text  (bounded, DropOldest)</text>
+  <!-- cancel arrow -->
+  <path d="M412 90 H470 V158 H540" fill="none" stroke="#ef5350" stroke-width="1.6" stroke-dasharray="4 3"/>
+  <polygon points="540,158 532,154 532,162" fill="#ef5350"/>
+  <text x="455" y="128" class="diag-sub" fill="#ef5350">cancels the in-flight</text>
+  <text x="455" y="142" class="diag-sub" fill="#ef5350">data frame's token</text>
+  <!-- in-flight -->
+  <rect x="548" y="132" width="300" height="56" rx="8" fill="#11151c" stroke="#2d3748"/>
+  <text x="566" y="156" class="diag-label">in-flight work</text>
+  <text x="566" y="174" class="diag-sub">LLM stream / TTS synth — aborts unless IUninterruptible</text>
+</svg>
+<figcaption>An interruption on the system task cancels the data frame's token; uninterruptible frames still complete.</figcaption>
+</figure>
+
+<h2 id="backpressure"><span class="secno">4</span>Backpressure</h2>
+<p>The two queues use opposite full-modes on purpose:</p>
+<table>
+  <tr><th>Path</th><th>Channel</th><th>When full…</th></tr>
+  <tr><td>Audio / data</td><td>bounded, <code>BoundedChannelFullMode.DropOldest</code></td><td>drop the oldest audio rather than stall the pipeline — a slow consumer loses samples, not real-time.</td></tr>
+  <tr><td>Control / system</td><td>unbounded, <code>Wait</code></td><td>never drop a control signal; priority frames always land.</td></tr>
+</table>
+<p>This is why a momentarily slow downstream stage degrades gracefully (dropped audio) instead of deadlocking.
+  Any processor that deviates from this convention documents why.</p>
+
+<h2 id="agentloop"><span class="secno">5</span>The agent loop</h2>
+<p><code>AgentLoopProcessor</code> (in <code>Voxa.Core</code>) is the framework-agnostic per-turn brain. Its defining
+  property: <b>the data loop never blocks on the agent or a tool call</b>. A separate <em>turn worker</em> runs the
+  turn while frames keep flowing through the processor.</p>
+<p>It owns per-turn ids, the lifecycle frames (<code>LlmTurnStartedFrame</code>/<code>LlmTurnEndedFrame</code>),
+  per-turn try/catch isolation, token aggregation into a <code>TurnSummary</code>, and the correlation of
+  <b>frontend tools</b> — tool calls leave as <code>ToolCallRequestFrame</code>, travel the pipeline, and the
+  result returns as <code>ToolCallResultFrame</code> matched back by a <code>TaskCompletionSource</code>.</p>
+<p>The single seam to any LLM runtime is tiny:</p>
+<pre><code><span class="kw">public interface</span> IAgentTurnDriver
+{
+    IAsyncEnumerable&lt;Frame&gt; RunTurnAsync(VoiceTurnContext ctx, CancellationToken ct);
+}</code></pre>
+<p>The driver yields frames (text chunks, tool requests, usage) one at a time; the processor pumps them downstream
+  immediately. For Microsoft Agent Framework, <code>MicrosoftAgentVoice.CreateProcessor(agent, options)</code>
+  returns a fully-wired <code>AgentLoopProcessor</code> whose driver translates MAF's streaming updates into Voxa
+  frames. A local LLM is reached the same way — point an <code>IChatClient</code> at a local OpenAI-compatible
+  endpoint (Ollama today).</p>
+
+<h2 id="shapes"><span class="secno">6</span>Two pipeline shapes</h2>
+<p>Voxa supports two ways to assemble a voice agent, and they coexist behind the same frame contract.</p>
+
+<h3>6.1 Granular — vendor-neutral chain</h3>
+<p>Mix any STT vendor with any LLM with any TTS vendor. <code>SentenceAggregator</code> batches LLM tokens into
+  sentence-sized TTS chunks (so speech starts before the full reply is generated); <code>TranscriptionFilter</code>
+  drops Whisper hallucinations.</p>
+<figure>
+<svg viewBox="0 0 900 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Granular pipeline">
+  <g>
+    <rect x="14"  y="50" width="86" height="46" rx="8" fill="#1c2330" stroke="#2d3748"/><text x="57" y="71" class="diag-label" text-anchor="middle">Mic</text><text x="57" y="86" class="diag-sub" text-anchor="middle">source</text>
+    <rect x="124" y="50" width="86" height="46" rx="8" fill="#1c2330" stroke="#1f4d61"/><text x="167" y="71" class="diag-label diag-accent" text-anchor="middle">VAD</text><text x="167" y="86" class="diag-sub" text-anchor="middle">Silero</text>
+    <rect x="234" y="50" width="86" height="46" rx="8" fill="#1c2330" stroke="#1f4d61"/><text x="277" y="71" class="diag-label diag-accent" text-anchor="middle">STT</text><text x="277" y="86" class="diag-sub" text-anchor="middle">engine</text>
+    <rect x="344" y="50" width="96" height="46" rx="8" fill="#1c2330" stroke="#1f4d61"/><text x="392" y="71" class="diag-label diag-accent" text-anchor="middle">Agent</text><text x="392" y="86" class="diag-sub" text-anchor="middle">turn loop</text>
+    <rect x="464" y="50" width="110" height="46" rx="8" fill="#1c2330" stroke="#2d3748"/><text x="519" y="71" class="diag-label" text-anchor="middle">Aggregator</text><text x="519" y="86" class="diag-sub" text-anchor="middle">sentences</text>
+    <rect x="598" y="50" width="86" height="46" rx="8" fill="#1c2330" stroke="#1f4d61"/><text x="641" y="71" class="diag-label diag-accent" text-anchor="middle">TTS</text><text x="641" y="86" class="diag-sub" text-anchor="middle">engine</text>
+    <rect x="708" y="50" width="86" height="46" rx="8" fill="#1c2330" stroke="#2d3748"/><text x="751" y="71" class="diag-label" text-anchor="middle">Speaker</text><text x="751" y="86" class="diag-sub" text-anchor="middle">sink</text>
+    <g stroke="#4fc3f7" stroke-width="1.4" fill="none">
+      <path d="M100 73 H124"/><path d="M210 73 H234"/><path d="M320 73 H344"/><path d="M440 73 H464"/><path d="M574 73 H598"/><path d="M684 73 H708"/>
+    </g>
+  </g>
+</svg>
+<figcaption>The granular chain: each box is a <code>FrameProcessor</code>; arrows are frames. Any box is swappable.</figcaption>
+</figure>
+
+<h3>6.2 Composite — one processor, full-duplex</h3>
+<p>A single processor wraps STT+LLM+TTS+VAD against a server-side realtime API:
+  <code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>. Full-duplex, server-side VAD, one
+  WebSocket. The same family hosts an on-device speech-to-speech model through the
+  <code>ISpeechToSpeechSession</code> seam (a third sibling alongside the two cloud composites).</p>
+
+<h2 id="seams"><span class="secno">7</span>The seam ecosystem</h2>
+<p>Every capability is a thin interface with a fake for tests and one or more real implementations. The STT and
+  TTS seams are <b>push/streaming</b> — you push audio in and read results out as an
+  <code>IAsyncEnumerable</code>, never poll — which is the correct shape for real-time and composes with
+  cancellation and backpressure.</p>
+<table>
+  <tr><th>Seam</th><th>Shape</th><th>Notes</th></tr>
+  <tr><td><code>ISpeechToTextEngine</code></td><td>push audio → stream <code>TranscriptionResult</code></td><td>16+ impls. <code>WriteAudioAsync</code> / <code>ReadTranscriptsAsync</code> / VAD-gated <code>FlushAsync</code>; optional eager/speculative STT.</td></tr>
+  <tr><td><code>ITextToSpeechEngine</code></td><td>push text → stream PCM chunks</td><td>13+ impls (cloud + local + sidecar).</td></tr>
+  <tr><td><code>IAgentTurnDriver</code></td><td>context → stream <code>Frame</code></td><td>The LLM-runtime seam (see §5).</td></tr>
+  <tr><td><code>IRealtimeApiTransport</code></td><td>push/stream JSON events</td><td>WebSocket wire for the cloud composites.</td></tr>
+  <tr><td><code>ISpeechToSpeechSession</code></td><td>push user audio → stream agent chunks+events</td><td>Full-duplex on-device model seam; mock ships, real model deferred.</td></tr>
+  <tr><td><code>ISmartTurnClassifier</code></td><td>recent PCM → "turn complete?"</td><td>Lets VAD <code>StopDuration</code> drop without cutting off mid-sentence pauses. Fails "complete" on error.</td></tr>
+  <tr><td><code>IEchoCanceller</code> / <code>IAudioEnhancer</code></td><td>concurrent / stateful filters</td><td>AEC (far-end reference + near-end cancel) and denoise. Null defaults ship; DSP/ONNX models follow.</td></tr>
+  <tr><td><code>ISpeakerSegmentation</code> · <code>ISpeakerEmbedding</code> · <code>IDiarizer</code></td><td>batch audio → speaker segments</td><td>Diarization: pyannote ONNX segmentation + centroid clustering.</td></tr>
+</table>
+<p>VAD is the one capability expressed as a concrete processor (<code>SileroVadProcessor</code> over an ONNX engine)
+  rather than an interface — it owns the decision logic (emits the speaking-edge frames, the eager-STT speculation,
+  long-utterance force-split, and the optional smart-turn confirmation).</p>
+
+<h2 id="providers"><span class="secno">8</span>AddVoxa, registry &amp; composer</h2>
+<p>This is the "five lines to a voice bot" layer (<code>Voxa.AspNetCore</code> + the <code>Voxa</code> meta-package),
+  and the part most likely to surprise you.</p>
+<pre><code><span class="cm">// Program.cs — a working voice bot</span>
+builder.Services.AddVoxa(builder.Configuration);
+app.MapVoxaVoice(<span class="str">"/voice"</span>).UseDefaults();</code></pre>
+<ul>
+  <li><b><code>AddVoxa(configuration)</code></b> registers a <code>VoxaProviderRegistry</code> + every built-in
+    provider descriptor, binds the <code>"Voxa"</code> config section, and adds a <b>fail-fast options validator</b>
+    (<code>ValidateOnStart</code>) — the host refuses to start on an unknown provider/profile.</li>
+  <li><b>Providers are descriptors</b>: <code>VoxaSttDescriptor</code> / <code>VoxaTtsDescriptor</code> carry a name,
+    a config section, a keyless <code>Validate</code>, a <code>CreateProcessor</code> factory, and an optional
+    startup <code>WarmUpAsync</code>. A package self-registers via <code>builder.AddProvider(descriptor)</code>.</li>
+  <li><b><code>MapVoxaVoice("/voice").UseDefaults()</code></b> composes VAD → STT → agent → aggregation → TTS via
+    <code>DefaultVoicePipelineComposer</code>, which is <b>transport-agnostic</b> (<code>Compose(IServiceProvider)</code>;
+    the <code>HttpContext</code> overload forwards to it). The same composer backs the WebSocket route, the Twilio
+    telephony route, and Voxa Studio.</li>
+  <li><b>Named profiles</b> — <code>LowLatency</code> / <code>Quality</code> / <code>Cheap</code> — bundle the VAD
+    timings, eager-STT threshold, and response caps from the performance-tuning guide. They tune latency and
+    robustness on a fixed topology; provider selection stays an explicit per-slot config choice.</li>
+</ul>
+<div class="callout warn"><b>The config-capture rule.</b> Providers that need configuration capture the
+  <code>IConfiguration</code> passed to <code>AddVoxa</code> — they must <b>not</b> call
+  <code>GetRequiredService&lt;IConfiguration&gt;()</code>. ASP.NET registers <code>IConfiguration</code> implicitly,
+  but plain <code>ServiceCollection</code> hosts (Voxa Studio, tests) do not, so DI resolution would throw there.
+  The validator, composer, and default agent factory all follow this.</div>
+
+<h2 id="diagnostics"><span class="secno">9</span>The diagnostics hub</h2>
+<p><code>VoxaDiagnosticsHub</code> (<code>Voxa.Core/Diagnostics</code>, enabled by <code>Voxa:Diagnostics:Enabled</code>)
+  is a per-session typed event stream: VAD windows, turn edges, transcripts, stage latencies. Two properties make
+  it safe to leave in the framework:</p>
+<ul>
+  <li><b>Zero-cost when unobserved</b> — a <code>HasListeners</code> guard precedes every publish. With diagnostics
+    off, composed pipelines are <b>byte-identical</b> to pre-diagnostics (golden-tested).</li>
+  <li><b>Bounded, drop-oldest per subscriber</b> — a slow observer can't back-pressure the conversation; a gap in
+    the <code>SeqNo</code> signals a drop intentionally.</li>
+</ul>
+<p>A <code>StageLatencyTracker</code> inside the hub derives the per-turn latency waterfall (VAD close → STT final →
+  LLM first token → TTS first byte → audio out) and records the <code>voxa.stage.latency</code> histogram. This is
+  exactly what Voxa Studio's Talk view renders live.</p>
+
+<h2 id="localmodels"><span class="secno">10</span>Local-model infrastructure</h2>
+<p>The offline tier is what lets you develop without API keys, deploy air-gapped, and run zero-cost CI
+  conversations. Three pieces work together.</p>
+
+<h3>10.1 The pinned catalog — <code>VoxaModelArtifact</code></h3>
+<p>Every downloadable model is a record with a <b>pinned URL and SHA-256</b> — no floating refs:</p>
+<pre><code><span class="kw">sealed record</span> VoxaModelArtifact(
+    <span class="kw">string</span> Id, Uri DownloadUrl, <span class="kw">string</span> Sha256, <span class="kw">long</span> SizeBytes)
+{
+    <span class="kw">public string?</span> ArchiveEntry { <span class="kw">get; init;</span> }  <span class="cm">// path inside a .zip/.tar.gz, or null</span>
+    <span class="kw">public bool</span>    Executable   { <span class="kw">get; init;</span> }  <span class="cm">// chmod +x on Unix</span>
+}</code></pre>
+<p>Per-provider catalogs build on it — <code>WhisperCppModelCatalog</code> (22 pinned GGML models),
+  <code>PiperVoiceCatalog</code>, <code>KokoroCatalog</code>, <code>PyannoteSegmentationCatalog</code>. The variant
+  is keyed by name (size / quantization / voice), not a capability flag matrix.</p>
+
+<h3>10.2 The cache — <code>VoxaModelCache</code></h3>
+<p>Resolves its root from <code>VOXA_MODEL_CACHE</code> (env, highest), then <code>Voxa:Models:CachePath</code>, then
+  the OS default (<code>%LOCALAPPDATA%\voxa\models</code> on Windows). Downloads verify SHA-256 incrementally with an
+  atomic rename, a cross-process <code>.lock</code> serialises parallel test hosts, and
+  <code>Voxa:Models:Offline=true</code> turns a cache miss into a <code>VoxaModelUnavailableException</code> with
+  copy-pasteable air-gap provisioning instructions. <b>Validation never downloads</b> — it only checks the cache.</p>
+
+<h3>10.3 The ONNX host — <code>OnnxModelHost</code></h3>
+<p>A process-wide session factory keyed by <code>(path, device)</code> so weights load exactly once across
+  concurrent sessions. Execution-provider selection is <b>CPU by default, GPU opt-in</b>
+  (<code>OnnxExecutionProvider</code>: CUDA / DirectML / CoreML, with an <code>Auto</code> that probes and falls back
+  to CPU). The base package bundles only the CPU runtime; a GPU runtime is a matching NuGet package the consuming
+  app adds, and an unsatisfiable explicit request throws with a remediation message rather than silently degrading.</p>
+
+<h2 id="catalog"><span class="secno">11</span>Provider catalog</h2>
+<table>
+  <tr><th>Capability</th><th>Cloud</th><th>Local / offline</th></tr>
+  <tr><td>STT</td><td>OpenAI · Azure · Deepgram · AssemblyAI · Gladia · Speechmatics · Google · AWS · Groq · Together · Mistral</td><td><b>whisper.cpp</b> (keyless) · <b>Voxtral</b> (open-weights, GPU, via local vLLM — VLS-009)</td></tr>
+  <tr><td>TTS</td><td>OpenAI · Azure · ElevenLabs · Mistral</td><td><b>Piper</b> (speed) · <b>Kokoro</b> (quality) · sidecar (cloning)</td></tr>
+  <tr><td>Agent / LLM</td><td>OpenAI (and any MAF <code>AIAgent</code>)</td><td>Ollama (OpenAI-compatible endpoint) · keyless <code>Echo</code></td></tr>
+  <tr><td>VAD · turn-taking</td><td colspan="2">Silero VAD (ONNX) · smart-turn classifier (HTTP / sidecar)</td></tr>
+  <tr><td>Audio</td><td colspan="2">AEC seam · denoise seam · speaker diarization (pyannote ONNX)</td></tr>
+  <tr><td>Transports</td><td colspan="2">WebSocket · Twilio Media Streams telephony (μ-law, 8 kHz bridge)</td></tr>
+</table>
+<p>The streaming WebSocket STT vendors share a <code>WebSocketSttEngine</code> base (connect / receive-loop /
+  graceful close); the SDK-backed and batch vendors share a <code>StreamingTranscriptAccumulator</code>. Voxtral is
+  the exception that proves the seam: vLLM's realtime API carries audio as base64-in-JSON and finalises via a
+  <code>commit</code>→<code>done</code> round-trip, so it implements <code>ISpeechToTextEngine</code> directly over a
+  plain channel rather than reusing that base.</p>
+
+<h2 id="studio"><span class="secno">12</span>Voxa Studio</h2>
+<p class="lead">Voxa Studio (<code>apps/Voxa.Studio</code>) is an Avalonia 11 desktop app that hosts the <b>real composed
+  pipeline in-process</b> against the developer's mic and speakers — the same <code>DefaultVoicePipelineComposer</code>
+  a server uses. It is the framework's microscope.</p>
+
+<h3>12.1 Composition &amp; the no-Generic-Host rule</h3>
+<p>Studio builds its container with a <b>plain <code>ServiceCollection</code> + <code>AddVoxa</code></b>, deliberately
+  <em>not</em> the Generic Host. The reason is a hard product rule: <b>Studio never touches the network before the
+  user acts.</b> Hosted services (eager model warm-up) must not run on boot, so there is no host to run them. The
+  staged splash (<code>StartupCoordinator</code>: <span class="pill">configuration</span>
+  <span class="pill">providers</span> <span class="pill">devices</span> <span class="pill">model cache</span>
+  <span class="pill">ready</span>) does only local work — device enumeration and a cache <em>scan</em>, never a fetch.</p>
+
+<h3>12.2 The three-layer live config</h3>
+<p>Studio can re-compose the live pipeline without a restart. <code>StudioServices.Build</code> layers configuration,
+  lowest priority first:</p>
+<figure>
+<svg viewBox="0 0 900 168" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Studio config layers">
+  <rect x="60"  y="28" width="780" height="32" rx="6" fill="#11151c" stroke="#2d3748"/><text x="74" y="49" class="diag-sub">base — appsettings.json + environment</text>
+  <rect x="60"  y="66" width="780" height="32" rx="6" fill="#161b22" stroke="#2d3748"/><text x="74" y="87" class="diag-sub">secrets — DPAPI-encrypted credential store (VST-003)</text>
+  <rect x="60"  y="104" width="780" height="32" rx="6" fill="#1c2330" stroke="#1f4d61"/><text x="74" y="125" class="diag-sub diag-accent">overrides — the Config draft / active pipeline profile</text>
+  <text x="450" y="156" class="diag-sub" text-anchor="middle">higher layers win → container rebuilds → next Talk session composes with the new settings</text>
+</svg>
+<figcaption><code>Reconfigure</code> swaps the overrides; <code>ApplySecrets</code> swaps the secrets layer — neither wipes the other.</figcaption>
+</figure>
+<p>Because secrets are their own layer, a Config "Apply" (which replaces the override set) can't erase stored API
+  keys. The GPU-gated default-STT selector (VLS-009) also lives here: when no layer chose an <code>Stt</code>, it
+  picks Voxtral if the machine can run it (an <code>nvidia-smi</code> VRAM probe behind a cached seam) and a vLLM
+  server is configured, else keyless whisper.cpp — overlaid as the lowest-priority default so any explicit choice
+  still wins.</p>
+
+<h3>12.3 View models are Avalonia-free</h3>
+<p>The view models reference no Avalonia types and are <b>headless-testable</b>: a 33 ms <code>DispatcherTimer</code>
+  calls <code>DrainPending()</code> in the app; tests call it directly. Headless boot runs through
+  <code>Avalonia.Headless.XUnit</code> with headless drawing (the Skia render loop is opt-in via
+  <code>VOXA_STUDIO_CAPTURE=1</code> — enabling it keeps the dispatcher alive, which is the exact cause of the
+  historical "tests pass then <code>dotnet test</code> never exits" hang).</p>
+
+<h3>12.4 Audio behind a seam</h3>
+<p>All audio is behind <code>IStudioAudioDevice</code> — WASAPI/NAudio on Windows, <code>NullAudioDevice</code>
+  elsewhere and in tests. WASAPI mix formats are usually <code>WAVE_FORMAT_EXTENSIBLE</code>;
+  <code>CaptureFormatConverter</code> resolves the subformat GUIDs and an unconvertible format throws at session
+  start rather than going silently deaf.</p>
+
+<h3>12.5 The sections</h3>
+<table>
+  <tr><th>Section</th><th>What it does</th></tr>
+  <tr><td><b>Talk</b></td><td>Live conversation against your mic/speakers, rendering the diagnostics hub: a phase pill, the VAD trace, per-turn transcripts, and the stage-latency waterfall.</td></tr>
+  <tr><td><b>Playgrounds</b></td><td>Isolate one stage — e.g. an STT playground that transcribes a fixture or live mic.</td></tr>
+  <tr><td><b>Builder</b></td><td>A visual node graph of the pipeline; drag to compose, validate visually, export a verified <code>appsettings.json</code> block, and save named profiles.</td></tr>
+  <tr><td><b>Models</b></td><td>Model-cache inventory: prefetch-all (air-gap provisioning), SHA-256 verify, purge — grouped by type with a provider filter.</td></tr>
+  <tr><td><b>Voices</b></td><td>Audition / A&#8203;/B the Piper &amp; Kokoro voice catalogs with TTFB + RTF measured on local hardware.</td></tr>
+  <tr><td><b>Metrics</b></td><td>The per-turn latency breakdown over time.</td></tr>
+  <tr><td><b>Config</b> / <b>Settings</b></td><td>Registry-driven provider pickers (filtered to activated-or-local), the smart-turn / AEC / denoise toggles, and the Settings dialog that stores API keys encrypted via DPAPI.</td></tr>
+  <tr><td><b>Diarization</b></td><td>Speaker-segmentation analytics over a recording.</td></tr>
+</table>
+<p>Pipeline <b>profiles</b> (<code>PipelineProfileStore</code>) are app-wide named pipelines — the shell bar shows the
+  active one; activating a profile rebuilds the container from its config pairs.</p>
+
+<h2 id="packages"><span class="secno">13</span>Package map</h2>
+<table>
+  <tr><th>Package</th><th>Responsibility</th></tr>
+  <tr><td><code>Voxa.Core</code></td><td>Frames, <code>FrameProcessor</code>, pipeline, <code>AgentLoopProcessor</code>, diagnostics hub. Zero deps.</td></tr>
+  <tr><td><code>Voxa.Speech.Abstractions</code></td><td>The STT/TTS seams, <code>WebSocketSttEngine</code> base, the model cache &amp; artifact, <code>VoxaHttp</code>.</td></tr>
+  <tr><td><code>Voxa.Audio.Abstractions</code> · <code>.Onnx</code></td><td>AEC/enhancer/resampler seams; the shared ONNX session host &amp; EP selection.</td></tr>
+  <tr><td><code>Voxa.Speech.*</code></td><td>One per vendor/engine: Azure, OpenAI, Deepgram, AssemblyAI, Gladia, Speechmatics, Google, AWS, Groq, Together, ElevenLabs, Mistral, WhisperCpp, Piper, Kokoro, <b>Voxtral</b>, Sidecar.</td></tr>
+  <tr><td><code>Voxa.Audio.SileroVad</code> · <code>.SmartTurn</code> · <code>.Diarization(.Onnx)</code></td><td>VAD, turn-end confirmation, speaker diarization.</td></tr>
+  <tr><td><code>Voxa.Services.*</code></td><td>Composites &amp; runtimes: OpenAI Realtime, Azure Voice Live, Speech-to-Speech, Microsoft Agents.</td></tr>
+  <tr><td><code>Voxa.Transports.*</code></td><td>WebSocket, Telephony (base), Twilio Media Streams.</td></tr>
+  <tr><td><code>Voxa.AspNetCore</code></td><td><code>AddVoxa</code>, the registry, <code>DefaultVoicePipelineComposer</code>, profiles, the validator.</td></tr>
+  <tr><td><code>Voxa</code> (meta)</td><td>One reference: <code>AddVoxa(cfg)</code> with every built-in provider bundled.</td></tr>
+  <tr><td><code>Voxa.Cli</code> · <code>Voxa.Mcp</code></td><td>A headless Core entry point; an MCP server that gives an agent a voice/ears.</td></tr>
+</table>
+
+<h2 id="testing"><span class="secno">14</span>Testing &amp; CI</h2>
+<ul>
+  <li><b>Every seam has a fake.</b> Unit tests fake the engine/transport — never burn cloud quota, never need a GPU.</li>
+  <li><b>The <code>LocalModels</code> trait is load-bearing.</b> Tests tagged <code>[Trait("Category","LocalModels")]</code>
+    download real speech models (hundreds of MB) and are <b>excluded from the default run</b>
+    (<code>--filter "Category!=LocalModels"</code>), running in their own cached, network-blocked CI lane.</li>
+  <li><b>Warnings are errors</b> in <code>src/</code>, <code>apps/</code>, and most tests — fix, don't suppress.
+    <code>dotnet build Voxa.slnx -warnaserror</code> matches CI.</li>
+  <li><b>Studio runs headless</b> in the default Ubuntu suite plus a dedicated <code>windows-latest</code> lane for
+    the WASAPI paths.</li>
+</ul>
+<hr class="soft"/>
+<p style="color:var(--muted);font-size:0.85rem">Companion reading: the design specs in
+  <code>docs/specifications/*.html</code>, the guides <code>docs/local-speech.md</code>,
+  <code>docs/performance-tuning.md</code>, <code>docs/studio.md</code>, and <code>ROADMAP.md</code> for what has
+  shipped and what is planned.</p>
+
+</div>
+</body>
+</html>

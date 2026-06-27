@@ -43,7 +43,7 @@ public class ProviderManifestTests
     public void Local_Identities_Are_Exactly_The_Keyless_Tier_With_No_Fields()
     {
         var locals = ProviderManifestCatalog.All.Where(m => m.IsLocal).Select(m => m.Name).OrderBy(n => n);
-        Assert.Equal(["Echo", "Kokoro", "Piper", "WhisperCpp"], locals);
+        Assert.Equal(["Echo", "Kokoro", "Piper", "Voxtral", "WhisperCpp"], locals);
         Assert.All(ProviderManifestCatalog.All.Where(m => m.IsLocal), m => Assert.Empty(m.Fields));
     }
 
