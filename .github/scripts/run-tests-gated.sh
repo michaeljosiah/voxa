@@ -34,15 +34,23 @@ for proj in "$@"; do
   fi
 
   counters="$(grep -om1 '<Counters[^>]*/>' "${trx}" || true)"
-  fcount="$(printf '%s' "${counters}" | grep -o 'failed="[0-9]*"' | grep -o '[0-9]*' || true)"
-  pcount="$(printf '%s' "${counters}" | grep -o 'passed="[0-9]*"' | grep -o '[0-9]*' || true)"
+  count() { printf '%s' "${counters}" | grep -o "$1=\"[0-9]*\"" | grep -o '[0-9]*'; }
+  total="$(count total)"; pcount="$(count passed)"
 
-  if [ "${fcount:-1}" != "0" ] || [ "${pcount:-0}" = "0" ]; then
+  # The only real failure signals are non-zero failed/error/aborted/timeout — a project whose tests are
+  # all filtered out (e.g. Voxa.LocalSpeech.Tests under Category!=LocalModels) legitimately runs zero and
+  # passes. A non-zero exit with zero tests means the host crashed before running anything → fail.
+  bad=0
+  for k in failed error aborted timeout; do v="$(count "$k")"; [ "${v:-0}" -gt 0 ] && bad=1; done
+
+  if [ "${bad}" -ne 0 ]; then
     echo "::error::${name} failed (rc=${rc}; ${counters:-no <Counters> in TRX})"; failed="${failed} ${name}"
+  elif [ "${total:-0}" = "0" ] && [ "${rc}" -ne 0 ]; then
+    echo "::error::${name}: host exited non-zero (rc=${rc}) before running any test"; failed="${failed} ${name}"
   elif [ "${rc}" -ne 0 ]; then
-    echo "::warning::${name}: ${pcount} passed, 0 failed, but the host exited non-zero (rc=${rc}) — known Avalonia.Headless session-shutdown hang; gated on the TRX result."
+    echo "::warning::${name}: ${pcount:-0} passed, 0 failed, but the host exited non-zero (rc=${rc}) — known Avalonia.Headless session-shutdown hang; gated on the TRX result."
   else
-    echo "${name}: ${pcount} passed"
+    echo "${name}: ${pcount:-0} passed"
   fi
 done
 
