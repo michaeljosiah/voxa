@@ -53,6 +53,8 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     public string ServerUrl => $"ws://127.0.0.1:{Port}";
 
     public string? Model { get; private set; }
+    public string? Language { get; private set; }
+    public int? Delay { get; private set; }
 
     public byte[] ReceivedAudio { get { lock (_gate) return _audio.ToArray(); } }
 
@@ -100,6 +102,8 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
         {
             case "session.update":
                 Model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+                Language = doc.RootElement.TryGetProperty("language", out var lang) ? lang.GetString() : null;
+                Delay = doc.RootElement.TryGetProperty("delay", out var d2) && d2.ValueKind == JsonValueKind.Number ? d2.GetInt32() : null;
                 break;
             case "input_audio_buffer.append":
                 if (doc.RootElement.TryGetProperty("audio", out var a) && a.GetString() is { } b64)

@@ -42,11 +42,21 @@ public class VoxtralWireTests
     }
 
     [Fact]
-    public void SessionUpdate_Carries_Type_And_Model()
+    public void SessionUpdate_Carries_Model_Language_And_Delay()
     {
-        using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(VoxtralWire.SessionUpdate("my-model")));
+        using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(VoxtralWire.SessionUpdate("my-model", "en", 480)));
         Assert.Equal("session.update", doc.RootElement.GetProperty("type").GetString());
         Assert.Equal("my-model", doc.RootElement.GetProperty("model").GetString());
+        Assert.Equal("en", doc.RootElement.GetProperty("language").GetString());
+        Assert.Equal(480, doc.RootElement.GetProperty("delay").GetInt32());
+    }
+
+    [Fact]
+    public void SessionUpdate_Omits_Language_When_Null()
+    {
+        using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(VoxtralWire.SessionUpdate("my-model", null, 480)));
+        Assert.False(doc.RootElement.TryGetProperty("language", out _)); // auto-detect: don't pin a language
+        Assert.Equal(480, doc.RootElement.GetProperty("delay").GetInt32());
     }
 
     [Fact]

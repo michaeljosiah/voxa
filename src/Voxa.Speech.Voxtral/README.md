@@ -76,7 +76,7 @@ vLLM realtime is OpenAI-Realtime-style JSON over a WebSocket at `/v1/realtime`:
 
 ```jsonc
 // client → server
-{ "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602" }
+{ "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602", "delay": 480 }  // + "language" when set
 { "type": "input_audio_buffer.commit" }                  // "ready to start", sent right after session.update
 { "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }
 { "type": "input_audio_buffer.commit" }                  // non-final: flush this utterance at VAD speech-end

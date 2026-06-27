@@ -50,6 +50,26 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // codex P2: the configured language hint and realtime delay must reach the server, not be silently dropped
+    public async Task Handshake_Sends_The_Configured_Language_And_Delay()
+    {
+        await using var server = new MiniRealtimeServer(deltas: ["hi"], doneText: "hi");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model", Language = "fr", DelayMs = 320 };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+
+        await engine.StartAsync(CancellationToken.None);
+        // Drive one utterance so we know the handshake (sent before audio) has been processed by the server.
+        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+        await engine.FlushAsync();
+        await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
+
+        Assert.Equal("test-model", server.Model);
+        Assert.Equal("fr", server.Language);
+        Assert.Equal(320, server.Delay);
+
+        await engine.StopAsync();
+    }
+
     [Fact] // codex P1: append (data loop) and commit (system loop) overlap — concurrent ws sends must be serialized
     public async Task Concurrent_Append_And_Commit_Do_Not_Drop_The_Final()
     {

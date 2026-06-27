@@ -24,7 +24,8 @@ internal readonly record struct VoxtralServerMessage(VoxtralServerEvent Kind, st
 /// </summary>
 internal static class VoxtralWire
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json =
+        new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
     // Both commit forms are constant — build once. The non-final form OMITS the "final" field (per vLLM's
     // realtime protocol: a bare commit flushes/starts the stream; only {"final":true} ends it).
@@ -33,9 +34,15 @@ internal static class VoxtralWire
     private static readonly byte[] FinalCommitBytes =
         JsonSerializer.SerializeToUtf8Bytes(new FinalCommitMsg("input_audio_buffer.commit", true), Json);
 
-    /// <summary>Handshake: tell the server which model this session uses.</summary>
-    public static byte[] SessionUpdate(string model)
-        => JsonSerializer.SerializeToUtf8Bytes(new SessionUpdateMsg("session.update", model), Json);
+    /// <summary>
+    /// Handshake: the model plus the configured session knobs. <paramref name="language"/> is omitted when null
+    /// (let the model auto-detect); <paramref name="delayMs"/> is the realtime delay knob. Field names follow the
+    /// OpenAI-realtime/Mistral convention (flat, like the documented <c>model</c>); confirm against a live vLLM
+    /// build if the server renames them — unknown fields are ignored, so a mismatch degrades to "knob ineffective"
+    /// rather than breaking the session.
+    /// </summary>
+    public static byte[] SessionUpdate(string model, string? language, int delayMs)
+        => JsonSerializer.SerializeToUtf8Bytes(new SessionUpdateMsg("session.update", model, language, delayMs), Json);
 
     /// <summary>Append a PCM16 chunk as base64 (<c>input_audio_buffer.append</c>).</summary>
     public static byte[] AppendAudio(ReadOnlySpan<byte> pcm)
@@ -87,7 +94,9 @@ internal static class VoxtralWire
 
     private sealed record SessionUpdateMsg(
         [property: JsonPropertyName("type")] string Type,
-        [property: JsonPropertyName("model")] string Model);
+        [property: JsonPropertyName("model")] string Model,
+        [property: JsonPropertyName("language")] string? Language,
+        [property: JsonPropertyName("delay")] int Delay);
 
     private sealed record AppendMsg(
         [property: JsonPropertyName("type")] string Type,

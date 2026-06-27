@@ -88,8 +88,9 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 "your vLLM server is running; in managed mode, check the server logs (it may still be loading the model).", ex);
         }
 
-        // Handshake: tell the server which model this session uses, before any audio flows.
-        await SendSerializedAsync(ws, VoxtralWire.SessionUpdate(_options.Model), ct).ConfigureAwait(false);
+        // Handshake: model + the configured session knobs (language hint, realtime delay), before any audio flows.
+        await SendSerializedAsync(ws, VoxtralWire.SessionUpdate(_options.Model, _options.Language, _options.DelayMs), ct)
+            .ConfigureAwait(false);
         // vLLM realtime: a non-final commit right after session.update signals "ready to start" the stream.
         await SendSerializedAsync(ws, VoxtralWire.Commit(final: false), ct).ConfigureAwait(false);
         _ws = ws;
@@ -104,8 +105,15 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         var append = VoxtralWire.AppendAudio(pcm.Span); // base64-encode synchronously before the await
         try
         {
-            await SendSerializedAsync(ws, append, ct).ConfigureAwait(false);
-            _pendingAudio = true; // there is now buffered audio the server hasn't been told to finalize
+            await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await ws.SendAsync(append, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
+                // Mark INSIDE the lock so a commit that next acquires the lock observes this audio. Setting it
+                // after release would let a racing FlushAsync snapshot a stale "no audio" and skip _awaitingDone.
+                _pendingAudio = true;
+            }
+            finally { _sendLock.Release(); }
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
@@ -114,7 +122,8 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         }
     }
 
-    // Serialize all socket writes (append / commit / close) — ClientWebSocket allows only one outstanding send.
+    // Serialize all socket writes (handshake / close) — ClientWebSocket allows only one outstanding send.
+    // Append and commit manage the buffer flags inside the lock themselves (see WriteAudioAsync / FlushAsync).
     private async Task SendSerializedAsync(ClientWebSocket ws, ReadOnlyMemory<byte> bytes, CancellationToken ct)
     {
         await _sendLock.WaitAsync(ct).ConfigureAwait(false);
@@ -136,10 +145,19 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
-            var hadAudio = _pendingAudio;
-            await SendSerializedAsync(ws, VoxtralWire.Commit(final: false), CancellationToken.None).ConfigureAwait(false);
-            _pendingAudio = false;                 // this utterance has been committed for finalization
-            if (hadAudio) _awaitingDone = true;    // the server now owes us its transcription.done
+            await _sendLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                // Snapshot INSIDE the lock: every append serialized before this commit has run (and set
+                // _pendingAudio), and any later append is ordered after it on the wire — so _pendingAudio here is
+                // exactly the audio this commit finalizes. Snapshotting before the lock could miss a racing append.
+                var hadAudio = _pendingAudio;
+                await ws.SendAsync(VoxtralWire.Commit(final: false), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None)
+                    .ConfigureAwait(false);
+                _pendingAudio = false;                 // this utterance has been committed for finalization
+                if (hadAudio) _awaitingDone = true;    // the server now owes us its transcription.done
+            }
+            finally { _sendLock.Release(); }
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
