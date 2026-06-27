@@ -27,6 +27,8 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     private readonly Task _acceptLoop;
     private readonly MemoryStream _audio = new();
     private readonly object _gate = new();
+    private bool _audioSinceCommit;   // a real server has nothing to finalize on an empty buffer (e.g. the start commit)
+    private bool _streamEnded;        // a {"final":true} commit ends the stream — no further transcripts
 
     /// <param name="sendDone">When false, <c>commit</c> replays the deltas but never sends <c>transcription.done</c>
     /// — simulates a dropped/never-finalized utterance so the engine's per-utterance reset can be exercised.</param>
@@ -97,13 +99,24 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
                 break;
             case "input_audio_buffer.append":
                 if (doc.RootElement.TryGetProperty("audio", out var a) && a.GetString() is { } b64)
+                {
                     lock (_gate) _audio.Write(Convert.FromBase64String(b64));
+                    _audioSinceCommit = true;
+                }
                 break;
             case "input_audio_buffer.commit":
-                foreach (var d in _deltas)
-                    await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
-                if (_sendDone)
-                    await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                // A {"final":true} commit means "all audio sent" — the stream is over after it; ignore later commits.
+                if (_streamEnded) break;
+                var final = doc.RootElement.TryGetProperty("final", out var f) && f.ValueKind == JsonValueKind.True;
+                if (_audioSinceCommit)   // nothing to finalize on an empty buffer (e.g. the start/ready commit)
+                {
+                    foreach (var d in _deltas)
+                        await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
+                    if (_sendDone)
+                        await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                    _audioSinceCommit = false;
+                }
+                if (final) _streamEnded = true;
                 break;
         }
     }

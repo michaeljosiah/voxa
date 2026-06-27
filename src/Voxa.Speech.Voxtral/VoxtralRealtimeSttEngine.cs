@@ -76,6 +76,9 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         // Handshake: tell the server which model this session uses, before any audio flows.
         await ws.SendAsync(VoxtralWire.SessionUpdate(_options.Model), WebSocketMessageType.Text, endOfMessage: true, ct)
             .ConfigureAwait(false);
+        // vLLM realtime: a non-final commit right after session.update signals "ready to start" the stream.
+        await ws.SendAsync(VoxtralWire.Commit(final: false), WebSocketMessageType.Text, endOfMessage: true, ct)
+            .ConfigureAwait(false);
         _ws = ws;
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
     }
@@ -100,16 +103,18 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct)
         => _transcripts.Reader.ReadAllAsync(ct);
 
-    /// <summary>VAD speech-end: commit the buffered audio so the server finalizes this utterance and emits
-    /// <c>transcription.done</c>. The final flows from the receive loop when <c>done</c> arrives — never emitted
-    /// locally — so there is exactly one final per utterance with no post-speech round-trip the pipeline must wait on.</summary>
+    /// <summary>VAD speech-end: send a <b>non-final</b> commit so the server finalizes this utterance and emits
+    /// <c>transcription.done</c> WITHOUT ending the stream (a <c>{"final":true}</c> commit would tell vLLM all audio
+    /// is sent, stopping transcription for the rest of the session). The final flows from the receive loop when
+    /// <c>done</c> arrives — never emitted locally — so there is exactly one final per utterance with no post-speech
+    /// round-trip the pipeline must wait on.</summary>
     public async Task FlushAsync()
     {
         var ws = _ws;
         if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
-            await ws.SendAsync(VoxtralWire.Commit(), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None)
+            await ws.SendAsync(VoxtralWire.Commit(final: false), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None)
                 .ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
@@ -127,6 +132,9 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
             try
             {
                 using var close = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                // Signal end-of-all-audio before closing, so the server flushes any tail and tears down cleanly.
+                await ws.SendAsync(VoxtralWire.Commit(final: true), WebSocketMessageType.Text, endOfMessage: true, close.Token)
+                    .ConfigureAwait(false);
                 await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", close.Token).ConfigureAwait(false);
             }
             catch { /* best-effort graceful close */ }

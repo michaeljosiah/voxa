@@ -23,21 +23,32 @@ async def handle(ws, transcript: str):
     # Greet, like the real server. The client ignores unknown types.
     await ws.send(json.dumps({"type": "session.created", "id": "mock"}))
     words = transcript.split()
+    audio_since_commit = False  # nothing to finalize on an empty buffer (e.g. the "ready to start" commit)
+    stream_ended = False        # a {"final": true} commit ends the stream — no more transcripts after it
     async for message in ws:
         try:
             event = json.loads(message)
         except (ValueError, TypeError):
             continue  # ignore malformed frames, like the real engine does
         kind = event.get("type")
-        if kind == "input_audio_buffer.commit":
-            # Stream the transcript incrementally, then finalize — mirrors delta… then done.
-            running = ""
-            for word in words:
-                running = (running + " " + word).strip()
-                await ws.send(json.dumps({"type": "transcription.delta", "delta": (" " + word) if running != word else word}))
-                await asyncio.sleep(0.02)
-            await ws.send(json.dumps({"type": "transcription.done", "text": transcript}))
-        # input_audio_buffer.append / session.update are accepted and ignored (no real decoding).
+        if kind == "input_audio_buffer.append":
+            audio_since_commit = True
+        elif kind == "input_audio_buffer.commit":
+            if stream_ended:
+                continue
+            if audio_since_commit:
+                # Stream the transcript incrementally, then finalize — mirrors delta… then done.
+                running = ""
+                for word in words:
+                    running = (running + " " + word).strip()
+                    await ws.send(json.dumps({"type": "transcription.delta", "delta": (" " + word) if running != word else word}))
+                    await asyncio.sleep(0.02)
+                await ws.send(json.dumps({"type": "transcription.done", "text": transcript}))
+                audio_since_commit = False
+            # vLLM reserves {"final": true} for end-of-all-audio: the stream is over after it.
+            if event.get("final") is True:
+                stream_ended = True
+        # session.update is accepted and ignored (no real decoding).
 
 
 async def main():

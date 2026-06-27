@@ -77,13 +77,18 @@ vLLM realtime is OpenAI-Realtime-style JSON over a WebSocket at `/v1/realtime`:
 ```jsonc
 // client → server
 { "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602" }
+{ "type": "input_audio_buffer.commit" }                  // "ready to start", sent right after session.update
 { "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }
-{ "type": "input_audio_buffer.commit", "final": true }   // sent at VAD speech-end
+{ "type": "input_audio_buffer.commit" }                  // non-final: flush this utterance at VAD speech-end
+{ "type": "input_audio_buffer.commit", "final": true }   // end-of-all-audio, sent once at session stop
 
 // server → client
 { "type": "transcription.delta", "delta": "the quick brown" }   // → interim
 { "type": "transcription.done",  "text":  "the quick brown fox" } // → final
 ```
+
+`{"final": true}` tells vLLM the whole audio stream is over, so it is reserved for session stop — a per-utterance
+commit must omit it, or transcription stops after the first utterance.
 
 Parsing is total: an unknown or malformed frame is ignored, never throwing out of the receive loop.
 

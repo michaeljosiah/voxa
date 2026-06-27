@@ -26,9 +26,12 @@ internal static class VoxtralWire
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    // input_audio_buffer.commit {final:true} is constant — build it once.
+    // Both commit forms are constant — build once. The non-final form OMITS the "final" field (per vLLM's
+    // realtime protocol: a bare commit flushes/starts the stream; only {"final":true} ends it).
     private static readonly byte[] CommitBytes =
-        JsonSerializer.SerializeToUtf8Bytes(new CommitMsg("input_audio_buffer.commit", true), Json);
+        JsonSerializer.SerializeToUtf8Bytes(new CommitMsg("input_audio_buffer.commit"), Json);
+    private static readonly byte[] FinalCommitBytes =
+        JsonSerializer.SerializeToUtf8Bytes(new FinalCommitMsg("input_audio_buffer.commit", true), Json);
 
     /// <summary>Handshake: tell the server which model this session uses.</summary>
     public static byte[] SessionUpdate(string model)
@@ -38,8 +41,13 @@ internal static class VoxtralWire
     public static byte[] AppendAudio(ReadOnlySpan<byte> pcm)
         => JsonSerializer.SerializeToUtf8Bytes(new AppendMsg("input_audio_buffer.append", Convert.ToBase64String(pcm)), Json);
 
-    /// <summary>Commit the buffered audio and ask the server to finalize the utterance (sent at VAD speech-end).</summary>
-    public static ReadOnlyMemory<byte> Commit() => CommitBytes;
+    /// <summary>
+    /// Commit the buffered audio. <paramref name="final"/> <c>false</c> (the default) flushes the current
+    /// utterance without ending the stream — also the "ready to start" signal sent right after the handshake;
+    /// <c>true</c> signals end-of-all-audio. vLLM reserves <c>{"final":true}</c> for session end, so sending it
+    /// per-utterance would stop transcription after the first one.
+    /// </summary>
+    public static ReadOnlyMemory<byte> Commit(bool final = false) => final ? FinalCommitBytes : CommitBytes;
 
     /// <summary>Parse one server text frame. Returns false (ignored) for any non-transcription or malformed message.</summary>
     public static bool TryParseServerMessage(string json, out VoxtralServerMessage message)
@@ -86,6 +94,9 @@ internal static class VoxtralWire
         [property: JsonPropertyName("audio")] string Audio);
 
     private sealed record CommitMsg(
+        [property: JsonPropertyName("type")] string Type);
+
+    private sealed record FinalCommitMsg(
         [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("final")] bool Final);
 }

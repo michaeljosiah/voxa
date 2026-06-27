@@ -29,6 +29,27 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // codex P1: a per-utterance commit must be non-final, or the stream ends after the first utterance
+    public async Task Multiple_Utterances_On_One_Connection_Each_Finalize()
+    {
+        // The fake server honors {"final":true} by ending the stream — so a per-utterance final:true commit
+        // (the old bug) would starve every utterance after the first of its transcript.
+        await using var server = new MiniRealtimeServer(deltas: ["hi"], doneText: "hi there");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        for (var utterance = 0; utterance < 3; utterance++)
+        {
+            await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+            await engine.FlushAsync();
+            var results = await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
+            Assert.Contains(results, r => r.IsFinal && r.Text == "hi there"); // every utterance still finalizes
+        }
+
+        await engine.StopAsync();
+    }
+
     [Fact] // a new utterance must not inherit a previous one's interim when its `done` never arrived
     public async Task A_New_Utterance_Does_Not_Inherit_A_Previous_Interim_When_Done_Was_Missed()
     {

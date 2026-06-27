@@ -59,9 +59,18 @@ public class VoxtralWireTests
     }
 
     [Fact]
-    public void Commit_Is_Final_True()
+    public void Commit_Defaults_To_Non_Final_And_Omits_The_Field()
     {
+        // vLLM reserves {"final":true} for end-of-all-audio; a per-utterance/start commit must NOT be final.
         using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(VoxtralWire.Commit().ToArray()));
+        Assert.Equal("input_audio_buffer.commit", doc.RootElement.GetProperty("type").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("final", out _));
+    }
+
+    [Fact]
+    public void Commit_Final_True_Sets_The_Field()
+    {
+        using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(VoxtralWire.Commit(final: true).ToArray()));
         Assert.Equal("input_audio_buffer.commit", doc.RootElement.GetProperty("type").GetString());
         Assert.True(doc.RootElement.GetProperty("final").GetBoolean());
     }
