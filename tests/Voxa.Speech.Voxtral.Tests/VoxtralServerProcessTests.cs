@@ -21,6 +21,21 @@ public class VoxtralServerProcessTests
         // Disposing (via await using) in connect-only mode touches no process and must not throw.
     }
 
+    [Fact] // codex P2: ServerUrl wins over a managed launch target — configuring both stays connect-only (no process)
+    public async Task ServerUrl_Wins_Over_A_Managed_Launch_Target_And_Starts_No_Process()
+    {
+        var options = new VoxtralOptions
+        {
+            ServerUrl = "ws://127.0.0.1:9999",
+            LaunchCommand = "voxtral-bogus-launcher-should-never-run", // would throw if a launch were attempted
+        };
+        await using var server = new VoxtralServerProcess(options, NullLogger.Instance);
+
+        var endpoint = await server.StartAsync(CancellationToken.None); // must connect-only, not launch
+
+        Assert.Equal("ws://127.0.0.1:9999/v1/realtime", endpoint.ToString());
+    }
+
     [Fact]
     public async Task Managed_Launch_Of_A_Missing_Executable_Fails_With_Guidance()
     {

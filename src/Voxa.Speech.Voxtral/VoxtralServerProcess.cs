@@ -34,9 +34,11 @@ internal sealed class VoxtralServerProcess : IVoxtralServer
     {
         var endpoint = _options.ResolveEndpoint();
 
-        // Connect-only: the user runs vLLM themselves. Don't launch or health-poll — a ConnectAsync against a server
-        // that isn't up fails loudly at session start, which is the right signal for "your server isn't running".
-        if (!_options.HasManagedLaunch)
+        // Connect-only: the user runs vLLM themselves (ServerUrl set, or no managed target). Don't launch or
+        // health-poll — a ConnectAsync against a server that isn't up fails loudly at session start, which is the
+        // right signal for "your server isn't running". ServerUrl wins over a managed target, so configuring both
+        // stays connect-only rather than starting (and later killing) an unwanted local process.
+        if (!_options.ShouldLaunchManaged)
             return endpoint;
 
         Launch();

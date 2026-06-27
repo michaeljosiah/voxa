@@ -58,6 +58,10 @@ public sealed class VoxtralOptions
     public bool HasManagedLaunch
         => !string.IsNullOrEmpty(ExecutablePath) || !string.IsNullOrEmpty(LaunchCommand);
 
+    /// <summary>True when Voxa should launch and own the server: a managed target is set AND no <see cref="ServerUrl"/>
+    /// overrides it. <see cref="ServerUrl"/> wins (connect-only), so configuring both must not start a local process.</summary>
+    public bool ShouldLaunchManaged => string.IsNullOrEmpty(ServerUrl) && HasManagedLaunch;
+
     /// <summary>True when any hosting mode is resolvable (connect-only or managed) — the validation gate.</summary>
     public bool HasHostingMode => !string.IsNullOrEmpty(ServerUrl) || HasManagedLaunch;
 
