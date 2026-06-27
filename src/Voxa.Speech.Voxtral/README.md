@@ -74,15 +74,16 @@ python sidecar/voxtral_realtime_mock.py --port 8000
 
 vLLM realtime is OpenAI-Realtime-style JSON over a WebSocket at `/v1/realtime`, and it is **one-shot per
 connection**: a session is `session.update` → a "ready" commit → audio → one `commit {final:true}` → streamed
-deltas → one `done`, after which the stream is finished. So the engine opens **one connection per utterance**
-(at VAD speech-start) and reconnects for the next turn:
+deltas → one `done`, after which the stream is finished. So the engine **buffers each utterance** (between VAD
+speech-start and speech-end) and, at speech-end, opens **one connection per utterance**, replays the buffered
+audio, finalizes, and reconnects for the next turn:
 
 ```jsonc
-// client → server  (per utterance)
+// client → server  (one connection per utterance, sent at speech-end)
 { "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602", "delay": 480 }  // + "language" when set
 { "type": "input_audio_buffer.commit" }                  // "ready to start"
-{ "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }   // streamed during speech
-{ "type": "input_audio_buffer.commit", "final": true }   // VAD speech-end → finalize this utterance
+{ "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }   // the whole buffered utterance, in chunks
+{ "type": "input_audio_buffer.commit", "final": true }   // finalize this utterance
 
 // server → client
 { "type": "transcription.delta", "delta": "the quick brown" }   // → interim
@@ -92,7 +93,8 @@ deltas → one `done`, after which the stream is finished. So the engine opens *
 
 A bare commit never produces a `done`, and `{"final": true}` ends the stream — so per-utterance reconnection is
 required to drive a multi-turn conversation (one persistent socket would either never finalize a turn or stop
-after the first). Requires VAD upstream to bracket utterances.
+after the first). Buffering the utterance (rather than streaming audio live) means no preroll is lost while a
+socket connects and the final commit can't race a tail append. Requires VAD upstream to bracket utterances.
 
 Parsing is total: an unknown or malformed frame is ignored, never throwing out of the receive loop.
 
