@@ -72,6 +72,27 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // codex P2 (round 2): a clean stop right after flush still drains the committed utterance's in-flight done
+    public async Task StopAsync_Drains_A_Committed_Utterance_Whose_Done_Is_Still_In_Flight()
+    {
+        // The done is delayed so it is still in flight when StopAsync runs; _pendingAudio is already cleared by
+        // FlushAsync, so only the _awaitingDone path keeps the final from being dropped.
+        await using var server = new MiniRealtimeServer(deltas: ["c"], doneText: "committed", doneDelayMs: 150);
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+        await engine.FlushAsync();   // commit sent; the done is delayed and not yet read
+        await engine.StopAsync();    // must wait for the in-flight done before closing
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var finals = new List<TranscriptionResult>();
+        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
+            if (r.IsFinal) finals.Add(r);
+        Assert.Contains(finals, r => r.Text == "committed");
+    }
+
     [Fact] // codex P2: a stop with un-flushed audio (abrupt disconnect mid-utterance) still drains the tail transcript
     public async Task StopAsync_Drains_The_Tail_Transcript_When_Audio_Was_Not_Flushed()
     {

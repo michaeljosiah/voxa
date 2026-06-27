@@ -23,6 +23,7 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     private readonly string[] _deltas;
     private readonly string _doneText;
     private readonly bool _sendDone;
+    private readonly int _doneDelayMs;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _acceptLoop;
     private readonly MemoryStream _audio = new();
@@ -32,11 +33,14 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
 
     /// <param name="sendDone">When false, <c>commit</c> replays the deltas but never sends <c>transcription.done</c>
     /// — simulates a dropped/never-finalized utterance so the engine's per-utterance reset can be exercised.</param>
-    public MiniRealtimeServer(string[] deltas, string doneText, bool sendDone = true)
+    /// <param name="doneDelayMs">Delay before the <c>transcription.done</c> is sent, so a test can make the final
+    /// land while the engine is mid-<c>StopAsync</c> (exercising the stop-drain).</param>
+    public MiniRealtimeServer(string[] deltas, string doneText, bool sendDone = true, int doneDelayMs = 0)
     {
         _deltas = deltas;
         _doneText = doneText;
         _sendDone = sendDone;
+        _doneDelayMs = doneDelayMs;
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -113,7 +117,10 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
                     foreach (var d in _deltas)
                         await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
                     if (_sendDone)
+                    {
+                        if (_doneDelayMs > 0) await Task.Delay(_doneDelayMs, ct).ConfigureAwait(false);
                         await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                    }
                     _audioSinceCommit = false;
                 }
                 if (final) _streamEnded = true;

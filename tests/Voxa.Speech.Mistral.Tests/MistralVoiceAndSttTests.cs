@@ -248,6 +248,35 @@ public class MistralVoiceAndSttTests
         Assert.Equal(["hello"], finals);   // the stray second done is ignored
     }
 
+    [Fact] // a [DONE] sentinel with no transcription.done must still settle accumulated deltas as the final
+    public async Task Streaming_Stt_Settles_Deltas_On_A_Bare_Done_Sentinel()
+    {
+        var handler = new CapturingHandler
+        {
+            Respond = _ => Sse(
+                "data: {\"type\":\"transcription.text.delta\",\"text\":\"sentinel only\"}\n\n" +
+                "data: [DONE]\n\n"),   // ends the stream WITHOUT a transcription.done event
+        };
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await engine.StartAsync(default);
+
+        await engine.WriteAudioAsync(new byte[320], default);
+        await engine.FlushAsync();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        TranscriptionResult? last = null;
+        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        while (await reader.MoveNextAsync())
+        {
+            last = reader.Current;
+            if (reader.Current.IsFinal) break;
+        }
+
+        Assert.NotNull(last);
+        Assert.True(last!.IsFinal);
+        Assert.Equal("sentinel only", last.Text);
+    }
+
     [Fact] // SSE spec: one event's data may span multiple data: lines, joined by '\n'
     public async Task Streaming_Stt_Joins_A_Multi_Line_Data_Field_Before_Parsing()
     {

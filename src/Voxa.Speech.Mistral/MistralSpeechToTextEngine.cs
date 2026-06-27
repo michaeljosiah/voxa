@@ -214,10 +214,11 @@ public sealed class MistralSpeechToTextEngine : ISpeechToTextEngine
 
         // Stream closed without a trailing blank line — dispatch whatever data remains buffered.
         if (!done && data.Length > 0)
-            done = Dispatch(data.ToString());
+            Dispatch(data.ToString());
 
-        // Stream closed without an explicit done event but deltas accumulated — settle them as the final.
-        if (!done && !emittedFinal && running.Length > 0)
+        // No explicit transcription.done arrived — the stream just closed, or ended on a bare [DONE] sentinel —
+        // but deltas accumulated. Settle them as the final so downstream still gets one final per utterance.
+        if (!emittedFinal && running.Length > 0)
             _transcripts.Writer.TryWrite(new TranscriptionResult(running.ToString(), IsFinal: true, language));
     }
 

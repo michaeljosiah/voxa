@@ -39,10 +39,13 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     // InvalidOperationException, the catch swallows it, and the dropped commit means the utterance never finalizes.
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    // True when audio was appended since the last commit (set on the data loop, cleared on the system loop). On an
-    // abrupt stop with no preceding UserStoppedSpeaking (e.g. a client disconnect mid-utterance), StopAsync uses
-    // this to know there's a tail to drain. Completed by the receive loop when a transcription.done arrives.
+    // Stop-drain bookkeeping. _pendingAudio: audio appended since the last commit (uncommitted tail — set on the
+    // data loop, cleared on the system loop). _awaitingDone: a commit was sent for buffered audio and its
+    // transcription.done hasn't arrived yet. StopAsync waits for either before closing so the last utterance —
+    // whether already committed (a clean stop right after flush) or only buffered (an abrupt disconnect) — still
+    // reaches downstream. The receive loop completes _drainSignal when the done arrives.
     private volatile bool _pendingAudio;
+    private volatile bool _awaitingDone;
     private volatile TaskCompletionSource? _drainSignal;
 
     private ClientWebSocket? _ws;
@@ -133,8 +136,10 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
+            var hadAudio = _pendingAudio;
             await SendSerializedAsync(ws, VoxtralWire.Commit(final: false), CancellationToken.None).ConfigureAwait(false);
-            _pendingAudio = false; // this utterance has been committed for finalization
+            _pendingAudio = false;                 // this utterance has been committed for finalization
+            if (hadAudio) _awaitingDone = true;    // the server now owes us its transcription.done
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
@@ -152,23 +157,22 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
             {
                 using var close = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-                // If audio was appended but never committed (an abrupt stop with no UserStoppedSpeaking — e.g. a
-                // client disconnect mid-utterance), arm a drain signal so we can wait for the tail transcript
-                // below; the receive loop completes it when the resulting transcription.done arrives.
-                var drain = _pendingAudio ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null;
+                // Arm a drain signal so we can wait for an outstanding transcription.done before closing — either a
+                // committed utterance hasn't finalized yet (_awaitingDone, e.g. a stop right after a normal flush
+                // whose done is still in flight) or there's uncommitted tail audio the final commit below will
+                // finalize (_pendingAudio, e.g. an abrupt disconnect mid-utterance). The receive loop completes it.
+                var drain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _drainSignal = drain;
+                if (!_awaitingDone && !_pendingAudio) drain.TrySetResult(); // nothing outstanding — don't block
 
                 // Signal end-of-all-audio so the server flushes any tail and tears down cleanly.
                 await SendSerializedAsync(ws, VoxtralWire.Commit(final: true), close.Token).ConfigureAwait(false);
 
-                // Drain the final transcript before closing, so a tail utterance still reaches downstream
+                // Drain the final transcript before closing, so the last utterance still reaches downstream
                 // (mirrors the other engines' stop-drain). Bounded by the close budget; the receive loop is still
                 // running here (we cancel it only after), so the done is read and queued before we complete below.
-                if (drain is not null)
-                {
-                    try { await drain.Task.WaitAsync(close.Token).ConfigureAwait(false); }
-                    catch (OperationCanceledException) { /* no tail arrived within the budget */ }
-                }
+                try { await drain.Task.WaitAsync(close.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) { /* no tail arrived within the budget */ }
 
                 await _sendLock.WaitAsync(close.Token).ConfigureAwait(false);
                 try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", close.Token).ConfigureAwait(false); }
@@ -244,6 +248,7 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 _running.Clear();
                 if (!string.IsNullOrWhiteSpace(text))
                     _transcripts.Writer.TryWrite(new TranscriptionResult(text, IsFinal: true, _options.Language));
+                _awaitingDone = false;
                 _drainSignal?.TrySetResult(); // let a stop-drain proceed now the tail final has been queued
                 break;
         }
