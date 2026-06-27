@@ -2,7 +2,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Voxa.Speech.Voxtral.Tests;
 
-/// <summary>The streaming engine end-to-end against the in-process fake realtime server (no vLLM, GPU, or model).</summary>
+/// <summary>The streaming engine end-to-end against the in-process fake realtime server (no vLLM, GPU, or model).
+/// vLLM's realtime API is one-shot per connection, so the engine opens a socket per utterance: a test drives
+/// <c>OnUserStartedSpeakingAsync</c> (open) → <c>WriteAudioAsync</c> → <c>FlushAsync</c> (final commit) per turn.</summary>
 public class VoxtralRealtimeSttEngineTests
 {
     [Fact]
@@ -13,57 +15,19 @@ public class VoxtralRealtimeSttEngineTests
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
 
         await engine.StartAsync(CancellationToken.None);
+        await engine.OnUserStartedSpeakingAsync();          // opens this utterance's connection
         var pcm = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
         await engine.WriteAudioAsync(pcm, CancellationToken.None);
-        await engine.FlushAsync(); // VAD speech-end → commit
+        await engine.FlushAsync();                          // VAD speech-end → final commit
 
         var results = await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
 
-        Assert.Equal("test-model", server.Model);          // handshake reached the server
-        Assert.Equal(pcm, server.ReceivedAudio);           // audio arrived as base64 append
+        Assert.Equal("test-model", server.Model);           // handshake reached the server
+        Assert.Equal(pcm, server.ReceivedAudio);            // audio arrived as base64 append
         Assert.Contains(results, r => !r.IsFinal && r.Text == "hello"); // running deltas → interims
         var final = Assert.Single(results, r => r.IsFinal);
-        Assert.Equal("hello world", final.Text);           // done → one final
+        Assert.Equal("hello world", final.Text);            // done → one final
         Assert.Equal("en", final.Language);
-
-        await engine.StopAsync();
-    }
-
-    [Fact] // codex P1: a per-utterance commit must be non-final, or the stream ends after the first utterance
-    public async Task Multiple_Utterances_On_One_Connection_Each_Finalize()
-    {
-        // The fake server honors {"final":true} by ending the stream — so a per-utterance final:true commit
-        // (the old bug) would starve every utterance after the first of its transcript.
-        await using var server = new MiniRealtimeServer(deltas: ["hi"], doneText: "hi there");
-        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
-        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
-        await engine.StartAsync(CancellationToken.None);
-
-        for (var utterance = 0; utterance < 3; utterance++)
-        {
-            await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
-            await engine.FlushAsync();
-            var results = await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
-            Assert.Contains(results, r => r.IsFinal && r.Text == "hi there"); // every utterance still finalizes
-        }
-
-        await engine.StopAsync();
-    }
-
-    [Fact] // codex P2: a server error frame must fault the transcript stream, not hang Talk with no error
-    public async Task Server_Error_Frame_Faults_The_Transcript_Stream()
-    {
-        await using var server = new MiniRealtimeServer(deltas: [], doneText: "", error: "bad model name");
-        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "does-not-exist" };
-        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
-        await engine.StartAsync(CancellationToken.None);
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var ex = await Assert.ThrowsAsync<VoxaModelUnavailableException>(async () =>
-        {
-            await foreach (var _ in engine.ReadTranscriptsAsync(cts.Token)) { }
-        });
-        Assert.Contains("bad model name", ex.Message);
 
         await engine.StopAsync();
     }
@@ -76,7 +40,7 @@ public class VoxtralRealtimeSttEngineTests
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
 
         await engine.StartAsync(CancellationToken.None);
-        // Drive one utterance so we know the handshake (sent before audio) has been processed by the server.
+        await engine.OnUserStartedSpeakingAsync();
         await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
         await engine.FlushAsync();
         await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
@@ -88,13 +52,14 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
-    [Fact] // codex P1: append (data loop) and commit (system loop) overlap — concurrent ws sends must be serialized
+    [Fact] // codex P1: append (data loop) and the final commit (system loop) overlap — concurrent ws sends must serialize
     public async Task Concurrent_Append_And_Commit_Do_Not_Drop_The_Final()
     {
         await using var server = new MiniRealtimeServer(deltas: ["x"], doneText: "x done");
         var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
         await engine.StartAsync(CancellationToken.None);
+        await engine.OnUserStartedSpeakingAsync();
 
         var pcm = new byte[4096];
         await engine.WriteAudioAsync(pcm, CancellationToken.None);   // buffer audio so the commit has something to finalize
@@ -110,48 +75,41 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
-    [Fact] // codex P2 (round 2): a clean stop right after flush still drains the committed utterance's in-flight done
+    [Fact] // each utterance is its own connection (one-shot per connection) — every turn finalizes
+    public async Task Each_Utterance_Reconnects_And_Finalizes()
+    {
+        await using var server = new MiniRealtimeServer(deltas: ["hi"], doneText: "hi there");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        for (var utterance = 0; utterance < 3; utterance++)
+        {
+            await engine.OnUserStartedSpeakingAsync();
+            await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+            await engine.FlushAsync();
+            var results = await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
+            Assert.Contains(results, r => r.IsFinal && r.Text == "hi there"); // every utterance finalizes
+        }
+
+        await engine.StopAsync();
+    }
+
+    [Fact] // codex P2: a clean stop right after flush still drains the committed utterance's in-flight done
     public async Task StopAsync_Drains_A_Committed_Utterance_Whose_Done_Is_Still_In_Flight()
     {
-        // The done is delayed so it is still in flight when StopAsync runs; _pendingAudio is already cleared by
-        // FlushAsync, so only the _awaitingDone path keeps the final from being dropped.
+        // The done is delayed so it is still in flight when StopAsync runs.
         await using var server = new MiniRealtimeServer(deltas: ["c"], doneText: "committed", doneDelayMs: 150);
         var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
         await engine.StartAsync(CancellationToken.None);
 
+        await engine.OnUserStartedSpeakingAsync();
         await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
-        await engine.FlushAsync();   // commit sent; the done is delayed and not yet read
+        await engine.FlushAsync();   // final commit; the done is delayed and not yet read
         await engine.StopAsync();    // must wait for the in-flight done before closing
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var finals = new List<TranscriptionResult>();
-        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
-            if (r.IsFinal) finals.Add(r);
-        Assert.Contains(finals, r => r.Text == "committed");
-    }
-
-    [Fact] // codex P2: several commits can be in flight at stop — every pending done must drain, not just the first
-    public async Task StopAsync_Drains_All_Pending_Finals_For_Back_To_Back_Utterances()
-    {
-        // Delayed dones keep both commits in flight when StopAsync runs; a single-bool drain would release after
-        // the first done and drop the second utterance's final.
-        await using var server = new MiniRealtimeServer(deltas: ["u"], doneText: "utterance", doneDelayMs: 150);
-        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
-        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
-        await engine.StartAsync(CancellationToken.None);
-
-        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
-        await engine.FlushAsync();   // utterance 1 committed; done delayed/in flight
-        await engine.WriteAudioAsync(new byte[] { 3, 4 }, CancellationToken.None);
-        await engine.FlushAsync();   // utterance 2 committed; both dones now outstanding
-        await engine.StopAsync();    // must drain BOTH dones before closing
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var finals = 0;
-        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
-            if (r.IsFinal && r.Text == "utterance") finals++;
-        Assert.Equal(2, finals);
+        Assert.Contains(await DrainFinalsAsync(engine), t => t.Text == "committed");
     }
 
     [Fact] // codex P2: a stop with un-flushed audio (abrupt disconnect mid-utterance) still drains the tail transcript
@@ -162,39 +120,47 @@ public class VoxtralRealtimeSttEngineTests
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
         await engine.StartAsync(CancellationToken.None);
 
+        await engine.OnUserStartedSpeakingAsync();
         await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None); // audio, but NO FlushAsync
-        await engine.StopAsync();   // final:true commit → server finalizes → drain captures the done before close
+        await engine.StopAsync();   // flushes the tail (final:true) and drains the done before closing
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var finals = new List<TranscriptionResult>();
-        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token)) // channel is completed by StopAsync
-            if (r.IsFinal) finals.Add(r);
-        Assert.Contains(finals, r => r.Text == "tail end");
+        Assert.Contains(await DrainFinalsAsync(engine), t => t.Text == "tail end");
     }
 
-    [Fact] // a new utterance must not inherit a previous one's interim when its `done` never arrived
-    public async Task A_New_Utterance_Does_Not_Inherit_A_Previous_Interim_When_Done_Was_Missed()
+    [Fact] // back-to-back utterances each deliver their final even when dones lag: next-start and stop both drain
+    public async Task Back_To_Back_Utterances_Both_Finalize_When_Dones_Lag()
     {
-        // sendDone:false → each commit replays the delta but never finalizes, so _running would keep growing
-        // across utterances without the per-utterance reset.
-        await using var server = new MiniRealtimeServer(deltas: ["one"], doneText: "", sendDone: false);
+        await using var server = new MiniRealtimeServer(deltas: ["u"], doneText: "utterance", doneDelayMs: 120);
         var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
         await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
         await engine.StartAsync(CancellationToken.None);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
-
+        await engine.OnUserStartedSpeakingAsync();
         await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
-        await engine.FlushAsync();                                   // utterance 1 commit → interim "one"
-        Assert.True(await reader.MoveNextAsync());
-        Assert.Equal("one", reader.Current.Text);
-
-        await engine.OnUserStartedSpeakingAsync();                   // VAD speech-start for utterance 2
+        await engine.FlushAsync();                          // utterance 1: done still in flight
+        await engine.OnUserStartedSpeakingAsync();          // drains utterance 1 before opening utterance 2
         await engine.WriteAudioAsync(new byte[] { 3, 4 }, CancellationToken.None);
-        await engine.FlushAsync();                                   // utterance 2 commit → interim "one", not "oneone"
-        Assert.True(await reader.MoveNextAsync());
-        Assert.Equal("one", reader.Current.Text);
+        await engine.FlushAsync();                          // utterance 2: done still in flight
+        await engine.StopAsync();                           // drains utterance 2
+
+        Assert.Equal(2, (await DrainFinalsAsync(engine)).Count(t => t.Text == "utterance"));
+    }
+
+    [Fact] // codex P2: a server error frame must fault the transcript stream, not hang Talk with no error
+    public async Task Server_Error_Frame_Faults_The_Transcript_Stream()
+    {
+        await using var server = new MiniRealtimeServer(deltas: [], doneText: "", error: "bad model name");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "does-not-exist" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+        await engine.OnUserStartedSpeakingAsync();          // opens the connection; the server rejects it
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var ex = await Assert.ThrowsAsync<VoxaModelUnavailableException>(async () =>
+        {
+            await foreach (var _ in engine.ReadTranscriptsAsync(cts.Token)) { }
+        });
+        Assert.Contains("bad model name", ex.Message);
 
         await engine.StopAsync();
     }
@@ -225,6 +191,16 @@ public class VoxtralRealtimeSttEngineTests
         }
         catch (OperationCanceledException) { /* timed out — return what we have for a clear assertion failure */ }
         return results;
+    }
+
+    // Drain everything from the (StopAsync-completed) transcript channel.
+    private static async Task<List<TranscriptionResult>> DrainFinalsAsync(VoxtralRealtimeSttEngine engine)
+    {
+        var finals = new List<TranscriptionResult>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
+            if (r.IsFinal) finals.Add(r);
+        return finals;
     }
 
     private sealed class RecordingServer : IVoxtralServer

@@ -12,8 +12,12 @@ namespace Voxa.Speech.Voxtral.Tests;
 /// design: a <see cref="TcpListener"/> + a hand-rolled HTTP 101 upgrade, then
 /// <see cref="WebSocket.CreateFromStream(Stream, bool, string?, TimeSpan)"/> so the framework owns the RFC-6455
 /// framing — unlike <c>HttpListener</c> WebSockets, this works on the Linux default test lane too. It records
-/// the handshake model and the decoded audio it received, ignores the path, and on <c>commit</c> replays the
-/// scripted deltas followed by a <c>done</c>.
+/// the handshake model and the decoded audio it received, ignores the path, and on the <c>final:true</c> commit
+/// replays the scripted deltas followed by a <c>done</c>.
+///
+/// <para>Models vLLM's <b>one-shot-per-connection</b> realtime protocol: it accepts connections in a loop (the
+/// engine opens one per utterance), each connection finalizes once on <c>commit {final:true}</c>, and a bare
+/// commit (the "ready" signal) is a no-op. Per-connection state is local so back-to-back utterances are independent.</para>
 /// </summary>
 internal sealed class MiniRealtimeServer : IAsyncDisposable
 {
@@ -29,8 +33,6 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     private readonly Task _acceptLoop;
     private readonly MemoryStream _audio = new();
     private readonly object _gate = new();
-    private bool _audioSinceCommit;   // a real server has nothing to finalize on an empty buffer (e.g. the start commit)
-    private bool _streamEnded;        // a {"final":true} commit ends the stream — no further transcripts
 
     /// <param name="sendDone">When false, <c>commit</c> replays the deltas but never sends <c>transcription.done</c>
     /// — simulates a dropped/never-finalized utterance so the engine's per-utterance reset can be exercised.</param>
@@ -64,79 +66,82 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
 
     private async Task AcceptAsync(CancellationToken ct)
     {
-        try
+        // Accept one connection per utterance (the engine reconnects each time), in a loop until shutdown.
+        while (!ct.IsCancellationRequested)
         {
-            using var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-            var stream = client.GetStream();
-            await UpgradeAsync(stream, ct).ConfigureAwait(false);
-            using var ws = WebSocket.CreateFromStream(
-                stream, isServer: true, subProtocol: null, keepAliveInterval: TimeSpan.FromSeconds(30));
-
-            // Greet with a frame the engine must ignore (proves unknown types don't break the loop).
-            await SendAsync(ws, "{\"type\":\"session.created\",\"id\":\"fake\"}", ct).ConfigureAwait(false);
-
-            // Optionally reject the session right away (e.g. a bad model name) so error handling is exercisable.
-            if (_error is not null)
-                await SendAsync(ws, $"{{\"type\":\"error\",\"error\":{{\"message\":{Quote(_error)}}}}}", ct).ConfigureAwait(false);
-
-            var buffer = new byte[64 * 1024];
-            using var msg = new MemoryStream();
-            while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
+            try
             {
-                WebSocketReceiveResult result;
-                try { result = await ws.ReceiveAsync(buffer, ct).ConfigureAwait(false); }
-                catch (OperationCanceledException) { break; }
-                catch (WebSocketException) { break; }
-
-                if (result.MessageType == WebSocketMessageType.Close) break;
-                msg.Write(buffer, 0, result.Count);
-                if (!result.EndOfMessage) continue;
-
-                var text = Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length);
-                msg.SetLength(0);
-                await HandleAsync(ws, text, ct).ConfigureAwait(false);
+                using var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
+                await HandleConnectionAsync(client, ct).ConfigureAwait(false);
             }
+            catch (OperationCanceledException) { break; }       // shutdown
+            catch (IOException) { /* connection torn down — accept the next */ }
+            catch (SocketException) { break; }                  // listener stopped
         }
-        catch (OperationCanceledException) { /* shutdown */ }
-        catch (IOException) { /* connection torn down */ }
-        catch (SocketException) { /* listener stopped */ }
     }
 
-    private async Task HandleAsync(WebSocket ws, string json, CancellationToken ct)
+    private async Task HandleConnectionAsync(TcpClient client, CancellationToken ct)
     {
-        using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("type", out var typeEl)) return;
-        switch (typeEl.GetString())
+        var stream = client.GetStream();
+        await UpgradeAsync(stream, ct).ConfigureAwait(false);
+        using var ws = WebSocket.CreateFromStream(
+            stream, isServer: true, subProtocol: null, keepAliveInterval: TimeSpan.FromSeconds(30));
+
+        // Greet with a frame the engine must ignore (proves unknown types don't break the loop).
+        await SendAsync(ws, "{\"type\":\"session.created\",\"id\":\"fake\"}", ct).ConfigureAwait(false);
+
+        // Optionally reject the session right away (e.g. a bad model name) so error handling is exercisable.
+        if (_error is not null)
+            await SendAsync(ws, $"{{\"type\":\"error\",\"error\":{{\"message\":{Quote(_error)}}}}}", ct).ConfigureAwait(false);
+
+        var audioSinceCommit = false; // per connection: nothing to finalize on an empty buffer (e.g. the ready commit)
+        var streamEnded = false;      // a {"final":true} commit ends this connection's stream
+        var buffer = new byte[64 * 1024];
+        using var msg = new MemoryStream();
+        while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested && !streamEnded)
         {
-            case "session.update":
-                Model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
-                Language = doc.RootElement.TryGetProperty("language", out var lang) ? lang.GetString() : null;
-                Delay = doc.RootElement.TryGetProperty("delay", out var d2) && d2.ValueKind == JsonValueKind.Number ? d2.GetInt32() : null;
-                break;
-            case "input_audio_buffer.append":
-                if (doc.RootElement.TryGetProperty("audio", out var a) && a.GetString() is { } b64)
-                {
-                    lock (_gate) _audio.Write(Convert.FromBase64String(b64));
-                    _audioSinceCommit = true;
-                }
-                break;
-            case "input_audio_buffer.commit":
-                // A {"final":true} commit means "all audio sent" — the stream is over after it; ignore later commits.
-                if (_streamEnded) break;
-                var final = doc.RootElement.TryGetProperty("final", out var f) && f.ValueKind == JsonValueKind.True;
-                if (_audioSinceCommit)   // nothing to finalize on an empty buffer (e.g. the start/ready commit)
-                {
-                    foreach (var d in _deltas)
-                        await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
-                    if (_sendDone)
+            WebSocketReceiveResult result;
+            try { result = await ws.ReceiveAsync(buffer, ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+            catch (WebSocketException) { break; }
+
+            if (result.MessageType == WebSocketMessageType.Close) break;
+            msg.Write(buffer, 0, result.Count);
+            if (!result.EndOfMessage) continue;
+
+            using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length));
+            msg.SetLength(0);
+            if (!doc.RootElement.TryGetProperty("type", out var typeEl)) continue;
+            switch (typeEl.GetString())
+            {
+                case "session.update":
+                    Model = doc.RootElement.TryGetProperty("model", out var m) ? m.GetString() : null;
+                    Language = doc.RootElement.TryGetProperty("language", out var lang) ? lang.GetString() : null;
+                    Delay = doc.RootElement.TryGetProperty("delay", out var d2) && d2.ValueKind == JsonValueKind.Number ? d2.GetInt32() : null;
+                    break;
+                case "input_audio_buffer.append":
+                    if (doc.RootElement.TryGetProperty("audio", out var a) && a.GetString() is { } b64)
                     {
-                        if (_doneDelayMs > 0) await Task.Delay(_doneDelayMs, ct).ConfigureAwait(false);
-                        await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                        lock (_gate) _audio.Write(Convert.FromBase64String(b64));
+                        audioSinceCommit = true;
                     }
-                    _audioSinceCommit = false;
-                }
-                if (final) _streamEnded = true;
-                break;
+                    break;
+                case "input_audio_buffer.commit":
+                    var final = doc.RootElement.TryGetProperty("final", out var f) && f.ValueKind == JsonValueKind.True;
+                    if (audioSinceCommit) // a bare/ready commit on an empty buffer is a no-op
+                    {
+                        foreach (var d in _deltas)
+                            await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
+                        if (_sendDone)
+                        {
+                            if (_doneDelayMs > 0) await Task.Delay(_doneDelayMs, ct).ConfigureAwait(false);
+                            await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                        }
+                        audioSinceCommit = false;
+                    }
+                    if (final) streamEnded = true; // one-shot: the connection is finished after final:true
+                    break;
+            }
         }
     }
 

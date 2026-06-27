@@ -72,23 +72,27 @@ python sidecar/voxtral_realtime_mock.py --port 8000
 
 ## Wire protocol
 
-vLLM realtime is OpenAI-Realtime-style JSON over a WebSocket at `/v1/realtime`:
+vLLM realtime is OpenAI-Realtime-style JSON over a WebSocket at `/v1/realtime`, and it is **one-shot per
+connection**: a session is `session.update` → a "ready" commit → audio → one `commit {final:true}` → streamed
+deltas → one `done`, after which the stream is finished. So the engine opens **one connection per utterance**
+(at VAD speech-start) and reconnects for the next turn:
 
 ```jsonc
-// client → server
+// client → server  (per utterance)
 { "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602", "delay": 480 }  // + "language" when set
-{ "type": "input_audio_buffer.commit" }                  // "ready to start", sent right after session.update
-{ "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }
-{ "type": "input_audio_buffer.commit" }                  // non-final: flush this utterance at VAD speech-end
-{ "type": "input_audio_buffer.commit", "final": true }   // end-of-all-audio, sent once at session stop
+{ "type": "input_audio_buffer.commit" }                  // "ready to start"
+{ "type": "input_audio_buffer.append", "audio": "<base64 PCM16>" }   // streamed during speech
+{ "type": "input_audio_buffer.commit", "final": true }   // VAD speech-end → finalize this utterance
 
 // server → client
 { "type": "transcription.delta", "delta": "the quick brown" }   // → interim
-{ "type": "transcription.done",  "text":  "the quick brown fox" } // → final
+{ "type": "transcription.done",  "text":  "the quick brown fox" } // → final, then this connection is done
+{ "type": "error", "error": { "message": "…" } }                 // → faults the transcript stream
 ```
 
-`{"final": true}` tells vLLM the whole audio stream is over, so it is reserved for session stop — a per-utterance
-commit must omit it, or transcription stops after the first utterance.
+A bare commit never produces a `done`, and `{"final": true}` ends the stream — so per-utterance reconnection is
+required to drive a multi-turn conversation (one persistent socket would either never finalize a turn or stop
+after the first). Requires VAD upstream to bracket utterances.
 
 Parsing is total: an unknown or malformed frame is ignored, never throwing out of the receive loop.
 

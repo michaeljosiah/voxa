@@ -9,12 +9,19 @@ namespace Voxa.Speech.Voxtral;
 /// Fully-offline streaming <see cref="ISpeechToTextEngine"/> backed by Mistral's open-weights
 /// <b>Voxtral-Mini-4B-Realtime</b> served locally by vLLM over its realtime WebSocket API (VLS-009).
 ///
-/// <para>Implemented <b>directly</b> against the contract rather than via <see cref="WebSocketSttEngine"/>:
-/// vLLM's realtime protocol carries audio as base64-in-JSON (<c>input_audio_buffer.append</c>) instead of the
-/// base's binary frames, and finalizes via an explicit <c>commit</c>→<c>done</c> round-trip (exactly one
-/// <c>done</c> per utterance) rather than the base's local accumulator-flush — so there is no late-final
-/// "bleed" to guard against and a plain <c>Channel&lt;TranscriptionResult&gt;</c> (à la the Mistral REST
-/// engine) is the simpler, correct tool. Running deltas form the interim; <c>done</c> carries the final.</para>
+/// <para><b>One connection per utterance.</b> vLLM's <c>/v1/realtime</c> transcription is one-shot: a session is
+/// <c>session.update</c> → a non-final <c>commit</c> (ready) → <c>input_audio_buffer.append</c>… → one
+/// <c>commit {final:true}</c> → streamed <c>transcription.delta</c> partials → one <c>transcription.done</c>, after
+/// which the stream is finished. A bare commit never yields a <c>done</c>, and <c>final:true</c> ends the stream —
+/// so a single persistent socket cannot drive a multi-turn conversation. Instead the engine opens a fresh socket at
+/// VAD speech-start (<see cref="OnUserStartedSpeakingAsync"/>), streams that utterance's audio, sends
+/// <c>final:true</c> at speech-end (<see cref="FlushAsync()"/>), surfaces the deltas as interims and the
+/// <c>done</c> as the one final, then closes — and reconnects for the next utterance. Each connection is exactly
+/// one utterance / one final, so there is no cross-utterance state to reset.</para>
+///
+/// <para>Requires VAD upstream (the composer wires VAD → STT): without <c>UserStartedSpeaking</c>/<c>Stopped</c>
+/// brackets there is no per-utterance connection to open or commit. <b>Live-verify against a real vLLM build</b> —
+/// the wire field names and one-shot lifecycle are taken from the documented client example.</para>
 /// </summary>
 public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
 {
@@ -23,34 +30,22 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     private readonly ILogger _logger;
     private readonly Channel<TranscriptionResult> _transcripts = Channel.CreateUnbounded<TranscriptionResult>();
 
-    // Accumulates transcription.delta text for the current utterance into the interim shown live. Touched ONLY by
-    // the single receive loop (delta append, done reset) — never cross-thread — so it needs no lock.
-    private readonly StringBuilder _running = new();
-
-    // Set on the data-loop thread by OnUserStartedSpeakingAsync, consumed on the receive loop at the next Ingest:
-    // a new utterance must start from a clean interim even if the previous utterance's `done` never arrived
-    // (socket hiccup / server restart), so stale text can't bleed across utterances. A volatile flag keeps
-    // _running single-threaded (only the receive loop ever mutates it) without a lock.
-    private volatile bool _resetRunning;
-
-    // ClientWebSocket forbids concurrent sends, but audio appends arrive on the DATA loop while the commit at
-    // speech-end (UserStoppedSpeakingFrame is a SystemFrame) arrives on the SYSTEM loop — so an append and a
-    // commit can overlap. Serialize every socket write through this mutex; otherwise the overlapping send throws
-    // InvalidOperationException, the catch swallows it, and the dropped commit means the utterance never finalizes.
+    // ClientWebSocket forbids concurrent sends, but audio appends arrive on the DATA loop while the speech-end
+    // commit (UserStoppedSpeakingFrame is a SystemFrame) arrives on the SYSTEM loop — so they can overlap on the
+    // current utterance's socket. Serialize every socket write through this mutex.
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
-    // Stop-drain bookkeeping. _pendingAudio: audio appended since the last commit (uncommitted tail — set on the
-    // data loop, cleared inside the send lock). _pendingDones: how many committed utterances are still awaiting
-    // their transcription.done (a COUNT, not a flag — back-to-back utterances can have several commits in flight
-    // before the server finalizes any). StopAsync waits until the count reaches zero before closing, so no
-    // committed utterance is dropped. The receive loop decrements on each done and completes _drainSignal at zero.
-    private volatile bool _pendingAudio;
-    private int _pendingDones;
-    private volatile TaskCompletionSource? _drainSignal;
+    private Uri? _endpoint;
+    private CancellationTokenSource? _sessionCts;
 
+    // The current utterance's connection and its receive loop. Started on the system loop (OnUserStartedSpeaking),
+    // appended-to on the data loop (WriteAudio), finalized on the system loop (FlushAsync). _ws is published only
+    // after the handshake so WriteAudio never targets a half-open socket; access it via Volatile/Interlocked.
     private ClientWebSocket? _ws;
-    private CancellationTokenSource? _cts;
-    private Task? _receiveLoop;
+    private CancellationTokenSource? _utteranceCts;
+    private Task? _utteranceLoop;
+    private TaskCompletionSource? _utteranceDone;
+    private volatile bool _finalCommitted;
 
     /// <summary>Production: owns a managed (or connect-only) vLLM realtime server for the session's lifetime.</summary>
     public VoxtralRealtimeSttEngine(VoxtralOptions options, ILogger logger)
@@ -67,53 +62,31 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
 
     public async Task StartAsync(CancellationToken ct)
     {
-        if (_ws is not null) return; // idempotent
+        if (_sessionCts is not null) return; // idempotent
 
         // Managed mode launches the vLLM server and polls it to readiness (a cold 4B load is slow); connect-only
-        // just resolves the endpoint. Either way we connect only once the server is ready.
-        var endpoint = await _server.StartAsync(ct).ConfigureAwait(false);
+        // just resolves the endpoint. The endpoint is reused for each per-utterance connection.
+        _endpoint = await _server.StartAsync(ct).ConfigureAwait(false);
+        _sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    }
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var ws = new ClientWebSocket();
-        _logger.LogDebug("Voxtral connecting to {Endpoint}", endpoint);
-        try
-        {
-            await ws.ConnectAsync(endpoint, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is WebSocketException or HttpRequestException)
-        {
-            ws.Dispose();
-            throw new VoxaModelUnavailableException(
-                $"Could not connect to the Voxtral vLLM realtime server at {endpoint}. In connect-only mode, ensure " +
-                "your vLLM server is running; in managed mode, check the server logs (it may still be loading the model).", ex);
-        }
-
-        // Handshake: model + the configured session knobs (language hint, realtime delay), before any audio flows.
-        await SendSerializedAsync(ws, VoxtralWire.SessionUpdate(_options.Model, _options.Language, _options.DelayMs), ct)
-            .ConfigureAwait(false);
-        // vLLM realtime: a non-final commit right after session.update signals "ready to start" the stream.
-        await SendSerializedAsync(ws, VoxtralWire.Commit(final: false), ct).ConfigureAwait(false);
-        _ws = ws;
-        _receiveLoop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
+    /// <summary>VAD speech-start: finish any prior utterance, then open a fresh connection and handshake for this one.</summary>
+    public async Task OnUserStartedSpeakingAsync()
+    {
+        if (_sessionCts is null) return;
+        await EndCurrentUtteranceAsync(flushTail: true).ConfigureAwait(false);
+        await OpenUtteranceAsync(_sessionCts.Token).ConfigureAwait(false);
     }
 
     public async ValueTask WriteAudioAsync(ReadOnlyMemory<byte> pcm, CancellationToken ct)
     {
-        var ws = _ws;
+        var ws = Volatile.Read(ref _ws);
         if (ws is null || ws.State != WebSocketState.Open || pcm.IsEmpty) return;
 
         var append = VoxtralWire.AppendAudio(pcm.Span); // base64-encode synchronously before the await
         try
         {
-            await _sendLock.WaitAsync(ct).ConfigureAwait(false);
-            try
-            {
-                await ws.SendAsync(append, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
-                // Mark INSIDE the lock so a commit that next acquires the lock observes this audio. Setting it
-                // after release would let a racing FlushAsync snapshot a stale "no audio" and skip _awaitingDone.
-                _pendingAudio = true;
-            }
-            finally { _sendLock.Release(); }
+            await SendOnAsync(ws, append, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
@@ -122,30 +95,20 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         }
     }
 
-    // Serialize all socket writes (handshake / close) — ClientWebSocket allows only one outstanding send.
-    // Append and commit manage the buffer flags inside the lock themselves (see WriteAudioAsync / FlushAsync).
-    private async Task SendSerializedAsync(ClientWebSocket ws, ReadOnlyMemory<byte> bytes, CancellationToken ct)
-    {
-        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
-        try { await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false); }
-        finally { _sendLock.Release(); }
-    }
-
     public IAsyncEnumerable<TranscriptionResult> ReadTranscriptsAsync(CancellationToken ct)
         => _transcripts.Reader.ReadAllAsync(ct);
 
-    /// <summary>VAD speech-end: send a <b>non-final</b> commit so the server finalizes this utterance and emits
-    /// <c>transcription.done</c> WITHOUT ending the stream (a <c>{"final":true}</c> commit would tell vLLM all audio
-    /// is sent, stopping transcription for the rest of the session). The final flows from the receive loop when
-    /// <c>done</c> arrives — never emitted locally — so there is exactly one final per utterance with no post-speech
-    /// round-trip the pipeline must wait on.</summary>
+    /// <summary>VAD speech-end: send the <c>final:true</c> commit so the server finalizes the utterance and emits
+    /// <c>transcription.done</c>. The final flows from the receive loop when <c>done</c> arrives (never emitted
+    /// locally), and the connection is closed once it does — the next utterance opens a fresh one.</summary>
     public async Task FlushAsync()
     {
-        var ws = _ws;
+        var ws = Volatile.Read(ref _ws);
         if (ws is null || ws.State != WebSocketState.Open) return;
         try
         {
-            await SendCommitAsync(ws, final: false, CancellationToken.None).ConfigureAwait(false);
+            await SendOnAsync(ws, VoxtralWire.Commit(final: true), CancellationToken.None).ConfigureAwait(false);
+            _finalCommitted = true;
         }
         catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException
                                       or OperationCanceledException or InvalidOperationException)
@@ -154,71 +117,95 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         }
     }
 
-    // Send a commit and, under the same lock that serializes appends, account for the done it will produce.
-    // Reading _pendingAudio INSIDE the lock means every append ordered before this commit has set it (and any
-    // later append is ordered after it on the wire), so we count exactly one expected done per committed utterance.
-    private async Task SendCommitAsync(ClientWebSocket ws, bool final, CancellationToken ct)
-    {
-        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var hadAudio = _pendingAudio;
-            await ws.SendAsync(VoxtralWire.Commit(final), WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
-            _pendingAudio = false;
-            if (hadAudio) Interlocked.Increment(ref _pendingDones); // the server now owes us a transcription.done
-        }
-        finally { _sendLock.Release(); }
-    }
-
     public async Task StopAsync()
     {
-        var ws = _ws;
-        if (ws is not null && ws.State == WebSocketState.Open)
-        {
-            try
-            {
-                using var close = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-
-                // Arm a drain signal, THEN send the end-of-all-audio commit (which finalizes any uncommitted tail
-                // and bumps _pendingDones for it). The receive loop completes the signal once _pendingDones hits
-                // zero — i.e. every committed utterance, including back-to-back ones still in flight, has finalized.
-                var drain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                _drainSignal = drain;
-                await SendCommitAsync(ws, final: true, close.Token).ConfigureAwait(false);
-                if (Volatile.Read(ref _pendingDones) <= 0) drain.TrySetResult(); // nothing outstanding — don't block
-
-                // Drain the final transcript(s) before closing, so the last utterance still reaches downstream
-                // (mirrors the other engines' stop-drain). Bounded by the close budget; the receive loop is still
-                // running here (we cancel it only after), so the dones are read and queued before we complete below.
-                try { await drain.Task.WaitAsync(close.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) { /* not all finalized within the budget */ }
-
-                await _sendLock.WaitAsync(close.Token).ConfigureAwait(false);
-                try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "stop", close.Token).ConfigureAwait(false); }
-                finally { _sendLock.Release(); }
-            }
-            catch { /* best-effort graceful close */ }
-        }
-        _cts?.Cancel();
-        if (_receiveLoop is not null)
-        {
-            try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
-        }
-        _ws = null; // release the closed socket so the engine doesn't hold a live-looking ref after stop
+        await EndCurrentUtteranceAsync(flushTail: true).ConfigureAwait(false);
+        _sessionCts?.Cancel();
         _transcripts.Writer.TryComplete();
     }
 
-    /// <summary>New utterance (VAD speech-start): drop any leftover interim from a previous utterance whose
-    /// <c>done</c> never arrived, so its text can't prefix the new one. Honored on the receive loop.</summary>
-    public Task OnUserStartedSpeakingAsync()
+    private async Task OpenUtteranceAsync(CancellationToken ct)
     {
-        _resetRunning = true;
-        return Task.CompletedTask;
+        var ws = new ClientWebSocket();
+        _logger.LogDebug("Voxtral connecting to {Endpoint}", _endpoint);
+        try
+        {
+            await ws.ConnectAsync(_endpoint!, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is WebSocketException or HttpRequestException)
+        {
+            ws.Dispose();
+            // Surface a connect failure instead of silently producing no transcripts: fault the stream so
+            // SpeechToTextProcessor raises an ErrorFrame with remediation guidance.
+            _transcripts.Writer.TryComplete(new VoxaModelUnavailableException(
+                $"Could not connect to the Voxtral vLLM realtime server at {_endpoint}. In connect-only mode, ensure " +
+                "your vLLM server is running; in managed mode, check the server logs (it may still be loading the model).", ex));
+            return;
+        }
+
+        // Handshake before any audio flows. Sent on the local `ws` before it is published, so no concurrent send.
+        await SendOnAsync(ws, VoxtralWire.SessionUpdate(_options.Model, _options.Language, _options.DelayMs), ct).ConfigureAwait(false);
+        await SendOnAsync(ws, VoxtralWire.Commit(final: false), ct).ConfigureAwait(false); // "ready to start"
+
+        var uCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _utteranceCts = uCts;
+        _utteranceDone = done;
+        _finalCommitted = false;
+        Volatile.Write(ref _ws, ws); // publish — WriteAudio can now append
+        _utteranceLoop = Task.Run(() => ReceiveLoopAsync(ws, done, uCts.Token));
     }
 
-    private async Task ReceiveLoopAsync(CancellationToken ct)
+    // Finish the in-flight utterance (if any): optionally flush a tail that never got a speech-end commit, drain
+    // its transcription.done (bounded), then stop and dispose its receive loop. Runs on the system loop only.
+    private async Task EndCurrentUtteranceAsync(bool flushTail)
     {
-        var ws = _ws!;
+        var ws = Volatile.Read(ref _ws);
+        var loop = _utteranceLoop;
+        var done = _utteranceDone;
+        var uCts = _utteranceCts;
+        if (ws is null && loop is null) return;
+
+        // Abrupt end mid-utterance (no UserStoppedSpeaking, e.g. a client disconnect): flush the tail so the
+        // server still finalizes it. A clean end already sent final:true in FlushAsync.
+        if (flushTail && ws is not null && ws.State == WebSocketState.Open && !_finalCommitted)
+        {
+            try { await SendOnAsync(ws, VoxtralWire.Commit(final: true), CancellationToken.None).ConfigureAwait(false); _finalCommitted = true; }
+            catch { /* socket gone */ }
+        }
+
+        // Drain the final before tearing down, so the utterance reaches downstream (bounded so a missing done
+        // can't hang teardown). Only wait when a final was actually committed — otherwise there's no done coming.
+        if (done is not null && _finalCommitted)
+        {
+            try { await done.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false); }
+            catch (TimeoutException) { /* no done within the budget */ }
+        }
+
+        uCts?.Cancel(); // force the receive loop to end if the done never arrived
+        if (loop is not null)
+        {
+            try { await loop.ConfigureAwait(false); } catch { /* shutdown */ }
+        }
+        uCts?.Dispose();
+        _utteranceLoop = null;
+        _utteranceDone = null;
+        _utteranceCts = null;
+        _finalCommitted = false;
+        Volatile.Write(ref _ws, null);
+    }
+
+    // Serialize all socket writes — ClientWebSocket allows only one outstanding send (a receive may run concurrently).
+    private async Task SendOnAsync(ClientWebSocket ws, ReadOnlyMemory<byte> bytes, CancellationToken ct)
+    {
+        await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+        try { await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false); }
+        finally { _sendLock.Release(); }
+    }
+
+    private async Task ReceiveLoopAsync(ClientWebSocket ws, TaskCompletionSource done, CancellationToken ct)
+    {
+        var running = new StringBuilder(); // this utterance's interim, local to the loop — no cross-utterance bleed
         var buffer = new byte[16 * 1024];
         using var msg = new MemoryStream();
         try
@@ -234,67 +221,74 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 msg.Write(buffer, 0, result.Count);
                 if (!result.EndOfMessage) continue;
 
-                if (result.MessageType == WebSocketMessageType.Text)
-                    Ingest(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length));
+                if (result.MessageType == WebSocketMessageType.Text &&
+                    Ingest(Encoding.UTF8.GetString(msg.GetBuffer(), 0, (int)msg.Length), running))
+                    break; // a done / error frame ends this utterance's stream
                 msg.SetLength(0);
             }
         }
         catch (OperationCanceledException) { /* shutdown */ }
         finally
         {
-            _transcripts.Writer.TryComplete();
+            Interlocked.CompareExchange(ref _ws, null, ws); // unpublish if still current
+            done.TrySetResult();
+            try
+            {
+                if (ws.State == WebSocketState.Open)
+                {
+                    using var close = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", close.Token).ConfigureAwait(false);
+                }
+            }
+            catch { /* best-effort close */ }
+            ws.Dispose();
         }
     }
 
-    // Pure dispatch of one parsed server frame; runs only on the receive loop, so _running is single-threaded here.
-    private void Ingest(string json)
+    // Dispatch one parsed server frame. Returns true when the utterance's stream is finished (done/error).
+    private bool Ingest(string json, StringBuilder running)
     {
-        // A new utterance began since the last frame — clear the stale interim before appending this one's text.
-        if (_resetRunning) { _resetRunning = false; _running.Clear(); }
-
-        if (!VoxtralWire.TryParseServerMessage(json, out var m)) return;
+        if (!VoxtralWire.TryParseServerMessage(json, out var m)) return false;
         switch (m.Kind)
         {
             case VoxtralServerEvent.Delta:
-                if (m.Text.Length == 0) return;
-                _running.Append(m.Text);
-                _transcripts.Writer.TryWrite(new TranscriptionResult(_running.ToString(), IsFinal: false, _options.Language));
-                break;
+                if (m.Text.Length == 0) return false;
+                running.Append(m.Text);
+                _transcripts.Writer.TryWrite(new TranscriptionResult(running.ToString(), IsFinal: false, _options.Language));
+                return false;
 
             case VoxtralServerEvent.Done:
                 // Prefer the server's authoritative full text; fall back to the accumulated deltas if it's empty.
-                var text = m.Text.Length > 0 ? m.Text : _running.ToString();
-                _running.Clear();
+                var text = m.Text.Length > 0 ? m.Text : running.ToString();
                 if (!string.IsNullOrWhiteSpace(text))
                     _transcripts.Writer.TryWrite(new TranscriptionResult(text, IsFinal: true, _options.Language));
-                // One committed utterance finalized; only release a stop-drain once ALL of them have (count → 0),
-                // so back-to-back utterances still in flight aren't dropped by an early-closing socket.
-                if (Interlocked.Decrement(ref _pendingDones) <= 0)
-                    _drainSignal?.TrySetResult();
-                break;
+                return true; // utterance complete
 
             case VoxtralServerEvent.Error:
-                // The server rejected the session/request or hit a runtime failure (e.g. a bad model name). Surface
-                // it instead of waiting forever: fault the transcript stream so SpeechToTextProcessor raises an
-                // ErrorFrame, and release any stop-drain. Further frames are ignored (the channel is completed).
+                // The server rejected the request or hit a runtime failure (e.g. a bad model name). Surface it
+                // instead of waiting forever: fault the transcript stream so SpeechToTextProcessor raises an ErrorFrame.
                 var error = m.Text.Length > 0 ? m.Text : "unspecified error";
                 _logger.LogError("Voxtral server reported an error: {Error}", error);
-                _drainSignal?.TrySetResult();
                 _transcripts.Writer.TryComplete(new VoxaModelUnavailableException($"Voxtral server error: {error}"));
-                break;
+                return true;
+
+            default:
+                return false;
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
-        if (_receiveLoop is not null)
+        _sessionCts?.Cancel();
+        _utteranceCts?.Cancel();
+        if (_utteranceLoop is not null)
         {
-            try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
+            try { await _utteranceLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
-        _ws?.Dispose();
-        _ws = null;
-        _cts?.Dispose();
+        Volatile.Read(ref _ws)?.Dispose();
+        Volatile.Write(ref _ws, null);
+        _utteranceCts?.Dispose();
+        _sessionCts?.Dispose();
         _sendLock.Dispose();
         _transcripts.Writer.TryComplete();
         await _server.DisposeAsync().ConfigureAwait(false); // managed mode: kill the server process tree
