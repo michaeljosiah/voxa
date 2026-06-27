@@ -50,6 +50,24 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // codex P2: a server error frame must fault the transcript stream, not hang Talk with no error
+    public async Task Server_Error_Frame_Faults_The_Transcript_Stream()
+    {
+        await using var server = new MiniRealtimeServer(deltas: [], doneText: "", error: "bad model name");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "does-not-exist" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var ex = await Assert.ThrowsAsync<VoxaModelUnavailableException>(async () =>
+        {
+            await foreach (var _ in engine.ReadTranscriptsAsync(cts.Token)) { }
+        });
+        Assert.Contains("bad model name", ex.Message);
+
+        await engine.StopAsync();
+    }
+
     [Fact] // codex P2: the configured language hint and realtime delay must reach the server, not be silently dropped
     public async Task Handshake_Sends_The_Configured_Language_And_Delay()
     {

@@ -11,6 +11,9 @@ internal enum VoxtralServerEvent
 
     /// <summary>The finalized utterance transcript (<c>transcription.done</c>).</summary>
     Done,
+
+    /// <summary>A server-reported failure (<c>{"type":"error",…}</c>) — the <c>Text</c> carries the message.</summary>
+    Error,
 }
 
 /// <summary>One parsed server message: the <see cref="Kind"/> and its text payload (the delta, or the final text).</summary>
@@ -77,6 +80,9 @@ internal static class VoxtralWire
                 case "transcription.done":
                     message = new VoxtralServerMessage(VoxtralServerEvent.Done, StringProp(root, "text"));
                     return true;
+                case "error":
+                    message = new VoxtralServerMessage(VoxtralServerEvent.Error, ExtractError(root));
+                    return true;
                 default:
                     return false; // session.created / unknown — not our concern
             }
@@ -91,6 +97,18 @@ internal static class VoxtralWire
         => obj.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String
             ? el.GetString() ?? string.Empty
             : string.Empty;
+
+    // Pull a human-readable message out of an error frame, tolerating the common shapes:
+    // {"error":{"message":"…"}}, {"error":"…"}, or {"message":"…"}.
+    private static string ExtractError(JsonElement root)
+    {
+        if (root.TryGetProperty("error", out var err))
+        {
+            if (err.ValueKind == JsonValueKind.String) return err.GetString() ?? string.Empty;
+            if (err.ValueKind == JsonValueKind.Object) return StringProp(err, "message");
+        }
+        return StringProp(root, "message");
+    }
 
     private sealed record SessionUpdateMsg(
         [property: JsonPropertyName("type")] string Type,

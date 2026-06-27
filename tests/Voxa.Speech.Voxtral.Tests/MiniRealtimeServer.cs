@@ -24,6 +24,7 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     private readonly string _doneText;
     private readonly bool _sendDone;
     private readonly int _doneDelayMs;
+    private readonly string? _error;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _acceptLoop;
     private readonly MemoryStream _audio = new();
@@ -35,12 +36,15 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     /// — simulates a dropped/never-finalized utterance so the engine's per-utterance reset can be exercised.</param>
     /// <param name="doneDelayMs">Delay before the <c>transcription.done</c> is sent, so a test can make the final
     /// land while the engine is mid-<c>StopAsync</c> (exercising the stop-drain).</param>
-    public MiniRealtimeServer(string[] deltas, string doneText, bool sendDone = true, int doneDelayMs = 0)
+    /// <param name="error">When set, the server sends a <c>{"type":"error",…}</c> frame right after the greeting
+    /// (mimics a rejected session, e.g. a bad model name) so the engine's error handling can be exercised.</param>
+    public MiniRealtimeServer(string[] deltas, string doneText, bool sendDone = true, int doneDelayMs = 0, string? error = null)
     {
         _deltas = deltas;
         _doneText = doneText;
         _sendDone = sendDone;
         _doneDelayMs = doneDelayMs;
+        _error = error;
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -70,6 +74,10 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
 
             // Greet with a frame the engine must ignore (proves unknown types don't break the loop).
             await SendAsync(ws, "{\"type\":\"session.created\",\"id\":\"fake\"}", ct).ConfigureAwait(false);
+
+            // Optionally reject the session right away (e.g. a bad model name) so error handling is exercisable.
+            if (_error is not null)
+                await SendAsync(ws, $"{{\"type\":\"error\",\"error\":{{\"message\":{Quote(_error)}}}}}", ct).ConfigureAwait(false);
 
             var buffer = new byte[64 * 1024];
             using var msg = new MemoryStream();

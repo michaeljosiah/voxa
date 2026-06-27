@@ -33,6 +33,17 @@ public class VoxtralWireTests
     public void Ignores_Unknown_Or_Malformed_Frames(string json)
         => Assert.False(VoxtralWire.TryParseServerMessage(json, out _));
 
+    [Theory]
+    [InlineData("{\"type\":\"error\",\"error\":{\"message\":\"bad model\"}}", "bad model")]
+    [InlineData("{\"type\":\"error\",\"error\":\"flat string\"}", "flat string")]
+    [InlineData("{\"type\":\"error\",\"message\":\"top level\"}", "top level")]
+    public void Parses_Error_Frames_With_Their_Message(string json, string expected)
+    {
+        Assert.True(VoxtralWire.TryParseServerMessage(json, out var m));
+        Assert.Equal(VoxtralServerEvent.Error, m.Kind);
+        Assert.Equal(expected, m.Text);
+    }
+
     [Fact]
     public void Delta_With_No_Payload_Yields_Empty_Text()
     {

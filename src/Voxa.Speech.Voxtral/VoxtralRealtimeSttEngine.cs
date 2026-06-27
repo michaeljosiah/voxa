@@ -269,6 +269,17 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
                 _awaitingDone = false;
                 _drainSignal?.TrySetResult(); // let a stop-drain proceed now the tail final has been queued
                 break;
+
+            case VoxtralServerEvent.Error:
+                // The server rejected the session/request or hit a runtime failure (e.g. a bad model name). Surface
+                // it instead of waiting forever: fault the transcript stream so SpeechToTextProcessor raises an
+                // ErrorFrame, and release any stop-drain. Further frames are ignored (the channel is completed).
+                var error = m.Text.Length > 0 ? m.Text : "unspecified error";
+                _logger.LogError("Voxtral server reported an error: {Error}", error);
+                _awaitingDone = false;
+                _drainSignal?.TrySetResult();
+                _transcripts.Writer.TryComplete(new VoxaModelUnavailableException($"Voxtral server error: {error}"));
+                break;
         }
     }
 
