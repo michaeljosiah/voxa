@@ -50,6 +50,46 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // codex P1: append (data loop) and commit (system loop) overlap — concurrent ws sends must be serialized
+    public async Task Concurrent_Append_And_Commit_Do_Not_Drop_The_Final()
+    {
+        await using var server = new MiniRealtimeServer(deltas: ["x"], doneText: "x done");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        var pcm = new byte[4096];
+        await engine.WriteAudioAsync(pcm, CancellationToken.None);   // buffer audio so the commit has something to finalize
+        // Overlap a second append with the commit — without a send lock the concurrent ClientWebSocket sends throw
+        // InvalidOperationException, the catch swallows it, and the dropped commit would mean no transcription.done.
+        await Task.WhenAll(
+            engine.WriteAudioAsync(pcm, CancellationToken.None).AsTask(),
+            engine.FlushAsync());
+
+        var results = await ReadUntilFinalAsync(engine, TimeSpan.FromSeconds(10));
+        Assert.Contains(results, r => r.IsFinal && r.Text == "x done");
+
+        await engine.StopAsync();
+    }
+
+    [Fact] // codex P2: a stop with un-flushed audio (abrupt disconnect mid-utterance) still drains the tail transcript
+    public async Task StopAsync_Drains_The_Tail_Transcript_When_Audio_Was_Not_Flushed()
+    {
+        await using var server = new MiniRealtimeServer(deltas: ["tail"], doneText: "tail end");
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None); // audio, but NO FlushAsync
+        await engine.StopAsync();   // final:true commit → server finalizes → drain captures the done before close
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var finals = new List<TranscriptionResult>();
+        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token)) // channel is completed by StopAsync
+            if (r.IsFinal) finals.Add(r);
+        Assert.Contains(finals, r => r.Text == "tail end");
+    }
+
     [Fact] // a new utterance must not inherit a previous one's interim when its `done` never arrived
     public async Task A_New_Utterance_Does_Not_Inherit_A_Previous_Interim_When_Done_Was_Missed()
     {
