@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Remote Voxtral STT now streams (Mistral API).** `MistralSpeechToTextEngine` gained a streaming path:
+  with `Voxa:Mistral:SttStreaming` (default **true**) the per-utterance POST to `/v1/audio/transcriptions`
+  sends `stream=true` and parses the `text/event-stream` response — `transcription.text.delta` events surface
+  as interim `TranscriptionResult`s and the terminal `transcription.done` as the final, for lower perceived
+  latency than waiting for the whole batch. The audio is still sent once at speech-end (the API takes a complete
+  clip, not incremental audio). Set `SttStreaming:false` for the previous single batched final. The SSE parser
+  (`MistralSttStream`) is tolerant and total: the delta text is read from `delta` *or* `text`, and any unknown or
+  malformed event is ignored rather than throwing. This pairs the **local** privacy tier (`Voxa.Speech.Voxtral`,
+  VLS-009) with an **offload-to-API** remote tier behind the same `Voxa:Stt` switch (`"Voxtral"` vs `"Mistral"`).
 - **Local Voxtral realtime STT — open-weights, fully-offline, cloud-grade (VLS-009).** A new
   **`Voxa.Speech.Voxtral`** package adds Mistral's **Voxtral-Mini-4B-Realtime** (Apache-2.0) as a first-class,
   on-device STT provider — `"Voxa:Stt": "Voxtral"`. It implements the streaming `ISpeechToTextEngine` directly

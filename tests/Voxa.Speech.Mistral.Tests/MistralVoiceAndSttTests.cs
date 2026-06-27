@@ -101,7 +101,7 @@ public class MistralVoiceAndSttTests
     public async Task Stt_Buffers_Two_Writes_And_Posts_Once_On_Flush_Yielding_One_Final()
     {
         var handler = new CapturingHandler { Respond = _ => Json("""{ "text": "hello world" }""") };
-        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await using var engine = new MistralSpeechToTextEngine(Keyed() with { SttStreaming = false }, new HttpClient(handler));
         await engine.StartAsync(default);
 
         await engine.WriteAudioAsync(new byte[320], default);   // 10 ms @ 16 kHz PCM16
@@ -149,6 +149,78 @@ public class MistralVoiceAndSttTests
             catch (OperationCanceledException) { WasCancelled = true; throw; }
             return new HttpResponseMessage(HttpStatusCode.OK);
         }
+    }
+
+    private static HttpResponseMessage Sse(string body) => new(HttpStatusCode.OK)
+    {
+        Content = new StringContent(body, Encoding.UTF8, "text/event-stream"),
+    };
+
+    [Fact] // VVL-001 WS2 streaming: stream=true surfaces delta interims then one done final
+    public async Task Streaming_Stt_Emits_Delta_Interims_Then_A_Done_Final()
+    {
+        var handler = new CapturingHandler
+        {
+            Respond = _ => Sse(
+                "data: {\"type\":\"transcription.text.delta\",\"text\":\"the quick \"}\n\n" +
+                "data: {\"type\":\"transcription.text.delta\",\"text\":\"brown fox\"}\n\n" +
+                "data: {\"type\":\"transcription.done\",\"text\":\"the quick brown fox\",\"language\":\"en\"}\n\n" +
+                "data: [DONE]\n\n"),
+        };
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await engine.StartAsync(default);
+
+        await engine.WriteAudioAsync(new byte[320], default);
+        await engine.FlushAsync();
+
+        var snap = Assert.Single(handler.Snapshots);
+        Assert.EndsWith("/audio/transcriptions", snap.Uri.ToString());
+        Assert.Contains("name=stream", Encoding.Latin1.GetString(snap.Body));   // stream=true was sent
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var results = new List<TranscriptionResult>();
+        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        while (await reader.MoveNextAsync())
+        {
+            results.Add(reader.Current);
+            if (reader.Current.IsFinal) break;
+        }
+
+        Assert.Equal("the quick ", results[0].Text);             // first delta as an interim
+        Assert.False(results[0].IsFinal);
+        Assert.Equal("the quick brown fox", results[1].Text);    // running interim accumulates
+        Assert.False(results[1].IsFinal);
+        var final = results[^1];
+        Assert.True(final.IsFinal);
+        Assert.Equal("the quick brown fox", final.Text);
+        Assert.Equal("en", final.Language);
+    }
+
+    [Fact] // streaming with no done event — accumulated deltas still settle as the final
+    public async Task Streaming_Stt_Settles_Accumulated_Deltas_When_No_Done_Arrives()
+    {
+        var handler = new CapturingHandler
+        {
+            Respond = _ => Sse("data: {\"type\":\"transcription.text.delta\",\"text\":\"partial only\"}\n\n"),
+        };
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await engine.StartAsync(default);
+
+        await engine.WriteAudioAsync(new byte[320], default);
+        await engine.FlushAsync();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        TranscriptionResult? last = null;
+        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        while (await reader.MoveNextAsync())
+        {
+            last = reader.Current;
+            if (reader.Current.IsFinal) break;
+        }
+
+        Assert.NotNull(last);
+        Assert.True(last!.IsFinal);
+        Assert.Equal("partial only", last.Text);
     }
 
     [Fact] // CQ-008: parity with the OpenAI engine — an aborted session cancels the in-flight transcription
