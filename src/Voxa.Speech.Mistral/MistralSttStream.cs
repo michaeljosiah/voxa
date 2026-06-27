@@ -9,7 +9,7 @@ namespace Voxa.Speech.Mistral;
 /// text, and a terminal <c>transcription.done</c> (a.k.a. <c>transcription.text.done</c>) carries the settled
 /// transcript. The exact field names are under-documented, so parsing is deliberately <b>tolerant and total</b>:
 /// a delta's text is read from <c>delta</c> or <c>text</c>, the done text from <c>text</c>, and any unknown or
-/// malformed payload is classified <see cref="MistralSttEventKind.Other"/> (ignored) rather than throwing.
+/// malformed payload returns <c>null</c> (ignored) rather than throwing.
 /// </summary>
 internal static class MistralSttStream
 {
@@ -31,9 +31,9 @@ internal static class MistralSttStream
         payload.Equals("[DONE]", StringComparison.Ordinal);
 
     /// <summary>
-    /// Parse one SSE data payload into a typed event. Returns <c>null</c> for malformed JSON or a non-object
-    /// payload; returns <see cref="MistralSttEventKind.Other"/> for a well-formed but unrecognized event
-    /// (session/language-detection frames) so the caller can ignore it without special-casing.
+    /// Parse one SSE data payload into a typed event. Returns <c>null</c> for malformed JSON, a non-object
+    /// payload, or a well-formed but unrecognized event (session/language-detection frames) — the caller
+    /// ignores all of these identically.
     /// </summary>
     internal static MistralSttEvent? Parse(string json)
     {
@@ -44,6 +44,7 @@ internal static class MistralSttStream
             if (root.ValueKind != JsonValueKind.Object) return null;
 
             var type = root.TryGetProperty("type", out var t) ? t.GetString() : null;
+            if (type is null) return null;
             string? language = root.TryGetProperty("language", out var l) ? l.GetString() : null;
 
             string? text = null;
@@ -52,12 +53,12 @@ internal static class MistralSttStream
             else if (root.TryGetProperty("delta", out var d) && d.ValueKind == JsonValueKind.String)
                 text = d.GetString();
 
-            if (type is not null && type.Contains("done", StringComparison.OrdinalIgnoreCase))
+            if (type.Contains("done", StringComparison.OrdinalIgnoreCase))
                 return new MistralSttEvent(MistralSttEventKind.Done, text ?? string.Empty, language);
-            if (type is not null && type.Contains("delta", StringComparison.OrdinalIgnoreCase))
+            if (type.Contains("delta", StringComparison.OrdinalIgnoreCase))
                 return new MistralSttEvent(MistralSttEventKind.Delta, text ?? string.Empty, language);
 
-            return new MistralSttEvent(MistralSttEventKind.Other, text ?? string.Empty, language);
+            return null; // a well-formed but unrecognized event — ignore (same as the caller does with null)
         }
         catch (JsonException)
         {
@@ -73,8 +74,6 @@ internal enum MistralSttEventKind
     Delta,
     /// <summary>Terminal event carrying the settled transcript (emit as the final).</summary>
     Done,
-    /// <summary>A well-formed but unrecognized event — ignore.</summary>
-    Other,
 }
 
 /// <summary>One parsed streaming-transcription event.</summary>

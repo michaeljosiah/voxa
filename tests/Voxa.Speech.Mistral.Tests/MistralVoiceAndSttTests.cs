@@ -223,6 +223,57 @@ public class MistralVoiceAndSttTests
         Assert.Equal("partial only", last.Text);
     }
 
+    [Fact] // a second/per-segment done must not fire a second final (one utterance == one agent turn)
+    public async Task Streaming_Stt_Emits_Exactly_One_Final_When_Multiple_Done_Events_Arrive()
+    {
+        var handler = new CapturingHandler
+        {
+            Respond = _ => Sse(
+                "data: {\"type\":\"transcription.text.delta\",\"text\":\"hello\"}\n\n" +
+                "data: {\"type\":\"transcription.done\",\"text\":\"hello\"}\n\n" +
+                "data: {\"type\":\"transcription.done\",\"text\":\"hello again\"}\n\n"),   // stray second done
+        };
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await engine.StartAsync(default);
+
+        await engine.WriteAudioAsync(new byte[320], default);
+        await engine.FlushAsync();
+        await engine.StopAsync();   // completes the channel so we can drain to the end
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var finals = new List<string>();
+        await foreach (var r in engine.ReadTranscriptsAsync(cts.Token))
+            if (r.IsFinal) finals.Add(r.Text);
+
+        Assert.Equal(["hello"], finals);   // the stray second done is ignored
+    }
+
+    [Fact] // SSE spec: one event's data may span multiple data: lines, joined by '\n'
+    public async Task Streaming_Stt_Joins_A_Multi_Line_Data_Field_Before_Parsing()
+    {
+        var handler = new CapturingHandler
+        {
+            // The JSON object is split across two data: lines — only the joined payload is valid JSON.
+            Respond = _ => Sse("data: {\"type\":\"transcription.done\",\ndata: \"text\":\"joined ok\"}\n\n"),
+        };
+        await using var engine = new MistralSpeechToTextEngine(Keyed(), new HttpClient(handler));
+        await engine.StartAsync(default);
+
+        await engine.WriteAudioAsync(new byte[320], default);
+        await engine.FlushAsync();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        TranscriptionResult? final = null;
+        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        while (await reader.MoveNextAsync())
+        {
+            if (reader.Current.IsFinal) { final = reader.Current; break; }
+        }
+
+        Assert.NotNull(final);
+        Assert.Equal("joined ok", final!.Text);
+    }
+
     [Fact] // CQ-008: parity with the OpenAI engine — an aborted session cancels the in-flight transcription
     public async Task Flush_Cancels_The_In_Flight_Request_When_The_Session_Is_Torn_Down()
     {

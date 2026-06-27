@@ -27,6 +27,12 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     // the single receive loop (delta append, done reset) — never cross-thread — so it needs no lock.
     private readonly StringBuilder _running = new();
 
+    // Set on the data-loop thread by OnUserStartedSpeakingAsync, consumed on the receive loop at the next Ingest:
+    // a new utterance must start from a clean interim even if the previous utterance's `done` never arrived
+    // (socket hiccup / server restart), so stale text can't bleed across utterances. A volatile flag keeps
+    // _running single-threaded (only the receive loop ever mutates it) without a lock.
+    private volatile bool _resetRunning;
+
     private ClientWebSocket? _ws;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -130,7 +136,16 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
         {
             try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
+        _ws = null; // release the closed socket so the engine doesn't hold a live-looking ref after stop
         _transcripts.Writer.TryComplete();
+    }
+
+    /// <summary>New utterance (VAD speech-start): drop any leftover interim from a previous utterance whose
+    /// <c>done</c> never arrived, so its text can't prefix the new one. Honored on the receive loop.</summary>
+    public Task OnUserStartedSpeakingAsync()
+    {
+        _resetRunning = true;
+        return Task.CompletedTask;
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -166,6 +181,9 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
     // Pure dispatch of one parsed server frame; runs only on the receive loop, so _running is single-threaded here.
     private void Ingest(string json)
     {
+        // A new utterance began since the last frame — clear the stale interim before appending this one's text.
+        if (_resetRunning) { _resetRunning = false; _running.Clear(); }
+
         if (!VoxtralWire.TryParseServerMessage(json, out var m)) return;
         switch (m.Kind)
         {
@@ -193,6 +211,7 @@ public sealed class VoxtralRealtimeSttEngine : ISpeechToTextEngine
             try { await _receiveLoop.ConfigureAwait(false); } catch { /* shutdown */ }
         }
         _ws?.Dispose();
+        _ws = null;
         _cts?.Dispose();
         _transcripts.Writer.TryComplete();
         await _server.DisposeAsync().ConfigureAwait(false); // managed mode: kill the server process tree

@@ -55,15 +55,10 @@ public class MistralSttStreamTests
     }
 
     [Fact]
-    public void Unknown_Event_Types_Are_Classified_Other_Not_Thrown()
+    public void Unknown_Or_Malformed_Payloads_Return_Null_Not_Thrown()
     {
-        var ev = MistralSttStream.Parse("{\"type\":\"transcription.session.created\",\"session\":\"abc\"}");
-        Assert.Equal(MistralSttEventKind.Other, ev!.Value.Kind);
-    }
-
-    [Fact]
-    public void Malformed_Or_Non_Object_Payloads_Return_Null()
-    {
+        Assert.Null(MistralSttStream.Parse("{\"type\":\"transcription.session.created\",\"session\":\"abc\"}")); // unrecognized type
+        Assert.Null(MistralSttStream.Parse("{\"text\":\"no type field\"}"));   // no type
         Assert.Null(MistralSttStream.Parse("not json"));
         Assert.Null(MistralSttStream.Parse("[1,2,3]"));
         Assert.Null(MistralSttStream.Parse("\"bare string\""));

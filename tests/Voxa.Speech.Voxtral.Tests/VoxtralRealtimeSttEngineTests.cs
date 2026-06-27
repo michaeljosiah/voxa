@@ -29,6 +29,33 @@ public class VoxtralRealtimeSttEngineTests
         await engine.StopAsync();
     }
 
+    [Fact] // a new utterance must not inherit a previous one's interim when its `done` never arrived
+    public async Task A_New_Utterance_Does_Not_Inherit_A_Previous_Interim_When_Done_Was_Missed()
+    {
+        // sendDone:false → each commit replays the delta but never finalizes, so _running would keep growing
+        // across utterances without the per-utterance reset.
+        await using var server = new MiniRealtimeServer(deltas: ["one"], doneText: "", sendDone: false);
+        var options = new VoxtralOptions { ServerUrl = server.ServerUrl, Model = "test-model" };
+        await using var engine = new VoxtralRealtimeSttEngine(options, NullLogger.Instance);
+        await engine.StartAsync(CancellationToken.None);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var reader = engine.ReadTranscriptsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+
+        await engine.WriteAudioAsync(new byte[] { 1, 2 }, CancellationToken.None);
+        await engine.FlushAsync();                                   // utterance 1 commit → interim "one"
+        Assert.True(await reader.MoveNextAsync());
+        Assert.Equal("one", reader.Current.Text);
+
+        await engine.OnUserStartedSpeakingAsync();                   // VAD speech-start for utterance 2
+        await engine.WriteAudioAsync(new byte[] { 3, 4 }, CancellationToken.None);
+        await engine.FlushAsync();                                   // utterance 2 commit → interim "one", not "oneone"
+        Assert.True(await reader.MoveNextAsync());
+        Assert.Equal("one", reader.Current.Text);
+
+        await engine.StopAsync();
+    }
+
     [Fact]
     public async Task DisposeAsync_Tears_Down_The_Server_It_Owns()
     {

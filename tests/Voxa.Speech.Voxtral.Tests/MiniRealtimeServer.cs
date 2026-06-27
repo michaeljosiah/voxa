@@ -22,15 +22,19 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
     private readonly TcpListener _listener;
     private readonly string[] _deltas;
     private readonly string _doneText;
+    private readonly bool _sendDone;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _acceptLoop;
     private readonly MemoryStream _audio = new();
     private readonly object _gate = new();
 
-    public MiniRealtimeServer(string[] deltas, string doneText)
+    /// <param name="sendDone">When false, <c>commit</c> replays the deltas but never sends <c>transcription.done</c>
+    /// — simulates a dropped/never-finalized utterance so the engine's per-utterance reset can be exercised.</param>
+    public MiniRealtimeServer(string[] deltas, string doneText, bool sendDone = true)
     {
         _deltas = deltas;
         _doneText = doneText;
+        _sendDone = sendDone;
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -98,7 +102,8 @@ internal sealed class MiniRealtimeServer : IAsyncDisposable
             case "input_audio_buffer.commit":
                 foreach (var d in _deltas)
                     await SendAsync(ws, $"{{\"type\":\"transcription.delta\",\"delta\":{Quote(d)}}}", ct).ConfigureAwait(false);
-                await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
+                if (_sendDone)
+                    await SendAsync(ws, $"{{\"type\":\"transcription.done\",\"text\":{Quote(_doneText)}}}", ct).ConfigureAwait(false);
                 break;
         }
     }

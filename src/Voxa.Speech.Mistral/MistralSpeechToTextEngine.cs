@@ -161,16 +161,18 @@ public sealed class MistralSpeechToTextEngine : ISpeechToTextEngine
         using var reader = new StreamReader(body, Encoding.UTF8);
 
         var running = new StringBuilder();
+        var data = new StringBuilder();   // one SSE event's data, accumulated across multi-line `data:` fields
         var language = _options.SttLanguage;
         var emittedFinal = false;
 
-        string? line;
-        while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) is not null)
+        // SSE framing: `data:` lines accumulate (joined with '\n' per the spec) until a blank line closes the
+        // event; we then dispatch the whole payload. A `done`/`[DONE]` event is terminal — exactly one final
+        // per utterance, so we stop rather than risk a second final from a trailing or per-segment done event.
+        bool Dispatch(string payload)
         {
-            if (!MistralSttStream.TryReadDataLine(line, out var payload)) continue;
-            if (MistralSttStream.IsDoneSentinel(payload)) break;
-
-            if (MistralSttStream.Parse(payload) is not { } ev) continue;
+            if (payload.Length == 0) return false;
+            if (MistralSttStream.IsDoneSentinel(payload)) return true;
+            if (MistralSttStream.Parse(payload) is not { } ev) return false;
             if (ev.Language is { Length: > 0 } lang) language = lang;
 
             switch (ev.Kind)
@@ -178,7 +180,7 @@ public sealed class MistralSpeechToTextEngine : ISpeechToTextEngine
                 case MistralSttEventKind.Delta when ev.Text.Length > 0:
                     running.Append(ev.Text);
                     _transcripts.Writer.TryWrite(new TranscriptionResult(running.ToString(), IsFinal: false, language));
-                    break;
+                    return false;
                 case MistralSttEventKind.Done:
                     var final = ev.Text.Length > 0 ? ev.Text : running.ToString();
                     if (!string.IsNullOrWhiteSpace(final))
@@ -186,12 +188,36 @@ public sealed class MistralSpeechToTextEngine : ISpeechToTextEngine
                         _transcripts.Writer.TryWrite(new TranscriptionResult(final, IsFinal: true, language));
                         emittedFinal = true;
                     }
-                    break;
+                    return true; // terminal
+                default:
+                    return false;
             }
         }
 
+        var done = false;
+        string? line;
+        while (!done && (line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) is not null)
+        {
+            if (line.Length > 0)
+            {
+                if (MistralSttStream.TryReadDataLine(line, out var payload))
+                {
+                    if (data.Length > 0) data.Append('\n');
+                    data.Append(payload);
+                }
+                continue; // accumulate until the blank-line event boundary
+            }
+
+            done = Dispatch(data.ToString());   // blank line: the event is complete
+            data.Clear();
+        }
+
+        // Stream closed without a trailing blank line — dispatch whatever data remains buffered.
+        if (!done && data.Length > 0)
+            done = Dispatch(data.ToString());
+
         // Stream closed without an explicit done event but deltas accumulated — settle them as the final.
-        if (!emittedFinal && running.Length > 0)
+        if (!done && !emittedFinal && running.Length > 0)
             _transcripts.Writer.TryWrite(new TranscriptionResult(running.ToString(), IsFinal: true, language));
     }
 

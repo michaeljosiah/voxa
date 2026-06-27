@@ -34,7 +34,7 @@ namespace Voxa.Studio.Services;
 public sealed class StudioServices : IAsyncDisposable
 {
     private readonly IConfiguration _baseConfiguration;
-    private readonly int _gpuMemoryGb;
+    private readonly VoxtralCapabilityProbe _capability;
     private IReadOnlyDictionary<string, string?> _secrets = new Dictionary<string, string?>();
     private IReadOnlyDictionary<string, string?> _overrides = new Dictionary<string, string?>();
 
@@ -80,9 +80,10 @@ public sealed class StudioServices : IAsyncDisposable
         Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
         Profiles = pipelineProfiles ?? new PipelineProfileStore();
 
-        // VLS-009: probe GPU VRAM once (nvidia-smi behind the seam, cached) so the default-STT selector can
-        // gate Voxtral on real capability without re-shelling on every container rebuild.
-        _gpuMemoryGb = (gpuProbe ?? new NvidiaSmiGpuInfoProbe()).LargestGpuMemoryGb();
+        // VLS-009: GPU capability behind a seam (nvidia-smi, statically cached). Probed LAZILY by ApplyDefaultStt
+        // and only when a Voxtral server is configured, so a machine that never uses Voxtral never shells out on
+        // the boot path. Tests inject a fake IGpuInfoProbe.
+        _capability = new VoxtralCapabilityProbe(gpuProbe);
 
         // Fold the stored secrets AND the saved active profile into the FIRST build, so a returning user
         // reopens on the pipeline they left — live from the first session, no post-construction rebuild.
@@ -161,7 +162,7 @@ public sealed class StudioServices : IAsyncDisposable
             .Build();
 
         // VLS-009: GPU-gate the default STT when no config layer chose one (see DefaultSttSelector).
-        var configuration = ApplyDefaultStt(layered, _gpuMemoryGb);
+        var configuration = ApplyDefaultStt(layered);
 
         var services = new ServiceCollection();
         // Studio has no console, and AddDebug only reaches an attached debugger — so add a file sink too,
@@ -199,14 +200,16 @@ public sealed class StudioServices : IAsyncDisposable
     /// run it (probed VRAM ≥ the configured floor) AND a local vLLM server is configured, else keyless
     /// whisper.cpp — overlaid as the lowest-priority default so any user/profile/env choice still wins.
     /// </summary>
-    private static IConfiguration ApplyDefaultStt(IConfiguration layered, int gpuMemoryGb)
+    private IConfiguration ApplyDefaultStt(IConfiguration layered)
     {
         var voxa = layered.GetSection("Voxa");
         var voxtral = VoxtralOptions.FromConfiguration(voxa);
+        // Short-circuit: only probe the GPU (which may spawn nvidia-smi) when a Voxtral server is configured —
+        // otherwise the choice is whisper.cpp regardless of hardware, so the probe would be wasted boot work.
         var effective = DefaultSttSelector.Select(
             explicitStt: voxa["Stt"],
             voxtralConfigured: voxtral.HasHostingMode,
-            gpuCapable: gpuMemoryGb >= voxtral.MinGpuMemoryGb);
+            gpuCapable: voxtral.HasHostingMode && _capability.IsCapable(voxtral.MinGpuMemoryGb));
 
         if (string.Equals(voxa["Stt"], effective, StringComparison.Ordinal))
             return layered; // an explicit choice was present — nothing to overlay
