@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLS-009 — Local Voxtral Realtime STT (open-weights, offline)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin-top: 26px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  pre .cm { color: #6b7d92; }
+  .filelabel { display: inline-block; font-family: var(--mono); font-size: 0.75rem; background: var(--panel2); border: 1px solid var(--border); border-bottom: none; border-radius: 8px 8px 0 0; padding: 4px 12px; color: var(--accent2); margin-bottom: -1px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-high { color: var(--warn); font-weight: 700; }
+  .sev-med  { color: var(--accent); font-weight: 600; }
+  .sev-low  { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.p1 { background: #4a3214; color: #ffcc80; }
+  .badge.p2 { background: #143a4a; color: #81d4fa; }
+  .badge.additive { background: #143a20; color: #a5d6a7; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .ws-head { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; margin: 20px 0; display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.85rem; }
+  .ws-head span b { color: var(--accent2); }
+  ul.cl { list-style: none; padding-left: 4px; }
+  ul.cl li { margin: 8px 0; padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+  ul.cl .tid { font-family: var(--mono); color: var(--accent); font-size: 0.8rem; margin-right: 8px; }
+  ul.cl .ac { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 4px; margin-left: 30px; }
+  .explain { background: linear-gradient(180deg, var(--panel) 0%, var(--panel2) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin: 24px 0; }
+  .explain h3 { margin-top: 0; }
+  .explain .qa { margin: 16px 0; }
+  .explain .qa b { color: var(--accent2); display: block; margin-bottom: 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-009 — Local Voxtral Realtime STT (open-weights, offline)</h1>
+  <div class="sub">An on-device, open-weights speech-to-text tier built on Mistral's
+    <b>Voxtral-Mini-4B-Realtime-2602</b> (Apache-2.0) — a streaming audio LLM that finally gives the offline
+    tier <em>cloud-grade</em> transcription. Ships as a new <code>Voxa.Speech.Voxtral</code> package implementing
+    the streaming <code>ISpeechToTextEngine</code> contract directly, talking vLLM's realtime WebSocket API to a
+    <b>locally-run</b> server. Featured as the GPU-gated default STT in Voxa Studio, with whisper.cpp retained as
+    the keyless fallback.</div>
+  <div class="meta-grid">
+    <div><b>Spec</b> VLS-009</div>
+    <div><b>Status</b> Draft → implementing</div>
+    <div><b>Package</b> Voxa.Speech.Voxtral</div>
+    <div><b>Model</b> Voxtral-Mini-4B-Realtime-2602</div>
+    <div><b>License</b> Apache-2.0 (open weights)</div>
+    <div><b>Runtime</b> vLLM (local), GPU ≥ 16 GB</div>
+    <div><b>Depends on</b> VLS-001 (cache), VRT-004 (interims)</div>
+    <div><b>Surface</b> additive — opt-in provider</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#problem">Problem &amp; goal</a></li>
+    <li><a href="#model">The model — what's actually shippable</a></li>
+    <li><a href="#arch">Architecture</a></li>
+    <li><a href="#wire">Wire protocol (vLLM realtime)</a></li>
+    <li><a href="#config">Configuration</a></li>
+    <li><a href="#default">GPU-gated default in Studio</a></li>
+    <li><a href="#scope">Scope — ships now vs. deferred</a></li>
+    <li><a href="#testing">Testing</a></li>
+    <li><a href="#files">Files &amp; checklist</a></li>
+  </ol>
+</nav>
+
+<h2 id="problem"><span class="secno">1</span>Problem &amp; goal</h2>
+<p>The offline STT tier (VLS-001) is whisper.cpp — fast, keyless, runs on any laptop, but its small models trade
+  accuracy for size and its larger ones are slow on CPU. Mistral's <b>Voxtral</b> family is now open-weights under
+  <b>Apache-2.0</b>, and the <b>Voxtral-Mini-4B-Realtime-2602</b> variant is a purpose-built <em>streaming</em> ASR
+  with cloud-grade accuracy that can run entirely on the developer's own machine. This spec adds Voxtral as a
+  first-class, fully-offline STT provider and — where the hardware can actually run it — makes it the
+  <b>featured default</b> in Voxa Studio.</p>
+<p><b>Goal:</b> <code>"Voxa:Stt": "Voxtral"</code> resolves out of the box to a streaming, on-device engine that
+  drives one agent turn per utterance, with interims for live display — and Studio auto-promotes it to the default
+  the moment the machine is genuinely capable of running it, without regressing the keyless experience on machines
+  that aren't.</p>
+
+<h2 id="model"><span class="secno">2</span>The model — what's actually shippable</h2>
+<table>
+  <tr><th>Property</th><th>Value</th><th>Consequence for Voxa</th></tr>
+  <tr><td>Repo</td><td><code>mistralai/Voxtral-Mini-4B-Realtime-2602</code></td><td>Open weights, downloadable.</td></tr>
+  <tr><td>License</td><td>Apache-2.0 (BF16)</td><td>Clears "MIT-or-better"; redistributable, commercial-OK.</td></tr>
+  <tr><td>Params</td><td>4B audio LLM, novel architecture</td><td>~9 GB BF16; not a whisper.cpp/ONNX drop-in.</td></tr>
+  <tr><td>Runtime</td><td><b>vLLM</b> (Day-0), Transformers 5.2+</td><td>Not in llama.cpp upstream; <b>no ONNX export</b>. vLLM is the only production path.</td></tr>
+  <tr><td>Hardware</td><td>Single GPU ≥ 16 GB VRAM</td><td>GPU-gated. No realtime CPU path.</td></tr>
+  <tr><td>Interface</td><td>WebSocket <code>/v1/realtime</code></td><td>Native streaming — fits a streaming <code>ISpeechToTextEngine</code>.</td></tr>
+  <tr><td>Audio in</td><td>PCM16 @ 16 kHz, base64 in JSON</td><td>No transcode; the pipeline already runs 16 kHz mono PCM.</td></tr>
+</table>
+<div class="callout warn"><b>Why this isn't a config change.</b> Unlike the existing cloud
+  <code>"Voxa:Stt": "Mistral"</code> (a REST call to Mistral's API), running Voxtral <em>offline</em> means hosting
+  a 4B audio LLM. vLLM is the only officially-supported runtime and it needs a ≥ 16 GB GPU. So this is a new local
+  engine + a managed local server process, on the scale of VVL-002's sidecar tier — not a default-string flip.</div>
+<div class="callout"><b>Community escape hatches (not in scope).</b> Q4 <b>GGUF</b> conversions (~2.5 GB) and a
+  Rust/Burn port exist and could one day run on modest hardware, but the Realtime architecture is <em>not</em>
+  upstream in llama.cpp yet, so those paths require unofficial/custom builds. We target the supported vLLM path now
+  and leave a lighter CPU/GGUF tier to a follow-up once upstream support lands.</div>
+
+<h2 id="arch"><span class="secno">3</span>Architecture</h2>
+<p>Two pieces, both inside <code>Voxa.Speech.Voxtral</code>:</p>
+<h3>3.1 <code>VoxtralRealtimeSttEngine : ISpeechToTextEngine</code></h3>
+<p>A streaming engine implemented <b>directly</b> against the contract (like the SDK-backed Google/AWS engines), not
+  via <code>WebSocketSttEngine</code>. Two properties of vLLM's realtime API make the shared WebSocket base a poor
+  fit, so reusing it would mean overriding most of it:</p>
+<ul>
+  <li><b>Audio is base64-in-JSON</b> (<code>input_audio_buffer.append</code>), not the base's binary frames.</li>
+  <li><b>Finalization is a <code>commit</code> → <code>done</code> round-trip</b>, not the base's local
+    accumulator-flush. Because <code>done</code> is produced <em>only</em> in response to our <code>commit</code>
+    (exactly one per utterance), there is no "provider keeps emitting the tail after flush" problem — so the
+    anti-bleed window the accumulator exists to provide isn't needed. A plain
+    <code>Channel&lt;TranscriptionResult&gt;</code> (à la the Mistral REST engine) is the correct, simpler tool.</li>
+</ul>
+<p>Mapping:</p>
+<table>
+  <tr><th>Pipeline event</th><th>Engine action</th></tr>
+  <tr><td><code>WriteAudioAsync(pcm)</code></td><td>base64-encode, send <code>input_audio_buffer.append</code>.</td></tr>
+  <tr><td>recv <code>transcription.delta</code></td><td>append to running text, write interim (<code>IsFinal:false</code>).</td></tr>
+  <tr><td>recv <code>transcription.done</code></td><td>write final (<code>IsFinal:true</code>); reset running text.</td></tr>
+  <tr><td><code>FlushAsync()</code> (VAD speech-end)</td><td>send <code>input_audio_buffer.commit {final:true}</code> — do <em>not</em> emit locally; the final flows when <code>done</code> arrives.</td></tr>
+  <tr><td><code>StopAsync()</code>/<code>DisposeAsync()</code></td><td>close the socket, then tear down the managed server process.</td></tr>
+</table>
+
+<h3>3.2 <code>VoxtralServerProcess</code> — the managed local runtime</h3>
+<p>Mirrors <code>ProcessSidecarChannel</code> (VVL-002): launches the vLLM server as a child process, drains stderr
+  to the log, <b>polls readiness</b> (vLLM with a 4B model takes many seconds to load — poll an HTTP health probe /
+  the <code>/v1/realtime</code> route until it accepts, up to a generous configurable timeout), exposes the chosen
+  <code>host:port</code>, and kills the process tree on dispose. The engine connects only once the server is ready.</p>
+<div class="callout good"><b>Two honest hosting modes.</b> Because most users already run vLLM via the documented
+  <code>podman</code>/<code>vllm serve</code> command, the engine supports <b>connect-only</b>
+  (<code>Voxa:Voxtral:ServerUrl</code> → an already-running server; Voxa launches nothing) <em>and</em>
+  <b>managed</b> (<code>Voxa:Voxtral:LaunchCommand</code>/<code>ExecutablePath</code> → Voxa starts &amp; owns it).
+  This is the same "no pinned binary yet — you provide the launch target" honesty as the VVL-002 sidecar.</div>
+
+<h2 id="wire"><span class="secno">4</span>Wire protocol (vLLM realtime)</h2>
+<p>Endpoint: <code>ws://{host}:{port}/v1/realtime</code>. OpenAI-Realtime-style JSON envelopes.</p>
+<pre><code><span class="cm">// server → client, on connect</span>
+{ "type": "session.created", "id": "..." }
+
+<span class="cm">// client → server, handshake</span>
+{ "type": "session.update", "model": "mistralai/Voxtral-Mini-4B-Realtime-2602" }
+
+<span class="cm">// client → server, audio (PCM16 @ 16 kHz, base64)</span>
+{ "type": "input_audio_buffer.append", "audio": "&lt;base64&gt;" }
+
+<span class="cm">// client → server, at VAD speech-end (FlushAsync)</span>
+{ "type": "input_audio_buffer.commit", "final": true }
+
+<span class="cm">// server → client, streaming partials then the final</span>
+{ "type": "transcription.delta", "delta": "the quick brown" }
+{ "type": "transcription.done",  "text": "the quick brown fox", "usage": { ... } }</code></pre>
+<p>Parsing is pure and total: a malformed or unknown-<code>type</code> frame is ignored (never throws out of the
+  receive loop), exactly as the WebSocket base treats vendor frames.</p>
+
+<h2 id="config"><span class="secno">5</span>Configuration</h2>
+<pre><code>"Voxa": {
+  "Stt": "Voxtral",
+  "Voxtral": {
+    <span class="cm">// Connect-only: point at an already-running vLLM realtime server.</span>
+    "ServerUrl": "ws://127.0.0.1:8000",
+    <span class="cm">// OR managed: Voxa launches &amp; owns the server (wins nothing if ServerUrl is set).</span>
+    "ExecutablePath": null,            <span class="cm">// e.g. a vllm-serve wrapper / frozen launcher</span>
+    "LaunchCommand": null,             <span class="cm">// e.g. "vllm"</span>
+    "LaunchArgs": [],                  <span class="cm">// e.g. ["serve","mistralai/Voxtral-Mini-4B-Realtime-2602","--tokenizer-mode","mistral", ...]</span>
+    "Host": "127.0.0.1",
+    "Port": 8000,
+    "Model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+    "InputSampleRate": 16000,
+    "DelayMs": 480,                    <span class="cm">// realtime delay knob (80–2400; 480 recommended)</span>
+    "Language": null,                  <span class="cm">// BCP-47 hint; null = auto</span>
+    "ReadyTimeoutSeconds": 180,        <span class="cm">// cold 4B model load is slow; poll until ready</span>
+    "MinGpuMemoryGb": 16               <span class="cm">// capability gate for the Studio default</span>
+  }
+}</code></pre>
+<p>Validation is <b>keyless and side-effect-free</b> (like <code>SidecarDescriptors.Validate</code>): it only checks
+  that a hosting mode is resolvable — a <code>ServerUrl</code>, or a launch target whose file exists — and that
+  <code>InputSampleRate</code>/<code>DelayMs</code> are sane. It never probes the GPU or touches the network.</p>
+
+<h2 id="default"><span class="secno">6</span>GPU-gated default in Studio</h2>
+<p>Voxtral is <b>registered in the meta-package</b> so the string resolves everywhere, but Studio only
+  <em>auto-selects</em> it when the machine can actually run it. A small Avalonia-free, headless-testable selector:</p>
+<pre><code>effectiveStt =
+    (configHasExplicitStt)        ? config.Stt              <span class="cm">// user's choice always wins</span>
+  : (capable &amp;&amp; voxtralConfigured) ? "Voxtral"
+  :                                 "WhisperCpp";           <span class="cm">// keyless fallback — never regresses</span></code></pre>
+<p><code>capable</code> = an NVIDIA GPU with ≥ <code>MinGpuMemoryGb</code> VRAM, detected via
+  <code>nvidia-smi --query-gpu=memory.total</code> (behind an injectable seam so tests don't shell out).
+  <code>voxtralConfigured</code> = a <code>ServerUrl</code> or launch target is present. On a fresh install with no
+  GPU and no server configured, Studio behaves <b>exactly as today</b> (whisper.cpp). The moment a developer with a
+  capable GPU points Studio at a Voxtral server, it becomes the default. Voxtral is surfaced as the
+  <em>recommended</em> STT in Config/Models regardless, so it's discoverable.</p>
+<div class="callout"><b>Studio rule preserved.</b> Studio never launches the heavy server before the user acts:
+  <code>Voxa:Models:EagerWarmup</code> is false in Studio, so the managed server is started on Talk-Start (engine
+  warm-up), not at splash.</div>
+
+<h2 id="scope"><span class="secno">7</span>Scope — ships now vs. deferred</h2>
+<h4>Ships now <span class="badge additive">this PR</span></h4>
+<ul>
+  <li><code>Voxa.Speech.Voxtral</code>: options, the streaming engine, the managed-server launcher + readiness poll,
+    the capability probe, the descriptor (registered in the meta-package), a dev <b>mock realtime server</b>, README.</li>
+  <li>Studio GPU-gated default-STT selector + "recommended" surfacing.</li>
+  <li>Full unit coverage against an in-process fake realtime WebSocket server + a fake launcher/GPU probe — no real
+    model, no GPU, no network. Build is warnings-as-errors; default test lane stays green and offline.</li>
+  <li>Docs (local-speech guide), CHANGELOG, ROADMAP.</li>
+</ul>
+<h4>Deferred (documented, gated) <span class="badge p2">follow-up</span></h4>
+<ul>
+  <li>A pinned, SHA-256-verified, auto-downloaded model/runtime bundle (the BF16 model is multi-file ~9 GB; the
+    same deferral as VVL-002's frozen binaries and VLS-007/008's real-model hashes — needs a GPU CI lane).</li>
+  <li>The live <code>[Trait("Category","LocalModels")]</code> end-to-end test against a real vLLM + GPU.</li>
+  <li>A lighter CPU/GGUF tier once the Realtime architecture lands upstream in llama.cpp.</li>
+</ul>
+
+<h2 id="testing"><span class="secno">8</span>Testing</h2>
+<ul>
+  <li><b>Engine</b> — drive against an in-process fake <code>/v1/realtime</code> server (an <code>HttpListener</code>
+    WebSocket) that speaks the envelopes: assert the handshake, that audio arrives as base64
+    <code>append</code>, that <code>delta</code>→interim and <code>done</code>→final, and that
+    <code>FlushAsync</code> sends <code>commit</code>.</li>
+  <li><b>Parsing</b> — table tests: each envelope type → expected emission; malformed/unknown ignored.</li>
+  <li><b>Launcher</b> — a fake process/launcher seam: readiness poll succeeds/times out; dispose kills the process.</li>
+  <li><b>Capability probe</b> — injected GPU-info → capable/not at the VRAM threshold.</li>
+  <li><b>Default selector</b> — capable+configured→Voxtral; explicit config respected; otherwise WhisperCpp.</li>
+  <li><b>Descriptor</b> — validation: no hosting mode → error; <code>ServerUrl</code> set → ok; missing launch file → error.</li>
+</ul>
+
+<h2 id="files"><span class="secno">9</span>Files &amp; checklist</h2>
+<ul class="cl">
+  <li><span class="tid">9.1</span><code>src/Voxa.Speech.Voxtral/</code> — <code>VoxtralOptions</code>,
+    <code>VoxtralRealtimeSttEngine</code>, <code>VoxtralServerProcess</code> (+ <code>IVoxtralServer</code> test seam),
+    <code>VoxtralCapabilityProbe</code> (+ GPU-info seam), <code>VoxtralDescriptors</code>, <code>VoxtralWire</code>
+    (JSON envelopes), <code>sidecar/voxtral_realtime_mock.py</code>, <code>README.md</code>, csproj.</li>
+  <li><span class="tid">9.2</span>Register <code>VoxtralDescriptors.Stt</code> in <code>VoxaDefaults</code>; add the
+    project to <code>Voxa.slnx</code> and the meta-package csproj.</li>
+  <li><span class="tid">9.3</span>Studio: <code>DefaultSttSelector</code> + capability wiring; surface Voxtral as
+    recommended. Avalonia-free, headless-tested.</li>
+  <li><span class="tid">9.4</span><code>tests/Voxa.Speech.Voxtral.Tests/</code> — engine, parse, launcher, probe,
+    selector, descriptor. <code>tests/Voxa.Studio.Tests</code> — selector wiring.</li>
+  <li><span class="tid">9.5</span>Docs (<code>docs/local-speech.md</code>), <code>CHANGELOG.md</code>,
+    <code>ROADMAP.md</code>.</li>
+</ul>
+
+</div>
+</body>
+</html>

@@ -141,6 +141,16 @@ public static class ProviderManifestCatalog
             Description: "On-device speech-to-text via whisper.cpp. Runs offline.",
             IsLocal: true, DocsUrl: null, Fields: []),
 
+        // VLS-009: open-weights Voxtral served by a local vLLM server. Local (offline, no API key) but heavy —
+        // Studio auto-selects it as the default only on a capable GPU with Voxa:Voxtral:ServerUrl set.
+        new ProviderManifest(
+            Name: "Voxtral",
+            DisplayName: "Voxtral (local)",
+            Roles: [ProviderRole.Stt],
+            Description: "Open-weights Voxtral-Mini-4B realtime speech-to-text via a local vLLM server. " +
+                         "Recommended on a GPU (≥ 16 GB); set Voxa:Voxtral:ServerUrl to your server.",
+            IsLocal: true, DocsUrl: "https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602", Fields: []),
+
         new ProviderManifest(
             Name: "Piper",
             DisplayName: "Piper (local)",

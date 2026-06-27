@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Voxa.AspNetCore;
 using Voxa.Audio.SmartTurn;
 using Voxa.Speech;
+using Voxa.Speech.Voxtral;
 using Voxa.Studio.Audio;
 
 namespace Voxa.Studio.Services;
@@ -33,6 +34,7 @@ namespace Voxa.Studio.Services;
 public sealed class StudioServices : IAsyncDisposable
 {
     private readonly IConfiguration _baseConfiguration;
+    private readonly int _gpuMemoryGb;
     private IReadOnlyDictionary<string, string?> _secrets = new Dictionary<string, string?>();
     private IReadOnlyDictionary<string, string?> _overrides = new Dictionary<string, string?>();
 
@@ -60,7 +62,8 @@ public sealed class StudioServices : IAsyncDisposable
         IStudioAudioDevice? audioDevice = null,
         ISecretsStore? secretsStore = null,
         ProviderActivationStore? activationStore = null,
-        PipelineProfileStore? pipelineProfiles = null)
+        PipelineProfileStore? pipelineProfiles = null,
+        IGpuInfoProbe? gpuProbe = null)
     {
         _baseConfiguration = configuration ?? new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
@@ -76,6 +79,10 @@ public sealed class StudioServices : IAsyncDisposable
         SecretsStore = secretsStore ?? CreateDefaultSecretsStore();
         Secrets = new ProviderSecretsService(SecretsStore, activationStore ?? new ProviderActivationStore());
         Profiles = pipelineProfiles ?? new PipelineProfileStore();
+
+        // VLS-009: probe GPU VRAM once (nvidia-smi behind the seam, cached) so the default-STT selector can
+        // gate Voxtral on real capability without re-shelling on every container rebuild.
+        _gpuMemoryGb = (gpuProbe ?? new NvidiaSmiGpuInfoProbe()).LargestGpuMemoryGb();
 
         // Fold the stored secrets AND the saved active profile into the FIRST build, so a returning user
         // reopens on the pipeline they left — live from the first session, no post-construction rebuild.
@@ -142,16 +149,19 @@ public sealed class StudioServices : IAsyncDisposable
         Reconfigured?.Invoke();
     }
 
-    private static (IConfiguration, ServiceProvider, VoxaModelCache) Build(
+    private (IConfiguration, ServiceProvider, VoxaModelCache) Build(
         IConfiguration baseConfiguration,
         IReadOnlyDictionary<string, string?> secrets,
         IReadOnlyDictionary<string, string?> overrides)
     {
-        var configuration = new ConfigurationBuilder()
+        var layered = new ConfigurationBuilder()
             .AddConfiguration(baseConfiguration)
             .AddInMemoryCollection(secrets.Where(p => !string.IsNullOrEmpty(p.Value)))
             .AddInMemoryCollection(overrides.Where(p => !string.IsNullOrEmpty(p.Value)))
             .Build();
+
+        // VLS-009: GPU-gate the default STT when no config layer chose one (see DefaultSttSelector).
+        var configuration = ApplyDefaultStt(layered, _gpuMemoryGb);
 
         var services = new ServiceCollection();
         // Studio has no console, and AddDebug only reaches an attached debugger — so add a file sink too,
@@ -182,6 +192,29 @@ public sealed class StudioServices : IAsyncDisposable
             VoxaModelCacheOptions.FromConfiguration(configuration.GetSection("Voxa")));
 
         return (configuration, provider, cache);
+    }
+
+    /// <summary>
+    /// VLS-009 default-STT gate: when no config layer chose <c>Voxa:Stt</c>, pick Voxtral if this machine can
+    /// run it (probed VRAM ≥ the configured floor) AND a local vLLM server is configured, else keyless
+    /// whisper.cpp — overlaid as the lowest-priority default so any user/profile/env choice still wins.
+    /// </summary>
+    private static IConfiguration ApplyDefaultStt(IConfiguration layered, int gpuMemoryGb)
+    {
+        var voxa = layered.GetSection("Voxa");
+        var voxtral = VoxtralOptions.FromConfiguration(voxa);
+        var effective = DefaultSttSelector.Select(
+            explicitStt: voxa["Stt"],
+            voxtralConfigured: voxtral.HasHostingMode,
+            gpuCapable: gpuMemoryGb >= voxtral.MinGpuMemoryGb);
+
+        if (string.Equals(voxa["Stt"], effective, StringComparison.Ordinal))
+            return layered; // an explicit choice was present — nothing to overlay
+
+        return new ConfigurationBuilder()
+            .AddConfiguration(layered)
+            .AddInMemoryCollection([new KeyValuePair<string, string?>("Voxa:Stt", effective)])
+            .Build();
     }
 
     public TalkSession CreateTalkSession() => TalkSession.Create(Provider, AudioDevice);

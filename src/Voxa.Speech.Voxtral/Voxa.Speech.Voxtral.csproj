@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <PackageId>Voxa.Speech.Voxtral</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Voxa contributors</Authors>
+    <Description>Fully-offline, open-weights speech-to-text for the Voxa pipeline using Mistral's Voxtral-Mini-4B-Realtime (Apache-2.0), served locally by vLLM over its realtime WebSocket API. Implements the streaming ISpeechToTextEngine — pair with the generic SpeechToTextProcessor from Voxa.Speech.Abstractions. Heavy tier (VLS-009): needs a GPU (>= 16 GB) and a vLLM server you run or let Voxa launch.</Description>
+    <PackageTags>voxa;voice;ai;stt;voxtral;mistral;offline;local;realtime;vllm</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Voxa.Speech.Abstractions\Voxa.Speech.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <!-- Ship the dev mock realtime server so the wire protocol is exercisable with no GPU/model. -->
+    <None Include="sidecar\**" Pack="true" PackagePath="sidecar\" CopyToOutputDirectory="PreserveNewest" />
+    <InternalsVisibleTo Include="Voxa.Speech.Voxtral.Tests" />
+  </ItemGroup>
+
+</Project>

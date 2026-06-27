@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Quality &amp; Design Audit — whole solution (round 2)</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+    --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+    --good: #66bb6a; --warn: #ffb74d; --bad: #ef5350; --code-bg: #11151c;
+    --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 120px; }
+  header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+  header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+  header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+  .meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+  .meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+  h2 .secno { color: var(--accent); margin-right: 10px; }
+  h3 { font-size: 1.12rem; color: var(--accent2); margin-top: 36px; }
+  h4 { font-size: 1rem; color: #fff; margin: 24px 0 8px; }
+  p, li { font-size: 0.95rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #c9d6e3; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: rgba(255,255,255,0.018); }
+  .sev-critical { color: var(--bad); font-weight: 700; }
+  .sev-major { color: var(--warn); font-weight: 700; }
+  .sev-minor { color: var(--accent); font-weight: 600; }
+  .sev-note { color: var(--muted); }
+  .badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.critical { background: #4a1416; color: #ff8a80; }
+  .badge.major { background: #4a3214; color: #ffcc80; }
+  .badge.minor { background: #143a4a; color: #81d4fa; }
+  .badge.note { background: #232a35; color: #b6c2d2; }
+  .badge.conf { background: #143a20; color: #a5d6a7; }
+  .badge.likely { background: #3a3214; color: #ffe082; }
+  .badge.spec { background: #3a1c1c; color: #ef9a9a; }
+  .callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.danger { border-left-color: var(--bad); }
+  .callout.good { border-left-color: var(--good); }
+  .callout b:first-child { color: var(--accent2); }
+  nav.toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; }
+  nav.toc ol { margin: 6px 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; font-size: 0.9rem; }
+  .finding { background: linear-gradient(180deg, rgba(22,27,34,0.78) 0%, rgba(28,35,48,0.35) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin: 22px 0; }
+  .finding h3 { margin-top: 0; }
+  .finding .loc { display: block; margin: 8px 0 12px; color: var(--muted); }
+  .small { color: var(--muted); font-size: 0.82rem; }
+  .nowrap { white-space: nowrap; }
+  ul.flat { padding-left: 20px; }
+  ul.flat li { margin: 6px 0; }
+  .kv { margin: 4px 0; }
+  .kv b { color: var(--accent2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>Code Quality &amp; Design Audit — whole solution (round 2)</h1>
+  <div class="sub">Second evidence-based pass over Voxa, after the CQ-001..013 audit landed. Focus: issues <em>not</em> in that set — drain-loop resilience, transient-failure handling, resource/observability leaks, residual duplication.</div>
+  <div class="meta-grid">
+    <div><b>Scope</b> whole solution (<code>src/</code>, <code>apps/</code> judged; <code>tests/</code> skimmed; <code>samples/</code>/<code>bench/</code>/leftover <code>.claude/worktrees</code> not judged)</div>
+    <div><b>Branch/commit</b> <code>main</code> @ <code>945c795</code></div>
+    <div><b>Build</b> Pass — <code>dotnet build Voxa.slnx -c Release</code> (0 warnings, 0 errors)</div>
+    <div><b>Tests</b> Pass — the 7 projects these findings touch are green: <b>233/233</b> (<code>Category!=LocalModels</code>). Full-solution suite excluded from the timed run (Studio's headless lane is slow locally). See Appendix.</div>
+    <div><b>Date</b> 2026-06-20</div>
+    <div><b>Files reviewed</b> 235 <code>.cs</code> in <code>src/</code>+<code>apps/</code> (27,013 LOC); 134 test files skimmed</div>
+    <div><b>Method</b> 6 parallel read-only subsystem sweeps → every candidate re-verified at <code>path:line</code> by the author before inclusion</div>
+    <div><b>Findings</b> 3 Major · 5 Minor · 3 Note (11 total)</div>
+  </div>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#scorecard">Dimension scorecard</a></li>
+    <li><a href="#index">Findings index</a></li>
+    <li><a href="#details">Detailed findings</a></li>
+    <li><a href="#intentional">Confirmed-intentional &amp; known-deferred</a></li>
+    <li><a href="#quick-wins">Quick wins</a></li>
+    <li><a href="#appendix">Appendix</a></li>
+  </ol>
+</nav>
+
+<h2 id="summary"><span class="secno">1.</span>Executive summary</h2>
+<div class="callout">
+  <p><b>Overall health:</b> Voxa remains in good shape. The Release build is warning-free, <code>Voxa.Core</code> stays dependency-clean, the documented hot-path invariants hold (the data loop is allocation-gated and regression-tested, the diagnostics hub is zero-cost-unobserved), and the previous audit's 13 findings are resolved on <code>main</code> (CQ-009's WAV-reader consolidation is the one remaining in-flight item). Nothing here blocks shipping.</p>
+  <p>The findings cluster into three themes. <b>Theme 1 — "one transient fault, degraded for the whole session"</b> is the meaningful one. Three independent code paths turn a single, recoverable fault into a session-long outage: a throwing interruption handler can permanently disable barge-in (<a href="#cq-014">CQ-014</a>); one transient cloud STT failure permanently ends the transcript stream for a granular pipeline (<a href="#cq-015">CQ-015</a>); and one transient voice-list failure breaks the entire Studio voices grid <em>and</em> is swallowed (<a href="#cq-016">CQ-016</a>). <b>Theme 2 — teardown hygiene:</b> a handful of small, real resource/observability leaks (an abandoned timer, an unobserved read loop, an undisposed <code>JsonDocument</code>, a leaked CTS). <b>Theme 3 — residual duplication:</b> the WebSocket request lifecycle is copy-pasted, and the realtime codec/transport duplication first raised as CQ-006 still awaits its extraction (only the UTF-8 sub-bug was fixed).</p>
+  <p><b>Highest-value fixes are tiny:</b> guard the two drain-loop bodies (<a href="#cq-014">CQ-014</a>) and stop killing the STT channel on a transient failure (<a href="#cq-015">CQ-015</a>). Each is a few lines and each converts a session-fatal fault into a recoverable one.</p>
+</div>
+
+<h2 id="scorecard"><span class="secno">2.</span>Dimension scorecard</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Findings (C/Maj/Min)</th><th>One-line verdict</th></tr></thead>
+  <tbody>
+    <tr><td>Business-logic placement &amp; layering</td><td>0 / 0 / 0</td><td>Clean. The composer/registry/validator own their logic correctly and respect the config-capture rule; the prior Studio builder-drift (CQ-007) is fixed.</td></tr>
+    <tr><td>Bad C# practices</td><td>0 / 3 / 4</td><td>The center of gravity: unguarded drain-loop exceptions and transient-failure teardown (3 Major), plus four small resource/observability leaks. One dead-code Note.</td></tr>
+    <tr><td>DRY violations</td><td>0 / 0 / 1</td><td>One duplicated WebSocket request lifecycle. The realtime codec/transport duplication (CQ-006) is still a known, deferred extraction — see §5.</td></tr>
+    <tr><td>Performance / hot-path</td><td>0 / 0 / 0</td><td>Core per-frame path stays allocation-gated; the only algorithmic cost is an O(n³) clustering on the <em>offline</em> diarization path (Note).</td></tr>
+    <tr><td>Simplification / optimization</td><td>0 / 0 / 0</td><td>One dead method parameter (Note); nothing structural to simplify.</td></tr>
+    <tr><td>Over-engineering / YAGNI</td><td>0 / 0 / 0</td><td>Clean. Apparent one-impl seams are load-bearing test seams or documented "seam-not-model" extension points.</td></tr>
+  </tbody>
+</table>
+<p class="small">Notes (3) are recorded in the verdicts above and detailed in §4; the C/Maj/Min columns count Major/Minor only.</p>
+
+<h2 id="index"><span class="secno">3.</span>Findings index</h2>
+<table>
+  <thead><tr><th>ID</th><th>Dimension</th><th>Severity</th><th>Confidence</th><th>Location</th><th>One-line problem</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#cq-014">CQ-014</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Likely</td><td><code>src/Voxa.Core/Processors/FrameProcessor.cs:149</code></td><td>A throwing interruption/system handler kills the system loop and disables barge-in for the rest of the session.</td></tr>
+    <tr><td><a href="#cq-015">CQ-015</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Certain</td><td><code>src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:141</code></td><td>One transient transcription failure permanently completes the transcript channel — the granular pipeline goes deaf for the session.</td></tr>
+    <tr><td><a href="#cq-016">CQ-016</a></td><td>Bad C# practices</td><td class="sev-major">Major</td><td>Likely</td><td><code>apps/Voxa.Studio/Services/VoiceCatalogService.cs:121</code></td><td>A raw network/JSON failure escapes the <code>VoiceProviderException</code>-only catch: the whole voices grid fails and Config swallows it.</td></tr>
+    <tr><td><a href="#cq-017">CQ-017</a></td><td>Bad C# practices</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Core/Pipelines/PipelineRunner.cs:68</code></td><td><code>StopAsync</code> abandons a <code>Task.Delay</code> timer on the normal path and can leave an unobserved faulted task.</td></tr>
+    <tr><td><a href="#cq-018">CQ-018</a></td><td>Bad C# practices</td><td class="sev-minor">Minor</td><td>Likely</td><td><code>src/Voxa.Transports.WebSocket/WebSocketAudioSource.cs:30</code></td><td>The receive loop is never awaited on teardown — unobserved faults and no stop-before-dispose guarantee (unlike every sibling).</td></tr>
+    <tr><td><a href="#cq-019">CQ-019</a></td><td>Bad C# practices</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:26</code></td><td>A per-tool <code>JsonDocument</code> is parsed and never disposed (both realtime codecs).</td></tr>
+    <tr><td><a href="#cq-020">CQ-020</a></td><td>DRY</td><td class="sev-minor">Minor</td><td>Certain</td><td><code>src/Voxa.AspNetCore/MapVoxaVoiceExtensions.cs:103</code></td><td><code>HandleAsync</code> and <code>HandleContextAsync</code> duplicate the full WebSocket connection lifecycle (~50 lines).</td></tr>
+    <tr><td><a href="#cq-021">CQ-021</a></td><td>Bad C# practices</td><td class="sev-minor">Minor</td><td>Likely</td><td><code>apps/Voxa.Studio/Services/DictationSession.cs:50</code></td><td><code>Start</code> overwrites the capture CTS without disposing the previous one on a re-start after a non-stop terminal state.</td></tr>
+    <tr><td><a href="#cq-022">CQ-022</a></td><td>Bad C# practices</td><td class="sev-note">Note</td><td>Certain</td><td><code>src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:55</code></td><td>Two dead codec builders in both realtime stacks; barge-in never actually sends <code>response.cancel</code>.</td></tr>
+    <tr><td><a href="#cq-023">CQ-023</a></td><td>Simplification</td><td class="sev-note">Note</td><td>Certain</td><td><code>src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:112</code></td><td>Dead <code>bool force</code> parameter on <code>FlushAsync</code>; the Mistral twin already dropped it.</td></tr>
+    <tr><td><a href="#cq-024">CQ-024</a></td><td>Performance</td><td class="sev-note">Note</td><td>Certain (cost)</td><td><code>src/Voxa.Audio.Diarization/SpeakerClustering.cs:47</code></td><td>Agglomerative clustering re-scans all pairs per merge — O(n³) — on the (offline) diarization path.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="details"><span class="secno">4.</span>Detailed findings</h2>
+
+<!-- ===================== CQ-014 ===================== -->
+<div class="finding" id="cq-014">
+  <h3>CQ-014 — Unguarded exceptions in the processor drain loops disable interruptions / hang the sink
+    <span class="badge major">Major</span><span class="badge likely">Likely</span></h3>
+  <code class="loc">src/Voxa.Core/Processors/FrameProcessor.cs:130–156 (system loop) and :158–214 (data loop)</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (over-narrow catch on a long-lived loop whose death is silent and consequential)</div>
+
+  <h4>Evidence</h4>
+  <p>The system loop deliberately wraps <code>inFlight.Cancel()</code> in a try/catch <em>specifically</em> so a fault can't kill the loop and disable interruptions — then leaves the two <code>await</code>s immediately after it unguarded:</p>
+  <pre><code>// FrameProcessor.cs:138-155 (RunSystemLoopAsync)
+//  ... swallow it (the frame we wanted to preempt already completed) instead of letting it kill
+//  this loop and disable interruptions for the rest of the session.
+var inFlight = _currentFrameCts;
+if (inFlight is not null)
+{
+    try { inFlight.Cancel(); }
+    catch (ObjectDisposedException) { /* frame finished; CTS already replaced */ }
+}
+await OnInterruptionAsync(interruption, ct).ConfigureAwait(false);   // &lt;-- unguarded
+}
+await ProcessFrameAsync(frame, ct).ConfigureAwait(false);            // &lt;-- unguarded
+}
+catch (OperationCanceledException) { /* shutdown */ }
+catch (ChannelClosedException) { /* shutdown */ }</code></pre>
+  <p>The data loop has the same shape: the only catches are the preemption <code>OperationCanceledException</code> (line 196, with a <code>when</code> filter) and the loop-level <code>OperationCanceledException</code>/<code>ChannelClosedException</code> (lines 208–209). Any other exception from <code>ProcessFrameAsync</code> propagates out of the <code>await foreach</code> and ends the loop.</p>
+
+  <h4>Why it matters</h4>
+  <p>The system loop drains <em>priority</em> frames — <code>InterruptionFrame</code> (barge-in), speaking edges, <code>ErrorFrame</code>. If any subclass's <code>OnInterruptionAsync</code> or its system-frame <code>ProcessFrameAsync</code> throws a regular exception, the loop terminates and <b>interruptions stop working for the rest of the session</b> — the user can no longer cut the bot off. There are real overrides on this path (<code>SpeechToSpeechProcessor.OnInterruptionAsync</code>, <code>EchoCancellerProcessor.OnInterruptionAsync</code>, and system-frame handling inside the realtime/WebSocket processors). The inline comment three lines up proves the loop is <em>meant</em> to survive faults; the unguarded awaits are an oversight, not a deliberate fail-stop — that asymmetry is what makes this a bug.</p>
+  <p>In the data loop the consequence is different but also bad: <code>StartFrame</code>/<code>EndFrame</code> are forwarded from this same loop, so if <code>ProcessFrameAsync</code> throws on an earlier data frame the loop dies and the later <code>EndFrame</code> is never forwarded → <code>PipelineSink.EndFrameObserved</code> never completes → <code>PipelineRunner.WaitAsync()</code> only unblocks at the <code>StopAsync</code> grace timeout, and the original error is swallowed. That directly violates CLAUDE.md's "forward unhandled frames downstream (especially StartFrame/EndFrame, or the sink never completes)".</p>
+
+  <h4>Recommendation</h4>
+  <p>Wrap the per-frame body of <em>each</em> loop in a try/catch that treats <code>OperationCanceledException</code>/<code>ChannelClosedException</code> as loop-exit (as today) but, for any other exception, surfaces it via <code>PushErrorAsync</code> (an upstream <code>ErrorFrame</code>) and then continues (system loop) or exits deterministically (data loop) so the runner observes a <code>PipelineFailedException</code> rather than hanging. One bad handler must not silently disable interruptions or strand the sink.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> not the just-fixed disposal/CTS cluster — this is fault-resilience of an already-running session; the existing inline comment confirms the loop is meant to survive faults.</div>
+</div>
+
+<!-- ===================== CQ-015 ===================== -->
+<div class="finding" id="cq-015">
+  <h3>CQ-015 — A single transient transcription failure permanently kills the STT stream (OpenAI Whisper + Mistral)
+    <span class="badge major">Major</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:141–145 · src/Voxa.Speech.Mistral/MistralSpeechToTextEngine.cs:118–122</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (exception handling that tears down a long-lived channel; documented-intent mismatch)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>// OpenAIWhisperEngine.cs:140-145 (Mistral is identical)
+catch (OperationCanceledException) { /* session torn down mid-flush — teardown, not a transcription failure */ }
+catch (Exception ex)
+{
+    _transcripts.Writer.TryComplete(new InvalidOperationException(
+        $"OpenAI Whisper transcription failed: {ex.Message}", ex));
+}</code></pre>
+  <p><code>TryComplete(exception)</code> permanently closes the unbounded transcript channel; <code>ReadTranscriptsAsync</code> is <code>_transcripts.Reader.ReadAllAsync(ct)</code>, so it never yields again. The POST goes through raw <code>_http.SendAsync(req, ct)</code> with <em>no</em> retry (unlike the TTS path, which uses <code>VoxaHttp.SendWithSingleRetryAsync</code>), so a single 429/5xx/socket blip is enough.</p>
+  <p>That this is unintended is settled by the local engine, which makes the opposite choice and even claims the cloud engines match it:</p>
+  <pre><code>// WhisperCppSttEngine.cs:356-362
+catch (Exception ex)
+{
+    // Per-utterance failure must not kill the session: log and keep the engine alive for
+    // the next utterance (parity with cloud engines' per-request failure handling).
+    _logger.LogError(ex, "WhisperCpp STT: transcription failed for a {Seconds:F1}s utterance", ...);
+}</code></pre>
+
+  <h4>Why it matters</h4>
+  <p>In a granular pipeline the upstream <code>SpeechToTextProcessor</code> read loop sees the faulted enumerator, emits one <code>ErrorFrame</code>, and exits. For the rest of the call the user keeps talking and <b>every subsequent utterance is silently dropped</b> — no transcripts, no further errors, no recovery short of a new session. The "parity with cloud engines" comment is simply false today.</p>
+
+  <h4>Recommendation</h4>
+  <p>On a non-cancellation exception, log and <code>return</code> (drop just that utterance), mirroring <code>WhisperCppSttEngine</code> — do <em>not</em> <code>TryComplete</code> the writer. Keep the no-argument <code>TryComplete()</code> for the graceful <code>StopAsync</code> path. Optionally route the POST through <code>VoxaHttp.SendWithSingleRetryAsync</code> for parity with TTS.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> distinct from CQ-008 (that fixed cancellation threading — the <code>OperationCanceledException</code> arm here is already correct) and from CQ-009 (WAV); no test asserts the terminate-on-error behavior.</div>
+</div>
+
+<!-- ===================== CQ-016 ===================== -->
+<div class="finding" id="cq-016">
+  <h3>CQ-016 — A transient cloud failure breaks the whole Studio voices grid and is swallowed in Config
+    <span class="badge major">Major</span><span class="badge likely">Likely</span></h3>
+  <code class="loc">apps/Voxa.Studio/Services/VoiceCatalogService.cs:117–128 &amp; :142–148 · escapes from ElevenLabs/Mistral <code>ListVoicesAsync</code></code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (over-narrow catch defeating a designed isolation contract) · blast radius: the Studio app, not the runtime library</div>
+
+  <h4>Evidence</h4>
+  <p>The per-provider reconcile catches only <code>VoiceProviderException</code>:</p>
+  <pre><code>// VoiceCatalogService.cs:117-128
+try { live = await GetLiveAsync(ttsName, catalog, ct).ConfigureAwait(false); }
+catch (VoiceProviderException ex)
+{
+    var stale = profiles.Select(p =&gt; new LibraryVoice(ToProviderVoice(p), VoiceState.Stale, p)).ToList();
+    return new ProviderVoiceSet(ttsName, stale, ex.MissingApiKey, ex.Message);
+}</code></pre>
+  <p>But the catalogs throw <em>unwrapped</em> exceptions on transient failure — <code>EnsureOkAsync</code> only converts HTTP <em>status</em> errors:</p>
+  <pre><code>// ElevenLabsVoiceCatalog.cs:34-38 (Mistral catalog is the same shape)
+using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);   // HttpRequestException (DNS/TLS/socket) — unwrapped
+await EnsureOkAsync(resp, "list voices", ct).ConfigureAwait(false);       // only this throws VoiceProviderException
+using var doc = await JsonDocument.ParseAsync(stream, ...).ConfigureAwait(false); // JsonException — unwrapped</code></pre>
+  <p>So a raw <code>HttpRequestException</code>/<code>JsonException</code> escapes <code>ForProviderAsync</code>. The grid builder has no isolation:</p>
+  <pre><code>// VoiceCatalogService.cs:142-148
+foreach (var name in _services.Registry.TtsNames.OrderBy(...))
+    sets.Add(await ForProviderAsync(name, ct).ConfigureAwait(false));   // one raw throw aborts the whole loop</code></pre>
+  <p>And in Config the call is fire-and-forget with no try/catch: <code>public void RefreshCloudVoices() =&gt; _ = ReloadCloudVoicesAsync();</code> and a second <code>_ = ReloadCloudVoicesAsync();</code> in <code>OnSelectedTtsChanged</code> (<code>ConfigViewModel.cs:363, :409</code>; body <code>:365-393</code>).</p>
+
+  <h4>Why it matters</h4>
+  <p>The design intends per-provider error isolation — <code>ProviderVoiceSet</code> carries an <code>Error</code>/<code>MissingKey</code> so the status strip can render one failed provider as an error chip while the rest load. A transient network blip on a <em>single</em> cloud provider instead: (a) aborts the entire <code>AllAsync</code> loop so the whole library grid fails to populate, and (b) in Config becomes an unobserved <code>TaskScheduler.UnobservedTaskException</code> — the picker just silently stays empty with no feedback. The narrow catch defeats the very resilience the <code>Error</code> field exists for.</p>
+
+  <h4>Recommendation</h4>
+  <p>Broaden the catch in <code>ForProviderAsync</code> to also degrade non-<code>VoiceProviderException</code> failures into an error chip, e.g. add after the existing catch:</p>
+  <pre><code>catch (Exception ex) when (ex is not OperationCanceledException)
+{
+    var stale = profiles.Select(p =&gt; new LibraryVoice(ToProviderVoice(p), VoiceState.Stale, p)).ToList();
+    return new ProviderVoiceSet(ttsName, stale, MissingKey: false, Error: ex.Message);
+}</code></pre>
+  <p>Keep <code>OperationCanceledException</code> propagating for cooperative cancellation. Secondarily, give <code>ReloadCloudVoicesAsync</code>'s two fire-and-forget call sites an internal try/catch that surfaces a status string, so even an unexpected throw is visible rather than swallowed.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> not CQ-007/011; the <code>VoiceProviderException</code>-only contract and the unwrapped <code>SendAsync</code>/<code>ParseAsync</code> throw sites were both verified.</div>
+</div>
+
+<!-- ===================== CQ-017 ===================== -->
+<div class="finding" id="cq-017">
+  <h3>CQ-017 — <code>PipelineRunner.StopAsync</code> leaks an abandoned <code>Task.Delay</code> timer (and a possible unobserved fault)
+    <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Core/Pipelines/PipelineRunner.cs:67–73</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (fire-and-forget timer without cancellation)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>// PipelineRunner.cs:67-73
+var grace = gracePeriod ?? TimeSpan.FromSeconds(5);
+var graceTask = Task.Delay(grace, ct);
+var winner = await Task.WhenAny(_completion.Task, graceTask).ConfigureAwait(false);
+if (winner != _completion.Task)
+{
+    _cts.Cancel();
+}</code></pre>
+
+  <h4>Why it matters</h4>
+  <p>On the common path where the pipeline completes before the grace window, <code>graceTask</code> is abandoned but its underlying <code>Timer</code> keeps running for the full grace period (up to 5 s), holding state. If <code>ct</code> is cancelled, <code>graceTask</code> faults with <code>TaskCanceledException</code> and is never awaited — an unobserved task exception. It's once-per-<code>StopAsync</code> (not per-frame), so impact is small, but it's an avoidable textbook <code>Task.Delay</code> leak in lifecycle code.</p>
+
+  <h4>Recommendation</h4>
+  <p>Replace the manual <code>WhenAny</code> with a self-cleaning wait:</p>
+  <pre><code>try { await _completion.Task.WaitAsync(grace, ct).ConfigureAwait(false); }
+catch (TimeoutException) { _cts.Cancel(); }</code></pre>
+  <p>That removes the dangling timer and the unobserved-fault path (or, if keeping <code>WhenAny</code>, drive the delay off a linked CTS cancelled in a <code>finally</code>).</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> lifecycle path, but a concrete resource/observability hazard, not a style nit.</div>
+</div>
+
+<!-- ===================== CQ-018 ===================== -->
+<div class="finding" id="cq-018">
+  <h3>CQ-018 — <code>WebSocketAudioSource</code>'s read loop is unobserved and not awaited on teardown
+    <span class="badge minor">Minor</span><span class="badge likely">Likely</span></h3>
+  <code class="loc">src/Voxa.Transports.WebSocket/WebSocketAudioSource.cs:19, 30</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (unobserved Task; teardown ordering inconsistent with every sibling)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>// WebSocketAudioSource.cs:19,30 — field written, read by nothing
+private Task? _readLoop;
+...
+protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
+{
+    _readLoop = Task.Run(() =&gt; ReadLoopAsync(ct), ct);
+    return ValueTask.CompletedTask;
+}</code></pre>
+  <p>Every other processor that spawns a read loop awaits it during teardown to observe faults and guarantee the loop stopped: <code>SpeechToTextProcessor</code> (<code>DisposeAsyncCore</code>), <code>OpenAIRealtimeProcessor</code>, <code>AzureVoiceLiveProcessor</code>, <code>SpeechToSpeechProcessor</code> — and the paired <code>WebSocketAudioSink</code> awaits its own <code>_writerTask</code>. This source is the only one that doesn't.</p>
+
+  <h4>Why it matters</h4>
+  <p>The receive loop guards <code>ReceiveAsync</code> (OCE → return, <code>WebSocketException</code> → <code>ErrorFrame</code> + return) but an exception thrown elsewhere in the loop — e.g. from a downstream <code>IngestAsync</code>, or a non-<code>WebSocketException</code> surfacing from receive — faults the task with no observer. And because <code>DisposeAsync</code> never awaits <code>_readLoop</code>, it can dispose <code>_processorCts</code> while the detached loop is still unwinding, so unlike its siblings the source gives no stop-before-dispose guarantee.</p>
+
+  <h4>Recommendation</h4>
+  <p>Override the documented extension point and await the loop, exactly like <code>SpeechToTextProcessor</code>:</p>
+  <pre><code>protected override async ValueTask DisposeAsyncCore()
+{
+    if (_readLoop is not null) { try { await _readLoop.ConfigureAwait(false); } catch { } _readLoop = null; }
+}</code></pre>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> a real robustness inconsistency vs. four sibling processors and the paired sink; the base does not await derived read loops.</div>
+</div>
+
+<!-- ===================== CQ-019 ===================== -->
+<div class="finding" id="cq-019">
+  <h3>CQ-019 — Per-tool <code>JsonDocument</code> in <code>BuildSessionUpdate</code> is never disposed (both realtime codecs)
+    <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:26 · src/Voxa.Services.AzureVoiceLive/Events/RealtimeEventCodec.cs:27</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (undisposed <code>IDisposable</code>)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>var tools = options.Tools.Select(t =&gt; new
+{
+    ...
+    parameters = JsonDocument.Parse(t.ParametersJsonSchema).RootElement.Clone(),
+}).ToArray();</code></pre>
+  <p><code>JsonDocument</code> is <code>IDisposable</code> (it rents from a pooled buffer) and is discarded without <code>Dispose()</code>. The <code>.Clone()</code> already detaches the element, so the document is safe to dispose immediately.</p>
+
+  <h4>Why it matters</h4>
+  <p>One undisposed <code>JsonDocument</code> per configured tool leaks its pooled byte buffer back to the GC instead of the array pool. It's bounded and once-per-session (<code>OnStartAsync</code>), so impact is small — but it's a genuine, avoidable leak, and the <code>.Clone()</code> shows the author already intended the document to be short-lived.</p>
+
+  <h4>Recommendation</h4>
+  <p>Parse inside a <code>using</code> and clone within it (a small local loop or helper), or parse with <code>JsonNode</code>/<code>JsonElement</code> APIs that don't require disposal. Fixing once falls out naturally if the codec consolidation (§5) lands.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> a real undisposed <code>IDisposable</code>, not the CQ-002 transport-disposal finding.</div>
+</div>
+
+<!-- ===================== CQ-020 ===================== -->
+<div class="finding" id="cq-020">
+  <h3>CQ-020 — <code>MapVoxaVoice</code> duplicates the full WebSocket request lifecycle
+    <span class="badge minor">Minor</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.AspNetCore/MapVoxaVoiceExtensions.cs:103–215 (<code>HandleContextAsync</code>) vs. :217–293 (<code>HandleAsync</code>)</code>
+  <div class="kv"><b>Dimension:</b> DRY (duplicated handler lifecycle across 2 live sites)</div>
+
+  <h4>Evidence</h4>
+  <p>Both methods carry the same logger creation, the <code>IsWebSocketRequest</code> 400 guard, <code>AcceptWebSocketAsync</code>, the hello-reader try/catch with a <code>PolicyViolation</code> close (<code>:143-155</code> vs <code>:238-250</code>), the <code>source → factories → sink</code> assembly, <code>await using runner</code> + <code>StartAsync</code> + <code>WaitAsync(ct)</code> with the OCE-when-cancelled swallow, and the identical ~15-line outer <code>catch (Exception)</code> → <code>CloseAsync(InternalServerError)</code> block (<code>:199-214</code> vs <code>:277-292</code>). <code>HandleContextAsync</code> only adds two things: the pre-accept composition-error → HTTP 500 path (<code>:123-135</code>) and the session-rate source + <code>SessionInfoFrame</code> injection (<code>:161-187</code>).</p>
+
+  <h4>Why it matters</h4>
+  <p>Two copies of the connection lifecycle (hello handling, error-close semantics, cancellation) must be kept in lockstep; hardening one path silently misses the other. The public <code>MapVoxaVoice(pattern, configure)</code> overload routes to the leaner <code>HandleAsync</code> (line 67), so its callers never get the pre-accept-500 diagnostic the fluent path has — already a small behavioral divergence.</p>
+
+  <h4>Recommendation</h4>
+  <p>Have <code>HandleAsync</code> delegate to <code>HandleContextAsync</code> with a constant factory (<code>_ =&gt; builder</code>; the 500 branch is inert for an already-built builder), or extract the shared post-accept body (hello → assemble → run → close-on-error) into one private helper both call. No behavior change required.</p>
+  <div class="kv"><b>Effort:</b> moderate · <b>Do-not-flag check:</b> both entry points are live (fluent route + the <code>configure</code> overload used by the AspNetServer sample); not provider-registration boilerplate that legitimately varies.</div>
+</div>
+
+<!-- ===================== CQ-021 ===================== -->
+<div class="finding" id="cq-021">
+  <h3>CQ-021 — <code>DictationSession.Start</code> leaks the prior <code>CancellationTokenSource</code> on a re-start
+    <span class="badge minor">Minor</span><span class="badge likely">Likely</span></h3>
+  <code class="loc">apps/Voxa.Studio/Services/DictationSession.cs:43–63</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (CTS handle leak)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>// DictationSession.cs:43-51
+public void Start(AudioEndpoint microphone)
+{
+    ArgumentNullException.ThrowIfNull(microphone);
+    if (State == DictationState.Recording) return;     // only guards while RECORDING
+    ...
+    _capture = new CancellationTokenSource();           // previous _capture never Disposed
+    var ct = _capture.Token;</code></pre>
+  <p>The <code>Recording</code> guard only blocks re-entry <em>while</em> recording. After a <code>StopAndTranscribeAsync</code> reaches <code>Completed</code>/<code>Failed</code> (or the early capture-failure return at <code>:76-83</code>), <code>State != Recording</code>, so the next <code>Start</code> allocates a fresh CTS while the previous one is still undisposed — and <code>DisposeAsync</code> (<code>:132-138</code>) only disposes the latest.</p>
+
+  <h4>Why it matters</h4>
+  <p>One <code>CancellationTokenSource</code> (which wraps a wait handle) leaks per start-after-non-stop cycle. Push-to-talk dictation is driven by a global hotkey and invoked repeatedly, so this accrues over a session in a long-lived service.</p>
+
+  <h4>Recommendation</h4>
+  <p>Dispose the prior source before replacing it, at the top of <code>Start</code>: <code>_capture?.Dispose();</code> (the prior capture task is already finished/cancelled on any non-<code>Recording</code> state).</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> <code>DictationSession</code> <em>is</em> <code>IAsyncDisposable</code> and is created/destroyed per dictation — unlike the app-lifetime VM singletons whose replace-without-dispose CTS pattern is the established (and acceptable) Studio convention.</div>
+</div>
+
+<!-- ===================== CQ-022 ===================== -->
+<div class="finding" id="cq-022">
+  <h3>CQ-022 — Dead codec builders in both realtime stacks; barge-in never sends <code>response.cancel</code>
+    <span class="badge note">Note</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Services.OpenAIRealtime/Events/RealtimeEventCodec.cs:55–59 &amp; :96–97 · same in the AzureVoiceLive twin</code>
+  <div class="kv"><b>Dimension:</b> Bad C# practices (dead code; latent-allocation trap; possibly-missing feature)</div>
+
+  <h4>Evidence</h4>
+  <p>A repo-wide search for <code>BuildInputAudioBufferAppend</code> (the <code>string</code> overload) and <code>BuildResponseCancel</code> finds only their definitions — zero callers in <code>src/</code> or <code>tests/</code> (the processors use <code>BuildInputAudioBufferAppendUtf8</code>, <code>BuildSessionUpdate</code>, <code>BuildToolCallOutput</code>, <code>BuildResponseCreate</code>).</p>
+  <pre><code>// RealtimeEventCodec.cs:55-59  — superseded by the byte/UTF-8 variant
+public static string BuildInputAudioBufferAppend(ReadOnlyMemory&lt;byte&gt; pcm)
+{
+    var b64 = Convert.ToBase64String(pcm.Span);     // the intermediate-string alloc the Utf8 variant removed
+    return JsonSerializer.Serialize(new { type = "input_audio_buffer.append", audio = b64 }, Json);
+}
+// :96-97  — never invoked
+public static string BuildResponseCancel() =&gt; JsonSerializer.Serialize(new { type = "response.cancel" }, Json);</code></pre>
+
+  <h4>Why it matters</h4>
+  <p>Four unused methods across two files. The string <code>BuildInputAudioBufferAppend</code> reintroduces exactly the per-chunk base64+JSON allocation that <code>...Utf8</code> was written to avoid, so leaving it invites a future caller to regress the hot path. <code>BuildResponseCancel</code> being dead is a hint worth a glance: the interruption path (<code>response.audio.delta</code> → <code>InterruptionFrame</code>) never sends a <code>response.cancel</code> to the server — relevant only if you intend client-driven barge-in cancellation rather than relying on server VAD.</p>
+
+  <h4>Recommendation</h4>
+  <p>Delete the four methods (the codec is <code>internal static</code>, so no public surface concern). Separately decide whether barge-in should send <code>response.cancel</code>; if yes, wire it, if no, the deletion stands.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> unused non-private methods aren't compiler-flagged; this has a latent-allocation and possibly-missing-feature implication, not a style nit.</div>
+</div>
+
+<!-- ===================== CQ-023 ===================== -->
+<div class="finding" id="cq-023">
+  <h3>CQ-023 — Dead <code>bool force</code> parameter on <code>OpenAIWhisperEngine.FlushAsync</code>
+    <span class="badge note">Note</span><span class="badge conf">Certain</span></h3>
+  <code class="loc">src/Voxa.Speech.OpenAI/OpenAIWhisperEngine.cs:112–118</code>
+  <div class="kv"><b>Dimension:</b> Simplification (dead parameter / misleading signature)</div>
+
+  <h4>Evidence</h4>
+  <pre><code>private async Task FlushAsync(bool force)
+{
+    ...
+    _ = force; // unused — kept for API symmetry with StopAsync path</code></pre>
+  <p>Both branches behave identically regardless of <code>force</code>; callers pass <code>true</code> (<code>StopAsync</code>, the public <code>FlushAsync()</code>) or <code>false</code> (the backstop loop) with no effect. The sibling Mistral engine already dropped the parameter (<code>FlushBufferAsync()</code> takes none) — minor drift between two otherwise-parallel engines.</p>
+
+  <h4>Why it matters</h4>
+  <p>A misleading signature implies a force/non-force distinction that doesn't exist; a future reader may rely on it. Pure maintainability.</p>
+
+  <h4>Recommendation</h4>
+  <p>Drop the parameter and the <code>_ = force;</code> line; collapse to <code>FlushAsync()</code> like Mistral.</p>
+  <div class="kv"><b>Effort:</b> trivial · <b>Do-not-flag check:</b> genuinely dead control state on a private method; <code>_ = force;</code> is what suppresses the unused-parameter warning under warnings-as-errors.</div>
+</div>
+
+<!-- ===================== CQ-024 ===================== -->
+<div class="finding" id="cq-024">
+  <h3>CQ-024 — Agglomerative speaker clustering is O(n³) (full pair rescan per merge)
+    <span class="badge note">Note</span><span class="badge conf">Certain (cost)</span></h3>
+  <code class="loc">src/Voxa.Audio.Diarization/SpeakerClustering.cs:47–87</code>
+  <div class="kv"><b>Dimension:</b> Performance / algorithmic — on the <em>offline</em> diarization path</div>
+
+  <h4>Evidence</h4>
+  <pre><code>// SpeakerClustering.cs:47-52 — ClosestPair is re-run every merge
+while (members.Count &gt; 1)
+{
+    ...
+    var (a, b, best) = ClosestPair(centroids);   // O(n^2) pairwise scan ...
+    ...                                           // ... inside the O(n) merge loop  =&gt; O(n^3)
+}</code></pre>
+  <p><code>ClosestPair</code> (lines 69–87) is a full O(n²) double loop over centroids, called once per merge iteration; each <code>CosineDistance</code> is itself O(d) in embedding width, so the whole cluster is ~O(n³·d) in the number of speech regions <code>n</code>.</p>
+
+  <h4>Why it matters</h4>
+  <p>For a long, many-speaker recording with many short regions (the VLS-005 spec flags "large-ish recordings" as a risk), clustering time grows cubically. At n ≈ 30 it's nothing; in the high hundreds it becomes seconds. This is a <em>batch/offline</em> path (<code>voxa transcribe --diarize</code>; the spec states diarization here is not the live loop), so it does not affect real-time latency.</p>
+
+  <h4>Recommendation</h4>
+  <p>Only if profiling shows it matters: keep candidate pair distances in a heap and update incrementally after each merge, or use NN-chain linkage — ~O(n² log n)/O(n²). Not worth the added complexity until a real recording is measured slow; the determinism/tie-breaking behavior is correct and tested and must be preserved.</p>
+  <div class="kv"><b>Effort:</b> involved · <b>Do-not-flag check:</b> downgraded to Note per the audit's batch-path rule; the algorithm's output is correct, this is purely about scaling.</div>
+</div>
+
+<h2 id="intentional"><span class="secno">5.</span>Confirmed-intentional &amp; known-deferred</h2>
+<p>Each of these looked like a smell and was checked against the docs/tests/architecture; none is an ask.</p>
+<ul class="flat">
+  <li><b>Realtime codec/transport duplication (known — CQ-006 deferral).</b> <code>RealtimeEventCodec</code>, <code>IRealtimeApiTransport</code>, and the <code>WebSocketRealtimeApiTransport</code> body are near-identical across <code>Voxa.Services.OpenAIRealtime</code> and <code>Voxa.Services.AzureVoiceLive</code> (the decode switch and the event-type string vocabulary are duplicated verbatim; the only differences are the options type and two error-label strings). This is the <em>same</em> duplication the prior audit raised as CQ-006 — only its UTF-8 receive-decode sub-bug was fixed; the extraction into a shared internal source was explicitly deferred. It remains the largest open DRY item and is a real drift risk (a protocol change must be made in two places), but it is already tracked, so it is recorded here rather than re-filed. <span class="small">If/when addressed: a small shared internal package or linked <code>&lt;Compile Include&gt;</code> with an options-view interface + error-label parameter.</span></li>
+  <li><b>WAV PCM16 reader consolidation (in-flight — CQ-009).</b> <code>OpenAIWhisperEngine</code>/<code>MistralSpeechToTextEngine</code> still carry a private <code>WrapPcmAsWav</code> on <code>main</code>; the shared <code>Pcm16Wav</code> helper exists and the writer/reader migration is the open PR for CQ-009. Not re-reported.</li>
+  <li><b><code>AgentLoopProcessor</code>'s turn worker on its own CTS, not the session token.</b> The worker is deliberately decoupled so an interruption (which fires the per-frame CTS) doesn't kill an in-flight turn; disposal bounds it via the <code>DisposeAsyncCore</code> join added for CQ-001. Intentional.</li>
+  <li><b><code>OnnxModelHost.EvictAll</code> evict-during-load race.</b> If <code>EvictAll</code> runs concurrently with a mid-construction <code>Load</code> on the same key, the in-flight session could be orphaned. The XML doc scopes <code>EvictAll</code> to single-threaded teardown ("tests, Studio's unload models … NOT per-connection teardown") — a documented non-scenario. Left as-is.</li>
+  <li><b><code>DefaultVoicePipelineComposer</code> length.</b> The long AEC→Enhance→VAD→STT→filter→agent→aggregator→TTS→far-end-tap method is the documented composition home; each stage is a distinct conditional insert, not duplicated logic. Not a god-service smell.</li>
+  <li><b><code>VoxaDefaultsGuard</code> resolving <code>IConfiguration</code> from DI.</b> Looks like a config-capture-rule violation, but it is a guarded nullable <code>GetService</code> that only runs under the Generic Host (where <code>IConfiguration</code> is always registered); plain-<code>ServiceCollection</code> hosts don't run hosted services. Honors the rule's intent.</li>
+  <li><b>Per-frame <code>byte[]</code> allocations</b> in the WebSocket source, realtime audio deltas, and TTS chunking. These are inherent to the records-for-frames contract (the array becomes a frame payload with unbounded downstream lifetime — it must not be pooled). Not avoidable waste.</li>
+  <li><b>One-impl seams</b> (<code>IAgentTurnDriver</code>, <code>IFrontendToolGateway</code>, <code>ISmartTurnClassifier</code>, the engine interfaces, the Null* passthroughs). All have test fakes and/or a documented "seam-not-model" extensibility rationale. Not YAGNI.</li>
+</ul>
+
+<h2 id="quick-wins"><span class="secno">6.</span>Quick wins</h2>
+<p>Ranked by value ÷ effort — the short list to do first:</p>
+<ol>
+  <li><b><a href="#cq-015">CQ-015</a></b> — stop <code>TryComplete</code>-ing the STT channel on a transient failure (<code>return</code> instead). Trivial; removes a session-fatal "bot goes deaf" bug. <span class="small">Two engines.</span></li>
+  <li><b><a href="#cq-014">CQ-014</a></b> — guard the two drain-loop bodies so a throwing handler can't disable interruptions or strand the sink. Trivial; high blast-radius.</li>
+  <li><b><a href="#cq-016">CQ-016</a></b> — broaden the <code>VoiceCatalogService</code> catch to a per-provider error chip. Trivial; restores the designed grid isolation.</li>
+  <li><b><a href="#cq-017">CQ-017</a></b> — swap the <code>WhenAny</code>/<code>Task.Delay</code> for <code>WaitAsync(grace, ct)</code>. Trivial; removes a timer leak.</li>
+  <li><b><a href="#cq-019">CQ-019</a></b> + <b><a href="#cq-021">CQ-021</a></b> — dispose the <code>JsonDocument</code> and the prior dictation CTS. Trivial; two real leaks.</li>
+  <li><b><a href="#cq-018">CQ-018</a></b> — await the WebSocket source's read loop in <code>DisposeAsyncCore</code>. Trivial; matches its siblings.</li>
+  <li><b><a href="#cq-022">CQ-022</a></b> + <b><a href="#cq-023">CQ-023</a></b> — delete the dead codec builders and the dead <code>force</code> parameter. Trivial cleanup.</li>
+</ol>
+
+<h2 id="appendix"><span class="secno">7.</span>Appendix</h2>
+
+<h4>Build</h4>
+<pre><code>$ dotnet build Voxa.slnx --configuration Release
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)</code></pre>
+
+<h4>Tests</h4>
+<p>The projects these findings touch were run green (<code>--filter "Category!=LocalModels"</code>) — <b>233 passed, 0 failed</b>:</p>
+<pre><code>Voxa.Core.Tests                   Passed!  Failed: 0, Passed: 54
+Voxa.Speech.OpenAI.Tests          Passed!  Failed: 0, Passed:  6
+Voxa.Speech.Mistral.Tests         Passed!  Failed: 0, Passed:  7
+Voxa.Services.OpenAIRealtime.Tests Passed! Failed: 0, Passed: 10
+Voxa.AspNetCore.Tests             Passed!  Failed: 0, Passed: 87
+Voxa.Transports.WebSocket.Tests   Passed!  Failed: 0, Passed: 40
+Voxa.Audio.Diarization.Tests      Passed!  Failed: 0, Passed: 29</code></pre>
+<p>The whole-solution <code>dotnet test Voxa.slnx</code> run was excluded from the timed pass because the Studio headless lane is slow locally (the prior audit noted the same). The <code>LocalModels</code> lane (real model downloads) is intentionally excluded per repo convention. Findings here come from static review + targeted code verification, not from test failures; none depends on an unverified runtime number.</p>
+
+<h4>Method &amp; assumptions</h4>
+<ul class="flat">
+  <li><b>Discovery:</b> six parallel read-only sweeps over disjoint subsystem clusters (Core; realtime/S2S composites; granular speech engines; audio packages; AspNetCore/meta/transports; Studio/CLI/Mcp/Observability). <b>Verification:</b> every candidate was then re-read at its cited <code>path:line</code> by the author; candidates that failed the per-dimension "do-not-flag" list or the intentional-design check were dropped (e.g. the <code>EvictAll</code> race, the <code>AgentLoopProcessor</code> worker-CTS question, per-frame frame-payload allocations).</li>
+  <li><b>Scope guard:</b> the previous audit's CQ-001..013 were explicitly excluded from re-reporting; this report's IDs continue at <b>CQ-014</b> to avoid collision. A leftover sub-agent worktree under <code>.claude/worktrees/</code> was excluded from scope.</li>
+  <li><b>Architectural stance honored:</b> service-oriented / transaction-script, not DDD. Anemic records were treated as correct; no value-object/aggregate/repository recommendations were made.</li>
+  <li><b>Unverified:</b> the O(n³) clustering cost (<a href="#cq-024">CQ-024</a>) is analyzed, not benchmarked — its severity is deliberately a Note pending a real measurement.</li>
+</ul>
+
+<p class="small">End of report. The deliverable is this file; findings are actionable as-is with the cited <code>path:line</code> evidence.</p>
+
+</div>
+</body>
+</html>
