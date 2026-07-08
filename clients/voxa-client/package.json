@@ -16,6 +16,10 @@
     "dist",
     "README.md"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/michaeljosiah/voxa.git",
@@ -32,6 +36,7 @@
     "barge-in"
   ],
   "scripts": {
+    "prepublishOnly": "npm test && npm run build",
     "generate": "node scripts/generate-protocol.mjs",
     "generate:check": "node scripts/generate-protocol.mjs --check",
     "build": "npm run generate:check && tsc -p tsconfig.json",
