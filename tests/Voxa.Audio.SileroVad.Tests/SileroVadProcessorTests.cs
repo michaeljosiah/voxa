@@ -39,6 +39,48 @@ public class SileroVadProcessorTests
     }
 
     [Fact]
+    public async Task Rate_Mismatch_Warns_Once_And_Forwards_Every_Frame()
+    {
+        // Mis-rated audio arrives at frame rate for the whole session; the wiring fault should be
+        // reported once, not flooded, and the audio must keep flowing (forwarded without VAD).
+        var logger = new CollectingLogger();
+        var vad = new SileroVadProcessor(
+            new SileroVadOptions { SampleRate = 16000 }, windowSize: 512, probability: _ => 0f, logger: logger);
+        var captured = new CapturingProcessor();
+        var pipeline = Pipeline.Build()
+            .Source(new PipelineSource())
+            .Then(vad)
+            .Then(captured)
+            .Sink(new PipelineSink());
+        await using var runner = new PipelineRunner(pipeline);
+        await runner.StartAsync();
+        await Task.Delay(40);
+
+        await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
+        await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
+        await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
+        await Task.Delay(150);
+
+        Assert.Equal(3, captured.Captured.Count(f => f is AudioRawFrame));
+        Assert.Equal(1, logger.WarningCount);
+    }
+
+    private sealed class CollectingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public int WarningCount { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) WarningCount++;
+        }
+    }
+
+    [Fact]
     public async Task Pure_Silence_Does_Not_Open_The_Gate()
     {
         var (runner, captured, pipeline) = Build();

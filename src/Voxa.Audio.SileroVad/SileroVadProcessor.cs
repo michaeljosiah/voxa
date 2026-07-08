@@ -47,6 +47,9 @@ public sealed class SileroVadProcessor : FrameProcessor
     // Force-split (VRT-002 WS2): time the gate has been continuously open for the current utterance.
     private TimeSpan _utteranceOpenDuration = TimeSpan.Zero;
 
+    // Rate-mismatch is a session-wide wiring fault; warn once instead of flooding at frame rate.
+    private bool _rateMismatchLogged;
+
     // Pre-roll: keeps the last N windows so when the gate opens we don't lose the first word.
     private readonly Queue<byte[]> _preroll = new();
     private readonly int _prerollWindows;
@@ -108,9 +111,16 @@ public sealed class SileroVadProcessor : FrameProcessor
 
         if (audio.SampleRate != _options.SampleRate)
         {
-            _logger.LogWarning(
-                "SileroVadProcessor received audio at {ActualRate} Hz but is configured for {ExpectedRate} Hz; forwarding without VAD.",
-                audio.SampleRate, _options.SampleRate);
+            // Log once, not per frame — mismatched audio arrives at ~50 fps, and the condition is a
+            // session-wide wiring fault (mis-tagged transport rate), not a per-frame anomaly.
+            if (!_rateMismatchLogged)
+            {
+                _rateMismatchLogged = true;
+                _logger.LogWarning(
+                    "SileroVadProcessor received audio at {ActualRate} Hz but is configured for {ExpectedRate} Hz; " +
+                    "forwarding without VAD for the rest of the session. Check the transport's input sample rate.",
+                    audio.SampleRate, _options.SampleRate);
+            }
             await PushFrameAsync(frame, ct).ConfigureAwait(false);
             return;
         }

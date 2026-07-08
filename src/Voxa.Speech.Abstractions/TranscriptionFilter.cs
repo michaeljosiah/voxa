@@ -49,6 +49,13 @@ public sealed class TranscriptionFilter : FrameProcessor
         "like and subscribe", "see you in the next video",
     };
 
+    /// <summary>
+    /// Drop transcripts fully enclosed in <c>[]</c> or <c>()</c> — Whisper's sound-event markers
+    /// (<c>[BLANK_AUDIO]</c> from whisper.cpp on silence, <c>[MUSIC PLAYING]</c>, <c>(door closes)</c>).
+    /// The blocklists only catch known spellings; this catches the whole family. Default true.
+    /// </summary>
+    public bool DropBracketedMarkers { get; init; } = true;
+
     /// <summary>Exact-match blocklist (case-insensitive). Defaults to <see cref="DefaultExactBlocklist"/>.</summary>
     public IReadOnlySet<string> ExactBlocklist { get; init; } = DefaultExactBlocklist;
 
@@ -78,6 +85,10 @@ public sealed class TranscriptionFilter : FrameProcessor
     private bool ShouldDrop(string trimmed)
     {
         if (trimmed.Length < MinLengthChars) return true;
+
+        if (DropBracketedMarkers &&
+            ((trimmed[0] == '[' && trimmed[^1] == ']') || (trimmed[0] == '(' && trimmed[^1] == ')')))
+            return true;
 
         if (ExactBlocklist.Contains(trimmed)) return true;
 
