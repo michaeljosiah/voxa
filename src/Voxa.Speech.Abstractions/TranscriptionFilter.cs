@@ -84,7 +84,8 @@ public sealed class TranscriptionFilter : FrameProcessor
 
     private bool ShouldDrop(string trimmed)
     {
-        if (trimmed.Length < MinLengthChars) return true;
+        // Empty always drops — also guards the index accesses below when a host sets MinLengthChars = 0.
+        if (trimmed.Length == 0 || trimmed.Length < MinLengthChars) return true;
 
         if (DropBracketedMarkers &&
             ((trimmed[0] == '[' && trimmed[^1] == ']') || (trimmed[0] == '(' && trimmed[^1] == ')')))

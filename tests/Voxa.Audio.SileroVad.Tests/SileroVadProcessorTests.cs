@@ -59,7 +59,9 @@ public class SileroVadProcessorTests
         await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
         await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
         await pipeline.Source.IngestAsync(new AudioRawFrame(Silence(512), 24000, 1));
-        await Task.Delay(150);
+        // Wait on the third frame rather than a fixed delay (cold-runner robustness, like the
+        // mismatched-rate forwarding test below).
+        await captured.WaitForAsync(3, TimeSpan.FromSeconds(10));
 
         Assert.Equal(3, captured.Captured.Count(f => f is AudioRawFrame));
         Assert.Equal(1, logger.WarningCount);

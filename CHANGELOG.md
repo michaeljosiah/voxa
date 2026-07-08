@@ -20,12 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (new `DropBracketedMarkers` switch, default `true`). The blocklists only caught known spellings; this catches
   the whole marker family, so hosts no longer need a custom blank-audio filter stage.
 
-### Fixed
-
-- **Silero VAD rate-mismatch warning no longer floods the log.** Audio arriving at a different sample rate than
-  the VAD is configured for is a session-wide wiring fault reported at ~50 fps; the warning now fires once per
-  session (frames are still forwarded without VAD, unchanged).
-
 - **Remote Voxtral STT now streams (Mistral API).** `MistralSpeechToTextEngine` gained a streaming path:
   with `Voxa:Mistral:SttStreaming` (default **true**) the per-utterance POST to `/v1/audio/transcriptions`
   sends `stream=true` and parses the `text/event-stream` response — `transcription.text.delta` events surface
@@ -566,6 +560,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Silero VAD rate-mismatch warning no longer floods the log.** Audio arriving at a different sample rate than
+  the VAD is configured for is a session-wide wiring fault reported at ~50 fps; the warning now fires once per
+  session (frames are still forwarded without VAD, unchanged).
 - **Voxa Studio's headless test host no longer hangs `dotnet test` at exit.** `Voxa.Studio.Tests` ran its
   Avalonia-headless app with real Skia rendering (`UseHeadlessDrawing = false`), which starts a continuous
   render loop that kept the Avalonia dispatcher busy after the tests finished — so the per-assembly
