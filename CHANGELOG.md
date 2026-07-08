@@ -28,6 +28,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`JsonSchemaExporter`) and fails CI on drift; the schema's `type` constants are cross-checked
   against the real codec. This is the single source the upcoming `@voxa/client` TypeScript types
   are generated from, so client and server cannot silently diverge. Wire bytes are untouched.
+- **Host-owned agent turns under `UseDefaults()` (VDX-007).** `DefaultVoicePipelineComposer` now resolves a
+  host-registered **`IAgentTurnDriver`** from the per-connection scope *before* the `AIAgent`/`IChatClient`/
+  `IVoiceAgentFactory` chain. When present, the driver replaces the Microsoft-Agents stage entirely — the host
+  owns its engine, conversation memory, and tool round-trips — so an app with its own agent runtime (e.g. Ada)
+  keeps the composed defaults (real VAD, latency profile, diagnostics taps) instead of hand-building the whole
+  chain. Registering both a driver and an `IVoiceAgentConfigurator` logs a warning (the configurator is never
+  invoked). With no driver registered the agent stage composes exactly as before.
+- **`TranscriptionFilter` drops bracket-enclosed sound markers.** Transcripts fully enclosed in `[]` or `()` —
+  whisper.cpp's `[BLANK_AUDIO]` on silence, `[MUSIC PLAYING]`, `(door closes)` — are now dropped by default
+  (new `DropBracketedMarkers` switch, default `true`). The blocklists only caught known spellings; this catches
+  the whole marker family, so hosts no longer need a custom blank-audio filter stage.
 - **Remote Voxtral STT now streams (Mistral API).** `MistralSpeechToTextEngine` gained a streaming path:
   with `Voxa:Mistral:SttStreaming` (default **true**) the per-utterance POST to `/v1/audio/transcriptions`
   sends `stream=true` and parses the `text/event-stream` response — `transcription.text.delta` events surface
@@ -568,6 +579,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Silero VAD rate-mismatch warning no longer floods the log.** Audio arriving at a different sample rate than
+  the VAD is configured for is a session-wide wiring fault reported at ~50 fps; the warning now fires once per
+  session (frames are still forwarded without VAD, unchanged).
 - **Voxa Studio's headless test host no longer hangs `dotnet test` at exit.** `Voxa.Studio.Tests` ran its
   Avalonia-headless app with real Skia rendering (`UseHeadlessDrawing = false`), which starts a continuous
   render loop that kept the Avalonia dispatcher busy after the tests finished — so the per-assembly

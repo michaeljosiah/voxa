@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VDX-007 — Host-owned agent turns under UseDefaults()</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+  --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+  --good: #66bb6a; --warn: #ffb74d; --code-bg: #11151c;
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+.meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+.meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+h2 .secno { color: var(--accent); margin-right: 10px; }
+p, li { font-size: 0.95rem; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+pre code { background: none; padding: 0; color: #c9d6e3; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: var(--panel2); color: #fff; font-weight: 600; }
+.callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+.callout.good { border-left-color: var(--good); }
+.callout b:first-child { color: var(--accent2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-007 — Host-owned agent turns under <code>UseDefaults()</code></h1>
+  <div class="sub">
+    A one-lookup composer seam: a host that registers its own <code>IAgentTurnDriver</code> keeps the
+    composed defaults — real VAD, latency profile, diagnostics taps — while replacing the
+    Microsoft-Agents stage entirely. The driver-level companion to VDX-006, for hosts whose agent is
+    not an <code>AIAgent</code> at all.
+  </div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-007 v1.0</div>
+    <div><b>Date</b> 2026-07-08</div>
+    <div><b>Status</b> Implemented</div>
+    <div><b>Target</b> Voxa.AspNetCore (+ TranscriptionFilter, SileroVad hardening)</div>
+    <div><b>Motivating consumer</b> Ada (retires its manual pipeline; M6.1 follow-through)</div>
+    <div><b>Depends on</b> VDX-006 (shares the agent-stage seam discipline)</div>
+  </div>
+</header>
+
+<h2><span class="secno">1.</span> Problem</h2>
+<p>
+VDX-006 let a host own the voice agent's <em>options</em> (memory, frontend tools, hooks) under
+<code>UseDefaults()</code> — but only when the agent is a Microsoft-Agents <code>AIAgent</code> or an
+<code>IChatClient</code>. A host with its own agent runtime (Ada's <code>IAdaEngine</code>: hybrid
+local/cloud routing, its own memory, tool harness, approval gates) implements Voxa's
+<code>IAgentTurnDriver</code> directly and hand-builds an <code>AgentLoopProcessor</code> — which forces
+it off <code>UseDefaults()</code> for the <em>entire</em> chain. In practice (Ada M6.1) that meant
+silently losing the registered Silero VAD, the LowLatency profile, and the diagnostics taps, plus two
+local workaround stages (input-rate relabeling, blank-audio filtering) that belong upstream.
+</p>
+
+<h2><span class="secno">2.</span> The seam</h2>
+<p>
+<code>DefaultVoicePipelineComposer.CreateAgentProcessor</code> resolves a host-registered
+<code>IAgentTurnDriver</code> from the per-connection scope <em>before</em> the existing
+<code>AIAgent → IChatClient → IVoiceAgentFactory</code> chain. When present:
+</p>
+<ul>
+  <li>The stage is <code>new AgentLoopProcessor(hostDriver, maxResponseDuration: tuning.MaxResponseDuration)</code> —
+      the profile's response cap still applies.</li>
+  <li>The Microsoft-Agents wiring is bypassed, not layered: no <code>AIAgent</code> is required in DI,
+      <code>Voxa:Agent:*</code> (provider, memory, instructions) does not apply, and a registered
+      <code>IVoiceAgentConfigurator</code> is never invoked (a warning is logged if both are present).</li>
+  <li>With no driver registered the agent stage composes exactly as before — the byte-identity guarantee
+      of VDX-006 is preserved.</li>
+</ul>
+<pre><code>// Host (Ada) — the whole migration:
+services.AddSingleton&lt;IAgentTurnDriver, AdaEngineTurnDriver&gt;();
+app.MapVoxaVoice("/voice").UseDefaults();
+// VAD stop duration, aggregator chunking etc. stay config: Voxa:Vad:StopDurationMs = 900, …</code></pre>
+
+<h2><span class="secno">3.</span> Companion hardening (same PR)</h2>
+<table>
+  <tr><th>Change</th><th>Why</th></tr>
+  <tr>
+    <td><code>TranscriptionFilter.DropBracketedMarkers</code> (default <code>true</code>): drop transcripts
+        fully enclosed in <code>[]</code>/<code>()</code>.</td>
+    <td>whisper.cpp emits <code>[BLANK_AUDIO]</code> on silence; the blocklists only caught known spellings.
+        Retires Ada's custom <code>BlankTranscriptionFilter</code> stage.</td>
+  </tr>
+  <tr>
+    <td>Silero VAD rate-mismatch warning fires once per session (frames still forwarded without VAD).</td>
+    <td>Mis-rated audio arrives at ~50 fps; a per-frame warning is a hot-path log flood for a
+        session-wide wiring fault.</td>
+  </tr>
+</table>
+
+<div class="callout good">
+  <b>Non-goals.</b> No wire, transport, or Core changes. The <code>IAgentTurnDriver</code> contract is
+  untouched — this is purely a composer resolution-order addition. Voxa.Core stays zero-dependency.
+</div>
+
+<h2><span class="secno">4.</span> Verification</h2>
+<ul>
+  <li><code>ComposerHostTurnDriverTests</code>: driver-only DI composes (previously threw); no driver ⇒
+      unchanged requirement; driver wins over <code>IChatClient</code>; driver + configurator warns and
+      skips the configurator; pipeline shape unchanged.</li>
+  <li><code>TranscriptionFilterTests</code>: bracket-enclosed markers dropped; embedded brackets pass;
+      rule can be disabled.</li>
+  <li><code>SileroVadProcessorTests</code>: three mis-rated frames ⇒ one warning, all forwarded.</li>
+  <li>Existing golden/route tests pin the no-driver path byte-identical.</li>
+</ul>
+
+</div>
+</body>
+</html>
