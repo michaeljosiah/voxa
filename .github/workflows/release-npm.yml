@@ -1,0 +1,69 @@
+# Publishes @voxa/client to npm. Mirrors release.yml's tag mechanics: push `client-vX.Y.Z`
+# (or run manually via workflow_dispatch) and the package ships at that version.
+#
+# One-time setup: create a granular npm automation token (npmjs.com → Access Tokens →
+# Generate → Automation, scoped to the package/org) and save it as the NPM_TOKEN secret.
+# The @voxa scope must exist on npm and the token's account must have publish rights to it.
+name: Release @voxa/client
+
+on:
+  push:
+    tags: ['client-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.1.0-alpha). Empty = version already in package.json.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/voxa-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: clients/voxa-client/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # Tag wins over the dispatch input; dispatch input wins over package.json.
+      - name: Set version from tag / input
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/client-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/client-v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          if [[ -n "$VERSION" ]]; then
+            npm version "$VERSION" --no-git-tag-version
+          fi
+          echo "publishing $(node -p "require('./package.json').version")"
+
+      # A prerelease version (-alpha/-beta/-rc) publishes under the matching dist-tag so
+      # `npm i @voxa/client` never resolves to a prerelease by accident; stable → latest.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *-* ]]; then
+            TAG="${VERSION#*-}"; TAG="${TAG%%.*}"
+          else
+            TAG="latest"
+          fi
+          # prepublishOnly runs the golden check, tests, and the build.
+          npm publish --tag "$TAG"
