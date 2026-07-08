@@ -135,3 +135,31 @@ jobs:
         with:
           name: local-speech-results
           path: '**/TestResults/local-speech-results.trx'
+
+  js-client:
+    name: '@voxa/client (Node)'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: clients/voxa-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: clients/voxa-client/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      # npm test runs the protocol.ts golden check (drift from the committed schema fails here),
+      # compiles with tsc, and runs the headless unit suite (mock WebSocket + fake AudioBackend).
+      - name: Test
+        run: npm test
+
+      - name: Pack (build + dts)
+        run: npm run build

@@ -1,3 +1,7 @@
 # Shell scripts must stay LF — a CRLF .sh breaks `bash` on the Linux CI runners
 # (`/usr/bin/env: 'bash\r'`). Normalize regardless of a contributor's core.autocrlf.
 *.sh text eol=lf
+
+# The JS client and its generated artifacts stay LF: both golden checks (the .NET wire-schema
+# golden and the protocol.ts --check) compare LF-normalized text, and mixed EOLs churn diffs.
+clients/voxa-client/** text eol=lf

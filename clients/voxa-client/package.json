@@ -1,0 +1,45 @@
+{
+  "name": "@voxa/client",
+  "version": "0.1.0-alpha",
+  "description": "Official browser/JS client for Voxa voice endpoints — mic capture, gap-free playback, barge-in that actually stops the bot, and typed events generated from the server's wire protocol.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/michaeljosiah/voxa.git",
+    "directory": "clients/voxa-client"
+  },
+  "keywords": [
+    "voxa",
+    "voice",
+    "ai",
+    "websocket",
+    "speech",
+    "stt",
+    "tts",
+    "barge-in"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate-protocol.mjs",
+    "generate:check": "node scripts/generate-protocol.mjs --check",
+    "build": "npm run generate:check && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run generate:check && tsc -p tsconfig.test.json && node --test \"build-test/test/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}
