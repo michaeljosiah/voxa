@@ -276,6 +276,23 @@ public sealed class DefaultVoicePipelineComposer
         VoxaAgentOptions agentOpts,
         TimeSpan? maxResponseDuration)
     {
+        // VDX-007: a host-registered IAgentTurnDriver replaces the whole Microsoft-Agents stage —
+        // the host owns its engine, memory, and tool round-trips — so a host with its own agent
+        // runtime keeps UseDefaults() (real VAD, profile, taps) instead of hand-building the chain.
+        var hostDriver = sp.GetService<IAgentTurnDriver>();
+        if (hostDriver is not null)
+        {
+            if (sp.GetService<IVoiceAgentConfigurator>() is not null)
+                _logger.LogWarning(
+                    "Voxa: both an IAgentTurnDriver and an IVoiceAgentConfigurator are registered; the " +
+                    "turn driver replaces the Microsoft-Agents stage, so the configurator is never invoked.");
+            if (agentOpts.ConversationMemory)
+                _logger.LogDebug(
+                    "Voxa: an IAgentTurnDriver is registered; it owns conversation memory, so " +
+                    "Voxa:Agent:ConversationMemory does not apply.");
+            return new AgentLoopProcessor(hostDriver, maxResponseDuration: maxResponseDuration);
+        }
+
         // Resolution order: AIAgent (DI) → IChatClient (DI) → IVoiceAgentFactory (provider-backed)
         AIAgent? agent = sp.GetService<AIAgent>()
             ?? WrapChatClient(sp.GetService<IChatClient>(), agentOpts)
