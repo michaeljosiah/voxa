@@ -18,7 +18,7 @@ internal readonly record struct MessageEnvelope(string Type, string Message);   
 // always tolerated as absent; 'hello' stays host-defined (UseWebSocketHello<T>) and is not folded in.
 internal readonly record struct EndClientEnvelope(string Type);
 internal readonly record struct TextClientEnvelope(string Type, string? Text);
-internal readonly record struct ToolResultClientEnvelope(string Type, string? CallId, string? ResultJson, bool IsError);
+internal readonly record struct ToolResultClientEnvelope(string Type, string? CallId, string? ResultJson, bool? IsError);
 
 /// <summary>
 /// Source-generated serialization context for the wire envelopes, both directions. Eliminates
