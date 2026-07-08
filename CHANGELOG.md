@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`@voxa/client` — the official browser/JS client (VDX-005 WS2/WS3).** A new npm package under
+  `clients/voxa-client` (TypeScript, ESM, **zero runtime dependencies**): AudioWorklet mic capture at
+  the announced input rate, gap-free PCM playback at the announced output rate, typed events
+  (`session`/`transcription`/`text`/`speaking`/`toolCall`/`status`/`error`/`micLevel`/`end`), the
+  client half of **barge-in** (local playback flushes on both `speaking{user,started}` and the
+  `interruption` envelope — the audio the server's epoch purge can't reach), **frontend tool
+  round-trips** (`toolCall` event → `sendToolResult`), and a runtime `session.v` check
+  (`onVersionMismatch: warn|throw|ignore`). Types are generated from `voxa-wire.schema.json` with a
+  golden `--check`; audio and the socket sit behind injectable seams, so the 16-test unit suite runs
+  headless (mock WebSocket + fake backend) in a new `@voxa/client (Node)` CI lane. Not yet published
+  to npm; the wire protocol is unchanged.
 - **The wire protocol is now a generated, versioned contract (VDX-005 WS1).** The inbound
   (client → server) envelopes — `end`, `text`, `toolResult` — are expressed as records alongside the
   outbound ones in `WireMessages.cs`, and `TryParseClientMessage` deserializes them via the same
