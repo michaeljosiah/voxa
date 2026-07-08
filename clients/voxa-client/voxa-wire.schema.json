@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "AUTO-GENERATED from the C# wire envelope records (src/Voxa.Transports.WebSocket/Protocol/WireMessages.cs). Do not edit by hand. Regenerate: VOXA_REGEN_GOLDEN=1 dotnet test tests/Voxa.Transports.WebSocket.Tests --filter WireSchemaGolden",
+  "title": "Voxa voice WebSocket wire protocol",
+  "wireVersion": 1,
+  "$defs": {
+    "Session": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "session"
+        },
+        "v": {
+          "type": "integer"
+        },
+        "inputSampleRate": {
+          "type": "integer"
+        },
+        "outputSampleRate": {
+          "type": "integer"
+        }
+      }
+    },
+    "Transcription": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "transcription"
+        },
+        "text": {
+          "type": "string"
+        },
+        "isFinal": {
+          "type": "boolean"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "speakerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Text": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "ToolCall": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "toolCall"
+        },
+        "callId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "argumentsJson": {
+          "type": "string"
+        }
+      }
+    },
+    "Speaking": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "speaking"
+        },
+        "who": {
+          "enum": [
+            "bot",
+            "user"
+          ]
+        },
+        "started": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Interruption": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "interruption"
+        }
+      }
+    },
+    "Status": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "status"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "error"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "End": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "end"
+        }
+      }
+    },
+    "ClientEnd": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "end"
+        }
+      }
+    },
+    "ClientText": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ClientToolResult": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "toolResult"
+        },
+        "callId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resultJson": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isError": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "ServerMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Session"
+        },
+        {
+          "$ref": "#/$defs/Transcription"
+        },
+        {
+          "$ref": "#/$defs/Text"
+        },
+        {
+          "$ref": "#/$defs/ToolCall"
+        },
+        {
+          "$ref": "#/$defs/Speaking"
+        },
+        {
+          "$ref": "#/$defs/Interruption"
+        },
+        {
+          "$ref": "#/$defs/Status"
+        },
+        {
+          "$ref": "#/$defs/Error"
+        },
+        {
+          "$ref": "#/$defs/End"
+        }
+      ]
+    },
+    "ClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClientEnd"
+        },
+        {
+          "$ref": "#/$defs/ClientText"
+        },
+        {
+          "$ref": "#/$defs/ClientToolResult"
+        }
+      ]
+    }
+  }
+}

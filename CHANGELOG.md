@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The wire protocol is now a generated, versioned contract (VDX-005 WS1).** The inbound
+  (client → server) envelopes — `end`, `text`, `toolResult` — are expressed as records alongside the
+  outbound ones in `WireMessages.cs`, and `TryParseClientMessage` deserializes them via the same
+  source-generated context (same inputs, same frames, same dropped-unknown behavior — pinned by the
+  existing compatibility goldens; malformed field types now drop to `null` instead of throwing).
+  A new golden test generates `clients/voxa-client/voxa-wire.schema.json` from the records
+  (`JsonSchemaExporter`) and fails CI on drift; the schema's `type` constants are cross-checked
+  against the real codec. This is the single source the upcoming `@voxa/client` TypeScript types
+  are generated from, so client and server cannot silently diverge. Wire bytes are untouched.
 - **Host-owned agent turns under `UseDefaults()` (VDX-007).** `DefaultVoicePipelineComposer` now resolves a
   host-registered **`IAgentTurnDriver`** from the per-connection scope *before* the `AIAgent`/`IChatClient`/
   `IVoiceAgentFactory` chain. When present, the driver replaces the Microsoft-Agents stage entirely — the host
@@ -19,7 +28,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   whisper.cpp's `[BLANK_AUDIO]` on silence, `[MUSIC PLAYING]`, `(door closes)` — are now dropped by default
   (new `DropBracketedMarkers` switch, default `true`). The blocklists only caught known spellings; this catches
   the whole marker family, so hosts no longer need a custom blank-audio filter stage.
-
 - **Remote Voxtral STT now streams (Mistral API).** `MistralSpeechToTextEngine` gained a streaming path:
   with `Voxa:Mistral:SttStreaming` (default **true**) the per-utterance POST to `/v1/audio/transcriptions`
   sends `stream=true` and parses the `text/event-stream` response — `transcription.text.delta` events surface
