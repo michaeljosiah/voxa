@@ -38,13 +38,18 @@ class FakeAudio implements AudioBackend {
     this.onFrame = onFrame;
   }
   play(pcm: Int16Array, outputRate: number): void { this.played.push({ pcm, rate: outputRate }); }
-  flush(): void { this.flushes++; }
+  flush(): void { this.flushes++; this.onFlush?.(); }
   async stop(): Promise<void> { this.stopped = true; }
+  onFlush: (() => void) | undefined;
 }
 
 const SESSION = JSON.stringify({ type: "session", v: 1, inputSampleRate: 16000, outputSampleRate: 24000 });
 
-function harness(opts?: { hello?: Record<string, unknown>; onVersionMismatch?: "warn" | "throw" | "ignore" }) {
+function harness(opts?: {
+  hello?: Record<string, unknown>;
+  onVersionMismatch?: "warn" | "throw" | "ignore";
+  connectTimeoutMs?: number;
+}) {
   const socket = new FakeSocket();
   const audio = new FakeAudio();
   const client = new VoxaClient({
@@ -164,32 +169,53 @@ test("unknown envelopes and malformed JSON are dropped without faulting", async 
 
 // ── barge-in: the load-bearing behaviour ─────────────────────────────────────────────────────
 
-test("interruption envelope flushes scheduled playback", async () => {
+test("interruption envelope flushes scheduled playback BEFORE the event fires", async () => {
   const { socket, audio, client } = await connected();
-  const interruptions: number[] = [];
-  client.on("interruption", () => interruptions.push(1));
+  const order: string[] = [];
+  audio.onFlush = () => order.push("flush");
+  client.on("interruption", () => order.push("emit"));
 
   socket.message(new Int16Array([1, 2]).buffer as ArrayBuffer);
   socket.message(JSON.stringify({ type: "interruption" }));
 
+  // Flush-first is the load-bearing ordering: no handler may run while stale audio is scheduled.
+  assert.deepEqual(order, ["flush", "emit"]);
   assert.equal(audio.flushes, 1);
-  assert.equal(interruptions.length, 1);
 });
 
-test("speaking{user,started} flushes playback before the interruption envelope arrives", async () => {
+test("speaking{user,started} flushes (flush-first) before the interruption envelope arrives", async () => {
   const { socket, audio, client } = await connected();
-  const speaking: unknown[] = [];
-  client.on("speaking", (s) => speaking.push(s));
+  const order: string[] = [];
+  audio.onFlush = () => order.push("flush");
+  client.on("interruption", () => order.push("interruption"));
+  client.on("speaking", () => order.push("speaking"));
 
   socket.message(JSON.stringify({ type: "speaking", who: "user", started: true }));
-  assert.equal(audio.flushes, 1);
+  assert.deepEqual(order, ["flush", "interruption", "speaking"]);
 
   // The other three speaking transitions must NOT flush.
   socket.message(JSON.stringify({ type: "speaking", who: "user", started: false }));
   socket.message(JSON.stringify({ type: "speaking", who: "bot", started: true }));
   socket.message(JSON.stringify({ type: "speaking", who: "bot", started: false }));
   assert.equal(audio.flushes, 1);
-  assert.equal(speaking.length, 4);
+});
+
+test("connect rejects after connectTimeoutMs when the server never sends a session envelope", async () => {
+  const { socket, client } = harness({ connectTimeoutMs: 20 });
+  const connecting = client.connect();
+  socket.open(); // socket opens, then silence — e.g. a non-Voxa endpoint
+  await assert.rejects(connecting, /No session envelope within 20 ms/);
+});
+
+test("a subarray-view mic frame sends exactly the view's bytes", async () => {
+  const { socket, audio } = await connected();
+  const pool = new Int16Array(8).fill(7);
+  const view = pool.subarray(2, 5); // 3 samples inside a larger pooled buffer
+
+  audio.onFrame!(view);
+  const binary = socket.sent.filter((d): d is ArrayBufferLike => typeof d !== "string");
+  assert.equal(binary.length, 1);
+  assert.equal(binary[0].byteLength, 6); // 3 samples × 2 bytes, not the 16-byte pool
 });
 
 // ── frontend tools ───────────────────────────────────────────────────────────────────────────

@@ -67,7 +67,7 @@ export type ClientToolResultMessage = {
   type: "toolResult";
   callId?: string | null;
   resultJson?: string | null;
-  isError: boolean;
+  isError?: boolean | null;
 };
 
 export type ServerMessage =

@@ -38,6 +38,11 @@ export interface VoxaClientOptions {
   micConstraints?: MediaTrackConstraints;
   /** WebSocket factory — injectable for tests; defaults to the platform WebSocket. */
   socketFactory?: (url: string) => WebSocketLike;
+  /**
+   * Reject connect() if session + mic aren't live within this window — a server can accept the
+   * socket and then go silent (e.g. a non-Voxa endpoint). Default 15000 ms; 0 disables.
+   */
+  connectTimeoutMs?: number;
 }
 
 export type VoxaEvents = {
@@ -81,11 +86,19 @@ export class VoxaClient extends Emitter<VoxaEvents> {
     if (this.socket) throw new Error("VoxaClient is already connected.");
     return new Promise<void>((resolve, reject) => {
       let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const fail = (err: Error) => {
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
         reject(err);
       };
+
+      const timeoutMs = this.opts.connectTimeoutMs ?? 15000;
+      if (timeoutMs > 0)
+        timer = setTimeout(
+          () => fail(new Error(`No session envelope within ${timeoutMs} ms — is the endpoint a Voxa voice route?`)),
+          timeoutMs);
 
       const socket = this.opts.socketFactory
         ? this.opts.socketFactory(this.opts.url)
@@ -102,7 +115,10 @@ export class VoxaClient extends Emitter<VoxaEvents> {
 
       socket.onmessage = (event) => {
         if (typeof event.data === "string") {
-          this.handleEnvelope(event.data, { resolveConnect: () => { if (!settled) { settled = true; resolve(); } }, fail });
+          this.handleEnvelope(event.data, {
+            resolveConnect: () => { if (!settled) { settled = true; clearTimeout(timer); resolve(); } },
+            fail,
+          });
         } else if (this.session && event.data.byteLength % 2 === 0) {
           this.audio.play(new Int16Array(event.data), this.session.outputSampleRate);
         }
@@ -228,7 +244,13 @@ export class VoxaClient extends Emitter<VoxaEvents> {
     this.audio
       .startCapture(msg.inputSampleRate, (pcm) => {
         this.emit("micLevel", rms(pcm));
-        if (this.socket?.readyState === OPEN) this.socket.send(pcm.buffer);
+        if (this.socket?.readyState !== OPEN) return;
+        // A custom backend may hand us a subarray view over a pooled buffer — send exactly the
+        // view's bytes. The default backend transfers an exact-size buffer, so this is zero-copy.
+        const exact = pcm.byteOffset === 0 && pcm.byteLength === pcm.buffer.byteLength
+          ? pcm.buffer
+          : pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
+        this.socket.send(exact);
       })
       .then(connect.resolveConnect)
       .catch((err: unknown) => {

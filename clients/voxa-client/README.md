@@ -49,6 +49,7 @@ The server side is the five-line Voxa endpoint: `app.MapVoxaVoice("/voice").UseD
 | `audio` | `WebAudioBackend` | Inject a custom/fake `AudioBackend` (tests run headless this way) |
 | `micConstraints` | EC+NS+AGC on, mono | Mic `MediaTrackConstraints` for the default backend |
 | `socketFactory` | platform `WebSocket` | Injectable for tests |
+| `connectTimeoutMs` | `15000` | Reject `connect()` if the session envelope + mic aren't live in time (`0` disables) |
 
 ## Development
 
