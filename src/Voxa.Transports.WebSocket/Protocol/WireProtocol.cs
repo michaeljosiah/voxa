@@ -58,23 +58,24 @@ public static class WireProtocol
             var root = doc.RootElement;
             if (!root.TryGetProperty("type"u8, out var t)) return null;
 
+            // VDX-005 WS1: each match deserializes its inbound record (the same source the wire
+            // schema and the client's generated types come from) and maps to the same Frame as the
+            // previous hand-rolled parse — same inputs, same frames, same dropped-unknown behavior.
             if (t.ValueEquals("end"u8)) return new EndFrame();
             if (t.ValueEquals("text"u8))
-                return root.TryGetProperty("text"u8, out var txt)
-                    ? new TextFrame(txt.GetString() ?? string.Empty)
-                    : null;
-            if (t.ValueEquals("toolResult"u8)) return ParseToolResult(root);
+            {
+                if (!root.TryGetProperty("text"u8, out _)) return null; // missing text drops, as always
+                var env = root.Deserialize(WireJsonContext.Default.TextClientEnvelope);
+                return new TextFrame(env.Text ?? string.Empty);
+            }
+            if (t.ValueEquals("toolResult"u8))
+            {
+                var env = root.Deserialize(WireJsonContext.Default.ToolResultClientEnvelope);
+                return new ToolCallResultFrame(env.CallId ?? string.Empty, env.ResultJson ?? "{}", env.IsError);
+            }
             return null; // includes "hello" (handled out-of-band) and unknowns
         }
         catch (JsonException) { return null; }
-    }
-
-    private static Frame ParseToolResult(JsonElement root)
-    {
-        var callId = root.TryGetProperty("callId"u8, out var c) ? (c.GetString() ?? string.Empty) : string.Empty;
-        var resultJson = root.TryGetProperty("resultJson"u8, out var r) ? (r.GetString() ?? "{}") : "{}";
-        var isError = root.TryGetProperty("isError"u8, out var e) && e.ValueKind == JsonValueKind.True;
-        return new ToolCallResultFrame(callId, resultJson, isError);
     }
 
     // ---------- Outbound (server -> client): source-generated, UTF-8, one allocation ----------
