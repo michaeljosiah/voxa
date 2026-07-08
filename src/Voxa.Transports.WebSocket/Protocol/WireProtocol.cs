@@ -71,10 +71,13 @@ public static class WireProtocol
             if (t.ValueEquals("toolResult"u8))
             {
                 var env = root.Deserialize(WireJsonContext.Default.ToolResultClientEnvelope);
-                return new ToolCallResultFrame(env.CallId ?? string.Empty, env.ResultJson ?? "{}", env.IsError);
+                return new ToolCallResultFrame(env.CallId ?? string.Empty, env.ResultJson ?? "{}", env.IsError ?? false);
             }
             return null; // includes "hello" (handled out-of-band) and unknowns
         }
+        // Deliberately stricter than the old hand-parse on ill-TYPED fields (e.g. "isError":"true",
+        // numeric callId): those drop the envelope here, where the old GetString() calls could throw
+        // InvalidOperationException straight out of the codec into the receive loop.
         catch (JsonException) { return null; }
     }
 

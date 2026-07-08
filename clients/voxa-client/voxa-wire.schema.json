@@ -171,7 +171,10 @@
           ]
         },
         "isError": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       }
     },
