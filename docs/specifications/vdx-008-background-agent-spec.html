@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VDX-008 — Background agent delegation (talker / thinker split)</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+  --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+  --good: #66bb6a; --warn: #ffb74d; --code-bg: #11151c;
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+.meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+.meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+h2 .secno { color: var(--accent); margin-right: 10px; }
+h3 { font-size: 1.08rem; color: var(--accent2); margin-top: 32px; }
+p, li { font-size: 0.95rem; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+pre code { background: none; padding: 0; color: #c9d6e3; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: var(--panel2); color: #fff; font-weight: 600; }
+.callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+.callout.good { border-left-color: var(--good); }
+.callout.warn { border-left-color: var(--warn); }
+.callout b:first-child { color: var(--accent2); }
+.flow { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem; line-height: 1.7; color: #c9d6e3; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-008 — Background agent delegation (talker / thinker split)</h1>
+  <div class="sub">
+    A second, heavyweight agent that runs tool calls, browsing, and multi-step reasoning off the
+    voice-latency critical path. The interaction model delegates explicitly, keeps talking while the
+    work runs, and decides — when the result lands — whether it still warrants a spoken response.
+    Dead air is the enemy; this spec removes the "6-second tool call = 6 seconds of silence" failure mode.
+  </div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-008 v1.0</div>
+    <div><b>Date</b> 2026-07-09</div>
+    <div><b>Status</b> Proposed</div>
+    <div><b>Target</b> Voxa.Core, Voxa.AspNetCore, Voxa.Services.MicrosoftAgents</div>
+    <div><b>Pattern precedent</b> Pipecat async function calls; "talker/thinker" dual-model voice agents</div>
+    <div><b>Depends on</b> VDX-006/VDX-007 seam discipline (byte-identical when unused)</div>
+  </div>
+</header>
+
+<h2><span class="secno">1.</span> Problem</h2>
+<p>
+In text chat a slow tool call is a spinner; in voice it is dead air. The voice budget is
+&lt;1&nbsp;s to first audio, but real agent work — web search, RAG over a large corpus, a multi-step
+tool chain — takes 5–30&nbsp;s. Today a Voxa granular pipeline runs that work <em>inside</em> the
+turn: <code>AgentLoopProcessor</code>'s turn worker streams the driver, and nothing reaches TTS until
+the driver yields text. The data loop keeps flowing (the founding invariant), and
+<code>StatusFrame</code> can paint "Checking…" in the UI — but the <em>conversation</em> is stalled
+until the turn completes or the response-duration cap truncates it.
+</p>
+<p>
+The industry answer is a <strong>dual-model split</strong>: a fast interaction model owns the
+conversation and the latency budget; a heavyweight background model owns tools and reasoning. The
+interaction model acknowledges immediately ("sure — give me a moment, was this for the same
+account?"), the background model works asynchronously, and its result re-enters the conversation as
+a <em>new turn</em> when it lands. VDX-008 specifies that split as a Voxa-idiomatic frame round-trip.
+</p>
+
+<h2><span class="secno">2.</span> Design overview</h2>
+
+<div class="callout">
+  <b>Founding decision: delegation is explicit, not a mirror.</b> Every design that copies the whole
+  conversation to a second model doubles cost per turn and creates constant arbitration noise. Here
+  the interaction model <em>opts in</em> per task by calling a delegation tool. The common path stays
+  single-model; the background agent runs only when the interaction model decides the work is worth it.
+</div>
+
+<div class="flow">user speech ─ STT ─▶ AgentLoopProcessor ──────────▶ BackgroundAgentProcessor ─▶ SentenceAggregator ─▶ TTS
+                       │      ▲                          │
+   interaction driver ─┘      │                          │ runs background driver on a
+   yields BackgroundTask-     │                          │ bounded worker (its text is
+   RequestFrame + spoken ack  │                          │ ACCUMULATED, never spoken)
+                              │                          │
+                              └── BackgroundTaskCompletedFrame (Upstream) ──┘
+                                  consumed by the loop ⇒ queued as a
+                                  background-result TURN (model gates relevance)</div>
+
+<p>The round-trip reuses the two mechanisms the pipeline already trusts:</p>
+<ul>
+  <li><strong>Downstream request, upstream result</strong> — exactly the frontend-tool shape
+      (<code>ToolCallRequestFrame</code> down, <code>ToolCallResultFrame</code> back up, consumed by
+      the loop and not forwarded), except the "frontend" is a server-side processor.</li>
+  <li><strong>A new turn-trigger kind</strong> — the loop's turn queue today carries only final user
+      transcriptions; it grows a second trigger: "a background task completed". The single FIFO turn
+      worker is untouched, which gives ordering and never-two-turns-at-once for free.</li>
+</ul>
+
+<h2><span class="secno">3.</span> Frame contract (Voxa.Core)</h2>
+
+<pre><code>/// Delegation request. Emitted by the interaction driver (via ctx.Emitter or as a yielded frame);
+/// forwarded downstream by AgentLoopProcessor like any unhandled frame; consumed by
+/// BackgroundAgentProcessor. Uninterruptible for the same reason ToolCallRequestFrame is:
+/// a barge-in must not orphan a task the model has already verbally promised.
+public sealed record BackgroundTaskRequestFrame(
+    string TaskId,               // unique correlation id (ulid)
+    string Goal,                 // natural-language task for the background agent
+    string? ContextJson = null,  // interaction-model-selected context snapshot (compact!)
+    string? OriginTurnId = null) // turn that delegated — the staleness anchor
+    : DataFrame, IUninterruptible;
+
+/// Completion notice. Pushed UPSTREAM (Direction = FrameDirection.Upstream, like ErrorFrame)
+/// by BackgroundAgentProcessor; consumed by AgentLoopProcessor (never forwarded further).
+public sealed record BackgroundTaskCompletedFrame(
+    string TaskId,
+    string ResultText,           // compact result the interaction model will read — a summary, not a trace
+    bool IsError = false,
+    long ElapsedMs = 0,
+    UsageTotals? Usage = null,   // background driver's aggregated LlmUsageFrames
+    string? OriginTurnId = null)
+    : DataFrame, IUninterruptible;</code></pre>
+
+<table>
+  <tr><th>Semantic</th><th>Rule</th></tr>
+  <tr>
+    <td>Interruption</td>
+    <td>Both frames are <code>IUninterruptible</code>; in-flight background tasks are <strong>not</strong>
+        cancelled by <code>InterruptionFrame</code> — surviving barge-in is the point. They are cancelled
+        by <code>EndFrame</code> / disposal (bounded join, same discipline as the loop's turn worker).</td>
+  </tr>
+  <tr>
+    <td>Channel</td>
+    <td>Both are <code>DataFrame</code>s — FIFO-ordered with the conversation, same reasoning as
+        <code>SpeculativeUtteranceFrame</code>'s deliberate non-system placement.</td>
+  </tr>
+  <tr>
+    <td>Result size</td>
+    <td><code>ResultText</code> is what the interaction model reads inside a latency-bounded voice turn.
+        The background driver's contract is to return a compact answer; its full reasoning trace stays its own.</td>
+  </tr>
+</table>
+
+<h2><span class="secno">4.</span> AgentLoopProcessor: background-result turns</h2>
+<p>
+The private <code>Channel&lt;string&gt;</code> turn queue becomes <code>Channel&lt;TurnRequest&gt;</code>
+(internal union: user utterance | background result). Public surface changes are additive:
+</p>
+<pre><code>public enum TurnTrigger { UserUtterance, BackgroundResult }
+
+// VoiceTurnContext — two additive init-only members (defaults preserve source/binary compat):
+public TurnTrigger Trigger { get; init; } = TurnTrigger.UserUtterance;
+public BackgroundTaskCompletedFrame? BackgroundResult { get; init; }  // set iff Trigger == BackgroundResult</code></pre>
+<ul>
+  <li>The data loop gains one case: <code>BackgroundTaskCompletedFrame</code> is consumed (not
+      forwarded) and enqueued as a background-result turn — mirroring the existing
+      <code>ToolCallResultFrame</code> consumption.</li>
+  <li>Background-result turns are <strong>ordinary turns</strong>: <code>LlmTurnStartedFrame</code> /
+      <code>LlmTurnEndedFrame</code> bracket them, the response-duration cap applies, per-turn
+      try/catch isolation applies, hooks fire, and their speech is fully interruptible. For these
+      turns <code>UserText</code> is <code>""</code>; drivers read <code>ctx.BackgroundResult</code>.</li>
+  <li>A driver that decides the result is stale simply yields nothing — an empty turn, which
+      transports already tolerate. Silence is a valid, cheap outcome.</li>
+</ul>
+
+<h3>4.1 Arbitration policy</h3>
+<p>
+Because the turn queue is single-reader FIFO, a result that lands mid-turn naturally waits behind
+the in-flight turn. The remaining hazard is a result landing while the <em>user</em> is mid-utterance
+(their final transcription hasn't reached the queue yet — the bot would talk over them). Two knobs,
+both on the processor:
+</p>
+<table>
+  <tr><th>Knob</th><th>Default</th><th>Behavior</th></tr>
+  <tr>
+    <td><code>HoldBackgroundResultsWhileUserSpeaking</code></td>
+    <td><code>true</code></td>
+    <td>The loop observes <code>UserStartedSpeakingFrame</code>/<code>UserStoppedSpeakingFrame</code> on its
+        system path and holds completed results in a side buffer while the user is speaking; on
+        stop-speaking they are enqueued <em>after</em> any transcription-triggered turn already queued.
+        <code>false</code> ⇒ enqueue immediately (FIFO still serializes actual turns).</td>
+  </tr>
+  <tr>
+    <td><code>MaxPendingBackgroundResults</code></td>
+    <td><code>4</code></td>
+    <td>Bound on held + queued background-result turns, <strong>drop-oldest</strong> — the repo's
+        backpressure convention. A dropped result raises a diagnostics event; it is not an error.</td>
+  </tr>
+</table>
+<div class="callout">
+  <b>Staleness is the model's call, not a timer's.</b> The interaction model is the only component
+  holding current conversational context, so the relevance gate is its prompt contract (§7), not a
+  TTL heuristic. <code>OriginTurnId</code> travels with the result so hosts <em>can</em> build
+  policy hooks on top, but v1 ships no automatic time-based discard.
+</div>
+
+<h2><span class="secno">5.</span> BackgroundAgentProcessor (Voxa.Core)</h2>
+<p>
+A new processor placed immediately downstream of the agent stage. It hosts the heavyweight agent as
+a second <code>IAgentTurnDriver</code> — <strong>the contract is reused verbatim</strong>; no new
+driver interface. What differs is how its output is treated:
+</p>
+<pre><code>public sealed class BackgroundAgentProcessor : FrameProcessor
+{
+    public BackgroundAgentProcessor(
+        IAgentTurnDriver backgroundDriver,
+        int maxConcurrentTasks = 2,          // bounded worker pool per session
+        TimeSpan? taskTimeout = null);        // default 120 s; timeout ⇒ IsError completion, not silence
+}</code></pre>
+<ul>
+  <li>Consumes <code>BackgroundTaskRequestFrame</code> (not forwarded); everything else passes through
+      untouched — the processor is a transparent stage for the normal voice path.</li>
+  <li>Runs the background driver with <code>Trigger = TurnTrigger.UserUtterance</code> semantics
+      (<code>UserText = Goal</code>, metadata carries <code>ContextJson</code>). Its yielded
+      <code>LlmTextChunkFrame</code>s are <strong>accumulated into <code>ResultText</code>, never pushed
+      downstream</strong> — background text must not reach TTS directly. <code>LlmUsageFrame</code>s
+      aggregate into <code>Usage</code>.</li>
+  <li><code>StatusFrame</code>s yielded by the background driver <em>are</em> forwarded downstream —
+      the existing sanitized-progress channel gives "Researching flights…" UI for free.</li>
+  <li>Frontend tools are unavailable in background turns: <code>ctx.FrontendTools</code> throws.
+      A background task awaiting a UI round-trip is a design contradiction (nobody is looking at a
+      modal for a task the user delegated and moved past). Backend tools inside the driver are unrestricted.</li>
+  <li>On completion (success, error, or timeout) it pushes <code>BackgroundTaskCompletedFrame</code>
+      upstream. Per-task try/catch isolation: a failed task completes with <code>IsError = true</code>
+      and the message as <code>ResultText</code> — the interaction model can apologize gracefully instead
+      of the session degrading.</li>
+  <li>Excess requests beyond <code>maxConcurrentTasks</code> queue FIFO (unbounded is fine — the
+      delegation rate is model-limited, not audio-rate).</li>
+</ul>
+
+<h2><span class="secno">6.</span> Composition (Voxa.AspNetCore + MAF adapter)</h2>
+<p>Opt-in via the same one-lookup seam discipline as VDX-006/007:</p>
+<pre><code>// Host — the whole feature:
+services.AddKeyedSingleton&lt;IAgentTurnDriver&gt;("voxa:background", (sp, _) =&gt;
+    MicrosoftAgentVoice.CreateTurnDriver(researchAgent));   // or any hand-rolled driver
+app.MapVoxaVoice("/voice").UseDefaults();</code></pre>
+<ul>
+  <li><code>DefaultVoicePipelineComposer</code> resolves the keyed driver
+      (<code>"voxa:background"</code>) from the per-connection scope. Present ⇒ insert
+      <code>BackgroundAgentProcessor</code> after the agent stage and enable the delegation tool.
+      Absent ⇒ <strong>the composed pipeline is byte-identical to today</strong> (golden-tested, the
+      VDX-006 guarantee).</li>
+  <li>Tuning under <code>Voxa:BackgroundAgent:*</code> (<code>MaxConcurrentTasks</code>,
+      <code>TaskTimeoutSeconds</code>, <code>MaxPendingResults</code>, <code>HoldWhileUserSpeaking</code>),
+      validated by the existing fail-fast options validator.</li>
+  <li><strong>MAF convenience:</strong> when the background driver is present, the Microsoft-Agents
+      adapter injects one AIFunction into the interaction agent:
+      <code>delegate_task(goal, context_summary)</code>. Its handler emits
+      <code>BackgroundTaskRequestFrame</code> via <code>ctx.Emitter</code> and returns immediately with
+      an acknowledgment string — so to the interaction model, delegation is just a fast tool call.
+      Hosts on VDX-007 host drivers wire the same emit themselves (one line in their tool dispatch).</li>
+  <li>Model-tier guidance (docs, not code): interaction model on a fast/cheap tier; background model
+      on the heavyweight tier. The split only pays off if the talker is actually fast.</li>
+</ul>
+
+<h2><span class="secno">7.</span> The prompt contract</h2>
+<p>
+Most of the quality of this feature lives in prompts, not plumbing. The docs page ships the contract
+explicitly; the MAF adapter appends a default version to the interaction agent's instructions when
+delegation is enabled (host-overridable):
+</p>
+<table>
+  <tr><th>Rule</th><th>Why</th></tr>
+  <tr>
+    <td>After delegating, <strong>acknowledge and do not fabricate</strong> — say the work is in
+        progress; hold, hedge, or continue the conversation.</td>
+    <td>The #1 failure mode: the fast model confidently invents the answer the slow model is about
+        to contradict.</td>
+  </tr>
+  <tr>
+    <td>On a background-result turn, <strong>decide relevance first</strong> — if the conversation has
+        moved on or the user already got the answer, yield nothing.</td>
+    <td>Staleness gate (§4.1). Silence must be an explicitly permitted output.</td>
+  </tr>
+  <tr>
+    <td>Delegation context (<code>context_summary</code>) and results are <strong>compact summaries</strong>,
+        never transcripts or traces.</td>
+    <td>Both cross a latency-bounded voice turn; token bloat here is spoken-latency bloat.</td>
+  </tr>
+</table>
+
+<h2><span class="secno">8.</span> Diagnostics</h2>
+<p>
+Three hub events — <code>BackgroundTaskStarted</code>, <code>BackgroundTaskCompleted</code> (elapsed,
+error flag, usage), <code>BackgroundTaskDropped</code> (queue overflow) — behind the existing
+<code>HasListeners</code> zero-cost gate. Task elapsed feeds a <code>voxa.background.task.duration</code>
+histogram. Studio surfacing (a task lane in the Talk view) is deferred; the events are designed so it
+needs no Core changes later.
+</p>
+
+<h2><span class="secno">9.</span> Non-goals</h2>
+<ul>
+  <li><strong>No always-on mirroring</strong> — the background model sees only what delegation hands it.</li>
+  <li><strong>No multi-agent routing framework</strong> — exactly one background driver per session in v1;
+      fan-out/specialist routing belongs inside the background driver (that's what agent frameworks are for).</li>
+  <li><strong>No cross-session task persistence</strong> — tasks die with the session. Durable jobs are a
+      host concern (queue + webhook back into a new session).</li>
+  <li><strong>Composite pipelines out of scope</strong> — <code>AzureVoiceLiveProcessor</code> /
+      <code>OpenAIRealtimeProcessor</code> / the VRT-005 S2S seam own their conversation loop vendor-side;
+      granular pipelines only in v1.</li>
+  <li><strong>No wire/protocol change</strong> — progress rides the existing <code>StatusFrame</code>
+      envelope; results become ordinary spoken turns. <code>@voxa/client</code> is untouched.</li>
+</ul>
+
+<h2><span class="secno">10.</span> Workstreams</h2>
+<table>
+  <tr><th>WS</th><th>Scope</th><th>Ships</th></tr>
+  <tr>
+    <td><b>WS1 — Core</b></td>
+    <td>Frames (§3), turn-trigger union + arbitration knobs in <code>AgentLoopProcessor</code> (§4),
+        <code>BackgroundAgentProcessor</code> (§5), diagnostics events (§8). Pure .NET, fake-driver-testable,
+        zero new dependencies.</td>
+    <td>First — independently useful to hand-built pipelines.</td>
+  </tr>
+  <tr>
+    <td><b>WS2 — Composition</b></td>
+    <td>Composer keyed-driver seam + <code>Voxa:BackgroundAgent:*</code> options + MAF
+        <code>delegate_task</code> tool + default prompt-contract instructions (§6–7).</td>
+    <td>Second.</td>
+  </tr>
+  <tr>
+    <td><b>WS3 — DX</b></td>
+    <td><code>docs/background-agent.md</code>, MinimalServer sample variant (fast talker + delegating
+        researcher), Studio task lane (optional, deferred).</td>
+    <td>With or after WS2.</td>
+  </tr>
+</table>
+
+<h2><span class="secno">11.</span> Verification</h2>
+<ul>
+  <li><b>Round trip:</b> fake interaction driver emits a request; fake background driver returns a
+      result; loop runs a background-result turn with <code>Trigger = BackgroundResult</code>, correct
+      correlation, and normal lifecycle frames.</li>
+  <li><b>Arbitration:</b> result during user speech is held, released after
+      <code>UserStoppedSpeakingFrame</code> <em>behind</em> the pending transcription turn; hold disabled ⇒
+      immediate enqueue; overflow drops oldest and raises the diagnostics event.</li>
+  <li><b>Interruption:</b> <code>InterruptionFrame</code> mid-task ⇒ task completes and its result turn
+      still runs; interruption during a result turn cancels that turn's speech normally.</li>
+  <li><b>Isolation &amp; shutdown:</b> throwing background driver ⇒ <code>IsError</code> completion, session
+      healthy; <code>EndFrame</code>/dispose cancels in-flight tasks with the bounded join; timeout ⇒
+      <code>IsError</code> completion.</li>
+  <li><b>Containment:</b> background driver text never appears downstream; its <code>StatusFrame</code>s do;
+      <code>ctx.FrontendTools</code> throws in background turns.</li>
+  <li><b>Byte-identity:</b> no keyed driver registered ⇒ composed pipeline byte-identical
+      (extends the existing golden tests); existing <code>AgentLoopProcessor</code> tests unaffected
+      (additive context members default correctly).</li>
+</ul>
+
+</div>
+</body>
+</html>
