@@ -48,8 +48,8 @@ th { background: var(--panel2); color: #fff; font-weight: 600; }
     Dead air is the enemy; this spec removes the "6-second tool call = 6 seconds of silence" failure mode.
   </div>
   <div class="meta-grid">
-    <div><b>Document</b> VDX-008 v1.0</div>
-    <div><b>Date</b> 2026-07-09</div>
+    <div><b>Document</b> VDX-008 v1.1 (post-review)</div>
+    <div><b>Date</b> 2026-07-10</div>
     <div><b>Status</b> Proposed</div>
     <div><b>Target</b> Voxa.Core, Voxa.AspNetCore, Voxa.Services.MicrosoftAgents</div>
     <div><b>Pattern precedent</b> Pipecat async function calls; "talker/thinker" dual-model voice agents</div>
@@ -124,7 +124,8 @@ public sealed record BackgroundTaskCompletedFrame(
     string ResultText,           // compact result the interaction model will read — a summary, not a trace
     bool IsError = false,
     long ElapsedMs = 0,
-    UsageTotals? Usage = null,   // background driver's aggregated LlmUsageFrames
+    long InputTokens = 0,        // background driver's aggregated LlmUsageFrames — two longs
+    long OutputTokens = 0,       // (not UsageTotals: frames must not reference processor types)
     string? OriginTurnId = null)
     : DataFrame, IUninterruptible;</code></pre>
 
@@ -166,8 +167,13 @@ public BackgroundTaskCompletedFrame? BackgroundResult { get; init; }  // set iff
       <code>LlmTurnEndedFrame</code> bracket them, the response-duration cap applies, per-turn
       try/catch isolation applies, hooks fire, and their speech is fully interruptible. For these
       turns <code>UserText</code> is <code>""</code>; drivers read <code>ctx.BackgroundResult</code>.</li>
-  <li>A driver that decides the result is stale simply yields nothing — an empty turn, which
-      transports already tolerate. Silence is a valid, cheap outcome.</li>
+  <li>A driver that decides the result is stale simply yields nothing — an empty turn, which is
+      invisible on the wire (the WebSocket sink serializes no turn-lifecycle envelopes and
+      <code>SentenceAggregator</code> flushes nothing for an empty buffer). Silence is a valid, cheap
+      outcome. It is <em>not</em> invisible to observability: the lifecycle frames, the
+      <code>onTurnCompleted</code> hook, and the diagnostics turn edges still fire for the swallowed
+      turn — §8 therefore tags background-result turns with their trigger kind so dashboards and
+      Studio can separate (or filter) them rather than mistaking them for zero-output user turns.</li>
 </ul>
 
 <h3>4.1 Arbitration policy</h3>
@@ -182,9 +188,17 @@ both on the processor:
   <tr>
     <td><code>HoldBackgroundResultsWhileUserSpeaking</code></td>
     <td><code>true</code></td>
-    <td>The loop observes <code>UserStartedSpeakingFrame</code>/<code>UserStoppedSpeakingFrame</code> on its
-        system path and holds completed results in a side buffer while the user is speaking; on
-        stop-speaking they are enqueued <em>after</em> any transcription-triggered turn already queued.
+    <td>The loop observes <code>UserStartedSpeakingFrame</code> on its system path and holds completed
+        results in a side buffer while the user is speaking. Release is <strong>data-ordered, not
+        edge-triggered</strong>: <code>UserStoppedSpeakingFrame</code> alone must NOT release —
+        <code>SpeechToTextProcessor</code> deliberately forwards stop-speaking <em>before</em> the promoted
+        transcript, and as a <code>SystemFrame</code> it can additionally overtake queued data frames
+        cross-channel. Held results are instead released when the utterance's final
+        <code>TranscriptionFrame</code> is consumed by the data loop, enqueued immediately <em>behind</em>
+        the turn that final triggers (a whitespace-only final — a silence misfire — releases too, since no
+        turn will follow it). A quiet-timeout fallback (<code>HeldResultReleaseTimeout</code>, default 2 s
+        after stop-speaking) covers finals that never arrive. Implementation note: the side buffer is
+        mutated from both the system and data loops and must be synchronized.
         <code>false</code> ⇒ enqueue immediately (FIFO still serializes actual turns).</td>
   </tr>
   <tr>
@@ -212,18 +226,29 @@ driver interface. What differs is how its output is treated:
     public BackgroundAgentProcessor(
         IAgentTurnDriver backgroundDriver,
         int maxConcurrentTasks = 2,          // bounded worker pool per session
+        int maxQueuedRequests = 8,           // bound on waiting requests; excess REJECTED, not dropped (below)
         TimeSpan? taskTimeout = null);        // default 120 s; timeout ⇒ IsError completion, not silence
 }</code></pre>
 <ul>
   <li>Consumes <code>BackgroundTaskRequestFrame</code> (not forwarded); everything else passes through
       untouched — the processor is a transparent stage for the normal voice path.</li>
   <li>Runs the background driver with <code>Trigger = TurnTrigger.UserUtterance</code> semantics
-      (<code>UserText = Goal</code>, metadata carries <code>ContextJson</code>). Its yielded
-      <code>LlmTextChunkFrame</code>s are <strong>accumulated into <code>ResultText</code>, never pushed
-      downstream</strong> — background text must not reach TTS directly. <code>LlmUsageFrame</code>s
-      aggregate into <code>Usage</code>.</li>
-  <li><code>StatusFrame</code>s yielded by the background driver <em>are</em> forwarded downstream —
-      the existing sanitized-progress channel gives "Researching flights…" UI for free.</li>
+      (<code>UserText = Goal</code>, metadata carries <code>ContextJson</code>). The driver's yielded
+      frames are handled by <strong>whitelist, so unknown speech-bearing frames fail closed</strong>:
+      <table>
+        <tr><th>Yielded frame</th><th>Handling</th></tr>
+        <tr><td><code>LlmTextChunkFrame</code>, <code>TextFrame</code></td>
+            <td>Accumulated into <code>ResultText</code>. <code>TextFrame</code> explicitly included:
+                <code>TextToSpeechProcessor</code> synthesizes it, so letting it pass would speak
+                background text directly — the containment guarantee this processor exists to hold.</td></tr>
+        <tr><td><code>StatusFrame</code></td>
+            <td>Forwarded downstream — the existing sanitized-progress channel gives
+                "Researching flights…" UI for free.</td></tr>
+        <tr><td><code>LlmUsageFrame</code></td>
+            <td>Aggregated into the completion frame's <code>InputTokens</code>/<code>OutputTokens</code>.</td></tr>
+        <tr><td>Everything else</td>
+            <td>Dropped with a debug log — never forwarded.</td></tr>
+      </table></li>
   <li>Frontend tools are unavailable in background turns: <code>ctx.FrontendTools</code> throws.
       A background task awaiting a UI round-trip is a design contradiction (nobody is looking at a
       modal for a task the user delegated and moved past). Backend tools inside the driver are unrestricted.</li>
@@ -231,14 +256,23 @@ driver interface. What differs is how its output is treated:
       upstream. Per-task try/catch isolation: a failed task completes with <code>IsError = true</code>
       and the message as <code>ResultText</code> — the interaction model can apologize gracefully instead
       of the session degrading.</li>
-  <li>Excess requests beyond <code>maxConcurrentTasks</code> queue FIFO (unbounded is fine — the
-      delegation rate is model-limited, not audio-rate).</li>
+  <li>Excess requests beyond <code>maxConcurrentTasks</code> queue FIFO up to
+      <code>maxQueuedRequests</code>. Beyond the cap a request is <strong>rejected immediately</strong>
+      with <code>BackgroundTaskCompletedFrame(IsError = true, ResultText = "background task queue is full")</code>
+      — the interaction model verbally promised the work, so it must be told, not left waiting on a
+      promise that never reports back. Rejection rather than drop-oldest is a deliberate deviation
+      from the audio-path backpressure convention: requests are not superseded-by-newer the way audio
+      frames are. The cap also bounds what a looping or prompt-injected interaction model can
+      accumulate in <code>Goal</code>/<code>ContextJson</code> payloads per session.</li>
 </ul>
 
 <h2><span class="secno">6.</span> Composition (Voxa.AspNetCore + MAF adapter)</h2>
 <p>Opt-in via the same one-lookup seam discipline as VDX-006/007:</p>
 <pre><code>// Host — the whole feature:
-services.AddKeyedSingleton&lt;IAgentTurnDriver&gt;("voxa:background", (sp, _) =&gt;
+// Scoped: one driver instance per connection — background drivers typically hold per-conversation
+// state (ContextJson, tool sessions). A keyed SINGLETON is shared across all concurrent sessions
+// and is acceptable only if the driver is stateless and thread-safe.
+services.AddKeyedScoped&lt;IAgentTurnDriver&gt;("voxa:background", (sp, _) =&gt;
     MicrosoftAgentVoice.CreateTurnDriver(researchAgent));   // or any hand-rolled driver
 app.MapVoxaVoice("/voice").UseDefaults();</code></pre>
 <ul>
@@ -248,7 +282,8 @@ app.MapVoxaVoice("/voice").UseDefaults();</code></pre>
       Absent ⇒ <strong>the composed pipeline is byte-identical to today</strong> (golden-tested, the
       VDX-006 guarantee).</li>
   <li>Tuning under <code>Voxa:BackgroundAgent:*</code> (<code>MaxConcurrentTasks</code>,
-      <code>TaskTimeoutSeconds</code>, <code>MaxPendingResults</code>, <code>HoldWhileUserSpeaking</code>),
+      <code>MaxQueuedRequests</code>, <code>TaskTimeoutSeconds</code>, <code>MaxPendingResults</code>,
+      <code>HoldWhileUserSpeaking</code>, <code>HeldResultReleaseTimeoutMs</code>),
       validated by the existing fail-fast options validator.</li>
   <li><strong>MAF convenience:</strong> when the background driver is present, the Microsoft-Agents
       adapter injects one AIFunction into the interaction agent:
@@ -256,6 +291,15 @@ app.MapVoxaVoice("/voice").UseDefaults();</code></pre>
       <code>BackgroundTaskRequestFrame</code> via <code>ctx.Emitter</code> and returns immediately with
       an acknowledgment string — so to the interaction model, delegation is just a fast tool call.
       Hosts on VDX-007 host drivers wire the same emit themselves (one line in their tool dispatch).</li>
+  <li><strong>MAF background-result turns (required, not optional):</strong> the adapter's default
+      message build is a single <code>ChatMessage(ChatRole.User, ctx.UserText)</code>
+      (<code>MicrosoftAgentTurnDriver.BuildMessagesAsync</code>) — for a background-result turn
+      <code>UserText</code> is empty, so without an adapter change the flagship <code>UseDefaults()</code>
+      flow would run an <em>empty</em> turn on every completion and the result would never reach the
+      model. WS2 therefore includes: when <code>ctx.Trigger == TurnTrigger.BackgroundResult</code>, the
+      default build injects <code>ResultText</code> (task id, error flag, elapsed) framed by the
+      relevance-gate instruction from §7. Hosts that override <code>BuildMessages</code> take on the
+      trigger check themselves — the option's doc comment says so.</li>
   <li>Model-tier guidance (docs, not code): interaction model on a fast/cheap tier; background model
       on the heavyweight tier. The split only pays off if the talker is actually fast.</li>
 </ul>
@@ -288,11 +332,15 @@ delegation is enabled (host-overridable):
 
 <h2><span class="secno">8.</span> Diagnostics</h2>
 <p>
-Three hub events — <code>BackgroundTaskStarted</code>, <code>BackgroundTaskCompleted</code> (elapsed,
-error flag, usage), <code>BackgroundTaskDropped</code> (queue overflow) — behind the existing
+Four hub events — <code>BackgroundTaskStarted</code>, <code>BackgroundTaskCompleted</code> (elapsed,
+error flag, usage), <code>BackgroundTaskRejected</code> (request cap hit, §5),
+<code>BackgroundTaskDropped</code> (held-result overflow, §4.1) — behind the existing
 <code>HasListeners</code> zero-cost gate. Task elapsed feeds a <code>voxa.background.task.duration</code>
-histogram. Studio surfacing (a task lane in the Talk view) is deferred; the events are designed so it
-needs no Core changes later.
+histogram. In addition, the loop's turn-edge events carry the turn's <strong>trigger kind</strong>
+(<code>UserUtterance</code> | <code>BackgroundResult</code>) so dashboards and Studio can separate
+background-result turns — including the empty gated-to-silence ones (§4) — from real user turns
+instead of reading them as zero-output anomalies. Studio surfacing (a task lane in the Talk view) is
+deferred; the events are designed so it needs no Core changes later.
 </p>
 
 <h2><span class="secno">9.</span> Non-goals</h2>
@@ -338,16 +386,26 @@ needs no Core changes later.
   <li><b>Round trip:</b> fake interaction driver emits a request; fake background driver returns a
       result; loop runs a background-result turn with <code>Trigger = BackgroundResult</code>, correct
       correlation, and normal lifecycle frames.</li>
-  <li><b>Arbitration:</b> result during user speech is held, released after
-      <code>UserStoppedSpeakingFrame</code> <em>behind</em> the pending transcription turn; hold disabled ⇒
-      immediate enqueue; overflow drops oldest and raises the diagnostics event.</li>
+  <li><b>Arbitration (data-ordered release):</b> result during user speech is held;
+      <code>UserStoppedSpeakingFrame</code> alone does NOT release; the utterance's final
+      <code>TranscriptionFrame</code> releases it <em>behind</em> the turn that final triggers; a
+      whitespace-only final releases too; a stop-speaking with no final ever arriving releases via the
+      quiet-timeout; hold disabled ⇒ immediate enqueue; held-result overflow drops oldest and raises
+      <code>BackgroundTaskDropped</code>.</li>
+  <li><b>Request cap:</b> a request beyond <code>maxQueuedRequests</code> completes immediately with
+      <code>IsError = true</code> and raises <code>BackgroundTaskRejected</code>; queued (uncapped)
+      requests still run.</li>
   <li><b>Interruption:</b> <code>InterruptionFrame</code> mid-task ⇒ task completes and its result turn
       still runs; interruption during a result turn cancels that turn's speech normally.</li>
   <li><b>Isolation &amp; shutdown:</b> throwing background driver ⇒ <code>IsError</code> completion, session
       healthy; <code>EndFrame</code>/dispose cancels in-flight tasks with the bounded join; timeout ⇒
       <code>IsError</code> completion.</li>
-  <li><b>Containment:</b> background driver text never appears downstream; its <code>StatusFrame</code>s do;
-      <code>ctx.FrontendTools</code> throws in background turns.</li>
+  <li><b>Containment (whitelist):</b> background-driver <code>LlmTextChunkFrame</code> AND
+      <code>TextFrame</code> are accumulated, never downstream; an unknown/custom frame is dropped, not
+      forwarded; <code>StatusFrame</code>s pass; <code>ctx.FrontendTools</code> throws in background turns.</li>
+  <li><b>MAF default turn build:</b> a background-result turn through the unmodified
+      <code>UseDefaults()</code> MAF path produces messages containing <code>ResultText</code> (regression
+      test pinning the §6 adapter change — an empty message list is the failure this exists to catch).</li>
   <li><b>Byte-identity:</b> no keyed driver registered ⇒ composed pipeline byte-identical
       (extends the existing golden tests); existing <code>AgentLoopProcessor</code> tests unaffected
       (additive context members default correctly).</li>
