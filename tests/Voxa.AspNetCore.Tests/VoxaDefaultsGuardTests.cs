@@ -115,6 +115,45 @@ public class VoxaDefaultsGuardTests
         await guard.StartAsync(CancellationToken.None);
     }
 
+    private sealed class FakeTurnDriver : Voxa.Processors.IAgentTurnDriver
+    {
+        public bool Resolved;
+        public IAsyncEnumerable<Voxa.Frames.Frame> RunTurnAsync(
+            Voxa.Processors.VoiceTurnContext ctx, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task Armed_Guard_Skips_The_Agent_Check_When_A_Host_TurnDriver_Is_Registered()
+    {
+        // VDX-007: a registered IAgentTurnDriver replaces the agent stage, so the guard must NOT
+        // resolve the (unused) default AIAgent — a host whose agent factory does real work (sandbox
+        // warm-up) would otherwise stall startup. A RejectingFactory that would fail validation is
+        // present precisely to prove the guard never consults the agent path.
+        var guard = Guard(OptionsWithProviders(), s =>
+        {
+            s.AddSingleton<Voxa.Processors.IAgentTurnDriver, FakeTurnDriver>();
+            s.AddSingleton<IVoiceAgentFactory, RejectingFactory>();
+        });
+        guard.Arm();
+
+        await guard.StartAsync(CancellationToken.None); // no throw — the driver satisfies the requirement
+    }
+
+    [Fact]
+    public async Task Armed_Guard_Does_Not_Resolve_AIAgent_When_A_TurnDriver_Is_Registered()
+    {
+        // The stall is caused by RESOLVING the AIAgent (its factory blocks). Prove resolution never
+        // happens: a throwing AIAgent factory would surface if the guard touched it.
+        var guard = Guard(OptionsWithProviders(), s =>
+        {
+            s.AddSingleton<Voxa.Processors.IAgentTurnDriver, FakeTurnDriver>();
+            s.AddSingleton<AIAgent>(_ => throw new InvalidOperationException("AIAgent must not be resolved"));
+        });
+        guard.Arm();
+
+        await guard.StartAsync(CancellationToken.None); // the throwing AIAgent factory is never invoked
+    }
+
     // ── Meta-package end-to-end: the exact reported scenario ───────────────
 
     private static (VoxaDefaultsGuard Guard, ServiceProvider Sp) MetaPackageGuard(

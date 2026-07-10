@@ -54,10 +54,18 @@ public sealed class VoxaDefaultsGuard : IHostedService
         // scoped services from the root provider throws under scope validation).
         using var scope = _sp.CreateScope();
         var scoped = scope.ServiceProvider;
-        bool hasDiAgent = scoped.GetService<Microsoft.Agents.AI.AIAgent>() is not null
-                       || scoped.GetService<Microsoft.Extensions.AI.IChatClient>() is not null;
 
-        if (!hasDiAgent)
+        // VDX-007: a host-registered IAgentTurnDriver replaces the whole Microsoft-Agents stage, so
+        // the composer never resolves an AIAgent/IChatClient/factory for it. Mirror that resolution
+        // order HERE — otherwise the guard eagerly resolves the (unused) default AIAgent at startup,
+        // which for a host whose agent factory does real work (e.g. waiting on a sandbox warm-up)
+        // reintroduces the very first-launch stall the driver seam exists to avoid.
+        bool hasHostDriver = scoped.GetService<Voxa.Processors.IAgentTurnDriver>() is not null;
+        bool hasDiAgent = !hasHostDriver
+                       && (scoped.GetService<Microsoft.Agents.AI.AIAgent>() is not null
+                        || scoped.GetService<Microsoft.Extensions.AI.IChatClient>() is not null);
+
+        if (!hasHostDriver && !hasDiAgent)
         {
             // The factory is the agent source the composer will fall back to, so its mere
             // presence is not enough — the meta-package always registers one. Ask it whether
