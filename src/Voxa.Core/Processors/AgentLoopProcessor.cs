@@ -66,7 +66,12 @@ public sealed class AgentLoopProcessor : FrameProcessor
         = new(StringComparer.Ordinal);
 
     private readonly CancellationTokenSource _processorCts = new();
+    private readonly bool _cancelTurnOnBargeIn;
     private Task? _turnWorker;
+
+    /// <summary>The in-flight turn's linked CTS — set by the turn worker, cancelled from the system
+    /// loop on barge-in. Same benign-race discipline as <c>FrameProcessor._currentFrameCts</c>.</summary>
+    private CancellationTokenSource? _activeTurnCts;
 
     /// <summary>
     /// Construct an agent-loop processor. Hosts that need turn-level hooks (notification, audit,
@@ -95,6 +100,15 @@ public sealed class AgentLoopProcessor : FrameProcessor
     /// Null ⇒ defaults (hold while the user speaks, 4 pending max, 2 s quiet-timeout).</param>
     /// <param name="diagnosticsHub">Optional hub for <see cref="BackgroundTaskDroppedEvent"/>s when the
     /// pending cap evicts a held result. Null ⇒ no diagnostics (the default composition wires it).</param>
+    /// <param name="cancelTurnOnBargeIn">
+    /// VRT-002 WS2 barge-in: user speech starting during an in-flight turn cancels the driver
+    /// enumeration (a normal truncated completion — summary and <see cref="LlmTurnEndedFrame"/>
+    /// still fire) and pushes an <see cref="InterruptionFrame"/> downstream so the aggregator, TTS,
+    /// sink, and client all stop the stale response. Without this, nothing in a granular pipeline
+    /// ever emits an <see cref="InterruptionFrame"/> and an interrupted answer resumes after the
+    /// barge-in. Default on; opt out for half-duplex hosts whose VAD can hear the bot's own speech
+    /// without echo cancellation.
+    /// </param>
     public AgentLoopProcessor(
         IAgentTurnDriver driver,
         Func<VoiceTurnContext, CancellationToken, ValueTask>? onTurnStarted = null,
@@ -103,9 +117,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
         Func<VoiceTurnContext>? contextFactory = null,
         TimeSpan? maxResponseDuration = null,
         BackgroundResultOptions? backgroundResults = null,
-        VoxaDiagnosticsHub? diagnosticsHub = null)
+        VoxaDiagnosticsHub? diagnosticsHub = null,
+        bool cancelTurnOnBargeIn = true)
         : base(name: "AgentLoop")
     {
+        _cancelTurnOnBargeIn = cancelTurnOnBargeIn;
         _driver = driver ?? throw new ArgumentNullException(nameof(driver));
         _onTurnStarted = onTurnStarted;
         _onTurnCompleted = onTurnCompleted;
@@ -205,6 +221,14 @@ public sealed class AgentLoopProcessor : FrameProcessor
             case UserStartedSpeakingFrame:
                 // Arrives on the SYSTEM loop — only observe (under the hold lock) and forward.
                 OnUserStartedSpeaking();
+                // Barge-in (VRT-002 WS2): user speech during an in-flight turn cancels the driver
+                // and tells downstream via a real InterruptionFrame — the frame nothing in the
+                // granular chain emitted before, which is why an interrupted answer used to stop
+                // for the queued audio only and then RESUME from the next sentence.
+                if (_cancelTurnOnBargeIn && TryCancelActiveTurn())
+                {
+                    await PushFrameAsync(new InterruptionFrame(), ct).ConfigureAwait(false);
+                }
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
@@ -244,6 +268,30 @@ public sealed class AgentLoopProcessor : FrameProcessor
             }
         }
         _turnQueue.Writer.TryWrite(new TurnRequest(string.Empty, completed));
+    }
+
+    /// <summary>An externally-emitted <see cref="InterruptionFrame"/> (composite processors,
+    /// hand-built hosts) also cancels the in-flight turn; the frame itself is forwarded by
+    /// <see cref="ProcessFrameAsync"/>'s default case so downstream still reacts.</summary>
+    protected override ValueTask OnInterruptionAsync(InterruptionFrame frame, CancellationToken ct)
+    {
+        if (_cancelTurnOnBargeIn) TryCancelActiveTurn();
+        return ValueTask.CompletedTask;
+    }
+
+    private bool TryCancelActiveTurn()
+    {
+        var active = _activeTurnCts;
+        if (active is null) return false;
+        try
+        {
+            active.Cancel();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false; // the turn completed as we looked — nothing to interrupt
+        }
     }
 
     private void OnUserStartedSpeaking()
@@ -374,18 +422,16 @@ public sealed class AgentLoopProcessor : FrameProcessor
                         await _onTurnStarted.Invoke(ctx, ct).ConfigureAwait(false);
                     }
 
-                    // Response-duration cap (VRT-002 WS2 §6.5): a linked CTS cancels the driver enumeration
-                    // when the wall-clock cap is hit, so a turn that stalls before its first chunk, pauses
-                    // longer than the cap between chunks, or blocks on a frontend tool is bounded too — not
-                    // only one that keeps yielding frames. A capped turn is a normal truncated completion: the
-                    // cancellation is swallowed below and the summary + LlmTurnEndedFrame (finally) still run.
-                    CancellationTokenSource? capCts = null;
-                    if (_maxResponseDuration is { } cap)
-                    {
-                        capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        capCts.CancelAfter(cap);
-                    }
-                    var driverToken = capCts?.Token ?? ct;
+                    // One linked CTS per turn, fired by EITHER the response-duration cap (VRT-002 WS2
+                    // §6.5) or barge-in (user speech during the turn / an InterruptionFrame). Both are
+                    // normal truncated completions: the cancellation is swallowed below and the summary +
+                    // LlmTurnEndedFrame (finally) still run — so conversation memory keeps the partial
+                    // answer and the next turn has context. Frontend-tool waits cancel automatically:
+                    // drivers await them on this same token.
+                    var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    if (_maxResponseDuration is { } cap) turnCts.CancelAfter(cap);
+                    _activeTurnCts = turnCts;
+                    var driverToken = turnCts.Token;
                     try
                     {
                         await foreach (var frame in _driver.RunTurnAsync(ctx, driverToken).ConfigureAwait(false))
@@ -413,13 +459,14 @@ public sealed class AgentLoopProcessor : FrameProcessor
                             await PushFrameAsync(frame, ct).ConfigureAwait(false);
                         }
                     }
-                    catch (OperationCanceledException) when (capCts is { IsCancellationRequested: true } && !ct.IsCancellationRequested)
+                    catch (OperationCanceledException) when (turnCts.IsCancellationRequested && !ct.IsCancellationRequested)
                     {
-                        // Response-duration cap fired mid-generation — truncate cleanly and fall through to the summary.
+                        // Cap or barge-in fired mid-generation — truncate cleanly and fall through to the summary.
                     }
                     finally
                     {
-                        capCts?.Dispose();
+                        _activeTurnCts = null;
+                        turnCts.Dispose();
                     }
 
                     var summary = new TurnSummary(

@@ -28,6 +28,7 @@ public sealed class SentenceAggregator : FrameProcessor
     private readonly object _lock = new();
     private int _lastBoundary = -1;     // index in _buffer of the last confirmed sentence boundary
     private bool _firstFlushOfTurn = true;
+    private bool _droppingInterruptedTurn; // barge-in mute: drop the cancelled turn's stale chunks until the next turn opens
 
     /// <summary>Maximum chars to buffer before forcing a flush even without a sentence boundary. Default 500.</summary>
     public int MaxBufferChars { get; init; } = 500;
@@ -52,6 +53,11 @@ public sealed class SentenceAggregator : FrameProcessor
                     string? toFlush = null;
                     lock (_lock)
                     {
+                        // Barge-in: chunks from the cancelled turn can still be queued behind the
+                        // (system-channel) interruption — dropping the buffer once isn't enough;
+                        // stay muted until the next turn opens or the stale answer resumes.
+                        if (_droppingInterruptedTurn) return;
+
                         var text = chunk.Text;
                         int baseLen = _buffer.Length;
                         _buffer.Append(text);
@@ -126,15 +132,25 @@ public sealed class SentenceAggregator : FrameProcessor
                 }
 
             case LlmTurnStartedFrame:
-                // New turn — the next flush is the turn's first (re-enables eager first-chunk mode).
-                lock (_lock) _firstFlushOfTurn = true;
+                // New turn — the next flush is the turn's first (re-enables eager first-chunk mode)
+                // and any barge-in mute lifts: this turn's chunks are fresh, not the stale tail.
+                lock (_lock) { _firstFlushOfTurn = true; _droppingInterruptedTurn = false; }
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
             case UserStartedSpeakingFrame:
             case InterruptionFrame:
-                // Drop the buffered partial sentence — interrupted, so the response is no longer relevant.
-                lock (_lock) { _buffer.Clear(); _lastBoundary = -1; _firstFlushOfTurn = true; }
+                // Drop the buffered partial sentence AND everything else this turn still has queued
+                // (see the chunk case) — interrupted, so the response is no longer relevant.
+                lock (_lock) { _buffer.Clear(); _lastBoundary = -1; _firstFlushOfTurn = true; _droppingInterruptedTurn = true; }
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
+            case TranscriptionFrame { IsFinal: true } final when !string.IsNullOrWhiteSpace(final.Text):
+                // Data-ordered unmute (mirrors TextToSpeechProcessor): the barge-in utterance's final
+                // queues behind the stale chunks and ahead of the next turn's — safe reopen point for
+                // chains without turn-lifecycle frames.
+                lock (_lock) _droppingInterruptedTurn = false;
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
