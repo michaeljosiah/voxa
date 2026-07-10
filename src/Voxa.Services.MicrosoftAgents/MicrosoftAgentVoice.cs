@@ -66,6 +66,49 @@ public static class MicrosoftAgentVoice
             onTurnStarted: options.OnTurnStarted,
             onTurnCompleted: options.OnTurnCompleted,
             onTurnFailed: options.OnTurnFailed,
-            maxResponseDuration: options.MaxResponseDuration);
+            maxResponseDuration: options.MaxResponseDuration,
+            backgroundResults: options.BackgroundResults,
+            diagnosticsHub: options.DiagnosticsHub);
+    }
+
+    /// <summary>
+    /// Create a bare <see cref="IAgentTurnDriver"/> over a MAF agent — the shape a VDX-008
+    /// background agent registers under the composer's keyed seam, or a hand-built pipeline feeds
+    /// to <see cref="Processors.BackgroundAgentProcessor"/> directly:
+    /// <code>
+    /// services.AddKeyedScoped&lt;IAgentTurnDriver&gt;("voxa:background",
+    ///     (sp, _) =&gt; MicrosoftAgentVoice.CreateTurnDriver(researchAgent));
+    /// </code>
+    /// </summary>
+    public static IAgentTurnDriver CreateTurnDriver(
+        AIAgent agent,
+        Action<MicrosoftAgentVoiceOptions>? configure = null,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        var options = new MicrosoftAgentVoiceOptions();
+        configure?.Invoke(options);
+        return new MicrosoftAgentTurnDriver(agent, options, logger);
+    }
+
+    /// <summary>
+    /// Build the chat message a background-result turn feeds the interaction model (VDX-008 §7):
+    /// the compact result framed by the relevance-gate instruction — the model may respond with
+    /// nothing if the conversation has moved on. Public so hosts overriding
+    /// <see cref="MicrosoftAgentVoiceOptions.BuildMessages"/> keep the same contract.
+    /// </summary>
+    public static Microsoft.Extensions.AI.ChatMessage CreateBackgroundResultMessage(
+        Frames.BackgroundTaskCompletedFrame result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var outcome = result.IsError
+            ? $"FAILED: {result.ResultText}"
+            : $"completed. Result: {result.ResultText}";
+        return new Microsoft.Extensions.AI.ChatMessage(
+            Microsoft.Extensions.AI.ChatRole.User,
+            $"[System note — a background task you delegated earlier has {outcome} " +
+            "If the conversation has moved on or the user already has this answer, respond with " +
+            "NOTHING (empty response). Otherwise deliver the result briefly and conversationally; " +
+            "if it failed, apologize briefly and offer to retry.]");
     }
 }

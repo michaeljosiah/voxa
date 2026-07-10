@@ -30,8 +30,45 @@ public sealed class VoxaOptions
     public VoxaAecOptions Aec { get; set; } = new();
     public VoxaEnhanceOptions Enhance { get; set; } = new();
     public VoxaAgentOptions Agent { get; set; } = new();
+    public VoxaBackgroundAgentOptions BackgroundAgent { get; set; } = new();
     public VoxaAggregatorOptions Aggregator { get; set; } = new();
     public VoxaDiagnosticsOptions Diagnostics { get; set; } = new();
+}
+
+/// <summary>
+/// Background agent delegation tuning (VDX-008). These knobs only take effect when a host registers
+/// a background driver under <see cref="VoxaBackgroundAgentOptions.ServiceKey"/> — with none
+/// registered the composed pipeline has no background stage and is byte-identical to today.
+/// </summary>
+public sealed class VoxaBackgroundAgentOptions
+{
+    /// <summary>
+    /// The keyed-service key the composer resolves the background <c>IAgentTurnDriver</c> from:
+    /// <c>services.AddKeyedScoped&lt;IAgentTurnDriver&gt;(VoxaBackgroundAgentOptions.ServiceKey, …)</c>
+    /// (or use <c>AddVoxaBackgroundAgent</c>).
+    /// </summary>
+    public const string ServiceKey = "voxa:background";
+
+    /// <summary>Bounded background worker pool per session.</summary>
+    public int MaxConcurrentTasks { get; set; } = 2;
+
+    /// <summary>Waiting-request cap; excess delegations are rejected with an immediate error completion
+    /// the interaction model can recover from conversationally (never silently dropped).</summary>
+    public int MaxQueuedRequests { get; set; } = 8;
+
+    /// <summary>Per-task wall-clock cap in seconds; a timed-out task completes as an error, not silence.</summary>
+    public int TaskTimeoutSeconds { get; set; } = 120;
+
+    /// <summary>Held-result cap while the user speaks, drop-oldest (VDX-008 §4.1).</summary>
+    public int MaxPendingResults { get; set; } = 4;
+
+    /// <summary>Hold results that complete mid-utterance and release them data-ordered behind the
+    /// utterance's turn (VDX-008 §4.1). Off ⇒ results enqueue immediately.</summary>
+    public bool HoldWhileUserSpeaking { get; set; } = true;
+
+    /// <summary>Fallback release (ms) after stop-speaking when the utterance's final transcription
+    /// never arrives.</summary>
+    public int HeldResultReleaseTimeoutMs { get; set; } = 2000;
 }
 
 /// <summary>

@@ -81,6 +81,20 @@ internal sealed class VoxaOptionsValidator : IValidateOptions<VoxaOptions>
         else if (_registry.TryGetEnhancer(o.Enhance.Engine, out var enhDesc))
             errors.AddRange(enhDesc.Validate(root));
 
+        // Background agent (VDX-008): range-check unconditionally — the knobs are cheap to validate
+        // and a bad value would otherwise surface as a mid-session data-loop fault, not at startup.
+        var bg = o.BackgroundAgent;
+        if (bg.MaxConcurrentTasks < 1)
+            errors.Add($"Voxa:BackgroundAgent:MaxConcurrentTasks must be ≥ 1 (got {bg.MaxConcurrentTasks}).");
+        if (bg.MaxQueuedRequests < 1)
+            errors.Add($"Voxa:BackgroundAgent:MaxQueuedRequests must be ≥ 1 (got {bg.MaxQueuedRequests}).");
+        if (bg.TaskTimeoutSeconds < 1)
+            errors.Add($"Voxa:BackgroundAgent:TaskTimeoutSeconds must be ≥ 1 (got {bg.TaskTimeoutSeconds}).");
+        if (bg.MaxPendingResults < 1)
+            errors.Add($"Voxa:BackgroundAgent:MaxPendingResults must be ≥ 1 (got {bg.MaxPendingResults}).");
+        if (bg.HeldResultReleaseTimeoutMs < 1)
+            errors.Add($"Voxa:BackgroundAgent:HeldResultReleaseTimeoutMs must be ≥ 1 (got {bg.HeldResultReleaseTimeoutMs}).");
+
         return errors.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(errors);
