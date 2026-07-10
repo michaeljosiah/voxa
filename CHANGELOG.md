@@ -24,8 +24,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   progress UI; everything else is dropped), background tasks survive barge-in and die on `EndFrame`,
   and frontend tools throw in background turns. New diagnostics: `LlmTurnEvent` +
   `BackgroundTask{Started,Completed,Rejected,Dropped}Event` on the hub and a
-  `voxa.background.task.duration` histogram. Composition (`UseDefaults()` + the MAF `delegate_task`
-  tool) ships in WS2; spec: `docs/specifications/vdx-008-background-agent-spec.html`.
+  `voxa.background.task.duration` histogram.
+  **Composition (WS2):** registering a keyed `IAgentTurnDriver` under `"voxa:background"` — or
+  `services.AddVoxaBackgroundAgent(factory)` (scoped per connection) — is the whole opt-in:
+  `DefaultVoicePipelineComposer` inserts the background stage after the agent and arms the loop;
+  tuning under `Voxa:BackgroundAgent:*` with fail-fast range validation. The Microsoft-Agents
+  adapter gains `EnableBackgroundDelegation` (a per-turn `delegate_task(goal, context_summary)`
+  backend tool whose ack carries the acknowledge-don't-fabricate contract), a public
+  `MicrosoftAgentVoice.CreateTurnDriver`, and — critically — its default `BuildMessages` now feeds
+  background-result turns `CreateBackgroundResultMessage` (result + relevance-gate instruction)
+  instead of running an empty turn; the composer's conversation-memory path does the same and keeps
+  silent-gated results out of history.
+  **Docs & sample (WS3):** `docs/background-agent.md` guide and the runnable
+  `samples/Voxa.Samples.BackgroundAgentServer` (fast talker + delegating researcher with a
+  deliberately slow demo tool).
+  **Studio:** the Talk viewbar shows an "N background tasks" badge while delegated work is in
+  flight, and the event log names task starts/completions/rejections/drops and background-result
+  turn edges — including results the model gated to silence.
+  Spec: `docs/specifications/vdx-008-background-agent-spec.html`.
 - **`@voxa/client` — the official browser/JS client (VDX-005 WS2/WS3).** A new npm package under
   `clients/voxa-client` (TypeScript, ESM, **zero runtime dependencies**): AudioWorklet mic capture at
   the announced input rate, gap-free PCM playback at the announced output rate, typed events

@@ -48,14 +48,29 @@ th { background: var(--panel2); color: #fff; font-weight: 600; }
     Dead air is the enemy; this spec removes the "6-second tool call = 6 seconds of silence" failure mode.
   </div>
   <div class="meta-grid">
-    <div><b>Document</b> VDX-008 v1.1 (post-review)</div>
+    <div><b>Document</b> VDX-008 v1.2</div>
     <div><b>Date</b> 2026-07-10</div>
-    <div><b>Status</b> Proposed</div>
+    <div><b>Status</b> Implemented (WS1–WS3 + Studio surfacing; PR #96)</div>
     <div><b>Target</b> Voxa.Core, Voxa.AspNetCore, Voxa.Services.MicrosoftAgents</div>
     <div><b>Pattern precedent</b> Pipecat async function calls; "talker/thinker" dual-model voice agents</div>
     <div><b>Depends on</b> VDX-006/VDX-007 seam discipline (byte-identical when unused)</div>
   </div>
 </header>
+
+<div class="callout warn">
+  <b>Implementation refinements (v1.2 — what shipped differs from v1.1 in four places).</b>
+  (1) <em>Release is deferred-to-stop for mid-speech finals:</em> a final consumed while the speaking
+  edges say the user is talking (cross-channel race, a streaming engine's mid-utterance final, or a
+  late final from the previous utterance) marks the release pending and the next stop edge fires it —
+  results are never injected mid-speech, and the §4.1 "released when the final is consumed" wording
+  applies verbatim only to finals that arrive after the stop edge. (2) The delegate-tool
+  acknowledge-don't-fabricate contract rides the <em>tool's return value</em>, not appended
+  instructions — models follow tool results more reliably. (3) The helper is
+  <code>MicrosoftAgentVoice.CreateBackgroundResultMessage</code>; registration sugar is
+  <code>AddVoxaBackgroundAgent(factory)</code> (keyed scoped). (4) Studio surfacing shipped with v1
+  (not deferred): a Talk viewbar badge for in-flight tasks + event-log lines for task lifecycle and
+  background-result turn edges.
+</div>
 
 <h2><span class="secno">1.</span> Problem</h2>
 <p>

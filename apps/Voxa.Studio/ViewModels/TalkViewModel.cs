@@ -177,6 +177,17 @@ public sealed partial class TalkViewModel : ObservableObject
     /// <summary>Times the user barged in over the agent (interruptions) this session.</summary>
     [ObservableProperty] private int _bargeInCount;
 
+    /// <summary>Delegated background tasks currently running (VDX-008) — the viewbar badge shows while &gt; 0.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BackgroundTasksLabel)), NotifyPropertyChangedFor(nameof(ShowBackgroundTasksBadge))]
+    private int _activeBackgroundTasks;
+
+    public string BackgroundTasksLabel => ActiveBackgroundTasks == 1
+        ? "1 background task"
+        : $"{ActiveBackgroundTasks} background tasks";
+
+    public bool ShowBackgroundTasksBadge => ActiveBackgroundTasks > 0;
+
     [ObservableProperty] private AudioEndpoint? _selectedMicrophone;
     [ObservableProperty] private AudioEndpoint? _selectedSpeaker;
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(StopCommand))]
@@ -264,6 +275,7 @@ public sealed partial class TalkViewModel : ObservableObject
         _turnNumber = 0;
         TurnCount = 0;
         BargeInCount = 0;
+        ActiveBackgroundTasks = 0;
         TtfbText = "—";
         try
         {
@@ -331,6 +343,7 @@ public sealed partial class TalkViewModel : ObservableObject
         IsUserSpeaking = false;
         IsBotSpeaking = false;
         Phase = TalkPhase.Idle;
+        ActiveBackgroundTasks = 0; // in-flight tasks die with the session (VDX-008 EndFrame semantics)
         _streamingBot = null;
         _sessionStartTick = 0;
     }
@@ -418,6 +431,33 @@ public sealed partial class TalkViewModel : ObservableObject
                 case PipelineErrorEvent err:
                     ErrorText = err.Message;
                     Log(e, err.Message);
+                    break;
+
+                // ── VDX-008 background delegation ─────────────────────────────
+                case BackgroundTaskStartedEvent started:
+                    ActiveBackgroundTasks++;
+                    Log(e, Truncate(started.Goal, 60));
+                    break;
+
+                case BackgroundTaskCompletedEvent completed:
+                    ActiveBackgroundTasks = Math.Max(0, ActiveBackgroundTasks - 1);
+                    Log(e, completed.IsError
+                        ? $"FAILED after {completed.ElapsedMs:F0} ms"
+                        : $"done in {completed.ElapsedMs:F0} ms");
+                    break;
+
+                case BackgroundTaskRejectedEvent:
+                    Log(e, "rejected — request queue full");
+                    break;
+
+                case BackgroundTaskDroppedEvent:
+                    Log(e, "held result dropped (pending cap)");
+                    break;
+
+                case LlmTurnEvent { Trigger: Voxa.Frames.TurnTrigger.BackgroundResult } llmTurn:
+                    // A result gated to silence produces no transcript line — the log is the only
+                    // place these turns are visible, so name them explicitly.
+                    Log(e, llmTurn.Started ? "background-result turn started" : "background-result turn ended");
                     break;
             }
         }
@@ -515,6 +555,8 @@ public sealed partial class TalkViewModel : ObservableObject
             _stages = new Dictionary<string, double>();
         }
     }
+
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     private void Log(DiagnosticEvent e, string detail)
     {

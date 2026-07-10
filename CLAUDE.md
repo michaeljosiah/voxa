@@ -148,5 +148,6 @@ speakers. Key facts for working in it:
 ## Reference docs
 
 Design specs live in `docs/specifications/*.html` (developer-experience, local-speech, performance,
-Studio). Guides: `docs/local-speech.md`, `docs/performance-tuning.md`, `docs/studio.md`. `ROADMAP.md`
+Studio). Guides: `docs/local-speech.md`, `docs/performance-tuning.md`, `docs/studio.md`,
+`docs/background-agent.md` (the VDX-008 talker/thinker split). `ROADMAP.md`
 tracks planned work and which items have shipped.
