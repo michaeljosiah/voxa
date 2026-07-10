@@ -11,7 +11,7 @@ public enum BuilderPortType { Audio, Transcription, AgentText, SynthAudio }
 /// runtime), so this set is exactly what the default composer can materialise — the §8.3
 /// honesty constraint as a type.
 /// </summary>
-public enum BuilderNodeKind { Source, Vad, Stt, Filter, Agent, Aggregator, Tts, Sink }
+public enum BuilderNodeKind { Source, Vad, Stt, Filter, Agent, BackgroundAgent, Aggregator, Tts, Sink }
 
 /// <summary>One node on the canvas. Options are flat config-style values (e.g. "Model").</summary>
 public sealed class BuilderNode
@@ -50,6 +50,9 @@ public sealed class BuilderGraph
         BuilderNodeKind.Stt        => (BuilderPortType.Audio, BuilderPortType.Transcription),
         BuilderNodeKind.Filter     => (BuilderPortType.Transcription, BuilderPortType.Transcription),
         BuilderNodeKind.Agent      => (BuilderPortType.Transcription, BuilderPortType.AgentText),
+        // VDX-008: transparent for the conversation (agent-text in, agent-text out) — the delegation
+        // round trip rides frames, not ports, so the node slots anywhere after the Agent.
+        BuilderNodeKind.BackgroundAgent => (BuilderPortType.AgentText, BuilderPortType.AgentText),
         BuilderNodeKind.Aggregator => (BuilderPortType.AgentText, BuilderPortType.AgentText),
         BuilderNodeKind.Tts        => (BuilderPortType.AgentText, BuilderPortType.SynthAudio),
         BuilderNodeKind.Sink       => (BuilderPortType.SynthAudio, null),

@@ -103,10 +103,16 @@ single-in/single-out wiring and makes that feel intentional rather than limited.
   transcript / agent delta / TTS chunk), the active stage node glows with its measured latency,
   per-node queue depths surface backpressure, and the latest turn renders as a slim waterfall
   strip along the canvas bottom. Every signal is a real `VoxaDiagnosticsHub` event.
+- **Background agent (VDX-008).** Drop a **Background · thinker** node after the Agent to run
+  the talker/thinker split on the canvas: the talker gets the `delegate_task` tool automatically,
+  and delegated work runs on the node's thinker — the keyless **demo thinker** (a deliberate
+  N-second delay, so you can hear the conversation keep flowing) or a second **OpenAI** agent on
+  a heavier model. The card is honest: behind an Echo talker it says `idle (Echo agent never
+  delegates)`, because Echo never calls tools. See [background-agent.md](background-agent.md).
 - **Export.** When the chain matches what `UseDefaults()` composes, export the
-  `appsettings.json` block; any other valid shape (say, no `TranscriptionFilter`) exports as
-  generated C# composition code instead — both honest artifacts a server can run. API keys are
-  never exported.
+  `appsettings.json` block; any other valid shape (say, no `TranscriptionFilter`, or a
+  Background agent node) exports as generated C# composition code instead — both honest
+  artifacts a server can run. API keys are never exported.
 - **Furniture.** Drag to arrange (snap-to-grid), **Tidy** auto-layout, Ctrl+wheel zoom, undo/redo
   (Ctrl+Z/Y), save/load the graph as JSON in your user profile. The canvas opens with the active
   config as a graph, and the Config view's **Open in Builder** does the same for any draft.

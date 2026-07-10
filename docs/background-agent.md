@@ -112,6 +112,15 @@ A host that drives its own `IAgentTurnDriver` (the VDX-007 seam) participates di
 Hand-built (non-composer) pipelines place `new BackgroundAgentProcessor(backgroundDriver, …)`
 anywhere downstream of the `AgentLoopProcessor`.
 
+## Trying it in Voxa Studio
+
+The Builder's palette has **Background · demo thinker** (keyless — a deliberate N-second delay so
+the split is audible with no API keys when paired with an OpenAI talker) and **Background ·
+OpenAI thinker** (a second agent on a heavier model). Drop one after the Agent node and Run: the
+talker gets `delegate_task` automatically, the Talk-style badge counts in-flight tasks, and the
+chain exports as C# composition code with the `AddVoxaBackgroundAgent` registration a server needs.
+Note the Echo talker never calls tools, so behind it the node card honestly reads *idle*.
+
 ## Semantics worth knowing
 
 - **Barge-in does not cancel background work** — the user interrupting the talker must not orphan a

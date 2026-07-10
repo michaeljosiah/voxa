@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Voxa.AspNetCore;
 using Voxa.Audio;
 using Voxa.Diagnostics;
+using Voxa.Frames;
 using Voxa.Processors;
 using Voxa.Services.MicrosoftAgents;
 using Voxa.Speech;
@@ -222,7 +224,20 @@ internal static class BuilderChainCompiler
                     var history = options.Agent.ConversationMemory
                         ? new InMemoryChatHistory(options.Agent.MaxHistoryMessages)
                         : null;
-                    parts.Add(new(node.Id, sp => CreateAgentProcessor(sp, options.Agent, history, tuning.MaxResponseDuration)));
+                    // VDX-008: a BackgroundAgent node anywhere downstream means the talker needs the
+                    // delegate_task tool and the loop needs its arbitration knobs (composer parity).
+                    var backgroundEnabled = chain.Any(n => n.Kind == BuilderNodeKind.BackgroundAgent);
+                    parts.Add(new(node.Id, sp => CreateAgentProcessor(
+                        sp, options, history, tuning.MaxResponseDuration, backgroundEnabled)));
+                    break;
+
+                case BuilderNodeKind.BackgroundAgent:
+                    parts.Add(new(node.Id, sp => new BackgroundAgentProcessor(
+                        CreateBackgroundDriver(sp, node, options),
+                        maxConcurrentTasks: IntOption(node, "MaxConcurrentTasks", options.BackgroundAgent.MaxConcurrentTasks),
+                        maxQueuedRequests:  IntOption(node, "MaxQueuedRequests", options.BackgroundAgent.MaxQueuedRequests),
+                        taskTimeout:        TimeSpan.FromSeconds(IntOption(node, "TaskTimeoutSeconds", options.BackgroundAgent.TaskTimeoutSeconds)),
+                        diagnosticsHub:     sp.GetService<VoxaDiagnosticsHub>())));
                     break;
 
                 case BuilderNodeKind.Aggregator:
@@ -321,8 +336,10 @@ internal static class BuilderChainCompiler
     // non-default chain still gets exactly the agent a server would. Kept in lockstep with
     // DefaultVoicePipelineComposer.CreateAgentProcessor.
     private static FrameProcessor CreateAgentProcessor(
-        IServiceProvider sp, VoxaAgentOptions agentOpts, InMemoryChatHistory? history, TimeSpan? maxResponseDuration)
+        IServiceProvider sp, VoxaOptions options, InMemoryChatHistory? history,
+        TimeSpan? maxResponseDuration, bool backgroundEnabled)
     {
+        var agentOpts = options.Agent;
         AIAgent? agent = sp.GetService<AIAgent>()
             ?? WrapChatClient(sp.GetService<IChatClient>(), agentOpts)
             ?? sp.GetService<IVoiceAgentFactory>()?.Create(sp, agentOpts);
@@ -333,14 +350,41 @@ internal static class BuilderChainCompiler
         return MicrosoftAgentVoice.CreateProcessor(agent, opts =>
         {
             opts.MaxResponseDuration = maxResponseDuration; // CQ-007: match the composer's VRT-002 WS2 §6.5 response cap
+
+            if (backgroundEnabled)
+            {
+                // VDX-008 composer parity: the talker gets delegate_task; the loop gets the
+                // Voxa:BackgroundAgent arbitration knobs and the hub for drop events.
+                opts.EnableBackgroundDelegation = true;
+                opts.BackgroundResults = new BackgroundResultOptions
+                {
+                    HoldWhileUserSpeaking    = options.BackgroundAgent.HoldWhileUserSpeaking,
+                    MaxPendingResults        = options.BackgroundAgent.MaxPendingResults,
+                    HeldResultReleaseTimeout = TimeSpan.FromMilliseconds(options.BackgroundAgent.HeldResultReleaseTimeoutMs),
+                };
+                opts.DiagnosticsHub = sp.GetService<VoxaDiagnosticsHub>();
+            }
+
             if (history is null) return;
             opts.BuildMessages = (turnCtx, ct) =>
             {
-                var messages = new List<ChatMessage>(history.Snapshot()) { new(ChatRole.User, turnCtx.UserText) };
+                // VDX-008: background-result turns carry no user text — mirror the composer's
+                // relevance-gated result message so the model never runs an empty turn.
+                var turnMessage = turnCtx.Trigger == TurnTrigger.BackgroundResult && turnCtx.BackgroundResult is { } result
+                    ? MicrosoftAgentVoice.CreateBackgroundResultMessage(result)
+                    : new ChatMessage(ChatRole.User, turnCtx.UserText);
+                var messages = new List<ChatMessage>(history.Snapshot()) { turnMessage };
                 return ValueTask.FromResult<IReadOnlyList<ChatMessage>>(messages);
             };
             opts.OnTurnCompleted = (turnCtx, summary, ct) =>
             {
+                if (turnCtx.Trigger == TurnTrigger.BackgroundResult)
+                {
+                    // A result gated to silence leaves no history trace (composer parity).
+                    if (!string.IsNullOrWhiteSpace(summary.AssistantText))
+                        history.AddAssistant(summary.AssistantText);
+                    return ValueTask.CompletedTask;
+                }
                 history.AddUser(turnCtx.UserText);
                 if (!string.IsNullOrWhiteSpace(summary.AssistantText))
                     history.AddAssistant(summary.AssistantText);
@@ -348,6 +392,34 @@ internal static class BuilderChainCompiler
             };
         });
     }
+
+    /// <summary>
+    /// The node's "thinker": Echo → the keyless demo driver (delay from the node); OpenAI → a second
+    /// agent on its own (heavier) model via the same factory the talker uses, so key fallback rules match.
+    /// </summary>
+    private static IAgentTurnDriver CreateBackgroundDriver(
+        IServiceProvider sp, BuilderNode node, VoxaOptions options)
+    {
+        if (string.Equals(node.Provider, "Echo", StringComparison.OrdinalIgnoreCase))
+            return new DemoBackgroundDriver(TimeSpan.FromSeconds(IntOption(node, "DelaySeconds", 4)));
+
+        var thinkerOpts = new VoxaAgentOptions
+        {
+            Provider = "OpenAI",
+            Model = node.Options.GetValueOrDefault("Model", "gpt-4o"),
+            ApiKey = node.Options.GetValueOrDefault("ApiKey") is { Length: > 0 } key ? key : options.Agent.ApiKey,
+            Instructions = "You are a background research assistant. Answer in 2-3 compact sentences — " +
+                           "your answer is read aloud by another assistant, so no lists or markdown.",
+        };
+        var agent = sp.GetService<IVoiceAgentFactory>()?.Create(sp, thinkerOpts)
+            ?? throw new InvalidOperationException(
+                "The Background agent (OpenAI) node needs the OpenAI voice-agent factory (Voxa meta-package).");
+        return MicrosoftAgentVoice.CreateTurnDriver(agent);
+    }
+
+    private static int IntOption(BuilderNode node, string key, int fallback) =>
+        int.TryParse(node.Options.GetValueOrDefault(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+            ? v : fallback;
 
     private static AIAgent? WrapChatClient(IChatClient? chatClient, VoxaAgentOptions opts)
     {
@@ -385,6 +457,8 @@ internal static class BuilderChainCompiler
         sb.AppendLine("using Microsoft.Extensions.Options;");
         sb.AppendLine("using Voxa.AspNetCore;");
         if (aecEnabled) sb.AppendLine("using Voxa.Audio;"); // EchoReferenceTapProcessor + IEchoCanceller (far-end tap)
+        if (chain.Any(n => n.Kind == BuilderNodeKind.BackgroundAgent))
+            sb.AppendLine("using Voxa.Frames;"); // TurnTrigger on background-result turns (VDX-008)
         sb.AppendLine("using Voxa.Pipelines;");
         sb.AppendLine("using Voxa.Processors;");
         sb.AppendLine("using Voxa.Services.MicrosoftAgents;");
@@ -474,6 +548,7 @@ internal static class BuilderChainCompiler
                     break;
 
                 case BuilderNodeKind.Agent:
+                    var hasBackground = chain.Any(n => n.Kind == BuilderNodeKind.BackgroundAgent);
                     sb.AppendLine();
                     sb.AppendLine($"    // Agent — {node.Provider} (set Voxa:Agent:Provider/Model/ApiKey in config)");
                     sb.AppendLine("    var agent = session.GetService<AIAgent>()");
@@ -485,16 +560,60 @@ internal static class BuilderChainCompiler
                     sb.AppendLine("    builder.Then(MicrosoftAgentVoice.CreateProcessor(agent, opts =>");
                     sb.AppendLine("    {");
                     sb.AppendLine("        opts.MaxResponseDuration = tuning.MaxResponseDuration; // VRT-002 WS2 §6.5 response cap — match the composer");
+                    if (hasBackground)
+                    {
+                        sb.AppendLine("        // VDX-008: the BackgroundAgent stage downstream needs the talker to delegate.");
+                        sb.AppendLine("        opts.EnableBackgroundDelegation = true;");
+                        sb.AppendLine("        opts.BackgroundResults = new BackgroundResultOptions");
+                        sb.AppendLine("        {");
+                        sb.AppendLine("            HoldWhileUserSpeaking    = options.BackgroundAgent.HoldWhileUserSpeaking,");
+                        sb.AppendLine("            MaxPendingResults        = options.BackgroundAgent.MaxPendingResults,");
+                        sb.AppendLine("            HeldResultReleaseTimeout = TimeSpan.FromMilliseconds(options.BackgroundAgent.HeldResultReleaseTimeoutMs),");
+                        sb.AppendLine("        };");
+                    }
                     sb.AppendLine("        if (history is null) return;");
-                    sb.AppendLine("        opts.BuildMessages = (turn, ct) => ValueTask.FromResult<IReadOnlyList<ChatMessage>>(");
-                    sb.AppendLine("            new List<ChatMessage>(history.Snapshot()) { new(ChatRole.User, turn.UserText) });");
-                    sb.AppendLine("        opts.OnTurnCompleted = (turn, summary, ct) =>");
-                    sb.AppendLine("        {");
-                    sb.AppendLine("            history.AddUser(turn.UserText);");
-                    sb.AppendLine("            if (!string.IsNullOrWhiteSpace(summary.AssistantText)) history.AddAssistant(summary.AssistantText);");
-                    sb.AppendLine("            return ValueTask.CompletedTask;");
-                    sb.AppendLine("        };");
+                    if (hasBackground)
+                    {
+                        sb.AppendLine("        // Background-result turns carry no user text — feed the relevance-gated result instead.");
+                        sb.AppendLine("        opts.BuildMessages = (turn, ct) => ValueTask.FromResult<IReadOnlyList<ChatMessage>>(");
+                        sb.AppendLine("            new List<ChatMessage>(history.Snapshot())");
+                        sb.AppendLine("            {");
+                        sb.AppendLine("                turn.Trigger == TurnTrigger.BackgroundResult && turn.BackgroundResult is { } result");
+                        sb.AppendLine("                    ? MicrosoftAgentVoice.CreateBackgroundResultMessage(result)");
+                        sb.AppendLine("                    : new ChatMessage(ChatRole.User, turn.UserText),");
+                        sb.AppendLine("            });");
+                        sb.AppendLine("        opts.OnTurnCompleted = (turn, summary, ct) =>");
+                        sb.AppendLine("        {");
+                        sb.AppendLine("            if (turn.Trigger != TurnTrigger.BackgroundResult) history.AddUser(turn.UserText);");
+                        sb.AppendLine("            if (!string.IsNullOrWhiteSpace(summary.AssistantText)) history.AddAssistant(summary.AssistantText);");
+                        sb.AppendLine("            return ValueTask.CompletedTask;");
+                        sb.AppendLine("        };");
+                    }
+                    else
+                    {
+                        sb.AppendLine("        opts.BuildMessages = (turn, ct) => ValueTask.FromResult<IReadOnlyList<ChatMessage>>(");
+                        sb.AppendLine("            new List<ChatMessage>(history.Snapshot()) { new(ChatRole.User, turn.UserText) });");
+                        sb.AppendLine("        opts.OnTurnCompleted = (turn, summary, ct) =>");
+                        sb.AppendLine("        {");
+                        sb.AppendLine("            history.AddUser(turn.UserText);");
+                        sb.AppendLine("            if (!string.IsNullOrWhiteSpace(summary.AssistantText)) history.AddAssistant(summary.AssistantText);");
+                        sb.AppendLine("            return ValueTask.CompletedTask;");
+                        sb.AppendLine("        };");
+                    }
                     sb.AppendLine("    }));");
+                    break;
+
+                case BuilderNodeKind.BackgroundAgent:
+                    sb.AppendLine();
+                    sb.AppendLine("    // Background agent — the VDX-008 talker/thinker split (docs/background-agent.md).");
+                    sb.AppendLine("    // Studio's canvas runs a built-in thinker; a server registers its own driver once:");
+                    sb.AppendLine("    //   services.AddVoxaBackgroundAgent(sp => MicrosoftAgentVoice.CreateTurnDriver(researcherAgent));");
+                    sb.AppendLine("    var backgroundDriver = session.GetKeyedService<IAgentTurnDriver>(VoxaBackgroundAgentOptions.ServiceKey)");
+                    sb.AppendLine("        ?? throw new InvalidOperationException(\"No background driver registered — call services.AddVoxaBackgroundAgent(...).\");");
+                    sb.AppendLine("    builder.Then(new BackgroundAgentProcessor(backgroundDriver,");
+                    sb.AppendLine("        maxConcurrentTasks: options.BackgroundAgent.MaxConcurrentTasks,");
+                    sb.AppendLine("        maxQueuedRequests:  options.BackgroundAgent.MaxQueuedRequests,");
+                    sb.AppendLine("        taskTimeout:        TimeSpan.FromSeconds(options.BackgroundAgent.TaskTimeoutSeconds)));");
                     break;
 
                 case BuilderNodeKind.Aggregator:

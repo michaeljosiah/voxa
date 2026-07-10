@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Studio Builder: Background agent node (VDX-008).** The canvas palette gains
+  **Background · demo thinker** (keyless: a deliberate N-second delay, audible proof the
+  conversation keeps flowing) and **Background · OpenAI thinker** (a second agent on a heavier
+  model). The node carries agent-text in/out so it wires after the Agent; compiling a chain that
+  contains one arms the talker's `delegate_task` tool and the loop's arbitration knobs
+  (composer parity, `Voxa:BackgroundAgent:*`), and the C# export emits the
+  `BackgroundAgentProcessor` stage plus the `AddVoxaBackgroundAgent` registration a server needs
+  (such chains are non-default-shape, so appsettings export and profile save stay honestly
+  blocked). The card admits it idles behind an Echo talker, which never calls tools. Inspector
+  knobs: thinker delay (demo), model/API key (OpenAI), task timeout.
+
 ### Fixed
 
 - **Studio: Diarization's source RadioButtons could livelock the UI thread.** The "Bundled sample" /
