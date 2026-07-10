@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Studio: Diarization's source RadioButtons could livelock the UI thread.** The "Bundled sample" /
+  "WAV file" pair bound `IsChecked` to `UseFixture` and `!UseFixture`, both TwoWay — Avalonia's
+  radio-group manager unchecks one button, its binding writes the flipped value back to the view
+  model, which re-toggles the other button, forever, pinning the dispatcher at 100% CPU. The negated
+  binding is now `Mode=OneWay` (the group keeps it in sync; the first button stays the single
+  writer). This is what made `StudioBootTests.Section_Views_All_Construct` — and therefore any bare
+  `dotnet test tests/Voxa.Studio.Tests` — hang indefinitely; CI's TRX gate had been silently
+  absorbing the hang via its `--blame-hang-timeout` abort since 2026-06-27.
+
 ### Added
 
 - **`@voxa/client` — the official browser/JS client (VDX-005 WS2/WS3).** A new npm package under

@@ -20,7 +20,10 @@
       <StackPanel Spacing="10">
         <StackPanel Orientation="Horizontal" Spacing="16">
           <RadioButton GroupName="src" Content="Bundled sample (jfk.wav)" IsChecked="{Binding UseFixture}" />
-          <RadioButton GroupName="src" Content="WAV file" IsChecked="{Binding !UseFixture}" />
+          <!-- OneWay: two complementary TwoWay bindings livelock via RadioButtonGroupManager write-backs
+               (the group unchecks one button, its binding flips the source, which re-toggles the other, forever).
+               The first button's TwoWay binding is the single writer; the group keeps this one in sync. -->
+          <RadioButton GroupName="src" Content="WAV file" IsChecked="{Binding !UseFixture, Mode=OneWay}" />
         </StackPanel>
 
         <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !UseFixture}">
