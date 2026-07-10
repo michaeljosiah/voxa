@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Barge-in now actually interrupts the answer (VRT-002 WS2, the deferred half).** In granular
+  pipelines nothing ever emitted an `InterruptionFrame` (the Silero VAD emits only speaking edges),
+  so the per-processor preemption machinery never fired: the LLM kept streaming the interrupted
+  answer, the aggregator re-aggregated its later sentences, TTS synthesized them into the sink's
+  *fresh* epoch — and the bot audibly **resumed the interrupted answer** after a brief pause. Now:
+  `AgentLoopProcessor` cancels the in-flight turn when user speech starts during it (a normal
+  truncated completion — summary and `LlmTurnEndedFrame` still fire, conversation memory keeps the
+  partial answer, frontend-tool waits cancel) and pushes a real `InterruptionFrame` downstream; an
+  externally-emitted `InterruptionFrame` (composite processors, hand-built hosts) cancels the turn
+  too. `SentenceAggregator` and `TextToSpeechProcessor` mute the cancelled turn's stale text —
+  chunks queued behind the system-channel interruption — until the next `LlmTurnStartedFrame` (or,
+  for lifecycle-frame-free chains, the barge-in utterance's own final transcription), and TTS aborts
+  the sentence being synthesized mid-flight (covers the turn-tail case on a bare
+  `UserStartedSpeakingFrame`, matching the sink's pre-existing epoch bump). Opt out with
+  `AgentLoopProcessor(..., cancelTurnOnBargeIn: false)` for half-duplex hosts without echo
+  cancellation. Still deferred from VRT-002: the `MinInterruptionDuration` debounce and
+  `InterruptionRecoveryTimeout` knobs (the VAD's `StartDuration` gate covers the common case).
+  Note: Studio Talk is half-duplex by default (`Voxa:Studio:AllowBargeIn=false` gates the mic while
+  the bot speaks) — barge-in there requires enabling that flag, ideally with headphones.
+
 ### Added
 
 - **Studio Builder: Background agent node (VDX-008).** The canvas palette gains
