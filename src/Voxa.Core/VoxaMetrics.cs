@@ -38,4 +38,12 @@ public static class VoxaMetrics
     public static readonly Histogram<double> StageLatencyMs =
         Meter.CreateHistogram<double>("voxa.stage.latency", unit: "ms",
             description: "Per-turn stage latency breakdown (tag 'stage')");
+
+    /// <summary>
+    /// Wall-clock duration of a delegated background-agent task (VDX-008 §8) — the work that runs
+    /// off the voice-latency critical path, so it does NOT contribute to <see cref="TurnTtfbMs"/>.
+    /// </summary>
+    public static readonly Histogram<double> BackgroundTaskDurationMs =
+        Meter.CreateHistogram<double>("voxa.background.task.duration", unit: "ms",
+            description: "Background agent task duration (success, error, or timeout)");
 }

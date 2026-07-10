@@ -67,3 +67,22 @@ public sealed record StageLatencyEvent(string Stage, double Ms) : DiagnosticEven
 
 /// <summary>An <c>ErrorFrame</c> observed travelling through the pipeline.</summary>
 public sealed record PipelineErrorEvent(string Source, string Message) : DiagnosticEvent;
+
+/// <summary>
+/// An agent-turn boundary with its trigger kind (VDX-008 §8). The trigger distinguishes
+/// background-result turns — including empty gated-to-silence ones — from user turns, so
+/// dashboards don't read them as zero-output anomalies.
+/// </summary>
+public sealed record LlmTurnEvent(string TurnId, bool Started, Frames.TurnTrigger Trigger) : DiagnosticEvent;
+
+/// <summary>A delegated background task began executing on a worker (VDX-008 §8).</summary>
+public sealed record BackgroundTaskStartedEvent(string TaskId, string Goal) : DiagnosticEvent;
+
+/// <summary>A delegated background task finished — success, error, or timeout (VDX-008 §8).</summary>
+public sealed record BackgroundTaskCompletedEvent(string TaskId, bool IsError, double ElapsedMs) : DiagnosticEvent;
+
+/// <summary>A delegation request was rejected because the request queue was at capacity (VDX-008 §5).</summary>
+public sealed record BackgroundTaskRejectedEvent(string TaskId) : DiagnosticEvent;
+
+/// <summary>A held background result was evicted by the pending cap — drop-oldest (VDX-008 §4.1).</summary>
+public sealed record BackgroundTaskDroppedEvent(string TaskId) : DiagnosticEvent;

@@ -185,8 +185,25 @@ public sealed class DefaultVoicePipelineComposer
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Stt);
 
         // 4. Agent. Built-in conversation memory unless a host IVoiceAgentConfigurator owns it (VDX-006).
-        parts.Add(sp => CreateAgentProcessor(sp, o.Agent, tuning.MaxResponseDuration));
+        // VDX-008: a keyed background driver ("voxa:background") enables the talker/thinker split —
+        // the agent loop gains background-result turns and a BackgroundAgentProcessor is inserted
+        // below. Absent ⇒ both are skipped and the composed pipeline is byte-identical to today.
+        var backgroundEnabled = services.GetKeyedService<IAgentTurnDriver>(VoxaBackgroundAgentOptions.ServiceKey) is not null;
+        parts.Add(sp => CreateAgentProcessor(sp, o, tuning.MaxResponseDuration, backgroundEnabled, diagnostics));
         Tap(Voxa.Diagnostics.DiagnosticsTapScope.Agent);
+
+        // 4.5 Background agent stage (VDX-008 §5) — immediately downstream of the agent stage so the
+        //     delegation round trip (request down, completion up) stays adjacent.
+        if (backgroundEnabled)
+        {
+            var bg = o.BackgroundAgent;
+            parts.Add(sp => new BackgroundAgentProcessor(
+                sp.GetRequiredKeyedService<IAgentTurnDriver>(VoxaBackgroundAgentOptions.ServiceKey),
+                maxConcurrentTasks: bg.MaxConcurrentTasks,
+                maxQueuedRequests: bg.MaxQueuedRequests,
+                taskTimeout: TimeSpan.FromSeconds(bg.TaskTimeoutSeconds),
+                diagnosticsHub: diagnostics ? sp.GetService<Voxa.Diagnostics.VoxaDiagnosticsHub>() : null));
+        }
 
         // 5. Sentence aggregator (profile-tuned)
         parts.Add(_ => new SentenceAggregator
@@ -273,9 +290,27 @@ public sealed class DefaultVoicePipelineComposer
 
     private FrameProcessor CreateAgentProcessor(
         IServiceProvider sp,
-        VoxaAgentOptions agentOpts,
-        TimeSpan? maxResponseDuration)
+        VoxaOptions options,
+        TimeSpan? maxResponseDuration,
+        bool backgroundEnabled,
+        bool diagnostics)
     {
+        var agentOpts = options.Agent;
+
+        // VDX-008: arbitration knobs + hub reach the loop only when the background seam is active,
+        // so the no-background construction path is exactly the pre-VDX-008 one.
+        var backgroundArbitration = backgroundEnabled
+            ? new BackgroundResultOptions
+            {
+                HoldWhileUserSpeaking = options.BackgroundAgent.HoldWhileUserSpeaking,
+                MaxPendingResults = options.BackgroundAgent.MaxPendingResults,
+                HeldResultReleaseTimeout = TimeSpan.FromMilliseconds(options.BackgroundAgent.HeldResultReleaseTimeoutMs),
+            }
+            : null;
+        var backgroundHub = backgroundEnabled && diagnostics
+            ? sp.GetService<Voxa.Diagnostics.VoxaDiagnosticsHub>()
+            : null;
+
         // VDX-007: a host-registered IAgentTurnDriver replaces the whole Microsoft-Agents stage —
         // the host owns its engine, memory, and tool round-trips — so a host with its own agent
         // runtime keeps UseDefaults() (real VAD, profile, taps) instead of hand-building the chain.
@@ -290,7 +325,16 @@ public sealed class DefaultVoicePipelineComposer
                 _logger.LogDebug(
                     "Voxa: an IAgentTurnDriver is registered; it owns conversation memory, so " +
                     "Voxa:Agent:ConversationMemory does not apply.");
-            return new AgentLoopProcessor(hostDriver, maxResponseDuration: maxResponseDuration);
+            if (backgroundEnabled)
+                _logger.LogDebug(
+                    "Voxa: background delegation is active with a host IAgentTurnDriver — the host driver " +
+                    "emits BackgroundTaskRequestFrames itself and handles Trigger == BackgroundResult turns " +
+                    "(the MAF delegate_task tool applies only to the Microsoft-Agents stage).");
+            return new AgentLoopProcessor(
+                hostDriver,
+                maxResponseDuration: maxResponseDuration,
+                backgroundResults: backgroundArbitration,
+                diagnosticsHub: backgroundHub);
         }
 
         // Resolution order: AIAgent (DI) → IChatClient (DI) → IVoiceAgentFactory (provider-backed)
@@ -321,18 +365,34 @@ public sealed class DefaultVoicePipelineComposer
         {
             opts.MaxResponseDuration = maxResponseDuration; // VRT-002 WS2 §6.5 (null ⇒ no cap)
 
+            // VDX-008: with the keyed background driver present, the interaction agent gets the
+            // delegate_task tool and the loop gets the arbitration knobs + hub.
+            opts.EnableBackgroundDelegation = backgroundEnabled;
+            opts.BackgroundResults = backgroundArbitration;
+            opts.DiagnosticsHub = backgroundHub;
+
             if (history is not null)
             {
                 opts.BuildMessages = (turnCtx, ct) =>
                 {
-                    var messages = new List<Microsoft.Extensions.AI.ChatMessage>(history.Snapshot())
-                    {
-                        new(ChatRole.User, turnCtx.UserText),
-                    };
+                    // VDX-008: a background-result turn has no user text — feed the result framed by
+                    // the relevance-gate instruction, or the model runs an empty turn (spec §6).
+                    var turnMessage = turnCtx.Trigger == TurnTrigger.BackgroundResult && turnCtx.BackgroundResult is { } result
+                        ? MicrosoftAgentVoice.CreateBackgroundResultMessage(result)
+                        : new Microsoft.Extensions.AI.ChatMessage(ChatRole.User, turnCtx.UserText);
+                    var messages = new List<Microsoft.Extensions.AI.ChatMessage>(history.Snapshot()) { turnMessage };
                     return ValueTask.FromResult<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>>(messages);
                 };
                 opts.OnTurnCompleted = (turnCtx, summary, ct) =>
                 {
+                    if (turnCtx.Trigger == TurnTrigger.BackgroundResult)
+                    {
+                        // Record only what was actually said: a result gated to silence leaves no
+                        // trace, and no empty user message pollutes the history.
+                        if (!string.IsNullOrWhiteSpace(summary.AssistantText))
+                            history.AddAssistant(summary.AssistantText);
+                        return ValueTask.CompletedTask;
+                    }
                     history.AddUser(turnCtx.UserText);
                     if (!string.IsNullOrWhiteSpace(summary.AssistantText))
                         history.AddAssistant(summary.AssistantText);

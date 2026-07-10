@@ -15,11 +15,17 @@ internal sealed class FakeChatClient : IChatClient
         _stream = stream;
     }
 
+    /// <summary>The ChatOptions the agent passed on the most recent streaming call (VDX-008 tool-injection asserts).</summary>
+    public ChatOptions? LastOptions { get; private set; }
+
     public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => _stream(messages);
+    {
+        LastOptions = options;
+        return _stream(messages);
+    }
 
     public Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,

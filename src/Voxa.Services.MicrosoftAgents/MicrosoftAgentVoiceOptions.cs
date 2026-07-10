@@ -79,4 +79,31 @@ public sealed class MicrosoftAgentVoiceOptions
     /// once its wall-clock elapsed time reaches this bound and closes cleanly. Null ⇒ no cap (default).
     /// </summary>
     public TimeSpan? MaxResponseDuration { get; set; }
+
+    /// <summary>
+    /// VDX-008: inject a <c>delegate_task(goal, context_summary)</c> backend tool into every
+    /// user-utterance turn. Its handler emits a <see cref="BackgroundTaskRequestFrame"/> through the
+    /// pipeline and returns an acknowledgment string — so to the model, delegation is just a fast
+    /// tool call. Requires a <c>BackgroundAgentProcessor</c> downstream to consume the request.
+    /// The tool is backend (MAF auto-executes it); do not classify it via <see cref="IsFrontendTool"/>.
+    /// </summary>
+    public bool EnableBackgroundDelegation { get; set; }
+
+    /// <summary>
+    /// VDX-008 §4.1 arbitration knobs, passed through to <see cref="AgentLoopProcessor"/>.
+    /// Null ⇒ loop defaults.
+    ///
+    /// <para>
+    /// <strong>Overriding <see cref="BuildMessages"/> takes on the trigger check:</strong> for
+    /// <see cref="Frames.TurnTrigger.BackgroundResult"/> turns <c>ctx.UserText</c> is empty — read
+    /// <c>ctx.BackgroundResult</c> and include its <c>ResultText</c> (the helper
+    /// <see cref="MicrosoftAgentVoice.CreateBackgroundResultMessage"/> does this), or the model
+    /// never sees the result.
+    /// </para>
+    /// </summary>
+    public BackgroundResultOptions? BackgroundResults { get; set; }
+
+    /// <summary>Optional diagnostics hub for background-result drop events, passed through to
+    /// <see cref="AgentLoopProcessor"/>. Null ⇒ no diagnostics.</summary>
+    public Voxa.Diagnostics.VoxaDiagnosticsHub? DiagnosticsHub { get; set; }
 }

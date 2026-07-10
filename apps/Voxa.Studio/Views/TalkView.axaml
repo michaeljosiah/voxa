@@ -57,6 +57,11 @@
             <TextBlock Classes="vx-label" Text="live conversation · watch it think" />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <!-- VDX-008: delegated work in flight — visible even while the talker keeps the floor -->
+            <StackPanel Classes="vx-status" IsVisible="{Binding ShowBackgroundTasksBadge}">
+              <Ellipse Classes="vx-dot" Fill="{StaticResource VxAccentBrush}" />
+              <TextBlock Text="{Binding BackgroundTasksLabel}" VerticalAlignment="Center" />
+            </StackPanel>
             <StackPanel Classes="vx-status vx-live">
               <Ellipse Classes="vx-dot vx-live" />
               <TextBlock Text="{Binding PhaseLabel}" VerticalAlignment="Center" />

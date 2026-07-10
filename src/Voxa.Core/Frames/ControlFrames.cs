@@ -55,7 +55,9 @@ public sealed record SessionInfoFrame(
 /// Pipecat parity: <c>LLMFullResponseStartFrame</c>.
 /// </para>
 /// </summary>
-public sealed record LlmTurnStartedFrame(string TurnId) : ControlFrame;
+public sealed record LlmTurnStartedFrame(
+    string TurnId,
+    TurnTrigger Trigger = TurnTrigger.UserUtterance) : ControlFrame;
 
 /// <summary>
 /// Emitted by <see cref="Processors.AgentLoopProcessor"/> after a turn completes — i.e. all re-run
@@ -66,7 +68,9 @@ public sealed record LlmTurnStartedFrame(string TurnId) : ControlFrame;
 /// Pipecat parity: <c>LLMFullResponseEndFrame</c>.
 /// </para>
 /// </summary>
-public sealed record LlmTurnEndedFrame(string TurnId) : ControlFrame;
+public sealed record LlmTurnEndedFrame(
+    string TurnId,
+    TurnTrigger Trigger = TurnTrigger.UserUtterance) : ControlFrame;
 
 /// <summary>
 /// Emitted by an <see cref="Processors.IAgentTurnDriver"/> when the underlying LLM provider reports

@@ -25,6 +25,16 @@ public sealed class VoiceTurnContext
     public required IFrameEmitter Emitter { get; init; }
 
     /// <summary>
+    /// What triggered this turn (VDX-008). For <see cref="Frames.TurnTrigger.BackgroundResult"/>
+    /// turns <see cref="UserText"/> is empty — drivers read <see cref="BackgroundResult"/> instead
+    /// and may yield nothing if the result is no longer relevant (silence is a valid outcome).
+    /// </summary>
+    public Frames.TurnTrigger Trigger { get; init; } = Frames.TurnTrigger.UserUtterance;
+
+    /// <summary>The completed background task for background-result turns; null on user turns.</summary>
+    public Frames.BackgroundTaskCompletedFrame? BackgroundResult { get; init; }
+
+    /// <summary>
     /// Open metadata bag. Keys are case-sensitive. Hosts populate via
     /// <see cref="AgentLoopProcessor"/>'s constructor or per-turn setup; turn drivers read with
     /// <see cref="GetMetadata{T}"/>.

@@ -42,6 +42,12 @@ internal sealed class MicrosoftAgentTurnDriver : IAgentTurnDriver
     {
         var messages = await BuildMessagesAsync(ctx, ct).ConfigureAwait(false);
         var runOptions = _options.BuildRunOptions?.Invoke(ctx);
+        if (_options.EnableBackgroundDelegation && ctx.Trigger == TurnTrigger.UserUtterance)
+        {
+            // VDX-008: delegation is a per-turn backend tool bound to THIS turn's emitter, so the
+            // request frame rides the pipeline exactly like the driver's own yields.
+            runOptions = WithDelegateTool(runOptions, ctx, ct);
+        }
         var isFrontendTool = _options.IsFrontendTool ?? (static _ => false);
 
         // Re-run loop: the agent emits text + function calls; if any of those are frontend tools we
@@ -143,8 +149,44 @@ internal sealed class MicrosoftAgentTurnDriver : IAgentTurnDriver
         {
             return await build(ctx, ct).ConfigureAwait(false);
         }
+        // VDX-008: a background-result turn carries no user text — feed the result + relevance-gate
+        // instruction instead, or the model would run an empty turn and the result would be lost.
+        if (ctx.Trigger == TurnTrigger.BackgroundResult && ctx.BackgroundResult is { } result)
+        {
+            return new[] { MicrosoftAgentVoice.CreateBackgroundResultMessage(result) };
+        }
         // Default: single user message. Sufficient for stateless one-shot agents.
         return new ChatMessage[] { new(ChatRole.User, ctx.UserText) };
+    }
+
+    /// <summary>
+    /// Append the VDX-008 <c>delegate_task</c> backend tool to this turn's run options. The ack
+    /// return value carries the prompt contract (§7): acknowledge, don't fabricate — models read
+    /// tool results far more reliably than system-prompt addenda.
+    /// </summary>
+    private static ChatClientAgentRunOptions WithDelegateTool(
+        ChatClientAgentRunOptions? runOptions, VoiceTurnContext ctx, CancellationToken ct)
+    {
+        var tool = AIFunctionFactory.Create(
+            async (string goal, string? context_summary) =>
+            {
+                var taskId = Guid.NewGuid().ToString("N");
+                await ctx.Emitter.EmitAsync(
+                    new BackgroundTaskRequestFrame(taskId, goal, context_summary, ctx.TurnId),
+                    ct).ConfigureAwait(false);
+                return $"Delegated (task {taskId}). The result will arrive shortly as a system note. " +
+                       "Acknowledge to the user that you're working on it — do NOT invent the answer yourself.";
+            },
+            name: "delegate_task",
+            description: "Hand off work that needs tools, browsing, or extended reasoning to a background " +
+                         "assistant so the conversation keeps flowing. Pass a self-contained goal and a compact " +
+                         "context_summary (a sentence or two — never the whole conversation).");
+
+        runOptions ??= new ChatClientAgentRunOptions();
+        var chatOptions = runOptions.ChatOptions ??= new ChatOptions();
+        chatOptions.Tools ??= new List<AITool>();
+        chatOptions.Tools.Add(tool);
+        return runOptions;
     }
 
     private static async Task<ToolCallResultFrame[]> ResolvePendingAsync(
