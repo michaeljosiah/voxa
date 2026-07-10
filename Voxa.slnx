@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Voxa.Samples.AspNetServer/Voxa.Samples.AspNetServer.csproj" />
+    <Project Path="samples/Voxa.Samples.BackgroundAgentServer/Voxa.Samples.BackgroundAgentServer.csproj" />
     <Project Path="samples/Voxa.Samples.MinimalServer/Voxa.Samples.MinimalServer.csproj" />
     <Project Path="samples/Voxa.Samples.TwilioServer/Voxa.Samples.TwilioServer.csproj" />
   </Folder>

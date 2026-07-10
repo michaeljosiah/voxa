@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voxa — local voice test</title>
+<style>
+  :root {
+    --bg:#0f1419; --panel:#161b22; --border:#2d3748; --text:#d7dde6; --muted:#8b97a8;
+    --accent:#4fc3f7; --user:#2563eb; --bot:#1c2330; --good:#66bb6a; --bad:#ef5350;
+    --mono:"Cascadia Code",Consolas,"JetBrains Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:16px;height:100vh}
+  header{display:flex;align-items:center;gap:12px}
+  header h1{font-size:1.15rem;margin:0;color:#fff;font-weight:600}
+  header .tag{font-size:.72rem;color:var(--muted);background:var(--panel);border:1px solid var(--border);
+    border-radius:999px;padding:2px 10px}
+  .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  button.connect{padding:.55rem 1.4rem;border:none;border-radius:.4rem;background:var(--good);color:#06210c;
+    font-weight:700;font-size:.9rem;cursor:pointer}
+  button.connect.on{background:var(--bad);color:#2a0606}
+  button.connect:disabled{opacity:.5;cursor:not-allowed}
+  .pill{font-family:var(--mono);font-size:.78rem;color:var(--muted);background:var(--panel);
+    border:1px solid var(--border);border-radius:.4rem;padding:.4rem .6rem}
+  .pill b{color:var(--accent);font-weight:600}
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:16px;flex:1;min-height:0}
+  .chat{background:var(--panel);border:1px solid var(--border);border-radius:.6rem;padding:16px;
+    overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+  .chat .empty{color:var(--muted);font-style:italic;margin:auto;text-align:center}
+  .turn{max-width:88%;padding:.55rem .85rem;border-radius:.8rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+  .turn.user{align-self:flex-end;background:var(--user);color:#fff;border-bottom-right-radius:.2rem}
+  .turn.bot{align-self:flex-start;background:var(--bot);border:1px solid var(--border);border-bottom-left-radius:.2rem}
+  .turn .role{font-size:.68rem;opacity:.7;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+  .turn.err{align-self:stretch;max-width:100%;background:#3a1414;color:#ffb4b4;border:1px solid #5a1d1d}
+  .side{display:flex;flex-direction:column;gap:12px;min-height:0}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:.6rem;padding:12px 14px}
+  .card h3{margin:0 0 8px;font-size:.66rem;letter-spacing:.08em;color:var(--muted);font-weight:700}
+  .row{display:flex;justify-content:space-between;padding:3px 0;font-size:.82rem}
+  .row .v{font-family:var(--mono);font-size:.78rem;color:var(--accent)}
+  .row .v.dim{color:var(--muted)}
+  .meter{display:flex;gap:4px;margin-top:6px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2d3748;transition:background .05s}
+  .dot.on{background:var(--good)}
+  .events{flex:1;min-height:0;overflow-y:auto;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+  .events .e{padding:2px 0;display:grid;grid-template-columns:64px 1fr;gap:8px}
+  .events .e .n{color:var(--text)}
+  .events .e .n.error{color:var(--bad)}
+  .events .e .n.ok{color:var(--good)}
+  .hint{font-size:.78rem;color:var(--muted);line-height:1.5}
+  .hint code{font-family:var(--mono);color:var(--accent);font-size:.92em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎙️ Voxa — local voice test</h1>
+    <span class="tag">no API keys · runs on your CPU</span>
+  </header>
+
+  <div class="controls">
+    <button id="connect" class="connect">Connect &amp; talk</button>
+    <span class="pill">STT in <b id="inRate">—</b></span>
+    <span class="pill">TTS out <b id="outRate">—</b></span>
+    <span class="pill">status <b id="status">idle</b></span>
+  </div>
+
+  <div class="grid">
+    <div class="chat" id="chat">
+      <div class="empty">Click <b>Connect &amp; talk</b>, allow the mic, and start speaking.<br>
+        The bot transcribes you locally (Whisper) and replies in a local voice (Piper / Kokoro).</div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h3>SESSION</h3>
+        <div class="row"><span>Endpoint</span><span class="v">/voice</span></div>
+        <div class="row"><span>Input rate</span><span class="v dim" id="inRate2">—</span></div>
+        <div class="row"><span>Output rate</span><span class="v dim" id="outRate2">—</span></div>
+        <div class="row"><span>Mic level</span></div>
+        <div class="meter" id="meter">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="dot"></div><div class="dot"></div>
+        </div>
+      </div>
+      <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <h3>EVENTS</h3>
+        <div class="events" id="events"></div>
+      </div>
+      <div class="card">
+        <p class="hint">Sample rates come from the server's <code>session</code> envelope — this page
+          hardcodes nothing, so it plays any voice (16 kHz Piper, 22.05 kHz Piper, 24 kHz Kokoro)
+          at the correct pitch.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ── session state (rates are learned from the server, never hardcoded) ──────────
+let ws = null, outCtx = null, micCtx = null, micStream = null, worklet = null, micAnalyser = null;
+let inRate = 0, outRate = 0;
+let nextPlayTime = 0;
+const scheduled = new Set();   // live playback sources, for barge-in flush
+let botBubble = null;
+
+function setStatus(s){ $('status').textContent = s; }
+function evt(name, payload='', kind=''){
+  const row = document.createElement('div');
+  row.className = 'e';
+  row.innerHTML = `<span class="t">${new Date().toLocaleTimeString('en-GB')}</span>`+
+                  `<span class="n ${kind}">${name}${payload?': '+esc(payload):''}</span>`;
+  $('events').appendChild(row);
+  $('events').scrollTop = $('events').scrollHeight;
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function ensureChat(){ const e=$('chat').querySelector('.empty'); if(e) e.remove(); }
+function bubble(role, text){
+  ensureChat();
+  const d=document.createElement('div'); d.className='turn '+role;
+  d.innerHTML=`<div class="role">${role==='user'?'you':role==='bot'?'assistant':'error'}</div>`;
+  const span=document.createElement('span'); span.textContent=text; d.appendChild(span);
+  $('chat').appendChild(d); $('chat').scrollTop=$('chat').scrollHeight;
+  return span;
+}
+
+// ── playback: schedule gap-free at the ANNOUNCED output rate ─────────────────────
+function playPcm(int16){
+  if(!outCtx || !outRate || int16.length===0) return;
+  const f32=new Float32Array(int16.length);
+  for(let i=0;i<int16.length;i++) f32[i]=int16[i]/32768;
+  const buf=outCtx.createBuffer(1, f32.length, outRate); // context resamples to its own rate
+  buf.copyToChannel(f32,0);
+  const src=outCtx.createBufferSource(); src.buffer=buf; src.connect(outCtx.destination);
+  const startAt=Math.max(outCtx.currentTime, nextPlayTime);
+  src.start(startAt);
+  nextPlayTime=startAt+buf.duration;
+  scheduled.add(src);
+  src.onended=()=>scheduled.delete(src);
+}
+function flushPlayback(){
+  for(const s of scheduled){ try{s.stop();}catch{} }
+  scheduled.clear();
+  if(outCtx) nextPlayTime=outCtx.currentTime;
+}
+
+// ── mic level meter ─────────────────────────────────────────────────────────────
+function pumpMeter(){
+  if(!micAnalyser) return;
+  const data=new Uint8Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getByteFrequencyData(data);
+  let sum=0; for(const v of data) sum+=v*v;
+  const rms=Math.sqrt(sum/data.length)/255;
+  const lit=Math.min(5, Math.floor(rms*30));
+  document.querySelectorAll('#meter .dot').forEach((d,i)=>d.classList.toggle('on', i<lit));
+  requestAnimationFrame(pumpMeter);
+}
+
+// ── start mic capture once the server has told us the input rate ─────────────────
+async function startMic(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({
+      audio:{channelCount:1, echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
+  }catch(ex){ evt('mic-denied', ex.message, 'error'); return; }
+
+  micCtx=new AudioContext({sampleRate:inRate});
+  await micCtx.audioWorklet.addModule('/recorder-worklet.js');
+  if(micCtx.sampleRate!==inRate)
+    evt('mic-rate-mismatch', `wanted ${inRate}, got ${micCtx.sampleRate}`, 'error');
+
+  const source=micCtx.createMediaStreamSource(micStream);
+  worklet=new AudioWorkletNode(micCtx,'recorder',{
+    processorOptions:{chunkSamples:Math.floor(inRate/50)}}); // 20 ms frames
+  worklet.port.onmessage=(e)=>{ if(ws?.readyState===WebSocket.OPEN) ws.send(e.data); };
+  source.connect(worklet);
+
+  micAnalyser=micCtx.createAnalyser(); micAnalyser.fftSize=256;
+  source.connect(micAnalyser); pumpMeter();
+  setStatus('listening');
+}
+
+// ── connect ──────────────────────────────────────────────────────────────────────
+async function connect(){
+  $('connect').disabled=true; setStatus('connecting');
+  $('chat').innerHTML=''; $('events').innerHTML='';
+  outCtx=new AudioContext(); nextPlayTime=outCtx.currentTime;
+
+  const url=`${location.protocol==='https:'?'wss':'ws'}://${location.host}/voice`;
+  evt('connecting', url);
+  ws=new WebSocket(url); ws.binaryType='arraybuffer';
+
+  ws.onmessage=(e)=>{
+    if(typeof e.data==='string'){
+      let o; try{o=JSON.parse(e.data);}catch{ evt('raw', e.data); return; }
+      switch(o.type){
+        case 'session':
+          // THE point of this page: take both rates from the server, hardcode nothing.
+          inRate=o.inputSampleRate; outRate=o.outputSampleRate;
+          $('inRate').textContent=$('inRate2').textContent=`${inRate} Hz`;
+          $('outRate').textContent=$('outRate2').textContent=`${outRate} Hz`;
+          evt('session', `in ${inRate} / out ${outRate}`, 'ok');
+          startMic();
+          break;
+        case 'transcription':
+          if(o.isFinal && o.text?.trim()){ bubble('user', o.text); botBubble=null; }
+          break;
+        case 'text':
+          if(botBubble) botBubble.textContent+=o.text;
+          else botBubble=bubble('bot', o.text);
+          break;
+        case 'speaking':
+          if(o.who==='user' && o.started){ setStatus('you are speaking'); flushPlayback(); }   // barge-in
+          if(o.who==='bot' && o.started) setStatus('bot speaking');
+          if(o.who==='bot' && !o.started){ setStatus('listening'); botBubble=null; }
+          break;
+        case 'interruption': flushPlayback(); botBubble=null; evt('interruption','barge-in'); break;
+        case 'error': bubble('err', o.message); evt('error', o.message, 'error'); break;
+        default: evt(o.type, o.message ?? '');
+      }
+    } else {
+      if(e.data.byteLength%2===0) playPcm(new Int16Array(e.data));
+    }
+  };
+  ws.onclose=(e)=>{ evt('closed', `code=${e.code}`, e.code===1000?'':'error'); cleanup(); };
+  ws.onerror=()=>evt('ws-error','','error');
+  ws.onopen=()=>{
+    evt('connected', url, 'ok'); setStatus('waiting for session');
+    $('connect').textContent='Disconnect'; $('connect').classList.add('on'); $('connect').disabled=false;
+  };
+}
+
+function disconnect(){ try{ws?.send(JSON.stringify({type:'end'}));}catch{} try{ws?.close();}catch{} cleanup(); }
+function cleanup(){
+  flushPlayback();
+  try{worklet?.disconnect();}catch{} try{micAnalyser?.disconnect();}catch{}
+  micStream?.getTracks().forEach(t=>t.stop());
+  try{micCtx?.close();}catch{}
+  setTimeout(()=>{ try{outCtx?.close();}catch{} outCtx=null; },500);
+  document.querySelectorAll('#meter .dot').forEach(d=>d.classList.remove('on'));
+  ws=null; worklet=null; micCtx=null; micStream=null; micAnalyser=null; botBubble=null;
+  inRate=outRate=0;
+  $('connect').textContent='Connect & talk'; $('connect').classList.remove('on'); $('connect').disabled=false;
+  setStatus('idle');
+}
+
+$('connect').onclick=()=> ws ? disconnect() : connect();
+</script>
+</body>
+</html>

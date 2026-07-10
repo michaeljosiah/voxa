@@ -13,6 +13,7 @@ Guides for using VOXA, and the design specifications behind each delivery.
 
 | Guide | What it covers |
 |---|---|
+| [Background agent delegation](background-agent.md) | The talker/thinker split (VDX-008): a fast interaction model keeps the conversation flowing while a heavyweight background agent runs tools, browsing, and reasoning off the voice-latency critical path. |
 | [Voxa Studio](studio.md) | The desktop app: Talk, the STT/TTS playgrounds, model-cache manager, config composer, server-side diagnostics, troubleshooting. |
 | [Local speech](local-speech.md) | The keyless local tier — WhisperCpp, Piper, Kokoro, Silero VAD; model cache, air-gapped provisioning, licensing. |
 | [Performance tuning](performance-tuning.md) | The latency knobs and what they trade; the `LowLatency`/`Quality`/`Cheap` profiles. |

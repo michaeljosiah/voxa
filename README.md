@@ -96,6 +96,26 @@ model in a Voxa-managed local Python `Sidecar`. It's **zero-cost when unregister
 unchanged) and **fails "complete"** on any classifier error, so a flaky endpoint never strands a turn.
 Guide: [`src/Voxa.Audio.SmartTurn/README.md`](src/Voxa.Audio.SmartTurn/README.md).
 
+### Background agent delegation — no dead air on slow tools
+
+In voice, a 10-second tool call is 10 seconds of silence. VDX-008 splits the agent in two: the
+**interaction model** (fast tier) owns the conversation, and a **background agent** (heavyweight
+tier) runs tools, browsing, and multi-step reasoning off the critical path. The talker delegates
+explicitly via a `delegate_task` tool, acknowledges immediately, and when the result lands it
+re-enters as a new turn — *gated for relevance* by the talker, which may stay silent if the
+conversation has moved on. Results are never injected while the user is speaking.
+
+```csharp
+builder.Services.AddVoxa(builder.Configuration);
+builder.Services.AddVoxaBackgroundAgent(_ =>
+    MicrosoftAgentVoice.CreateTurnDriver(researcherAgent));  // opt-in; any IAgentTurnDriver
+```
+
+**Zero-cost when unregistered** — the composed pipeline is byte-identical without it. Barge-in
+never cancels delegated work; failed or timed-out tasks come back as apologizable errors, not
+silence. Guide: [`docs/background-agent.md`](docs/background-agent.md) · runnable sample:
+[`samples/Voxa.Samples.BackgroundAgentServer`](samples/Voxa.Samples.BackgroundAgentServer/Program.cs).
+
 ### Voxa Studio — talk to the pipeline and watch it think
 
 A desktop app (Windows) that runs the real pipeline against your mic and speakers and shows
