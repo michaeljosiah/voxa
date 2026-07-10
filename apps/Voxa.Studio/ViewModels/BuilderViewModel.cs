@@ -100,7 +100,7 @@ public sealed partial class BuilderNodeVm : ObservableObject
     {
         BuilderNodeKind.Source or BuilderNodeKind.Vad => "vad",
         BuilderNodeKind.Stt or BuilderNodeKind.Filter => "stt",
-        BuilderNodeKind.Agent or BuilderNodeKind.Aggregator => "agent",
+        BuilderNodeKind.Agent or BuilderNodeKind.BackgroundAgent or BuilderNodeKind.Aggregator => "agent",
         BuilderNodeKind.Tts => "tts",
         _ => "out",
     };
@@ -112,6 +112,7 @@ public sealed partial class BuilderNodeVm : ObservableObject
         BuilderNodeKind.Stt => "stt",
         BuilderNodeKind.Filter => "filter",
         BuilderNodeKind.Agent => "agent",
+        BuilderNodeKind.BackgroundAgent => "background",
         BuilderNodeKind.Aggregator => "aggregator",
         BuilderNodeKind.Tts => "tts",
         _ => "sink",
@@ -124,6 +125,7 @@ public sealed partial class BuilderNodeVm : ObservableObject
         BuilderNodeKind.Filter => "TranscriptionFilter",
         BuilderNodeKind.Aggregator => "SentenceAggregator",
         BuilderNodeKind.Vad when Model.Provider is not null => $"{Model.Provider} VAD",
+        BuilderNodeKind.BackgroundAgent when Model.Provider is not null => $"{Model.Provider} thinker",
         _ => Model.Provider ?? Kind.ToString(),
     };
 
@@ -294,7 +296,10 @@ public sealed partial class BuilderViewModel : ObservableObject
                 new(BuilderNodeKind.Aggregator, null, "SentenceAggregator", BuilderPortType.AgentText)]),
             new("Agent", [
                 new(BuilderNodeKind.Agent, "Echo", "Echo agent", BuilderPortType.AgentText),
-                new(BuilderNodeKind.Agent, "OpenAI", "OpenAI agent", BuilderPortType.AgentText)]),
+                new(BuilderNodeKind.Agent, "OpenAI", "OpenAI agent", BuilderPortType.AgentText),
+                // VDX-008: the background "thinker" — slots after the Agent (agent-text in/out).
+                new(BuilderNodeKind.BackgroundAgent, "Echo", "Background · demo thinker", BuilderPortType.AgentText),
+                new(BuilderNodeKind.BackgroundAgent, "OpenAI", "Background · OpenAI thinker", BuilderPortType.AgentText)]),
             new("TTS", ttss.Select(t => new BuilderPaletteEntry(BuilderNodeKind.Tts, t, t, BuilderPortType.SynthAudio)).ToList()),
             new("Output", [new(BuilderNodeKind.Sink, null, "Speaker", BuilderPortType.SynthAudio)]),
         ];
@@ -468,6 +473,13 @@ public sealed partial class BuilderViewModel : ObservableObject
             case BuilderNodeKind.Agent when Is(entry.Provider, "OpenAI"):
                 node.Options["Model"] = "gpt-4o-mini";
                 break;
+            case BuilderNodeKind.BackgroundAgent when Is(entry.Provider, "Echo"):
+                node.Options["DelaySeconds"] = "4";
+                break;
+            case BuilderNodeKind.BackgroundAgent when Is(entry.Provider, "OpenAI"):
+                // The thinker defaults to a heavier tier than the talker — that's the point of the split.
+                node.Options["Model"] = "gpt-4o";
+                break;
             case BuilderNodeKind.Tts when Is(entry.Provider, "Piper"):
                 node.Options["Voice"] = "en_US-amy-low";
                 break;
@@ -511,6 +523,9 @@ public sealed partial class BuilderViewModel : ObservableObject
         MarkErrorNodes(valid);
 
         foreach (var node in Nodes) node.ShowPlus = node.HasOut && Edges.All(e => e.From != node);
+        // The background node's idle hint depends on WHICH talker is in the chain — keep it live.
+        foreach (var node in Nodes.Where(n => n.Kind == BuilderNodeKind.BackgroundAgent))
+            RefreshNodeBadges(node);
         RefreshPlusChoices();
         RunCommand.NotifyCanExecuteChanged();
         SaveGraphCommand.NotifyCanExecuteChanged();
@@ -600,6 +615,23 @@ public sealed partial class BuilderViewModel : ObservableObject
                 InspectorOptions.Add(new TextOptionVm("API key (run only, never exported)",
                     node.Options.GetValueOrDefault("ApiKey", ""), v => Touch("ApiKey", v), isSecret: true));
                 break;
+            case BuilderNodeKind.BackgroundAgent when Is(node.Provider, "Echo"):
+                InspectorOptions.Add(new RangeOptionVm("Thinker delay", 1, 15, 1,
+                    ParseDouble(node.Options.GetValueOrDefault("DelaySeconds"), 4), "0", " s",
+                    v => Touch("DelaySeconds", v)));
+                InspectorOptions.Add(new RangeOptionVm("Task timeout", 10, 300, 10,
+                    ParseDouble(node.Options.GetValueOrDefault("TaskTimeoutSeconds"), 120), "0", " s",
+                    v => Touch("TaskTimeoutSeconds", v)));
+                break;
+            case BuilderNodeKind.BackgroundAgent when Is(node.Provider, "OpenAI"):
+                InspectorOptions.Add(new TextOptionVm("Model",
+                    node.Options.GetValueOrDefault("Model", "gpt-4o"), v => Touch("Model", v)));
+                InspectorOptions.Add(new TextOptionVm("API key (run only, never exported)",
+                    node.Options.GetValueOrDefault("ApiKey", ""), v => Touch("ApiKey", v), isSecret: true));
+                InspectorOptions.Add(new RangeOptionVm("Task timeout", 10, 300, 10,
+                    ParseDouble(node.Options.GetValueOrDefault("TaskTimeoutSeconds"), 120), "0", " s",
+                    v => Touch("TaskTimeoutSeconds", v)));
+                break;
             case BuilderNodeKind.Tts when Is(node.Provider, "Piper"):
                 InspectorOptions.Add(new ChoiceOptionVm("Voice", PiperVoiceCatalog.KnownVoices.ToList(),
                     node.Options.GetValueOrDefault("Voice", "en_US-amy-low"), v => Touch("Voice", v)));
@@ -668,6 +700,16 @@ public sealed partial class BuilderViewModel : ObservableObject
             case BuilderNodeKind.Agent:
                 vm.Meta = Is(node.Provider, "OpenAI")
                     ? node.Options.GetValueOrDefault("Model", "gpt-4o-mini") : "replies verbatim";
+                break;
+            case BuilderNodeKind.BackgroundAgent:
+                // Honesty first: the Echo talker never calls delegate_task, so a background node in
+                // an Echo-agent chain sits idle — say so on the card instead of implying it runs.
+                var talker = _graph.Nodes.FirstOrDefault(n => n.Kind == BuilderNodeKind.Agent);
+                var idleHint = talker is not null && Is(talker.Provider, "Echo")
+                    ? " · idle (Echo agent never delegates)" : "";
+                vm.Meta = (Is(node.Provider, "OpenAI")
+                    ? node.Options.GetValueOrDefault("Model", "gpt-4o")
+                    : $"demo · {node.Options.GetValueOrDefault("DelaySeconds", "4")}s") + idleHint;
                 break;
             case BuilderNodeKind.Aggregator:
                 vm.Meta = "sentence chunks";
