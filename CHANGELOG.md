@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`SentenceAggregator` flushes the trailing fragment at turn end (Pipecat parity).** It flushed on a
+  sentence boundary and on `EndFrame`, but not on `LlmTurnEndedFrame` — so a reply whose final sentence
+  had no terminal punctuation sat buffered, and on a persistent transport (no per-turn `EndFrame`, e.g.
+  a host that keeps the voice WebSocket open across turns) the next `UserStartedSpeakingFrame` cleared
+  it, dropping the tail of the response. Now `LlmTurnEndedFrame` flushes the leftover (respecting the
+  barge-in mute: an interrupted, already-cleared turn flushes nothing; a turn that ended on a boundary
+  leaves an empty buffer and flushes nothing).
+- **`VoxaDefaultsGuard` honors VDX-007 at startup — no eager default-agent resolution when a host driver
+  is registered.** The startup guard resolved the default `AIAgent`/`IChatClient` to validate the agent
+  path, but didn't account for a registered `IAgentTurnDriver` (which the composer uses to *replace* the
+  agent stage per-connection). A VDX-007 host whose agent factory does real work — e.g. blocking on a
+  sandbox warm-up — therefore paid that cost at startup for an agent the pipeline never uses. The guard
+  now mirrors the composer's resolution order: a registered `IAgentTurnDriver` satisfies the agent
+  requirement and the default `AIAgent` is never resolved.
 - **Barge-in now actually interrupts the answer (VRT-002 WS2, the deferred half).** In granular
   pipelines nothing ever emitted an `InterruptionFrame` (the Silero VAD emits only speaking edges),
   so the per-processor preemption machinery never fired: the LLM kept streaming the interrupted

@@ -138,6 +138,25 @@ public sealed class SentenceAggregator : FrameProcessor
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
 
+            case LlmTurnEndedFrame:
+                // Flush the trailing fragment at turn end (Pipecat parity: LLMFullResponseEndFrame
+                // flushes the aggregator). Without this, a reply whose final sentence has no terminal
+                // punctuation sits buffered — and on a persistent transport (no per-turn EndFrame) the
+                // next UserStartedSpeakingFrame CLEARS it, dropping the tail of the response. A turn
+                // that ended on a boundary leaves an empty buffer ⇒ nothing flushed; an interrupted
+                // turn already cleared the buffer and stays muted ⇒ nothing flushed.
+                string? tail;
+                lock (_lock)
+                {
+                    tail = (!_droppingInterruptedTurn && _buffer.Length > 0) ? _buffer.ToString().Trim() : null;
+                    _buffer.Clear();
+                    _lastBoundary = -1;
+                }
+                if (!string.IsNullOrEmpty(tail))
+                    await PushFrameAsync(new TextFrame(tail), ct).ConfigureAwait(false);
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
             case UserStartedSpeakingFrame:
             case InterruptionFrame:
                 // Drop the buffered partial sentence AND everything else this turn still has queued

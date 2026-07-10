@@ -179,4 +179,69 @@ public class SentenceAggregatorTests
             Assert.Equal("Trailing fragment without period", emitted!.Text);
         }
     }
+
+    [Fact]
+    public async Task Turn_End_Flushes_The_Unpunctuated_Tail()
+    {
+        // On a persistent transport (no per-turn EndFrame), a reply whose final sentence has no
+        // terminal punctuation must still be spoken — LlmTurnEndedFrame flushes it, so the next
+        // UserStartedSpeakingFrame can't clear (drop) the tail.
+        var (runner, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new LlmTurnStartedFrame("t1"));
+            await pipeline.Source.IngestAsync(new LlmTextChunkFrame("The answer is 42"));  // no period
+            await Task.Delay(40);
+            Assert.DoesNotContain(captured.Captured, f => f is TextFrame); // buffered, no boundary yet
+
+            await pipeline.Source.IngestAsync(new LlmTurnEndedFrame("t1"));
+            await captured.WaitForAsync(f => f is TextFrame, TimeSpan.FromSeconds(2));
+
+            var emitted = Assert.Single(captured.Captured.OfType<TextFrame>());
+            Assert.Equal("The answer is 42", emitted.Text);
+        }
+    }
+
+    [Fact]
+    public async Task Turn_End_On_A_Boundary_Flushes_Nothing_Extra()
+    {
+        var (runner, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new LlmTurnStartedFrame("t1"));
+            await pipeline.Source.IngestAsync(new LlmTextChunkFrame("Complete sentence. "));
+            await captured.WaitForAsync(f => f is TextFrame, TimeSpan.FromSeconds(2));
+
+            await pipeline.Source.IngestAsync(new LlmTurnEndedFrame("t1"));
+            await pipeline.Source.IngestAsync(new LlmTurnEndedFrame("marker")); // ordering fence
+            await Task.Delay(40);
+
+            // Exactly one TextFrame — the boundary flush; turn-end added nothing (empty buffer).
+            Assert.Single(captured.Captured.OfType<TextFrame>());
+        }
+    }
+
+    [Fact]
+    public async Task Turn_End_While_Muted_Flushes_Nothing()
+    {
+        // Once barge-in has muted the turn, its LlmTurnEndedFrame (truncated completion) must not
+        // resurrect the dropped tail. Establish the mute FIRST (wait for the InterruptionFrame — a
+        // system/priority frame — to be forwarded, which means it has been processed and the mute
+        // set), so the subsequent data frames are deterministically ordered behind it.
+        var (runner, captured, pipeline) = Build();
+        await using (runner)
+        {
+            await runner.StartAsync();
+            await pipeline.Source.IngestAsync(new InterruptionFrame());
+            await captured.WaitForAsync(f => f is InterruptionFrame, TimeSpan.FromSeconds(2)); // mute set
+
+            await pipeline.Source.IngestAsync(new LlmTextChunkFrame("stale muted fragment")); // dropped by mute
+            await pipeline.Source.IngestAsync(new LlmTurnEndedFrame("t1"));                    // buffer empty ⇒ no flush
+            await Task.Delay(40);
+
+            Assert.DoesNotContain(captured.Captured, f => f is TextFrame);
+        }
+    }
 }
