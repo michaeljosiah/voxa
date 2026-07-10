@@ -76,6 +76,10 @@ public sealed class DiagnosticsTapProcessor : FrameProcessor
         {
             LlmTextChunkFrame chunk => new AgentDeltaEvent(chunk.Text),
             TextFrame text          => new AgentDeltaEvent(text.Text),
+            // VDX-008 §8: turn edges carry the trigger kind so background-result turns (including
+            // empty gated-to-silence ones) are distinguishable from user turns.
+            LlmTurnStartedFrame s   => new LlmTurnEvent(s.TurnId, Started: true, s.Trigger),
+            LlmTurnEndedFrame e     => new LlmTurnEvent(e.TurnId, Started: false, e.Trigger),
             _ => null,
         },
         DiagnosticsTapScope.Tts => frame switch

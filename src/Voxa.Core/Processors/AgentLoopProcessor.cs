@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
+using Voxa.Diagnostics;
 using Voxa.Frames;
 
 namespace Voxa.Processors;
@@ -24,6 +25,10 @@ namespace Voxa.Processors;
 ///   <item>Frontend-tool TCS correlation (continuations run async; data loop never blocks).</item>
 ///   <item>Per-turn try/catch isolation: a failed turn emits an upstream <see cref="ErrorFrame"/>
 ///       and the worker continues to drain the next queued transcription.</item>
+///   <item>Background-result turns (VDX-008): a consumed <see cref="BackgroundTaskCompletedFrame"/>
+///       re-enters as an ordinary turn with <see cref="VoiceTurnContext.Trigger"/> =
+///       <see cref="TurnTrigger.BackgroundResult"/>, held while an utterance is in flight and
+///       released data-ordered behind that utterance's turn (<see cref="BackgroundResultOptions"/>).</item>
 ///   <item>Clean shutdown on <see cref="EndFrame"/> / connection cancellation: turn queue completed,
 ///       pending TCSs cancelled, worker joined.</item>
 /// </list>
@@ -36,9 +41,24 @@ public sealed class AgentLoopProcessor : FrameProcessor
     private readonly Func<VoiceTurnContext, Exception, CancellationToken, ValueTask>? _onTurnFailed;
     private readonly Func<VoiceTurnContext>? _contextFactory;
     private readonly TimeSpan? _maxResponseDuration;
+    private readonly BackgroundResultOptions _backgroundResults;
+    private readonly VoxaDiagnosticsHub? _diagnosticsHub;
 
-    private readonly Channel<string> _turnQueue = Channel.CreateUnbounded<string>(
+    /// <summary>A queued turn: user text, or a background-task result re-entering the conversation.</summary>
+    private readonly record struct TurnRequest(string UserText, BackgroundTaskCompletedFrame? BackgroundResult)
+    {
+        public TurnTrigger Trigger => BackgroundResult is null ? TurnTrigger.UserUtterance : TurnTrigger.BackgroundResult;
+    }
+
+    private readonly Channel<TurnRequest> _turnQueue = Channel.CreateUnbounded<TurnRequest>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+
+    // Held background results (VDX-008 §4.1). Mutated from BOTH loops: speaking edges arrive on the
+    // system task, completed-task frames and finals on the data task — every touch goes through the lock.
+    private readonly object _holdLock = new();
+    private readonly List<BackgroundTaskCompletedFrame> _heldResults = new();
+    private bool _holdingForUtterance;
+    private int _holdGeneration;
 
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ToolCallResultFrame>> _pendingFrontendTools
         = new(StringComparer.Ordinal);
@@ -69,13 +89,19 @@ public sealed class AgentLoopProcessor : FrameProcessor
     /// turn is a normal truncated completion, not an error. Null ⇒ no cap (default). Guards against a looping
     /// LLM or runaway TTS talking over the user's next turns.
     /// </param>
+    /// <param name="backgroundResults">Arbitration knobs for background-result turns (VDX-008 §4.1).
+    /// Null ⇒ defaults (hold while the user speaks, 4 pending max, 2 s quiet-timeout).</param>
+    /// <param name="diagnosticsHub">Optional hub for <see cref="BackgroundTaskDroppedEvent"/>s when the
+    /// pending cap evicts a held result. Null ⇒ no diagnostics (the default composition wires it).</param>
     public AgentLoopProcessor(
         IAgentTurnDriver driver,
         Func<VoiceTurnContext, CancellationToken, ValueTask>? onTurnStarted = null,
         Func<VoiceTurnContext, TurnSummary, CancellationToken, ValueTask>? onTurnCompleted = null,
         Func<VoiceTurnContext, Exception, CancellationToken, ValueTask>? onTurnFailed = null,
         Func<VoiceTurnContext>? contextFactory = null,
-        TimeSpan? maxResponseDuration = null)
+        TimeSpan? maxResponseDuration = null,
+        BackgroundResultOptions? backgroundResults = null,
+        VoxaDiagnosticsHub? diagnosticsHub = null)
         : base(name: "AgentLoop")
     {
         _driver = driver ?? throw new ArgumentNullException(nameof(driver));
@@ -84,6 +110,8 @@ public sealed class AgentLoopProcessor : FrameProcessor
         _onTurnFailed = onTurnFailed;
         _contextFactory = contextFactory;
         _maxResponseDuration = maxResponseDuration;
+        _backgroundResults = backgroundResults ?? new BackgroundResultOptions();
+        _diagnosticsHub = diagnosticsHub;
     }
 
     protected override ValueTask OnStartAsync(StartFrame frame, CancellationToken ct)
@@ -133,7 +161,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 // Forward the transcription so transports can render the user bubble immediately.
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 // Hand the user text off to the background turn worker.
-                await _turnQueue.Writer.WriteAsync(t.Text, ct).ConfigureAwait(false);
+                await _turnQueue.Writer.WriteAsync(new TurnRequest(t.Text, null), ct).ConfigureAwait(false);
+                // Data-ordered release (VDX-008 §4.1): held background results go out immediately
+                // BEHIND the turn this final just triggered — both writes happen on the data loop,
+                // so no result turn can overtake the user's utterance.
+                ReleaseHeldResults();
                 return;
 
             case TranscriptionFrame { IsFinal: true }:
@@ -143,6 +175,8 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 // UserStartedSpeakingFrame runs normally (no anticipatory state latched waiting on a turn that
                 // will never come — speech-core's stuck-pipeline guard).
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                // No turn will follow this utterance — release held results now (VDX-008 §4.1).
+                ReleaseHeldResults();
                 return;
 
             case ToolCallResultFrame r:
@@ -154,9 +188,112 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 // would push a "the user just got a tool result" envelope to the sink for no reason.
                 return;
 
+            case BackgroundTaskCompletedFrame completed:
+                // Consumed, never forwarded further upstream — the loop is this frame's destination
+                // (mirrors ToolCallResultFrame). Held while an utterance is in flight so the result
+                // turn can't talk over the user (VDX-008 §4.1).
+                HoldOrEnqueueBackgroundResult(completed);
+                return;
+
+            case UserStartedSpeakingFrame:
+                // Arrives on the SYSTEM loop — only observe (under the hold lock) and forward.
+                OnUserStartedSpeaking();
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
+            case UserStoppedSpeakingFrame:
+                // Stop-speaking must NOT release held results — the STT stage forwards it before the
+                // promoted transcript, and as a system frame it can overtake queued finals. It only
+                // arms the quiet-timeout fallback for utterances whose final never arrives.
+                OnUserStoppedSpeaking();
+                await PushFrameAsync(frame, ct).ConfigureAwait(false);
+                return;
+
             default:
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 return;
+        }
+    }
+
+    // ── Background-result arbitration (VDX-008 §4.1) ─────────────────────────────────────────
+
+    private void HoldOrEnqueueBackgroundResult(BackgroundTaskCompletedFrame completed)
+    {
+        lock (_holdLock)
+        {
+            if (_backgroundResults.HoldWhileUserSpeaking && _holdingForUtterance)
+            {
+                if (_heldResults.Count >= _backgroundResults.MaxPendingResults)
+                {
+                    var dropped = _heldResults[0];
+                    _heldResults.RemoveAt(0);
+                    if (_diagnosticsHub is { HasListeners: true } hub)
+                    {
+                        hub.Publish(new BackgroundTaskDroppedEvent(dropped.TaskId));
+                    }
+                }
+                _heldResults.Add(completed);
+                return;
+            }
+        }
+        _turnQueue.Writer.TryWrite(new TurnRequest(string.Empty, completed));
+    }
+
+    private void OnUserStartedSpeaking()
+    {
+        lock (_holdLock)
+        {
+            _holdingForUtterance = true;
+            // Invalidate any quiet-timeout armed by a previous stop-speaking.
+            _holdGeneration++;
+        }
+    }
+
+    private void OnUserStoppedSpeaking()
+    {
+        int generation;
+        lock (_holdLock)
+        {
+            if (!_holdingForUtterance) return;
+            generation = _holdGeneration;
+        }
+        _ = ReleaseAfterQuietTimeoutAsync(generation);
+    }
+
+    /// <summary>Fallback for utterances whose final transcription never arrives (VDX-008 §4.1).</summary>
+    private async Task ReleaseAfterQuietTimeoutAsync(int generation)
+    {
+        try
+        {
+            await Task.Delay(_backgroundResults.HeldResultReleaseTimeout, _processorCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // Shutdown — held results die with the session.
+        }
+        ReleaseHeldResults(generation);
+    }
+
+    /// <summary>
+    /// Drain the held buffer into the turn queue. With a <paramref name="generation"/>, releases only
+    /// if no newer utterance started since the timeout was armed (a final consumed on the data loop
+    /// releases unconditionally — it IS the ordering signal).
+    /// </summary>
+    private void ReleaseHeldResults(int? generation = null)
+    {
+        BackgroundTaskCompletedFrame[] toRelease;
+        lock (_holdLock)
+        {
+            if (generation is { } g && (g != _holdGeneration || !_holdingForUtterance)) return;
+            _holdingForUtterance = false;
+            _holdGeneration++;
+            if (_heldResults.Count == 0) return;
+            toRelease = _heldResults.ToArray();
+            _heldResults.Clear();
+        }
+        foreach (var result in toRelease)
+        {
+            _turnQueue.Writer.TryWrite(new TurnRequest(string.Empty, result));
         }
     }
 
@@ -167,10 +304,10 @@ public sealed class AgentLoopProcessor : FrameProcessor
 
         try
         {
-            await foreach (var userText in _turnQueue.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            await foreach (var request in _turnQueue.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
                 var turnId = Guid.NewGuid().ToString("N");
-                var ctx = BuildTurnContext(turnId, userText, gateway, emitter);
+                var ctx = BuildTurnContext(turnId, request, gateway, emitter);
 
                 var stopwatch = Stopwatch.StartNew();
                 var assistantText = new StringBuilder();
@@ -180,7 +317,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
 
                 try
                 {
-                    await PushFrameAsync(new LlmTurnStartedFrame(turnId), ct).ConfigureAwait(false);
+                    await PushFrameAsync(new LlmTurnStartedFrame(turnId, request.Trigger), ct).ConfigureAwait(false);
 
                     if (_onTurnStarted is not null)
                     {
@@ -280,7 +417,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 {
                     try
                     {
-                        await PushFrameAsync(new LlmTurnEndedFrame(turnId), ct).ConfigureAwait(false);
+                        await PushFrameAsync(new LlmTurnEndedFrame(turnId, request.Trigger), ct).ConfigureAwait(false);
                     }
                     catch
                     {
@@ -295,7 +432,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
 
     private VoiceTurnContext BuildTurnContext(
         string turnId,
-        string userText,
+        TurnRequest request,
         IFrontendToolGateway gateway,
         IFrameEmitter emitter)
     {
@@ -306,9 +443,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
             return new VoiceTurnContext
             {
                 TurnId = turnId,
-                UserText = userText,
+                UserText = request.UserText,
                 FrontendTools = gateway,
                 Emitter = emitter,
+                Trigger = request.Trigger,
+                BackgroundResult = request.BackgroundResult,
                 Metadata = seeded.Metadata,
             };
         }
@@ -316,9 +455,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
         return new VoiceTurnContext
         {
             TurnId = turnId,
-            UserText = userText,
+            UserText = request.UserText,
             FrontendTools = gateway,
             Emitter = emitter,
+            Trigger = request.Trigger,
+            BackgroundResult = request.BackgroundResult,
         };
     }
 
