@@ -89,6 +89,19 @@
                     <Button Grid.Column="1" Classes="vx-ghost" Content="Create"
                             Command="{Binding SaveAsProfileCommand}" />
                   </Grid>
+                  <Border Height="1" Background="{StaticResource VxLine1Brush}" />
+                  <!-- Profiles are flat Voxa:* config pairs — a chain beyond UseDefaults() (e.g. a
+                       Background agent node) can't be expressed that way, so it can't be a profile.
+                       The full canvas (every node + wire) saves/loads as a graph file instead. -->
+                  <TextBlock Classes="vx-sub" Text="Save/load the full canvas (any shape, incl. Background agent)" />
+                  <Grid ColumnDefinitions="*,*">
+                    <Button Grid.Column="0" Classes="vx-ghost" HorizontalAlignment="Stretch" Content="Save graph"
+                            Command="{Binding SaveGraphCommand}" Margin="0,0,6,0"
+                            ToolTip.Tip="Write every node and wire to voxa-graph.json in your user profile" />
+                    <Button Grid.Column="1" Classes="vx-ghost" HorizontalAlignment="Stretch" Content="Load graph"
+                            Command="{Binding LoadGraphCommand}"
+                            ToolTip.Tip="Replace the canvas with the saved voxa-graph.json" />
+                  </Grid>
                 </StackPanel>
               </Flyout>
             </Button.Flyout>
