@@ -58,6 +58,8 @@ public sealed class AgentLoopProcessor : FrameProcessor
     private readonly object _holdLock = new();
     private readonly List<BackgroundTaskCompletedFrame> _heldResults = new();
     private bool _holdingForUtterance;
+    private bool _userSpeaking;            // live edge state — distinct from _holdingForUtterance, which persists until a release
+    private bool _finalSeenWhileSpeaking;  // a final consumed mid-speech defers its release to the stop edge
     private int _holdGeneration;
 
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ToolCallResultFrame>> _pendingFrontendTools
@@ -111,6 +113,11 @@ public sealed class AgentLoopProcessor : FrameProcessor
         _contextFactory = contextFactory;
         _maxResponseDuration = maxResponseDuration;
         _backgroundResults = backgroundResults ?? new BackgroundResultOptions();
+        // Fail at construction, not mid-session: MaxPendingResults = 0 would make the drop-oldest
+        // eviction index an empty list and fault the data loop (PR #96 review).
+        ArgumentOutOfRangeException.ThrowIfLessThan(_backgroundResults.MaxPendingResults, 1, nameof(backgroundResults));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(
+            _backgroundResults.HeldResultReleaseTimeout, TimeSpan.Zero, nameof(backgroundResults));
         _diagnosticsHub = diagnosticsHub;
     }
 
@@ -165,7 +172,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 // Data-ordered release (VDX-008 §4.1): held background results go out immediately
                 // BEHIND the turn this final just triggered — both writes happen on the data loop,
                 // so no result turn can overtake the user's utterance.
-                ReleaseHeldResults();
+                OnFinalTranscriptionConsumed();
                 return;
 
             case TranscriptionFrame { IsFinal: true }:
@@ -176,7 +183,7 @@ public sealed class AgentLoopProcessor : FrameProcessor
                 // will never come — speech-core's stuck-pipeline guard).
                 await PushFrameAsync(frame, ct).ConfigureAwait(false);
                 // No turn will follow this utterance — release held results now (VDX-008 §4.1).
-                ReleaseHeldResults();
+                OnFinalTranscriptionConsumed();
                 return;
 
             case ToolCallResultFrame r:
@@ -243,21 +250,61 @@ public sealed class AgentLoopProcessor : FrameProcessor
     {
         lock (_holdLock)
         {
+            _userSpeaking = true;
             _holdingForUtterance = true;
+            _finalSeenWhileSpeaking = false;
             // Invalidate any quiet-timeout armed by a previous stop-speaking.
             _holdGeneration++;
         }
     }
 
-    private void OnUserStoppedSpeaking()
+    /// <summary>
+    /// A final was consumed on the data loop (its user turn, if any, is already enqueued). Release
+    /// held results now — unless the edges say the user is speaking, which means either the stop
+    /// edge is still queued cross-channel or this is a streaming/late final mid-utterance. In both
+    /// cases result turns must not be injected while the user talks: defer to the stop edge, which
+    /// releases immediately when a final has already been seen (PR #96 review).
+    /// </summary>
+    private void OnFinalTranscriptionConsumed()
     {
-        int generation;
         lock (_holdLock)
         {
-            if (!_holdingForUtterance) return;
-            generation = _holdGeneration;
+            if (_userSpeaking)
+            {
+                _finalSeenWhileSpeaking = true;
+                return;
+            }
         }
-        _ = ReleaseAfterQuietTimeoutAsync(generation);
+        ReleaseHeldResults();
+    }
+
+    private void OnUserStoppedSpeaking()
+    {
+        bool releaseNow;
+        var generation = 0;
+        lock (_holdLock)
+        {
+            _userSpeaking = false;
+            releaseNow = _finalSeenWhileSpeaking;
+            _finalSeenWhileSpeaking = false;
+            if (!releaseNow)
+            {
+                if (!_holdingForUtterance) return;
+                generation = _holdGeneration;
+            }
+        }
+
+        if (releaseNow)
+        {
+            // The utterance's final already ran its turn — release right behind it.
+            ReleaseHeldResults();
+        }
+        else
+        {
+            // No final yet: it usually arrives moments later (release happens there); the timer
+            // covers utterances whose final never comes.
+            _ = ReleaseAfterQuietTimeoutAsync(generation);
+        }
     }
 
     /// <summary>Fallback for utterances whose final transcription never arrives (VDX-008 §4.1).</summary>
@@ -285,6 +332,9 @@ public sealed class AgentLoopProcessor : FrameProcessor
         lock (_holdLock)
         {
             if (generation is { } g && (g != _holdGeneration || !_holdingForUtterance)) return;
+            // Defense-in-depth: every caller already checks the speaking state, but a release must
+            // never drain while the user talks (PR #96 review).
+            if (generation is null && _userSpeaking) return;
             _holdingForUtterance = false;
             _holdGeneration++;
             if (_heldResults.Count == 0) return;
