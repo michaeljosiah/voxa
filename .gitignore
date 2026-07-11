@@ -40,3 +40,6 @@ Thumbs.db
 
 # Skill eval workspaces (test-run artifacts, not source)
 .claude/skills/*-workspace/
+
+# Local-only analysis notes (competitive reviews etc.) — never committed
+docs/code-analysis/*.local.html

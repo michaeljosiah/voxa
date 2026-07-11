@@ -41,6 +41,9 @@ The chained `Whisper → gpt-4o-mini → TTS` pipeline currently sits at ~1.6 s 
 > (`Voxa:SmartTurn`). With one registered, `Voxa:Vad:StopDurationMs` can safely drop to ~200 ms. **Remaining:**
 > the on-device `LocalSmartTurnClassifier` (a SHA-256-pinned ONNX model + an audio-preprocessing spike to
 > match the model's input tensor) — the seam is ready for it.
+> **Now specced:** [VLS-010](docs/specifications/vls-010-local-smart-turn-spec.html) — pinned BSD-2-Clause
+> Smart Turn v3 artifact (hash verified against the live distribution) on the VLS-006 ONNX host, with the
+> Whisper-style log-mel front-end landing as shared DSP for VLS-007 reuse.
 
 Pipecat ships `OpenAISmartTurnAnalyzer` and on-device CoreML / `local_smart_turn_v2` / `v3` classifiers in `pipecat/audio/turn/smart_turn/`. They sit *on top of* silence VAD: silence-end fires → classifier says "is the user actually done?" → only then UserStoppedSpeakingFrame fires. With this, `stop_secs=0.2` is safe — within-sentence pauses don't trigger early flush.
 
@@ -86,6 +89,13 @@ Estimated effort: ~2 days. Requires a small change to frame direction convention
 > longer plays out after a barge-in. Remaining: cancel the in-flight LLM/TTS run through
 > `MicrosoftAgentsProcessor`, and confirm the JS client flushes its local playback buffer on the
 > `{"type":"interruption"}` envelope.
+>
+> **VRT-002 WS2 update (shipped, PR #100).** The cancel half landed: `AgentLoopProcessor` cancels the
+> in-flight turn on user speech and emits a real `InterruptionFrame`; the aggregator and TTS mute their
+> stale tails. Barge-in now *works* — and is a hair trigger (any detected speech interrupts, including
+> backchannels). **Next:** [VRT-006](docs/specifications/vrt-006-turn-taking-strategies-spec.html) —
+> interruption gating (`IInterruptionPolicy`, min-words + backchannel lexicon), engine-signaled
+> end-of-turn as a composable `TurnEnd` source, and formalized input-mute policies.
 
 Today: user starts talking → SentenceAggregator drops its buffer (good), but the TTS audio already in the WebSocket send queue still plays out (user hears bot finish current sentence). LLM may still be generating. Net effect: bot keeps talking for ~1 sentence after the interrupt.
 
@@ -185,7 +195,8 @@ Estimated effort (remaining P5): `@voxa/client` ~4–5d (**first**), then `Voxa`
 
 - ✅ **Per-stage latency waterfall** — shipped by VST-001 WS0: the per-turn breakdown (VAD close → STT final → LLM first token → TTS first byte → audio out) is derived inside `VoxaDiagnosticsHub` (a `StageLatencyTracker` over the hub's anchor events) and recorded as `voxa.stage.latency` histograms (tag `stage`), making `voxa.turn.ttfb` *diagnosable*. Enable with `Voxa:Diagnostics:Enabled`. Voxa Studio's Talk view renders it live; a `/voxa/debug` browser page over the same hub remains open for a follow-up.
 - **Runtime control envelope** — client-sent `{"type":"configure", ...}` to adjust VAD thresholds / voice / language mid-session (mobile acoustic environments vary wildly), guarded by a host-side allowlist.
-- **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load).
+- **Conversation test harness** — extend `Voxa.Testing` with a scripted-conversation runner: WAV (or text) in → ordered transcript/frame expectations + latency budgets out, deterministic clock, runnable in CI. Also the cure for timing-flaky tests (e.g. the MicrosoftAgents shutdown test under parallel suite load). **Now specced as [VDX-009](docs/specifications/vdx-009-behavioral-evals-spec.html)** — declarative YAML scenarios against the real composed pipeline (text and synthesized-audio lanes, diagnostics-hub assertions, optional local LLM judge), with a starter pack that re-derives this quarter's three shipped conversation bugs.
+- **Pipeline health watchdogs** — [VRT-007](docs/specifications/vrt-007-pipeline-health-watchdogs-spec.html): data-path heartbeats with a sink-side stall monitor (doubles as a whole-pipeline transit-latency probe), session idle detection with optional graceful auto-end (telephony hang-up), and teardown hygiene reports naming the processor that failed to stop. All off by default, zero new pipeline stages.
 - **Wire protocol doc + versioning** — `docs/wire-protocol.md` generated from the `WireMessages` DTOs, plus a `"v": 1` field in the hello envelope so future protocol changes can be negotiated instead of breaking. *(The `session` envelope already carries `v` via `SessionInfoFrame.ProtocolVersion`; the DTO→TS generator and the inbound-envelope DTOs land with `@voxa/client` in P5 — this item adds the prose doc and **hello-side** negotiation on top.)*
 
 ## P8 — Voxa Studio (developer desktop app)
