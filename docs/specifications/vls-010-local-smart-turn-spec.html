@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VLS-010 — Local on-device end-of-turn classifier (Smart Turn v3, ONNX)</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+  --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+  --good: #66bb6a; --warn: #ffb74d; --code-bg: #11151c;
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+.meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+.meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+h2 .secno { color: var(--accent); margin-right: 10px; }
+h3 { font-size: 1.08rem; color: var(--accent2); margin-top: 32px; }
+p, li { font-size: 0.95rem; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+pre code { background: none; padding: 0; color: #c9d6e3; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: var(--panel2); color: #fff; font-weight: 600; }
+.callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+.callout.good { border-left-color: var(--good); }
+.callout.warn { border-left-color: var(--warn); }
+.callout b:first-child { color: var(--accent2); }
+ul.check { list-style: none; padding-left: 4px; }
+ul.check li::before { content: "☐ "; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VLS-010 — Local on-device end-of-turn classifier (Smart Turn v3, ONNX)</h1>
+  <div class="sub">
+    The smart-turn seam (P0) shipped with remote implementations only — <code>HttpSmartTurnClassifier</code>
+    and the Python sidecar. This spec fills the promised third slot from the seam's own doc comment:
+    a local ONNX implementation, so the low-latency turn profile (VAD stop ≈ 200 ms + classifier confirm)
+    works fully offline. The model is Smart Turn v3 — an openly published, BSD-2-Clause, multilingual
+    semantic end-of-turn classifier, 8.3 MB, CPU-real-time.
+  </div>
+  <div class="meta-grid">
+    <div><b>Document</b> VLS-010 v1.1</div>
+    <div><b>Date</b> 2026-07-11</div>
+    <div><b>Status</b> Proposed</div>
+    <div><b>Target</b> new <code>Voxa.Audio.SmartTurn.Onnx</code>, <code>Voxa.Audio.Onnx</code> (shared DSP)</div>
+    <div><b>Depends on</b> VLS-006 (ONNX session host), smart-turn seam (P0), VoxaModelCache</div>
+    <div><b>Pairs with</b> VRT-006 (<code>TurnEnd=SmartTurn</code>/<code>Auto</code>)</div>
+  </div>
+</header>
+
+<div class="callout good">
+  <b>Unblocked, unlike VLS-007/008.</b> Those specs stalled on unverifiable model hashes. This artifact was
+  verified against the live canonical distribution on 2026-07-11: SHA-256 and size below are sourced from
+  the real file (HF <code>X-Linked-ETag</code> cross-checked against an independently downloaded copy),
+  the repo is ungated, and the license tag is <code>bsd-2-clause</code> — comfortably inside the
+  "MIT or better" bar used for bundled-by-default models.
+</div>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> initialization is now lazy — the ctor does no cache resolve /
+  session build / download; Studio composes <code>RequireCached</code> so the explicit-download consent
+  pattern holds. Concurrency no longer shares in-flight verdicts across callers (async-lock
+  serialization; every caller's verdict is computed on its own audio). The 8-second window semantics are
+  pinned: keep-last-8 s, <em>left</em>-pad with zeros (speech at window end), normalized log-mel — locked
+  by a short-utterance golden fixture.
+</div>
+
+<h2><span class="secno">1.</span> Problem</h2>
+<p>
+<code>ISmartTurnClassifier</code> lets the VAD's <code>StopDurationMs</code> drop to ~200 ms without
+cutting off mid-sentence pauses: silence fires → classifier inspects the turn's audio → only a
+"complete" verdict emits <code>UserStoppedSpeakingFrame</code>. But both shipped implementations leave
+the device: an HTTP endpoint or a local Python sidecar process. That fails Voxa's local-speech story
+(Studio "never touches the network before the user acts"; Ada is private-by-default) and adds a network
+round-trip to the most latency-sensitive decision in the pipeline. Result: nobody runs the low-latency
+turn profile in practice — Ada ships a blunt 900 ms stop duration instead.
+</p>
+
+<h2><span class="secno">2.</span> The model</h2>
+<table>
+  <tr><th>Property</th><th>Value</th></tr>
+  <tr><td>Artifact</td><td><code>smart-turn-v3.2-cpu.onnx</code> — Smart Turn v3, semantic end-of-turn ("did the speaker finish?") classifier</td></tr>
+  <tr><td>License</td><td>BSD-2-Clause (HF model tag; ungated, plain <code>.onnx</code> — resolves through <code>VoxaModelCache</code> with no archive step and no gate)</td></tr>
+  <tr><td>Size</td><td>8,679,182 bytes (~8.3 MB)</td></tr>
+  <tr><td>SHA-256</td><td><code>2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f</code></td></tr>
+  <tr><td>Input</td><td>16 kHz mono float32, exactly 8 s — keep the last 8 s / left-pad with zeros (speech at window end) — as 80-bin normalized Whisper-style log-mel features</td></tr>
+  <tr><td>Output</td><td>completion probability; ≥ threshold (default 0.5) ⇒ turn complete</td></tr>
+  <tr><td>Languages</td><td>multilingual (trained on a 20+ language corpus; English strongest)</td></tr>
+  <tr><td>Runtime cost</td><td>single-digit ms per inference on a desktop CPU; runs once per silence event, not per frame</td></tr>
+</table>
+<pre><code>// Voxa.Audio.SmartTurn.Onnx — pinned catalog (VLS convention: hashes from the real
+// artifact, never fabricated; verified against the canonical HF distribution 2026-07-11)
+public static class SmartTurnV3Catalog
+{
+    public static VoxaModelArtifact Model { get; } = new(
+        Id: "smart-turn/v3.2/smart-turn-v3.2-cpu.onnx",
+        DownloadUrl: new Uri("https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx"),
+        Sha256: "2bb026316b14a660486a75b1733cd3fbab8c2fd0314dc9af7be49f8cca967e4f",
+        SizeBytes: 8_679_182);
+}</code></pre>
+
+<h2><span class="secno">3.</span> Design</h2>
+<h3>3.1 Package shape</h3>
+<p>
+New leaf package <code>Voxa.Audio.SmartTurn.Onnx</code>, mirroring the
+<code>Voxa.Audio.Diarization</code> / <code>Voxa.Audio.Diarization.Onnx</code> split: the existing
+<code>Voxa.Audio.SmartTurn</code> keeps its zero-ONNX dependency surface (HTTP/sidecar); the
+<code>.Onnx</code> package references <code>Voxa.Audio.Onnx</code> (VLS-006 host — CPU by default,
+GPU execution providers opt-in with <code>PrivateAssets</code> discipline) and carries the catalog +
+classifier.
+</p>
+<pre><code>public sealed class LocalSmartTurnClassifier : ISmartTurnClassifier
+{
+    // The ctor does NO eager work — no cache resolve, no session build, no download.
+    // The first IsTurnCompleteAsync call lazily resolves the pinned model through
+    // VoxaModelCache (honors VOXA_MODEL_CACHE), builds the shared OrtSession via the
+    // VLS-006 host, and precomputes the mel filterbank. Composition stays cheap and
+    // network-free; WarmUpOnStart opts hosts into eagerness (§3.3).
+    public ValueTask&lt;bool&gt; IsTurnCompleteAsync(
+        ReadOnlyMemory&lt;byte&gt; recentSpeechPcm, int sampleRate, CancellationToken ct);
+}</code></pre>
+<ul>
+  <li><b>Pipeline per call:</b> PCM16 → float; resample to 16 kHz when needed
+      (<code>LinearResampler</code>, <code>Voxa.Audio.Abstractions</code>); window to exactly 8 s with the
+      reference semantics pinned: <b>keep the last 8 s</b> when longer, <b>zero-pad at the beginning</b>
+      when shorter, so the speech always sits at the <em>end</em> of the window (right-padding shifts
+      short utterances into positions the model never saw in training); normalized Whisper-style log-mel
+      features (max-normalization enabled, matching the reference front-end); single session run;
+      <code>probability ≥ Threshold</code>.</li>
+  <li><b>Failure posture:</b> per the seam contract, any error (missing model, ONNX fault, timeout)
+      returns <em>complete</em> and logs once — a classifier failure must never strand the conversation
+      with an unclosable turn.</li>
+  <li><b>Concurrency:</b> one session, inference serialized behind an async lock. Every caller gets a
+      verdict computed on <em>its own</em> audio — concurrent calls (multiple sessions sharing the DI
+      singleton, or a slow inference overlapping the next silence candidate) queue and run in turn;
+      in-flight results are never shared across callers, since another session's audio would produce a
+      meaningless verdict. Inference is single-digit ms, so queuing is invisible in practice; if a call
+      has waited past its own deadline it resolves via the failure posture (complete) rather than
+      adopting a stranger's answer. No per-call allocation of the feature buffers — pooled/reused,
+      matching the data-loop allocation discipline.</li>
+</ul>
+
+<h3>3.2 Shared DSP: Whisper-style log-mel in <code>Voxa.Audio.Onnx</code></h3>
+<p>
+The feature extractor is not classifier-specific — it is the standard Whisper front-end
+(<code>n_fft = 400</code>, <code>hop = 160</code>, 80 mel bins, Slaney mel scale, periodic Hann window,
+log10 with the usual max-normalization and clamp). VLS-007's ASR models (Parakeet/Nemotron
+families) need the same front-end, so it lands as <code>WhisperLogMelFeatureExtractor</code> in
+<code>Voxa.Audio.Onnx</code> (internal-visible-to friends or public-minimal — decide at review), with
+golden tests against precomputed reference feature frames checked in as small fixture arrays. The
+fixtures are generated with the reference front-end's <em>normalized</em> output (max-normalization on)
+and include a short-utterance case so the left-padding semantics of §3.1 are locked by test, not prose.
+</p>
+
+<h3>3.3 Registration &amp; composition</h3>
+<pre><code>// Host code — the default composer already wires any registered ISmartTurnClassifier
+// into the VAD's ConfirmTurnEnd (P0), so this one line is the whole integration:
+services.AddVoxaLocalSmartTurn();                       // defaults
+services.AddVoxaLocalSmartTurn(o =&gt; { o.Threshold = 0.6f; o.WarmUpOnStart = false; });</code></pre>
+<ul>
+  <li>Options: <code>Threshold</code> (default 0.5), <code>MaxWindowSeconds</code> (default 8),
+      <code>WarmUpOnStart</code> (default false). With warm-up off, nothing happens until the first
+      classification call (§3.1 lazy init); with it on, an ASP.NET hosted service resolves the cache and
+      builds the session at startup so the first turn never pays the cold cost. Server hosts may accept
+      an on-demand download at first use; <b>Studio composes with <code>RequireCached=true</code></b> —
+      the classifier never downloads implicitly there; a missing model logs once and fails "complete"
+      until the user downloads it through the Config card (§3.3 below), preserving the explicit-consent
+      download pattern.</li>
+  <li>Config-first activation for the <code>AddVoxa</code> registry path:
+      <code>Voxa:SmartTurn:Provider = "local"</code> (alongside the existing <code>http</code>/sidecar
+      providers), validated fail-fast on unknown values.</li>
+  <li>With VRT-006: descriptor participates in <code>TurnEnd=Auto</code> preference
+      (engine EOT &gt; smart-turn &gt; silence).</li>
+  <li><b>Studio:</b> the model appears in Config as a downloadable artifact (the pyannote pattern —
+      size + license shown, explicit user-initiated download, cache-path honesty), and the Builder's VAD
+      node can select it where registered.</li>
+</ul>
+
+<h2><span class="secno">4.</span> Non-goals</h2>
+<ul>
+  <li><b>Streaming/continuous turn scoring</b> (scoring every frame instead of once per silence event).
+      The seam is verdict-at-silence; continuous scoring is a different seam and a VRT-006 follow-up if
+      ever needed.</li>
+  <li><b>GPU-required operation.</b> CPU is the default and the target; GPU EPs come free via the
+      VLS-006 host but are never required.</li>
+  <li><b>Model training/fine-tuning, quantization work, or alternative EOT models.</b> One pinned
+      artifact; the catalog pattern makes additions cheap later.</li>
+  <li><b>CoreML/mobile variants.</b> Windows/Linux/macOS CPU via ONNX Runtime only.</li>
+</ul>
+
+<h2><span class="secno">5.</span> Workstreams</h2>
+<ul class="check">
+  <li><b>WS1 — DSP:</b> <code>WhisperLogMelFeatureExtractor</code> in <code>Voxa.Audio.Onnx</code> +
+      golden feature-frame tests (offline, default suite).</li>
+  <li><b>WS2 — Classifier:</b> package, catalog, <code>LocalSmartTurnClassifier</code>, options,
+      registration extensions, registry provider id <code>local</code>; unit tests with a stub
+      <code>OrtSession</code> seam for the failure-posture, pooling, lazy-init (ctor does nothing; first
+      call initializes once under concurrency), and per-caller verdict isolation (two overlapping calls
+      with different audio get different, correct answers).</li>
+  <li><b>WS3 — Integration:</b> <code>[Trait("Category","LocalModels")]</code> tests: real download →
+      hash verify → inference on checked-in fixture utterances (a complete sentence ⇒ complete; an
+      obvious mid-sentence pause ⇒ incomplete); cache-hit offline re-run.</li>
+  <li><b>WS4 — Surfacing:</b> Studio Config download card + provider selection; docs
+      (<code>docs/local-speech.md</code> gets an end-of-turn section, performance-tuning low-latency
+      profile updated to reference it), CHANGELOG.</li>
+</ul>
+
+<h2><span class="secno">6.</span> Verification</h2>
+<ul>
+  <li>Default suite: no network, no model — DSP golden tests + stub-session tests only.</li>
+  <li><code>LocalModels</code> lane: pinned download resolves and verifies; both fixture utterances
+      classify correctly at default threshold; second run with network blocked passes (cache).</li>
+  <li>Latency budget: inference ≤ 25 ms p99 on the CI CPU (generous bound — it's the turn-taking path);
+      recorded via the existing stage-latency histogram under a
+      <code>voxa.stage.latency</code> smart-turn stage tag.</li>
+  <li>Golden composition: unregistered ⇒ byte-identical pipelines (existing test unchanged).</li>
+  <li>Live protocol: Studio Talk with <code>StopDurationMs=250</code> + local classifier — pause
+      mid-sentence ("my favourite colour is … hmm … probably blue") and confirm the turn holds; automated
+      once VDX-009 lands.</li>
+</ul>
+
+<h2><span class="secno">7.</span> Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>Upstream artifact moves or re-uploads (hash breaks)</td>
+      <td>Pinned hash fails closed with a clear error; catalog update is a one-line PR; the 8.3 MB file can be mirrored under our own release assets if churn becomes real</td></tr>
+  <tr><td>Feature-extraction drift vs the reference front-end (subtle accuracy loss)</td>
+      <td>Golden feature-frame fixtures generated from the reference implementation; tolerance-checked per bin</td></tr>
+  <tr><td>Non-English accuracy below expectations</td>
+      <td>Multilingual model, but verify per deployment; threshold configurable; silence fallback (VRT-006 §4.3) bounds the damage</td></tr>
+  <tr><td>ONNX Runtime native load failures on exotic hosts</td>
+      <td>Same posture as VLS-006: fail at session start with actionable error; classifier failure posture keeps conversations alive</td></tr>
+</table>
+
+</div>
+</body>
+</html>

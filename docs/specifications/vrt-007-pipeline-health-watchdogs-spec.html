@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VRT-007 — Pipeline health watchdogs (heartbeats, idle sessions, teardown hygiene)</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+  --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+  --good: #66bb6a; --warn: #ffb74d; --code-bg: #11151c;
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+.meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+.meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+h2 .secno { color: var(--accent); margin-right: 10px; }
+h3 { font-size: 1.08rem; color: var(--accent2); margin-top: 32px; }
+p, li { font-size: 0.95rem; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+pre code { background: none; padding: 0; color: #c9d6e3; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: var(--panel2); color: #fff; font-weight: 600; }
+.callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+.callout.good { border-left-color: var(--good); }
+.callout.warn { border-left-color: var(--warn); }
+.callout b:first-child { color: var(--accent2); }
+ul.check { list-style: none; padding-left: 4px; }
+ul.check li::before { content: "☐ "; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VRT-007 — Pipeline health watchdogs</h1>
+  <div class="sub">
+    A voice pipeline that stalls fails <em>silently</em>: the socket stays open, the session object looks
+    alive, and the user hears nothing — indefinitely. Voxa has no runtime instrument that notices a wedged
+    data loop, an abandoned session, or a processor that never finished shutting down (the CI hang
+    investigation found the last one only because a whole test lane died). Three small, independently
+    useful watchdogs fix that: end-to-end heartbeats, session idle detection, and teardown hygiene
+    reporting. All off by default; zero cost when disabled.
+  </div>
+  <div class="meta-grid">
+    <div><b>Document</b> VRT-007 v1.1</div>
+    <div><b>Date</b> 2026-07-11</div>
+    <div><b>Status</b> Proposed</div>
+    <div><b>Target</b> Voxa.Core (runner/source/sink), Voxa.AspNetCore (config), Voxa.Studio</div>
+    <div><b>Depends on</b> Diagnostics hub (events), bounded-channel backpressure convention</div>
+    <div><b>Beneficiaries</b> VTL-001 telephony (idle hang-up), Studio (stall indicator), CI</div>
+  </div>
+</header>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> corrected the channel-mode premise — the granular chain's data
+  channels are <code>Wait</code>-mode, so heartbeats delay under load rather than shed; the informational
+  signal is now transit-latency-based congestion, not "missing heartbeats = backpressure". The teardown
+  deadline no longer changes behavior: <code>StopTimeoutMs</code> defaults to null, preserving
+  <code>StopAsync</code>'s existing 5 s grace, and WS3 only instruments the existing escalation.
+</div>
+
+<h2><span class="secno">1.</span> Problem</h2>
+<ul>
+  <li><b>Stalls are invisible.</b> If a processor's data task deadlocks or an engine's read loop hangs,
+      frames stop flowing but nothing reports it. The failure surfaces as a user complaint ("it just went
+      quiet") with no telemetry to triage.</li>
+  <li><b>Abandoned sessions run forever.</b> A caller who walks away (or a WebSocket client that stops
+      sending without closing) leaves a full pipeline — engines, buffers, possibly a metered phone call —
+      running until transport teardown, which may never come. For Twilio media streams this is billed time.</li>
+  <li><b>Teardown failures are silent until they aren't.</b> The Studio-tests hang burned six hours of CI
+      before anyone knew <em>which</em> component failed to exit. At runtime the same class of bug leaks
+      sessions instead of hanging processes — with even less visibility.</li>
+</ul>
+
+<h2><span class="secno">2.</span> WS1 — Heartbeats (end-to-end liveness + free latency probe)</h2>
+<h3>2.1 Mechanism</h3>
+<ul>
+  <li>New <code>HeartbeatFrame(long MonotonicTimestamp)</code> — a <code>ControlFrame</code> that rides
+      the <b>ordered data path</b>. That placement is the point: the system path stays healthy in most
+      wedge scenarios (it's drained by a separate task); only a data-path probe proves the loop every
+      processor's real work runs on is alive end-to-end.</li>
+  <li>When enabled, <code>PipelineSource</code> emits one every <code>PeriodMs</code> (default 1000)
+      from a timer that is <em>not</em> gated behind the source's normal queue — a blocked producer must
+      not stop probes.</li>
+  <li><code>PipelineSink</code> records arrival; a runner-owned monitor awaits each arrival with
+      <code>TimeoutMs</code> (default 10 000). Timeout ⇒ <code>PipelineStalledEvent</code> on the
+      diagnostics hub (+ optional host callback), re-fired each interval while the stall persists, and a
+      <code>PipelineRecoveredEvent</code> when flow resumes — stalls can be transient (a slow cold model
+      load) and the telemetry must show both edges.</li>
+  <li>Every arrival also yields <code>now − MonotonicTimestamp</code>: a continuous <b>whole-pipeline
+      transit-latency</b> series, published as a hub metric. This is a measurement no per-stage histogram
+      composes correctly (queue wait between stages is invisible to stage timers) — the heartbeat gets it
+      for free.</li>
+  <li>Processors need no changes: unhandled control frames already forward (the
+      <code>StartFrame</code>/<code>EndFrame</code> rule). A processor that <em>fails</em> to forward
+      heartbeats is itself a bug this watchdog exposes.</li>
+</ul>
+<div class="callout warn">
+  <b>Channel-mode honesty (corrected in v1.1).</b> The granular chain's inter-processor data channels are
+  <code>BoundedChannelFullMode.Wait</code> (capacity 64, <code>FrameProcessor</code> default), and the
+  WebSocket/telephony sinks backpressure rather than drop — so on the granular chain a heartbeat is never
+  <em>shed</em>; under pressure it <em>waits</em>, and its transit time grows. The monitor's signals follow
+  from that: steadily rising transit latency (heartbeats arriving, late) ⇒
+  <code>PipelineCongestionEvent</code> (informational, threshold ≈ a few heartbeat periods); <em>no</em>
+  arrival for the full timeout ⇒ stall. Genuine shedding only exists where a stage opts into
+  <code>DropOldest</code> — today the composite processors' audio channels
+  (<code>AzureVoiceLive</code>/<code>OpenAIRealtime</code>/S2S) and the diagnostics hub's subscriber
+  queues — and those sit outside the granular heartbeat path (§6). The timeout defaulting to 10× the
+  period keeps the false-positive window negligible either way.
+</div>
+
+<h2><span class="secno">3.</span> WS2 — Session idle detection</h2>
+<ul>
+  <li>The runner (when enabled) tracks last-activity time, reset only by <em>conversation-meaningful</em>
+      frames observed at the sink boundary: user/bot speaking events, transcriptions, turn lifecycle
+      frames, outbound TTS audio. Deliberately <b>not</b> reset by inbound audio frames — an open mic in
+      an empty room is exactly the abandoned case, and comfort noise/heartbeats must not defeat the timer.</li>
+  <li>On <code>IdleTimeoutSeconds</code> (default 300 when enabled): <code>SessionIdleEvent</code> +
+      optional host callback; if <code>EndOnIdle=true</code>, the runner initiates the normal graceful
+      end (push <code>EndFrame</code>, drain, complete) — the same path a client disconnect takes, so
+      transports unwind cleanly (for Twilio, the closed media stream releases the call leg).</li>
+  <li>A first-activity grace: the timer arms on <code>StartFrame</code>, so a session nobody ever speaks
+      into still times out — that is the abandoned-call case, not an exception to it.</li>
+</ul>
+
+<h2><span class="secno">4.</span> WS3 — Teardown hygiene</h2>
+<ul>
+  <li><code>PipelineRunner.StopAsync</code> <b>already has the deadline</b>: a 5-second grace period, then
+      hard cancel. WS3 does not change it — <code>StopTimeoutMs</code> defaults to <code>null</code>,
+      meaning "keep the runner's existing 5 s grace" (an always-active 20 s default would silently
+      quadruple every host's shutdown ceiling, violating this spec's own off-by-default rule). What WS3
+      adds is <em>instrumentation</em> of the existing escalation: when the grace expires, the runner
+      publishes a <code>TeardownReportEvent</code> naming, per processor, which of its tasks (system/data)
+      had not completed and how long teardown took. The event that would have named the Studio-tests
+      culprit in seconds instead of a CI archaeology session.</li>
+  <li>The report is also produced on <em>successful</em> teardown at debug level (per-processor stop
+      durations) — slow-stopping processors become visible before they become stuck ones.</li>
+  <li>No behavioral change to disposal ordering; this instruments the existing sequence. The known
+      disposal-cluster follow-ups (CQ-001/2/3/10) remain separate work — this spec only makes their
+      symptoms observable.</li>
+</ul>
+
+<h2><span class="secno">5.</span> Configuration &amp; composition</h2>
+<pre><code>"Voxa": {
+  "Health": {
+    "Heartbeats": false,          // WS1 — off by default
+    "HeartbeatPeriodMs": 1000,
+    "HeartbeatTimeoutMs": 10000,
+    "IdleTimeoutSeconds": 0,      // WS2 — 0 = disabled (default); &gt;0 enables
+    "EndOnIdle": false,
+    "StopTimeoutMs": null         // WS3 — null (default) = keep StopAsync's existing 5 s grace;
+                                  //        set to override; report event only when hub observed
+  }
+}</code></pre>
+<ul>
+  <li>All three are runner/source/sink concerns — <b>no new pipeline stages</b>, so the golden
+      composition test is untouched and disabled watchdogs cost nothing (no timers created, no fields
+      touched on the frame hot path; the usual <code>HasListeners</code> guard covers event publication).</li>
+  <li>Profiles: unchanged (health is orthogonal to latency/quality). The telephony sample enables
+      <code>IdleTimeoutSeconds=120, EndOnIdle=true</code> as documented good practice.</li>
+  <li><b>Studio:</b> Talk view shows a stall indicator (amber "pipeline stalled — Ns" chip driven by
+      the stall/recover events) and the idle countdown when enabled; the diagnostics pane gains the
+      transit-latency series.</li>
+</ul>
+
+<h2><span class="secno">6.</span> Non-goals</h2>
+<ul>
+  <li><b>Automatic recovery</b> (restarting stages, re-composing mid-session). Watchdogs detect and
+      report; the "one transient fault → degraded session" cluster (CQ-014/015/016) is its own program.</li>
+  <li><b>Cross-session/host aggregation.</b> Hub events feed whatever telemetry the host runs;
+      OpenTelemetry export stays in Voxa.Observability's lane.</li>
+  <li><b>Startup timing instrumentation</b> (per-processor start durations) — worthwhile, small, and
+      separable; noted for a diagnostics follow-up rather than scoped here.</li>
+  <li><b>Composite pipelines' internals.</b> The heartbeat proves the Voxa chain; a vendor's server-side
+      session health is theirs. (The composite processor still forwards heartbeats around its stage, so
+      transport-level stalls are caught.)</li>
+</ul>
+
+<h2><span class="secno">7.</span> Workstreams</h2>
+<ul class="check">
+  <li><b>WS1 — Heartbeats:</b> frame + source timer + sink monitor + stall/recover/congestion events +
+      transit metric; unit tests with a deliberately-wedged fake processor (blocked data task, healthy
+      system task ⇒ stall fires; both healthy ⇒ silence).</li>
+  <li><b>WS2 — Idle:</b> activity tracking at the sink boundary, timeout, <code>EndOnIdle</code> graceful
+      end; tests: no-activity session ends; active conversation never fires; open-mic-no-speech fires.</li>
+  <li><b>WS3 — Teardown:</b> stop deadline + escalation + per-processor report; test: a processor whose
+      data task ignores completion gets named in the report and the runner still exits.</li>
+  <li><b>WS4 — Surfacing:</b> Studio chip + latency series; telephony sample config;
+      <code>docs/performance-tuning.md</code> health section; CHANGELOG.</li>
+</ul>
+
+<h2><span class="secno">8.</span> Verification</h2>
+<ul>
+  <li>Golden composition byte-identical with <code>Voxa:Health</code> absent (no new stages by
+      construction — asserted anyway).</li>
+  <li>Zero-cost claim tested: heartbeats disabled ⇒ no timer allocated, frame hot path unchanged
+      (allocation test on the data loop stays green).</li>
+  <li>Stall detection end-to-end: wedge a mid-chain fake processor in a composed pipeline ⇒ stall event
+      within timeout+period; unwedge ⇒ recovered event.</li>
+  <li>Idle + <code>EndOnIdle</code> over the WebSocket transport: idle session closes the socket
+      gracefully (client sees the protocol's normal end, not an abort).</li>
+  <li>All waits condition-based with deadlines — no fixed <code>Task.Delay</code> asserts (repo flake
+      convention).</li>
+</ul>
+
+<h2><span class="secno">9.</span> Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>False stall positives under heavy load</td>
+      <td>Wait-mode channels mean load shows as rising transit latency (congestion signal) long before
+      arrivals stop; timeout = 10× period; events carry transit-time context for triage</td></tr>
+  <tr><td>Idle timer ends a session during a legitimately long silent operation (big background task, VDX-008)</td>
+      <td>Background-task lifecycle frames count as activity; hosts running long-silent workloads tune or disable <code>EndOnIdle</code></td></tr>
+  <tr><td>Escalated cancel during teardown masks the root hang</td>
+      <td>The report names the unfinished tasks <em>before</em> escalation; debug-level success reports build the baseline</td></tr>
+  <tr><td>Heartbeat frames confuse downstream custom processors</td>
+      <td>Standard control-frame forwarding rule already covers unknown frames; docs call it out; evals starter pack (VDX-009) includes a heartbeat-transparent scenario</td></tr>
+</table>
+
+</div>
+</body>
+</html>

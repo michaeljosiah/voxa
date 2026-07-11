@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VDX-009 — Behavioral conversation evals (scenario-driven voice-bot testing)</title>
+<style>
+:root {
+  --bg: #0f1419; --panel: #161b22; --panel2: #1c2330; --border: #2d3748;
+  --text: #d7dde6; --muted: #8b97a8; --accent: #4fc3f7; --accent2: #81d4fa;
+  --good: #66bb6a; --warn: #ffb74d; --code-bg: #11151c;
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 120px; }
+header.doc { border-bottom: 1px solid var(--border); padding: 40px 0 24px; margin-bottom: 32px; }
+header.doc h1 { font-size: 1.9rem; margin: 0 0 6px; color: #fff; }
+header.doc .sub { color: var(--muted); font-size: 0.95rem; }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 18px; }
+.meta-grid div { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 0.85rem; }
+.meta-grid b { color: var(--accent2); display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-size: 1.45rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 56px; }
+h2 .secno { color: var(--accent); margin-right: 10px; }
+h3 { font-size: 1.08rem; color: var(--accent2); margin-top: 32px; }
+p, li { font-size: 0.95rem; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--panel2); padding: 1px 6px; border-radius: 4px; color: #a5d6ff; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+pre code { background: none; padding: 0; color: #c9d6e3; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88rem; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+th { background: var(--panel2); color: #fff; font-weight: 600; }
+.callout { border-left: 4px solid var(--accent); background: var(--panel); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; font-size: 0.9rem; }
+.callout.good { border-left-color: var(--good); }
+.callout.warn { border-left-color: var(--warn); }
+.callout b:first-child { color: var(--accent2); }
+ul.check { list-style: none; padding-left: 4px; }
+ul.check li::before { content: "☐ "; color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>VDX-009 — Behavioral conversation evals</h1>
+  <div class="sub">
+    Voxa's unit tests are excellent at processors-in-isolation and dishonest about conversations: the
+    barge-in dead path, the aggregator tail-drop, and the delegation context loss all shipped past a green
+    suite and were caught by a human talking to the bot. This spec adds the missing layer — declarative
+    conversation scenarios executed against a <em>real composed pipeline</em>, asserting on what the bot
+    actually did (turn timing, spoken text, interruptions, tool calls, background delegation) with
+    optional LLM-judged content checks. Runnable from xUnit, the CLI, and CI.
+  </div>
+  <div class="meta-grid">
+    <div><b>Document</b> VDX-009 v1.1</div>
+    <div><b>Date</b> 2026-07-11</div>
+    <div><b>Status</b> Proposed</div>
+    <div><b>Target</b> new <code>Voxa.Evals</code>, <code>Voxa.Cli</code>, <code>Voxa.Testing</code></div>
+    <div><b>Depends on</b> Diagnostics hub (typed events), VDX-006/007 composition seams, Voxa.Testing</div>
+    <div><b>Consumers</b> Voxa CI, Ada (M10 talker/thinker scenarios), sample apps</div>
+  </div>
+</header>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> text mode now injects a complete synthetic utterance —
+  <code>UserStartedSpeakingFrame</code>, optional interims, <code>UserStoppedSpeakingFrame</code>, final —
+  not just a final transcription. Finals alone can never exercise barge-in (the loop's interruption path
+  triggers on the speech-onset frame) or VRT-006's interim-fed gate, which would have made the starter
+  pack's flagship scenarios silently vacuous in the default CI lane.
+</div>
+
+<h2><span class="secno">1.</span> Problem</h2>
+<p>
+Every processor is testable in isolation behind an interface — that is the repo's core convention, and it
+works. What it cannot catch is <em>emergent conversation behavior</em>: the frames all flow, every unit
+passes, and yet an interrupted answer resumes from the next sentence, or an unpunctuated reply tail never
+reaches the TTS, or a delegated task's result gets spoken into the wrong turn. These are properties of the
+<em>composition under time</em>, and today the only instrument that measures them is a developer with a
+microphone. That instrument does not run in CI, does not regress-test, and was the actual discovery
+mechanism for the last three shipped bugs.
+</p>
+
+<h2><span class="secno">2.</span> Design overview</h2>
+<pre class="flow" style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 0.8rem; line-height: 1.7; color: #c9d6e3; white-space: pre;">
+scenario.yaml ──► EvalRunner
+                    │  builds the host: plain ServiceCollection + AddVoxa(config)
+                    │  + DefaultVoicePipelineComposer.Compose(sp)   (the Studio precedent)
+                    ▼
+   ┌──────────── composed pipeline ────────────┐
+   │  EvalAudioSource ─► VAD ─► STT ─► agent ─► aggregator ─► TTS ─► EvalSink │
+   └────────────────────────────────────────────┘
+        ▲                                            │
+        │ user turns:                                ▼
+        │  • text  (inject transcription — fast lane) EvalRecorder ◄── VoxaDiagnosticsHub
+        │  • audio (TTS-synthesized / .wav fixture,      │ ordered, timestamped event log
+        │    played at real-time or accelerated cadence) ▼
+        └────────────────────────────── assertions: events + budgets + judge
+</pre>
+<p>Three deliberate choices:</p>
+<ul>
+  <li><b>In-process by default.</b> The runner hosts the composed pipeline the way Voxa Studio does
+      (plain <code>ServiceCollection</code>, no Generic Host, no eager warm-up) — deterministic, no ports,
+      no serialization variables. A remote mode over the WebSocket transport is a later workstream
+      (§8 WS4), valuable for full-stack client-protocol coverage but not the foundation.</li>
+  <li><b>The diagnostics hub is the witness.</b> Scenarios assert against the hub's typed, sequenced,
+      timestamped events (VAD windows, turn edges, transcripts, stage latencies, interruption gate
+      decisions, background-task lifecycle) plus sink-captured frames. No new instrumentation channel:
+      if a behavior matters enough to eval, it matters enough to appear in diagnostics — gaps found while
+      writing scenarios are hub features first.</li>
+  <li><b>Two input lanes, one schema.</b> <code>mode: text</code> bypasses audio and STT but injects a
+      <em>complete synthetic utterance</em>, not just a final: <code>UserStartedSpeakingFrame</code> →
+      optional interims → <code>UserStoppedSpeakingFrame</code> → final <code>TranscriptionFrame</code>,
+      with configurable gaps. The speaking edges are load-bearing, not decoration — the agent loop's
+      barge-in path triggers on <code>UserStartedSpeakingFrame</code> and the VRT-006 gate consumes
+      interims, so a finals-only lane could never exercise the interruption scenarios this spec exists to
+      guard (no models, CI-fast, exercises turn logic, agent loop, aggregation, TTS via a fake engine).
+      <code>mode: audio</code> synthesizes each user turn with a local TTS voice (or plays a
+      <code>.wav</code> fixture) into the real capture chain at a controlled cadence — the full pipeline,
+      VAD and STT producing the edges naturally, model-gated in CI.</li>
+</ul>
+
+<h2><span class="secno">3.</span> Scenario schema</h2>
+<pre><code>name: backchannel does not kill the answer
+mode: text                      # text | audio
+pipeline:
+  profile: LowLatency           # named profile, or a config fragment under `voxa:`
+  agent: scripted               # scripted driver (below) | host-registered driver
+script:                         # the scripted IAgentTurnDriver: deterministic bot lines
+  - match: "story"
+    reply: "Once upon a time, in a kingdom by the sea, there lived a very patient queen."
+
+turns:
+  - user: "tell me a story"
+    expect:
+      - event: turn.started          # LlmTurnStartedFrame
+        within_ms: 1000
+      - event: bot.text
+        contains: "kingdom"
+  - user: "uh-huh"
+    send_after: { event: bot.speaking.started, delay_ms: 200 }   # over the bot
+    expect:
+      - no_event: interruption       # gate must swallow it (VRT-006)
+        for_ms: 1500
+      - event: bot.speaking.stopped  # the answer completes
+  - user: "what did you have for breakfast?"
+    expect:
+      - event: response
+        judge: "politely declines or deflects; does not invent having eaten"</code></pre>
+<table>
+  <tr><th>Element</th><th>Semantics</th></tr>
+  <tr><td><code>user</code> / <code>wav</code> / <code>dtmf</code></td>
+      <td>Turn input: text (synthesized in audio mode; in text mode injected as speaking-edge →
+      interims → stopped-edge → final), a fixture file, or DTMF digits (telephony serializers)</td></tr>
+  <tr><td><code>interims</code> / <code>edge_gap_ms</code></td>
+      <td>Text-mode shaping: an optional list of interim texts emitted between the speaking edges
+      (defaults to none), and the gap between injected frames (default 50 ms). Barge-in gating scenarios
+      (VRT-006 min-words) set <code>interims:</code> explicitly to reproduce word-by-word arrival</td></tr>
+  <tr><td><code>send_after</code></td>
+      <td>Schedule the send relative to an earlier event (+optional delay) or a pure delay — this is how barge-in scenarios say "while the bot is talking"</td></tr>
+  <tr><td><code>expect</code> list</td>
+      <td>Matched <em>in order</em>; unmatched interleaved events are skipped, so scenarios don't break when incidental events appear. Each entry: an event name, optional <code>within_ms</code> (budget anchored at the turn's send), optional content check</td></tr>
+  <tr><td><code>no_event … for_ms</code></td>
+      <td>Negative assertion window — the only way to test suppression behaviors (backchannel gating, mute policies, relevance-gated silence from VDX-008)</td></tr>
+  <tr><td><code>contains</code> / <code>matches</code> / <code>judge</code></td>
+      <td>Substring / regex / LLM-judged criterion against the event's text payload</td></tr>
+  <tr><td><code>calls</code></td>
+      <td>For <code>tool.requested</code>: function name + args-subset match</td></tr>
+</table>
+<p>
+Event names map 1:1 to hub event types — current ones plus those specced by VRT-006/VRT-007/VDX-008
+(the runner fails a scenario referencing an event name with no hub counterpart, so the mapping table in
+the package README stays honest as specs land):
+<code>turn.started/ended</code>, <code>transcript.interim/final</code>, <code>bot.text</code>,
+<code>bot.speaking.started/stopped</code>, <code>interruption</code>, <code>tool.requested/completed</code>,
+<code>background.task.accepted/completed/spoken/dropped</code> (VDX-008),
+<code>response</code> (the aggregated per-turn bot text — a runner-derived convenience event).
+</p>
+<div class="callout">
+  <b>Format:</b> YAML via YamlDotNet, confined to <code>Voxa.Evals</code> (Voxa.Core stays
+  dependency-clean); the loader also accepts the same shape as JSON for hosts that ban YAML. Records
+  bind the schema; unknown keys are startup errors, not silent ignores.
+</div>
+
+<h2><span class="secno">4.</span> The judge</h2>
+<ul>
+  <li>Judged criteria run through <code>Microsoft.Extensions.AI.IChatClient</code> — any provider; the
+      reference config is a local Ollama endpoint so the whole harness runs offline. One round-trip per
+      criterion over the scenario's conversation-so-far.</li>
+  <li>The judge prompt is fixed and versioned in the package: strict-but-fair, explicitly tolerant of
+      STT artifacts (homophones, split/merged words) in audio mode, binary verdict + one-line reason
+      (the reason lands in the failure message).</li>
+  <li>Verdicts are cached per (criterion, conversation) hash within a run — repeated assertions are free.</li>
+  <li>No judge configured ⇒ scenarios using <code>judge:</code> fail with "judge not configured", never
+      silently pass.</li>
+</ul>
+
+<h2><span class="secno">5.</span> Execution surfaces</h2>
+<ul>
+  <li><b>xUnit:</b> <code>EvalScenarioTheoryData("scenarios/")</code> + a
+      <code>VoxaEvalRunner.RunAsync(path)</code> assertion helper — each scenario is a test case with the
+      scenario name as the display name; first failed expectation fails the scenario (fail-fast; a failed
+      turn leaves the conversation in an unknown state) with the recorder's event timeline dumped in the
+      failure output.</li>
+  <li><b>CLI:</b> <code>voxa evals run &lt;dir&gt; [--mode text|audio] [--filter name]</code> in
+      <code>Voxa.Cli</code> — table summary, non-zero exit on failure, <code>--timeline</code> writes the
+      per-scenario event log for debugging.</li>
+  <li><b>CI lanes (honest gating):</b>
+    <ul>
+      <li><code>mode: text</code> + scripted driver + fake TTS ⇒ <b>default suite</b> — no network, no
+          models, no keys. This is the tier that guards regressions like PR #100's.</li>
+      <li><code>mode: audio</code> (local TTS/STT models) ⇒ <code>Category=LocalModels</code> lane.</li>
+      <li><code>judge:</code> criteria ⇒ <code>Category=EvalJudge</code>, enabled by
+          <code>VOXA_EVALS_JUDGE_ENDPOINT</code>; skipped-with-reason when absent. Never in the default lane.</li>
+    </ul></li>
+</ul>
+
+<h2><span class="secno">6.</span> Determinism &amp; time</h2>
+<ul>
+  <li>The scripted driver (<code>script:</code> block) is the default agent for Voxa's own scenarios —
+      deterministic bot lines with optional per-line delays (<code>reply_delay_ms</code>,
+      <code>token_interval_ms</code>) to reproduce streaming pacing. Real drivers (an actual LLM) are for
+      host-side evals like Ada's.</li>
+  <li>Audio cadence is wall-clock real-time by default (VAD and turn logic are time-based); a
+      <code>time_scale</code> knob accelerates playback <em>and</em> proportionally scales the pipeline's
+      VAD durations via config so scaled runs stay self-consistent — marked experimental, off in CI.</li>
+  <li>Budgets (<code>within_ms</code>) on shared CI runners are noisy: scenario budgets are ceilings for
+      catching hangs (seconds), not latency SLOs (the stage-latency histogram + bench project own those).
+      Repo convention holds: no fixed sleeps in the runner — every wait is condition-based with a
+      deadline.</li>
+</ul>
+
+<h2><span class="secno">7.</span> Non-goals</h2>
+<ul>
+  <li><b>Latency benchmarking.</b> <code>bench/Voxa.Benchmarks</code> owns performance measurement;
+      evals assert behavior with generous ceilings.</li>
+  <li><b>Judging audio quality</b> (prosody, naturalness). Text-level content only; bot audio in audio
+      mode may optionally be re-transcribed for assertions, not scored aesthetically.</li>
+  <li><b>Load/soak testing.</b> One session per scenario.</li>
+  <li><b>A recorder UI.</b> Studio integration (record a live Talk session into a scenario skeleton) is
+      an attractive follow-up, explicitly out of v1.</li>
+</ul>
+
+<h2><span class="secno">8.</span> Workstreams</h2>
+<ul class="check">
+  <li><b>WS1 — Core runner:</b> schema records + YAML/JSON loader; in-process host builder (ServiceCollection
+      + AddVoxa + composer); <code>EvalRecorder</code> (hub subscriber + sink capture, ordered timeline);
+      text-mode synthetic-utterance injection (speaking edges + optional interims + final — asserted by a
+      runner test that a text-mode turn does trigger the loop's barge-in path); scripted driver; ordered
+      matcher with budgets + <code>no_event</code> windows;
+      xUnit surface. <em>Ships with a starter pack: the barge-in/backchannel, tail-flush, and VDX-008
+      delegation scenarios that re-derive this quarter's three shipped bugs.</em></li>
+  <li><b>WS2 — Audio mode:</b> synth lane (local TTS voice per scenario), wav fixtures, real-time cadence
+      player on the capture seam; <code>LocalModels</code>-gated scenario set.</li>
+  <li><b>WS3 — Judge + CLI:</b> <code>IChatClient</code> judge with cache + versioned prompt;
+      <code>voxa evals run</code>; <code>EvalJudge</code> trait/env gating.</li>
+  <li><b>WS4 — Remote mode (stretch):</b> drive a running host over the WebSocket transport using the
+      versioned client protocol — full-stack coverage incl. serialization; DTMF turns for telephony
+      serializers.</li>
+  <li><b>WS5 — Adoption:</b> Ada scenario suite for M10 (delegation ack, result-relevance silence,
+      barge-in during delegation); docs page <code>docs/evals.md</code>; CHANGELOG; CI wiring.</li>
+</ul>
+
+<h2><span class="secno">9.</span> Verification</h2>
+<ul>
+  <li>The starter-pack scenarios fail on deliberately re-broken code: revert PR #100's loop emission on a
+      scratch branch ⇒ the barge-in scenario fails; disable the aggregator tail flush ⇒ the tail scenario
+      fails. (Run once during development as the harness's own honesty check — documented in the PR, not
+      kept as permanent mutation tests.)</li>
+  <li>Runner unit tests: matcher ordering/skip semantics, budget anchoring, negative windows,
+      unknown-key rejection, judge-absent failure.</li>
+  <li>Default suite stays offline: a CI assertion greps the text-mode scenario set for
+      <code>mode: audio</code>/<code>judge:</code> leakage into the default lane.</li>
+  <li>Docs commands run as written (repo convention).</li>
+</ul>
+
+<h2><span class="secno">10.</span> Risks</h2>
+<table>
+  <tr><th>Risk</th><th>Mitigation</th></tr>
+  <tr><td>Flaky time-based assertions on CI runners</td>
+      <td>Budgets are hang-catching ceilings; ordered-skip matching tolerates incidental events; no fixed sleeps</td></tr>
+  <tr><td>Scenario schema sprawl</td>
+      <td>Schema is records + fail-fast on unknown keys; new event names require a hub event to exist first</td></tr>
+  <tr><td>Judge nondeterminism</td>
+      <td>Binary verdict + low temperature + versioned prompt; judged criteria live outside the default lane; failures print the judge's reason for fast triage</td></tr>
+  <tr><td>In-process mode masks transport bugs</td>
+      <td>Acknowledged scope; WS4 remote mode covers the wire; unit tests already cover serializers</td></tr>
+</table>
+
+</div>
+</body>
+</html>

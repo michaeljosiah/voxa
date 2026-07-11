@@ -71,9 +71,18 @@ or the sink never completes), and accept the per-frame `CancellationToken` on an
 
 ### Backpressure convention
 
-Audio/data paths use bounded channels with `BoundedChannelFullMode.DropOldest`; control/system
-paths use `Wait` (unbounded priority). Document any deviation. This is why a slow consumer drops
-audio rather than stalling the pipeline.
+Two regimes, by design:
+
+- **Granular chain (processor→processor):** bounded `Wait` data channels (capacity 64, the
+  `FrameProcessor` default) — a slow stage backpressures its upstream rather than dropping frames.
+  System frames ride a separate unbounded priority channel.
+- **Shedding paths:** `BoundedChannelFullMode.DropOldest` where dropping is the correct failure mode —
+  the composite processors' audio channels (`AzureVoiceLiveProcessor`/`OpenAIRealtimeProcessor`/
+  `SpeechToSpeechProcessor`) and the diagnostics hub's subscriber queues (`SeqNo` gaps signal drops
+  intentionally). This is why a slow *audio/diagnostics consumer* drops data rather than stalling the
+  pipeline.
+
+Document any deviation.
 
 ### The agent loop (`Voxa.Core.AgentLoopProcessor`)
 
