@@ -51,7 +51,7 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     reporting. All off by default; zero cost when disabled.
   </div>
   <div class="meta-grid">
-    <div><b>Document</b> VRT-007 v1.0</div>
+    <div><b>Document</b> VRT-007 v1.1</div>
     <div><b>Date</b> 2026-07-11</div>
     <div><b>Status</b> Proposed</div>
     <div><b>Target</b> Voxa.Core (runner/source/sink), Voxa.AspNetCore (config), Voxa.Studio</div>
@@ -59,6 +59,14 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     <div><b>Beneficiaries</b> VTL-001 telephony (idle hang-up), Studio (stall indicator), CI</div>
   </div>
 </header>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> corrected the channel-mode premise — the granular chain's data
+  channels are <code>Wait</code>-mode, so heartbeats delay under load rather than shed; the informational
+  signal is now transit-latency-based congestion, not "missing heartbeats = backpressure". The teardown
+  deadline no longer changes behavior: <code>StopTimeoutMs</code> defaults to null, preserving
+  <code>StopAsync</code>'s existing 5 s grace, and WS3 only instruments the existing escalation.
+</div>
 
 <h2><span class="secno">1.</span> Problem</h2>
 <ul>
@@ -97,11 +105,17 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
       heartbeats is itself a bug this watchdog exposes.</li>
 </ul>
 <div class="callout warn">
-  <b>DropOldest honesty.</b> Data paths drop oldest under pressure, so a heartbeat can be legitimately
-  dropped during an audio flood. The monitor therefore distinguishes: <em>some</em> heartbeats missing
-  while others arrive ⇒ <code>PipelineBackpressureEvent</code> (informational — the pipeline is shedding,
-  by design); <em>no</em> heartbeat for the full timeout ⇒ stall. The timeout defaulting to 10× the period
-  makes the false-positive window negligible.
+  <b>Channel-mode honesty (corrected in v1.1).</b> The granular chain's inter-processor data channels are
+  <code>BoundedChannelFullMode.Wait</code> (capacity 64, <code>FrameProcessor</code> default), and the
+  WebSocket/telephony sinks backpressure rather than drop — so on the granular chain a heartbeat is never
+  <em>shed</em>; under pressure it <em>waits</em>, and its transit time grows. The monitor's signals follow
+  from that: steadily rising transit latency (heartbeats arriving, late) ⇒
+  <code>PipelineCongestionEvent</code> (informational, threshold ≈ a few heartbeat periods); <em>no</em>
+  arrival for the full timeout ⇒ stall. Genuine shedding only exists where a stage opts into
+  <code>DropOldest</code> — today the composite processors' audio channels
+  (<code>AzureVoiceLive</code>/<code>OpenAIRealtime</code>/S2S) and the diagnostics hub's subscriber
+  queues — and those sit outside the granular heartbeat path (§6). The timeout defaulting to 10× the
+  period keeps the false-positive window negligible either way.
 </div>
 
 <h2><span class="secno">3.</span> WS2 — Session idle detection</h2>
@@ -120,11 +134,14 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
 
 <h2><span class="secno">4.</span> WS3 — Teardown hygiene</h2>
 <ul>
-  <li>Graceful end gains a deadline: <code>StopTimeoutMs</code> (default 20 000). If the pipeline hasn't
-      fully completed by then, the runner escalates — cooperative drain → hard cancel — and publishes a
-      <code>TeardownReportEvent</code> naming, per processor, which of its tasks (system/data) had not
-      completed and how long teardown took. The event that would have named the Studio-tests culprit in
-      seconds instead of a CI archaeology session.</li>
+  <li><code>PipelineRunner.StopAsync</code> <b>already has the deadline</b>: a 5-second grace period, then
+      hard cancel. WS3 does not change it — <code>StopTimeoutMs</code> defaults to <code>null</code>,
+      meaning "keep the runner's existing 5 s grace" (an always-active 20 s default would silently
+      quadruple every host's shutdown ceiling, violating this spec's own off-by-default rule). What WS3
+      adds is <em>instrumentation</em> of the existing escalation: when the grace expires, the runner
+      publishes a <code>TeardownReportEvent</code> naming, per processor, which of its tasks (system/data)
+      had not completed and how long teardown took. The event that would have named the Studio-tests
+      culprit in seconds instead of a CI archaeology session.</li>
   <li>The report is also produced on <em>successful</em> teardown at debug level (per-processor stop
       durations) — slow-stopping processors become visible before they become stuck ones.</li>
   <li>No behavioral change to disposal ordering; this instruments the existing sequence. The known
@@ -140,7 +157,8 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     "HeartbeatTimeoutMs": 10000,
     "IdleTimeoutSeconds": 0,      // WS2 — 0 = disabled (default); &gt;0 enables
     "EndOnIdle": false,
-    "StopTimeoutMs": 20000        // WS3 — deadline always active; report event only when hub observed
+    "StopTimeoutMs": null         // WS3 — null (default) = keep StopAsync's existing 5 s grace;
+                                  //        set to override; report event only when hub observed
   }
 }</code></pre>
 <ul>
@@ -169,7 +187,7 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
 
 <h2><span class="secno">7.</span> Workstreams</h2>
 <ul class="check">
-  <li><b>WS1 — Heartbeats:</b> frame + source timer + sink monitor + stall/recover/backpressure events +
+  <li><b>WS1 — Heartbeats:</b> frame + source timer + sink monitor + stall/recover/congestion events +
       transit metric; unit tests with a deliberately-wedged fake processor (blocked data task, healthy
       system task ⇒ stall fires; both healthy ⇒ silence).</li>
   <li><b>WS2 — Idle:</b> activity tracking at the sink boundary, timeout, <code>EndOnIdle</code> graceful
@@ -197,8 +215,9 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
 <h2><span class="secno">9.</span> Risks</h2>
 <table>
   <tr><th>Risk</th><th>Mitigation</th></tr>
-  <tr><td>False stall positives under heavy shedding</td>
-      <td>Backpressure/stall distinction (§2); timeout = 10× period; events carry drop context for triage</td></tr>
+  <tr><td>False stall positives under heavy load</td>
+      <td>Wait-mode channels mean load shows as rising transit latency (congestion signal) long before
+      arrivals stop; timeout = 10× period; events carry transit-time context for triage</td></tr>
   <tr><td>Idle timer ends a session during a legitimately long silent operation (big background task, VDX-008)</td>
       <td>Background-task lifecycle frames count as activity; hosts running long-silent workloads tune or disable <code>EndOnIdle</code></td></tr>
   <tr><td>Escalated cancel during teardown masks the root hang</td>

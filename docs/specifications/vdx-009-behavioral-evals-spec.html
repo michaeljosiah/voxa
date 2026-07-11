@@ -51,7 +51,7 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     optional LLM-judged content checks. Runnable from xUnit, the CLI, and CI.
   </div>
   <div class="meta-grid">
-    <div><b>Document</b> VDX-009 v1.0</div>
+    <div><b>Document</b> VDX-009 v1.1</div>
     <div><b>Date</b> 2026-07-11</div>
     <div><b>Status</b> Proposed</div>
     <div><b>Target</b> new <code>Voxa.Evals</code>, <code>Voxa.Cli</code>, <code>Voxa.Testing</code></div>
@@ -59,6 +59,14 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     <div><b>Consumers</b> Voxa CI, Ada (M10 talker/thinker scenarios), sample apps</div>
   </div>
 </header>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> text mode now injects a complete synthetic utterance —
+  <code>UserStartedSpeakingFrame</code>, optional interims, <code>UserStoppedSpeakingFrame</code>, final —
+  not just a final transcription. Finals alone can never exercise barge-in (the loop's interruption path
+  triggers on the speech-onset frame) or VRT-006's interim-fed gate, which would have made the starter
+  pack's flagship scenarios silently vacuous in the default CI lane.
+</div>
 
 <h2><span class="secno">1.</span> Problem</h2>
 <p>
@@ -98,11 +106,16 @@ scenario.yaml ──► EvalRunner
       decisions, background-task lifecycle) plus sink-captured frames. No new instrumentation channel:
       if a behavior matters enough to eval, it matters enough to appear in diagnostics — gaps found while
       writing scenarios are hub features first.</li>
-  <li><b>Two input lanes, one schema.</b> <code>mode: text</code> injects final transcriptions past the
-      STT (no models, CI-fast, still exercises VAD-independent turn logic, agent loop, aggregation, TTS
-      via a fake engine). <code>mode: audio</code> synthesizes each user turn with a local TTS voice (or
-      plays a <code>.wav</code> fixture) into the real capture chain at a controlled cadence — the full
-      pipeline, model-gated in CI.</li>
+  <li><b>Two input lanes, one schema.</b> <code>mode: text</code> bypasses audio and STT but injects a
+      <em>complete synthetic utterance</em>, not just a final: <code>UserStartedSpeakingFrame</code> →
+      optional interims → <code>UserStoppedSpeakingFrame</code> → final <code>TranscriptionFrame</code>,
+      with configurable gaps. The speaking edges are load-bearing, not decoration — the agent loop's
+      barge-in path triggers on <code>UserStartedSpeakingFrame</code> and the VRT-006 gate consumes
+      interims, so a finals-only lane could never exercise the interruption scenarios this spec exists to
+      guard (no models, CI-fast, exercises turn logic, agent loop, aggregation, TTS via a fake engine).
+      <code>mode: audio</code> synthesizes each user turn with a local TTS voice (or plays a
+      <code>.wav</code> fixture) into the real capture chain at a controlled cadence — the full pipeline,
+      VAD and STT producing the edges naturally, model-gated in CI.</li>
 </ul>
 
 <h2><span class="secno">3.</span> Scenario schema</h2>
@@ -135,7 +148,12 @@ turns:
 <table>
   <tr><th>Element</th><th>Semantics</th></tr>
   <tr><td><code>user</code> / <code>wav</code> / <code>dtmf</code></td>
-      <td>Turn input: text (synthesized in audio mode), a fixture file, or DTMF digits (telephony serializers)</td></tr>
+      <td>Turn input: text (synthesized in audio mode; in text mode injected as speaking-edge →
+      interims → stopped-edge → final), a fixture file, or DTMF digits (telephony serializers)</td></tr>
+  <tr><td><code>interims</code> / <code>edge_gap_ms</code></td>
+      <td>Text-mode shaping: an optional list of interim texts emitted between the speaking edges
+      (defaults to none), and the gap between injected frames (default 50 ms). Barge-in gating scenarios
+      (VRT-006 min-words) set <code>interims:</code> explicitly to reproduce word-by-word arrival</td></tr>
   <tr><td><code>send_after</code></td>
       <td>Schedule the send relative to an earlier event (+optional delay) or a pure delay — this is how barge-in scenarios say "while the bot is talking"</td></tr>
   <tr><td><code>expect</code> list</td>
@@ -148,7 +166,9 @@ turns:
       <td>For <code>tool.requested</code>: function name + args-subset match</td></tr>
 </table>
 <p>
-Event names map 1:1 to hub event types (documented table in the package README):
+Event names map 1:1 to hub event types — current ones plus those specced by VRT-006/VRT-007/VDX-008
+(the runner fails a scenario referencing an event name with no hub counterpart, so the mapping table in
+the package README stays honest as specs land):
 <code>turn.started/ended</code>, <code>transcript.interim/final</code>, <code>bot.text</code>,
 <code>bot.speaking.started/stopped</code>, <code>interruption</code>, <code>tool.requested/completed</code>,
 <code>background.task.accepted/completed/spoken/dropped</code> (VDX-008),
@@ -223,7 +243,9 @@ Event names map 1:1 to hub event types (documented table in the package README):
 <ul class="check">
   <li><b>WS1 — Core runner:</b> schema records + YAML/JSON loader; in-process host builder (ServiceCollection
       + AddVoxa + composer); <code>EvalRecorder</code> (hub subscriber + sink capture, ordered timeline);
-      text-mode injection; scripted driver; ordered matcher with budgets + <code>no_event</code> windows;
+      text-mode synthetic-utterance injection (speaking edges + optional interims + final — asserted by a
+      runner test that a text-mode turn does trigger the loop's barge-in path); scripted driver; ordered
+      matcher with budgets + <code>no_event</code> windows;
       xUnit surface. <em>Ships with a starter pack: the barge-in/backchannel, tail-flush, and VDX-008
       delegation scenarios that re-derive this quarter's three shipped bugs.</em></li>
   <li><b>WS2 — Audio mode:</b> synth lane (local TTS voice per scenario), wav fixtures, real-time cadence

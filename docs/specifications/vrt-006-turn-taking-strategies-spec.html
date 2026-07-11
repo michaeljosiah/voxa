@@ -52,7 +52,7 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
     policies with honest defaults.
   </div>
   <div class="meta-grid">
-    <div><b>Document</b> VRT-006 v1.0</div>
+    <div><b>Document</b> VRT-006 v1.1</div>
     <div><b>Date</b> 2026-07-11</div>
     <div><b>Status</b> Proposed</div>
     <div><b>Target</b> Voxa.Core, Voxa.Speech.Abstractions, Voxa.AspNetCore, Voxa.Studio</div>
@@ -65,6 +65,16 @@ ul.check li::before { content: "☐ "; color: var(--accent); }
   <b>Prime directive (VDX-006/007/008 discipline):</b> with nothing configured, composed pipelines are
   <em>byte-identical</em> to today's. Every seam in this spec defaults to current behavior; the golden
   composition test must not change.
+</div>
+
+<div class="callout good">
+  <b>v1.1 (review-driven, PR #102):</b> the gate now <em>holds</em> the onset frame instead of forwarding
+  it while undecided (downstream already treats a bare speech-onset as barge-in); gate evidence is
+  exempted from hallucination filtering via <code>TranscriptionFilter</code> tag mode; finals always
+  resolve — a one-word non-lexicon final ("stop") interrupts regardless of <code>MinWords</code>; the
+  Ignore epilogue releases held VDX-008 background results; §4.1 now lists honest per-vendor protocol
+  work (only AssemblyAI parses end-of-turn today); <code>ProvidesInterims</code> descriptor metadata added
+  for the fail-fast validation.
 </div>
 
 <h2><span class="secno">1.</span> Problem</h2>
@@ -153,6 +163,8 @@ public interface IInterruptionPolicy
 
     /// Interim or final transcription text observed while a verdict is pending.
     /// Called repeatedly; the text is the utterance-so-far (coalesced, VRT-004).
+    /// A final MUST resolve: when isFinal is true the return value is Interrupt or
+    /// Ignore, never Undecided — user words are never left in limbo.
     InterruptionVerdict OnTranscript(string utteranceSoFar, bool isFinal);
 
     /// The pending utterance ended without a verdict (user stopped speaking, or the
@@ -164,34 +176,61 @@ public enum InterruptionVerdict { Undecided, Interrupt, Ignore }</code></pre>
 
 <h3>3.2 Evaluation point</h3>
 <p>
-<code>AgentLoopProcessor</code> already sees every input this policy needs:
-<code>UserStartedSpeakingFrame</code> on the system path, interim and final transcriptions on the data
-path. Gating therefore lives inside the loop — no new processor, no reordering of the composed chain:
+<code>AgentLoopProcessor</code> sits between the STT side and the aggregator/TTS side, sees
+<code>UserStartedSpeakingFrame</code> on its system path and transcriptions on its data path, and — being
+the stage the onset frame flows <em>through</em> — can control what downstream ever learns about it.
+Gating therefore lives inside the loop, with two consequences the first draft of this spec got wrong
+(review findings on PR #102): the onset must be <em>held</em>, not forwarded, while a verdict is pending;
+and the gate's evidence must be exempt from hallucination filtering.
 </p>
 <ul>
-  <li><b>Onset:</b> on <code>UserStartedSpeakingFrame</code> with a turn in flight, call
-      <code>OnSpeechStarted()</code>. <code>Interrupt</code> ⇒ exactly today's path
-      (<code>TryCancelActiveTurn()</code> + push <code>InterruptionFrame</code>). <code>Ignore</code> ⇒
-      forward the frame, nothing else. <code>Undecided</code> ⇒ arm pending-verdict state and forward.</li>
-  <li><b>Evidence:</b> while pending, each <code>InterimTranscriptionFrame</code> /
-      <code>TranscriptionFrame</code> for the new utterance feeds <code>OnTranscript(...)</code>.
-      <code>Interrupt</code> ⇒ cancel + push <code>InterruptionFrame</code> <em>then</em> — the answer keeps
-      playing until the verdict lands, which is exactly the desired UX for a suspected backchannel.</li>
-  <li><b>Resolution without verdict:</b> a final transcription that ends <code>Undecided</code> or
-      <code>Ignore</code>d does <em>not</em> enqueue a new turn — it was a backchannel; drop it from turn
-      intake (it must not become a queued user turn that answers "uh-huh" after the bot finishes).
-      The loop calls <code>Reset()</code>. A final that arrives after an <code>Interrupt</code> verdict is a
-      normal next turn.</li>
+  <li><b>Onset — hold, don't forward.</b> Downstream already treats a bare
+      <code>UserStartedSpeakingFrame</code> as a barge-in signal: <code>TextToSpeechProcessor</code>
+      aborts the in-flight synthesis and mutes, <code>SentenceAggregator</code> flushes, and the sink
+      bumps its purge epoch. Forwarding the onset while <code>Undecided</code> would audibly kill the
+      answer before the gate ever ruled — defeating the feature. So: with a gating policy active and a
+      turn in flight, the loop calls <code>OnSpeechStarted()</code> and <em>withholds</em> the onset
+      frame. <code>Interrupt</code> ⇒ release the held onset downstream, then
+      <code>TryCancelActiveTurn()</code> + <code>InterruptionFrame</code> (today's ordering, just
+      verdict-deferred). <code>Ignore</code>/pending ⇒ the onset (and its paired
+      <code>UserStoppedSpeakingFrame</code>) are held and, on an <code>Ignore</code> resolution,
+      dropped — downstream never learns a suppressed backchannel happened; diagnostics does (§7).
+      The <code>Immediate</code> default forwards the onset exactly as today — byte-identical.</li>
+  <li><b>Evidence — evaluated before hallucination filtering.</b> <code>TranscriptionFilter</code>'s
+      default blocklist contains precisely the backchannel finals the gate needs ("okay", "yeah", "hmm",
+      "uh" …) — with the filter dropping them, a pending verdict would starve. When
+      <code>Interruption:Mode ≠ Immediate</code> the composer flips the filter to <b>tag mode</b>: a
+      blocklist/too-short final is forwarded flagged (<code>TranscriptionFrame.SuspectedHallucination =
+      true</code>) instead of dropped. The loop feeds flagged finals to <code>OnTranscript(...)</code> as
+      evidence but never enqueues them as turns — the filter's protective outcome is preserved, the
+      evidence path isn't. Interims already pass the filter untouched. (<code>Immediate</code> mode keeps
+      drop mode: byte-identical.)</li>
+  <li><b>Finals always resolve — user words are never swallowed.</b> <code>OnTranscript(…, isFinal:
+      true)</code> must return <code>Interrupt</code> or <code>Ignore</code>, never
+      <code>Undecided</code>. The built-in rule (§3.3): a lexicon-only final ⇒ <code>Ignore</code>; a
+      final containing <em>any</em> non-lexicon content ⇒ <code>Interrupt</code> — a one-word "stop" or
+      "wait" is a genuine barge-in and must interrupt even though it is under
+      <code>MinWords</code>. <code>MinWords</code> therefore governs only how early an <em>interim</em>
+      may confirm, never whether a final counts.</li>
+  <li><b>Ignore epilogue — same as the empty-final path.</b> A resolved-<code>Ignore</code> utterance
+      takes the epilogue the loop already applies to empty/whitespace finals: forward the (flagged) final
+      downstream so transports can clear their affordances (the TTS data-ordered unmute is a no-op — the
+      onset never muted it), <b>release held VDX-008 background results</b> (no turn will follow this
+      utterance; a completed thinker result must not stay parked until some later real turn), and
+      <code>Reset()</code>. A final that arrives after an <code>Interrupt</code> verdict is a normal next
+      turn.</li>
   <li><b>No turn in flight:</b> the policy is bypassed entirely — user speech when the bot is quiet is
-      never an "interruption" question.</li>
+      never an "interruption" question, the onset forwards immediately, and the loop's hold-while-speaking
+      state latches as today.</li>
 </ul>
 <div class="callout">
   <b>Latency honesty.</b> A word-gated verdict cannot arrive before the STT produces its first interim —
   typically 200–600 ms after onset with streaming vendors. During that window the bot keeps speaking.
   That is the feature, not a bug: the cost of gating is deferred interruption for genuine barge-ins, and
   the benefit is un-killed answers for backchannels. Hosts that cannot accept the deferral keep the
-  default immediate policy. The epoch-based sink purge and aggregator/TTS mute (VRT-002 WS2) already
-  handle the "audio queued between onset and verdict" tail.
+  default immediate policy. Audio queued between onset and verdict needs no special handling — the
+  <code>InterruptionFrame</code> emitted at the verdict drives the aggregator/TTS mute and the sink's
+  epoch purge exactly as in the immediate path (VRT-002 WS2).
 </div>
 
 <h3>3.3 <code>MinWordsInterruptionPolicy</code> (built-in)</h3>
@@ -205,10 +244,17 @@ path. Gating therefore lives inside the loop — no new processor, no reordering
       the lexicon (default: a small English set — "yeah", "yes", "uh-huh", "mm-hm", "ok", "okay",
       "right", "sure", "hmm", "wow", "i see", "got it" — case-insensitive, configurable, replaceable
       per language) handles the high-frequency cases.</li>
-  <li>Verdict logic per <code>OnTranscript</code>: if every token is lexicon ⇒ stay
-      <code>Undecided</code> while interim (a backchannel can be the prefix of a real sentence:
-      "yeah but wait—"), <code>Ignore</code> when final. If non-lexicon tokens ≥ <code>minWords</code> ⇒
-      <code>Interrupt</code>. Otherwise <code>Undecided</code>.</li>
+  <li>Verdict logic per <code>OnTranscript</code>:
+      <ul>
+        <li><b>Interim:</b> non-lexicon tokens ≥ <code>minWords</code> ⇒ <code>Interrupt</code> (early
+            confirm — the whole point of <code>useInterims</code>). Otherwise <code>Undecided</code>,
+            including lexicon-only text (a backchannel can be the prefix of a real sentence: "yeah but
+            wait—").</li>
+        <li><b>Final:</b> always resolves (§3.2). Lexicon-only ⇒ <code>Ignore</code>. <em>Any</em>
+            non-lexicon token ⇒ <code>Interrupt</code>, regardless of count — "stop" and "wait" are
+            one-word genuine barge-ins; <code>minWords</code> exists to make interims trustworthy, not to
+            discard short finals.</li>
+      </ul></li>
   <li><code>OnSpeechStarted()</code> always returns <code>Undecided</code> for this policy.</li>
 </ul>
 <p>
@@ -220,10 +266,25 @@ via DI with zero loop changes.
 <h2><span class="secno">4.</span> WS2 — Turn-end sources (engine end-of-turn)</h2>
 <h3>4.1 Capability flag + signal</h3>
 <ul>
-  <li><code>VoxaProviderDescriptor</code> (STT) gains <code>bool ProvidesEndOfTurn</code> — true for
-      streaming engines whose protocol carries an utterance-end / endpointing event (Deepgram,
-      AssemblyAI, Speechmatics, Gladia already surface one internally in their message parsers).</li>
-  <li>Engines that set it raise the signal by emitting their existing final-transcript with a new
+  <li><code>VoxaProviderDescriptor</code> (STT) gains <code>bool ProvidesEndOfTurn</code> — set per
+      engine <em>only once its parser actually emits the signal</em>. Current parse-readiness is honest
+      scope for WS2 (verified at head): only AssemblyAI parses an end-of-turn today; the other three are
+      protocol-level work, not flag-plumbing:
+      <table>
+        <tr><th>Engine</th><th>Wire signal</th><th>Status / WS2 deliverable</th></tr>
+        <tr><td>AssemblyAI</td><td><code>end_of_turn</code> on <code>Turn</code> messages</td>
+            <td>Already parsed (<code>AssemblyAISttEngine</code>) — map to the frame flag</td></tr>
+        <tr><td>Deepgram</td><td><code>speech_final</code> + <code>UtteranceEnd</code> messages</td>
+            <td>Not parsed today (<code>is_final</code> is a segment lock, not endpointing); requires
+                sending the <code>endpointing</code>/<code>utterance_end_ms</code> connection parameters
+                and handling the new message type</td></tr>
+        <tr><td>Speechmatics</td><td><code>EndOfUtterance</code> message</td>
+            <td>Not parsed today; requires <code>conversation_config.end_of_utterance_silence_trigger</code>
+                on the start message</td></tr>
+        <tr><td>Gladia</td><td><code>speech_end</code> event</td>
+            <td>Not parsed today; requires enabling the event in the session config</td></tr>
+      </table></li>
+  <li>Engines that qualify raise the signal by emitting their final-transcript with a new
       <code>EndOfTurn = true</code> flag on <code>TranscriptionFrame</code> (a record extension, defaulted
       false — wire-compatible everywhere else).</li>
 </ul>
@@ -290,7 +351,11 @@ public interface IUserInputMutePolicy
       <code>docs/performance-tuning.md</code>.</li>
   <li>Fail-fast validation (ValidateOnStart): unknown mode strings, <code>MinWords &lt; 1</code>,
       <code>MinWords</code> mode with a non-streaming STT that produces no interims ⇒ startup error with a
-      spelled-out fix, not a silent fallback.</li>
+      spelled-out fix, not a silent fallback. The last rule needs capability metadata the descriptor does
+      not carry today: WS1 adds <code>bool ProvidesInterims</code> to <code>VoxaProviderDescriptor</code>
+      (set by the streaming engines) alongside WS2's <code>ProvidesEndOfTurn</code> — without it the
+      validation is unimplementable. Note the degradation is soft either way (finals still resolve every
+      verdict, §3.2); the validator exists so hosts learn at startup that early-confirm won't happen.</li>
 </ul>
 
 <h2><span class="secno">7.</span> Diagnostics</h2>
@@ -323,12 +388,18 @@ muted chips on the timeline instead of user turns.</p>
 <h2><span class="secno">9.</span> Workstreams</h2>
 <ul class="check">
   <li><b>WS1 — Interruption gating:</b> <code>IInterruptionPolicy</code> + verdict enum (Voxa.Core);
-      loop integration (pending-verdict state, backchannel-final drop, <code>Reset()</code> paths);
-      <code>MinWordsInterruptionPolicy</code>; composer + options + validation; unit tests incl. the
-      "backchannel is a prefix of a real interruption" case.</li>
+      loop integration (onset hold/release/drop incl. the paired stopped-frame, pending-verdict state,
+      finals-always-resolve, Ignore epilogue with VDX-008 held-result release, <code>Reset()</code> paths);
+      <code>TranscriptionFilter</code> tag mode + <code>TranscriptionFrame.SuspectedHallucination</code>;
+      <code>VoxaProviderDescriptor.ProvidesInterims</code>; <code>MinWordsInterruptionPolicy</code>;
+      composer + options + validation; unit tests incl. the "backchannel is a prefix of a real
+      interruption" case and "backchannel swallowed while a background result is held ⇒ result still
+      delivers on schedule".</li>
   <li><b>WS2 — Turn-end sources:</b> <code>TranscriptionFrame.EndOfTurn</code>; descriptor capability flag;
-      parser wiring for Deepgram/AssemblyAI/Speechmatics/Gladia; composer <code>TurnEnd</code> modes +
-      <code>Auto</code> preference order; fallback watchdog.</li>
+      per-vendor protocol work from the §4.1 table (AssemblyAI mapping; Deepgram
+      <code>speech_final</code>/<code>UtteranceEnd</code> + connection params; Speechmatics
+      <code>EndOfUtterance</code> + config; Gladia <code>speech_end</code>); composer <code>TurnEnd</code>
+      modes + <code>Auto</code> preference order; fallback watchdog.</li>
   <li><b>WS3 — Mute policies:</b> interface + built-ins + composer stage; Studio half-duplex migrates onto
       <code>MuteDuringBotTurn</code>.</li>
   <li><b>WS4 — Surfacing:</b> diagnostics events; Studio Config + Talk chips; docs
@@ -339,9 +410,12 @@ muted chips on the timeline instead of user turns.</p>
 <ul>
   <li><b>Golden:</b> default composition byte-identical (existing golden test unchanged).</li>
   <li><b>Gate behavior (fake STT/driver):</b> backchannel final ("uh-huh") during a turn ⇒ no
-      <code>InterruptionFrame</code>, no queued turn, answer completes; 4-word interim ⇒ interruption fires
-      and the turn cancels exactly as PR #100's tests assert; onset with no transcript ever ⇒
-      <code>Reset()</code> after fallback, next turn normal.</li>
+      <code>InterruptionFrame</code>, <b>no onset frame reaches the aggregator/TTS/sink</b>, no queued
+      turn, answer completes, and any held background result still delivers on schedule; one-word
+      non-lexicon final ("stop") ⇒ interrupts despite being under <code>MinWords</code>; 4-word interim ⇒
+      interruption fires and the turn cancels exactly as PR #100's tests assert; onset with no transcript
+      ever ⇒ <code>Reset()</code> after fallback, next turn normal; tag-mode filter forwards a flagged
+      blocklist final and the loop never enqueues it as a turn.</li>
   <li><b>Engine EOT:</b> a fake engine emitting <code>EndOfTurn</code> finals closes turns with VAD
       silence-close disabled; fallback closes a turn when the engine never signals.</li>
   <li><b>Race honesty:</b> tests establish state deterministically (no fixed <code>Task.Delay</code>
@@ -362,6 +436,14 @@ muted chips on the timeline instead of user turns.</p>
       <td>Single fallback timer (§4.3) owns all deferred states; <code>Reset()</code> on every turn boundary; event on every forced reset</td></tr>
   <tr><td>Ignored utterance still cost an STT round-trip</td>
       <td>Accepted — audio was already streaming for eager STT (VRT-002); no new cost</td></tr>
+  <tr><td>Tag mode changes <code>TranscriptionFilter</code>'s output contract (flagged frames now flow)</td>
+      <td>Only composed when <code>Mode ≠ Immediate</code>; flagged finals are never enqueued as turns by
+      the loop; custom downstream processors see a new boolean defaulting false on a record they already
+      forward</td></tr>
+  <tr><td>Suppressed onset means the loop's hold-while-speaking state never latches for a backchannel</td>
+      <td>Deliberate: the gate only runs while the bot is already speaking, so a held background result
+      releasing during the <code>Undecided</code> window just queues behind the in-flight turn — asserted
+      by the WS1 held-result test</td></tr>
 </table>
 
 </div>
