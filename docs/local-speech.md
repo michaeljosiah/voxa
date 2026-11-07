@@ -396,3 +396,14 @@ Silero VAD → whisper → Echo agent → Piper and asserts on the audio that co
 - **GPL note** — espeak-ng (used by both Piper internally and Kokoro's phonemization) is GPL-3.0
   and always runs as a separate process. No Voxa assembly links GPL code; a dependency-graph gate
   test enforces this.
+
+
+### Arke transcription name hints
+
+`POST /stt` keeps its raw audio body and optional `X-Voxa-Prompt` header: base64 of UTF-8
+vocabulary text, at most 200 decoded bytes, without null characters. Malformed hints return
+400 before transcription; a missing or empty hint keeps the ordinary transcription behavior.
+The small byte bound conservatively fits Whisper's initial context even for non-ASCII names.
+Hints belong to one request's processor, never the shared model or a later dictation request.
+`WhisperCppOptions.InitialPrompt` is also available to hosts constructing an engine directly.
+This does not add hints to `/stt/words` or change transcription acceptance thresholds.

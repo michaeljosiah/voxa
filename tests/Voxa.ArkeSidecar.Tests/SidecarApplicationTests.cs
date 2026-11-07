@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 
 namespace Voxa.ArkeSidecar.Tests;
@@ -14,6 +15,7 @@ public class SidecarApplicationTests
             new Dictionary<string, EngineHealth> { ["kokoro"] = new(true, null), ["whisper"] = new(true, null) }, null);
         public TtsRequest? Tts { get; private set; }
         public byte[] SttAudio { get; private set; } = [];
+        public string? SttPrompt { get; private set; }
         public Exception? WordTimingFailure { get; set; }
         public Func<CancellationToken, Task>? OnWords { get; set; }
 
@@ -23,9 +25,10 @@ public class SidecarApplicationTests
             return Task.FromResult("RIFFxxxxWAVE"u8.ToArray());
         }
 
-        public Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct)
+        public Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct, string? prompt = null)
         {
             SttAudio = audio.ToArray();
+            SttPrompt = prompt;
             return Task.FromResult("hello harbour");
         }
 
@@ -36,6 +39,60 @@ public class SidecarApplicationTests
             if (WordTimingFailure is not null) throw WordTimingFailure;
             return new("hello harbour", 1.8, new("whisper.cpp/dtw-word-boundaries-v1", "1.9.1", "sha256:fixture"),
                 [new("hello", 0.2, 0.51, 0.97), new("harbour", 0.72, 1.45, 0.89)]);
+        }
+    }
+
+    [Fact]
+    public async Task Name_hint_is_Unicode_and_private_to_one_transcription()
+    {
+        var (app, client, fake) = await StartAsync();
+        await using (app)
+        using (client)
+        {
+            const string prompt = "Tunde, Rónkẹ, Ikoyi";
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/stt") { Content = new ByteArrayContent([1, 0, 2, 0]) };
+            request.Headers.Add("X-Voxa-Prompt", Convert.ToBase64String(Encoding.UTF8.GetBytes(prompt)));
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal(prompt, fake.SttPrompt);
+            Assert.Equal([1, 0, 2, 0], fake.SttAudio);
+            using var plain = await client.PostAsync("/stt", new ByteArrayContent([3, 0]));
+            Assert.Equal(HttpStatusCode.OK, plain.StatusCode);
+            Assert.Null(fake.SttPrompt);
+        }
+    }
+
+    [Theory]
+    [InlineData("not base64")]
+    [InlineData("/w==")]
+    [InlineData("AA==")]
+    public async Task Rejects_malformed_name_hints_before_transcribing(string header)
+    {
+        var (app, client, fake) = await StartAsync();
+        await using (app)
+        using (client)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/stt") { Content = new ByteArrayContent([1, 0]) };
+            request.Headers.Add("X-Voxa-Prompt", header);
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Empty(fake.SttAudio);
+        }
+    }
+
+    [Theory]
+    [InlineData(100, HttpStatusCode.OK)]
+    [InlineData(101, HttpStatusCode.BadRequest)]
+    public async Task Bounds_the_name_hint_by_UTF8_bytes(int characters, HttpStatusCode expected)
+    {
+        var (app, client, _) = await StartAsync();
+        await using (app)
+        using (client)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/stt") { Content = new ByteArrayContent([1, 0]) };
+            request.Headers.Add("X-Voxa-Prompt", Convert.ToBase64String(Encoding.UTF8.GetBytes(new string('é', characters))));
+            using var response = await client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
         }
     }
 

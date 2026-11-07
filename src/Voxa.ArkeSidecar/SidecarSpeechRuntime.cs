@@ -77,14 +77,14 @@ internal sealed class SidecarSpeechRuntime : ISidecarSpeechRuntime, IAsyncDispos
         finally { _ttsGate.Release(); }
     }
 
-    public async Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct)
+    public async Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct, string? prompt = null)
     {
         EnsureWhisperAvailable();
         var pcm = AudioInput.ToWhisperPcm(audio.Span, contentType);
         await _sttGate.WaitAsync(ct).ConfigureAwait(false);
         var failures = new FailureCapturingLogger();
         var engine = new WhisperCppSttEngine(
-            new WhisperCppOptions { ModelPath = _options.WhisperModel, Language = "en" },
+            new WhisperCppOptions { ModelPath = _options.WhisperModel, Language = "en", InitialPrompt = prompt },
             new VoxaModelCache(new VoxaModelCacheOptions(Path.GetTempPath(), Offline: true)), failures);
         try
         {

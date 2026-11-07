@@ -154,6 +154,7 @@ public sealed class WhisperCppSttEngine : ISpeechToTextEngine
             ? builder.WithLanguageDetection()
             : builder.WithLanguage(_options.Language!);
         if (_options.Translate) builder = builder.WithTranslate();
+        if (!string.IsNullOrWhiteSpace(_options.InitialPrompt)) builder = builder.WithPrompt(_options.InitialPrompt);
 
         _processor = builder.Build();
         _logger.LogInformation(

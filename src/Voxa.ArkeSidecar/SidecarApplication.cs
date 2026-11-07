@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Json;
@@ -7,6 +8,7 @@ namespace Voxa.ArkeSidecar;
 internal static class SidecarApplication
 {
     private const long MaxAudioBytes = 64 * 1024 * 1024;
+    private const int MaxPromptBytes = 200;
 
     public static WebApplication Build(string[] args, ISidecarSpeechRuntime? runtime = null)
     {
@@ -71,6 +73,7 @@ internal static class SidecarApplication
     {
         try
         {
+            var prompt = words ? null : ReadPrompt(request);
             if (request.ContentLength is > MaxAudioBytes)
                 return Problem(StatusCodes.Status413PayloadTooLarge, "Audio body exceeds 64 MiB.");
             using var body = new MemoryStream();
@@ -79,12 +82,25 @@ internal static class SidecarApplication
             if (words) return Results.Json(await speech.TranscribeWordsAsync(
                 body.GetBuffer().AsMemory(0, checked((int)body.Length)), request.ContentType, ct).ConfigureAwait(false));
             var text = await speech.TranscribeAsync(
-                body.GetBuffer().AsMemory(0, checked((int)body.Length)), request.ContentType, ct).ConfigureAwait(false);
+                body.GetBuffer().AsMemory(0, checked((int)body.Length)), request.ContentType, ct, prompt).ConfigureAwait(false);
             return Results.Json(new { text });
         }
+        catch (Exception ex) when (ex is FormatException or DecoderFallbackException)
+        { return Problem(StatusCodes.Status400BadRequest, "Invalid Whisper name hint: expected base64 UTF-8, at most 200 bytes, without null characters."); }
         catch (InvalidDataException ex) { return Problem(StatusCodes.Status415UnsupportedMediaType, ex.Message); }
         catch (WordTimingRejectedException ex) { return Problem(StatusCodes.Status422UnprocessableEntity, ex.Message); }
         catch (SidecarUnavailableException ex) { return Problem(StatusCodes.Status503ServiceUnavailable, ex.Message); }
+    }
+
+    private static string? ReadPrompt(HttpRequest request)
+    {
+        if (!request.Headers.TryGetValue("X-Voxa-Prompt", out var values)) return null;
+        if (values.Count != 1 || values[0]!.Length > 4 * ((MaxPromptBytes + 2) / 3)) throw new FormatException();
+        var bytes = Convert.FromBase64String(values[0]!);
+        if (bytes.Length > MaxPromptBytes) throw new FormatException();
+        var prompt = new UTF8Encoding(false, true).GetString(bytes);
+        if (prompt.Contains('\0')) throw new FormatException();
+        return string.IsNullOrWhiteSpace(prompt) ? null : prompt;
     }
 
     private static IResult Problem(int status, string detail) => Results.Problem(statusCode: status, detail: detail);
