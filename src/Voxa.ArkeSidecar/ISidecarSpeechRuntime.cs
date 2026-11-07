@@ -4,7 +4,7 @@ internal interface ISidecarSpeechRuntime
 {
     HealthResponse Health { get; }
     Task<byte[]> SynthesizeAsync(TtsRequest request, CancellationToken ct);
-    Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct);
+    Task<string> TranscribeAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct, string? prompt = null);
     Task<WordTimingResponse> TranscribeWordsAsync(ReadOnlyMemory<byte> audio, string? contentType, CancellationToken ct);
 }
 

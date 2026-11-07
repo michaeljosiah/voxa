@@ -33,9 +33,11 @@ public class WhisperCppIntegrationTests
         throw new InvalidDataException($"{path} has no data chunk.");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(null)]
+    [InlineData("country, Americans")]
     [Trait("Category", "LocalModels")]
-    public async Task TinyEn_Transcribes_The_Jfk_Fixture()
+    public async Task TinyEn_Transcribes_The_Jfk_Fixture(string? prompt)
     {
         var fixture = Path.Combine(AppContext.BaseDirectory, "fixtures", "jfk.wav");
         var pcm = ReadWavPcm(fixture, out var rate);
@@ -45,7 +47,7 @@ public class WhisperCppIntegrationTests
             new VoxaModelCacheOptions(VoxaModelCacheOptions.ResolveCacheRoot(), Offline: false));
 
         await using var engine = new WhisperCppSttEngine(
-            new WhisperCppOptions { Model = "tiny.en", Language = "en" }, cache);
+            new WhisperCppOptions { Model = "tiny.en", Language = "en", InitialPrompt = prompt }, cache);
         await engine.StartAsync(CancellationToken.None);
 
         var collector = Task.Run(async () =>

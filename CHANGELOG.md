@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Arke name hints:** `POST /stt` accepts an optional base64 UTF-8 `X-Voxa-Prompt` header
+  (at most 200 decoded bytes), passed only to that request's Whisper processor. Ordinary
+  transcription and acoustic word timing remain unchanged.
+
 - **Arke word timing:** optional `wordTiming` health capability and `POST /stt/words`
   return Whisper cross-attention DTW word intervals, confidence, audio duration and a path-free model/engine
   identity. Subword bounds are joined without allocating sentence duration across words;

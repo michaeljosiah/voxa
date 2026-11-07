@@ -773,5 +773,13 @@ This does not change the streaming engine interface or promise timestamp accurac
 </ul>
 
 </div>
+<section id="arke-name-hints">
+<h2>Arke name hints — 7 November 2026, ArkeStudio #1670</h2>
+<p>The plain <code>/stt</code> endpoint accepts an optional <code>X-Voxa-Prompt</code> header:
+base64 UTF-8, at most 200 decoded bytes, without null characters. Invalid hints return 400
+before transcription. The decoded vocabulary configures only that request's Whisper processor
+through <code>WhisperCppOptions.InitialPrompt</code>; shared model factories carry no hint state.
+Missing hints preserve existing behavior. Acoustic word timing and audio validation are unchanged.</p>
+</section>
 </body>
 </html>

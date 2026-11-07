@@ -29,6 +29,9 @@ public sealed class WhisperCppOptions
     /// <summary>Whisper translate-to-English mode.</summary>
     public bool Translate { get; set; }
 
+    /// <summary>Optional vocabulary hint, private to this processor rather than the shared model.</summary>
+    public string? InitialPrompt { get; set; }
+
     /// <summary>
     /// Inference backend (VLS-002). <see cref="WhisperDevice.Cpu"/> (default) needs no extra packages
     /// and is what CI uses; the GPU values require the matching <c>Whisper.net.Runtime.*</c> package to
